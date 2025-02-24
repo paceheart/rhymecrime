@@ -16,7 +16,7 @@ $display_word_frequencies = false
 DATAMUSE_ENABLED = true
 
 #
-# Public interface: rhyme_ninja(word1, word2, goal, output_format='text', debug_mode=false, datamuse_max=400)
+# Public interface: rhyme_crime(word1, word2, goal, output_format='text', debug_mode=false, datamuse_max=400)
 # see rhyme.rb for documentation
 # 
 
@@ -648,12 +648,12 @@ def focal_word(word)
   return "\"<span class='focal_word'>#{word}</span>\""
 end
 
-def rhyme_ninja(word1, word2, goal, lang='en', output_format='text', debug_mode=false, datamuse_max=DEFAULT_DATAMUSE_MAX)
+def rhymecrime(word1, word2, goal, lang='en', output_format='text', debug_mode=false, datamuse_max=DEFAULT_DATAMUSE_MAX)
   # When you enter a single word,
-  #   Rhyme Ninja displays rhymes for that word (see find_rhyming_words), separating out the rare words (see rare?)
+  #   RhymeCrime displays rhymes for that word (see find_rhyming_words), separating out the rare words (see rare?)
   #   and in a separate column, displays sets of rhyming words (see find_rhyming_tuples)
   # When you enter two words,
-  #   Rhyme Ninja first displays rhymes for WORD1 that are semantically related to WORD2 (see related_rhymes),
+  #   RhymeCrime first displays rhymes for WORD1 that are semantically related to WORD2 (see related_rhymes),
   #   and in a separate column, displays pairs of rhyming words (RHYME1 / RHYME2) in which RHYME1 is related to WORD1 and RHYME2 is related to WORD2. (see find_rhyming_pairs)
   $output_format = output_format
   $debug_mode = debug_mode
