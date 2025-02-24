@@ -1,9 +1,9 @@
-# rhyme-ninja
+# RhymeCrime
 Find semantically related rhymes
 
 ## Project Status
 
-No longer under active development by its original creator, Pace Smith. Feel free to branch, fork, whatever you wish!
+No longer under active development by its original creator, Pace Heart. Feel free to branch, fork, whatever you wish!
 
 Also, you can just use the dictionaries without the Ruby code. cmudict 0.7c (my forked version) has several improvements over 0.7b. And there's a rhyming dictionary text file that you're free to use under the GPL.
 
@@ -31,7 +31,7 @@ That will build the internal dictionaries. Then you ought to be able to go to cg
 
 ## Examples:
 
-**RHYME NINJA**  
+**RhymeCrime**  
 Pairs of rhyming words where the first word is related to **crime** and the second word is related to **heaven**:  
 assassination / salvation  
 case / airspace  
@@ -42,7 +42,7 @@ sin / tin
 victimization / salvation  
 violation / salvation  
 
-**RHYME NINJA**  
+**RhymeCrime**  
 Rhyming word sets that are related to **animal**:  
 bitten / kitten  
 cetacean / coloration / communication / conservation / domestication / experimentation / inoculation / liberation / predation / respiration / vaccination / vegetation  
@@ -71,8 +71,8 @@ We use a two-step lookup process to avoid storing lots of redundant data, e.g. a
 e.g. 
 curry [K AH1 R IY0] / hurry [HH ER1 IY0]  
 ear [IY R] / beer [B IH R]  
-        caught [K AA1 T] / fought [F AO1 T]  
-        bong [B AA1 NG] / song [S AO1 NG]  
+caught [K AA1 T] / fought [F AO1 T]  
+bong [B AA1 NG] / song [S AO1 NG]  
 but NOT bar [B AA1 R] / score [S K AO1 R], so we leave it alone if it's followed by R  
 If we had reliable data to distinguish 'cot' from 'caught', this would be in imperfect rhymes. But since caught and fought need to rhyme, we're forced to conflate them globally.
 
@@ -123,11 +123,11 @@ Also we filter out slurs.
 
 ### Semantic Relatedness
 
-Currently, Rhyme Ninja outsources its semantic relatedness to the Datamuse API.
+Currently, RhymeCrime outsources its semantic relatedness to the Datamuse API.
 
 ### Putting it all together
 
-When you enter a single word, Rhyme Ninja displays rhymes for that word (separating out the rare words, where rarity is computed as described above) and in a separate column, displays sets of rhyming words. The sets of rhyming words are computed as follows:
+When you enter a single word, RhymeCrime displays rhymes for that word (separating out the rare words, where rarity is computed as described above) and in a separate column, displays sets of rhyming words. The sets of rhyming words are computed as follows:
 
 Compute the set of all words semantically related to INPUT_REL1, call it RELATEDS1.  
 For each word REL1 in RELATEDS1,  
@@ -135,7 +135,7 @@ For each word REL1 in RELATEDS1,
   If R is in RELATEDS1, compute R's rhyme signature RSIG and put RHYME1 in the bucket labeled RSIG.  
 Return all buckets with two or more words in them.  
 
-When you enter two words, Rhyme Ninja first displays rhymes for WORD1 that are semantically related to WORD2,  
+When you enter two words, RhymeCrime first displays rhymes for WORD1 that are semantically related to WORD2,  
 and in a separate column, displays pairs of rhyming words (RHYME1 / RHYME2) in which RHYME1 is related to WORD1 and RHYME2 is related to WORD2. 
 
 Algorithm:  
