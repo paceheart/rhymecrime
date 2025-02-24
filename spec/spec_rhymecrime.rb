@@ -1,4 +1,4 @@
-require_relative '../ninja'
+require_relative '../crime'
 
 # set this to false to skip known failures
 TEST_FOR_SURPRISING_SUCCESSES = true
