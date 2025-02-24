@@ -1,6 +1,6 @@
 #!/usr/bin/env ruby
 
-# Rhyming utilities for Rhyme Ninja
+# Rhyming utilities for RhymeCrime
 # Used both in preprocessing and at runtime
 
 RHYME_SIGNATURE_DICT_FILENAME = "rhyme_signature_dict.txt"
