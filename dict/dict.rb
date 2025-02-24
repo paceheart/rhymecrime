@@ -12,7 +12,7 @@ TRACE_WORD = nil
 #  KITTERMAN  K IH1 T ER0 M AH0 N
 #
 # A word's "rhyme signature" 
-# Rhyme Ninja uses a two-step lookup process to avoid storing lots of redundant data. For exa e.g. all 500+ "-ation" rhymes as values for "elation", "consternation", etc.
+# RhymeCrime uses a two-step lookup process to avoid storing lots of redundant data. For exa e.g. all 500+ "-ation" rhymes as values for "elation", "consternation", etc.
 # Step 1: Given a word, use the CMU Pronouncing Data to get its pronunciation.
 # Step 1.1: Tweak the given pronunciation to deal with quirks of cmudict.
 # Step 1.5: Get the word's rhyme signature
@@ -36,8 +36,8 @@ COMMON_WORDS_FILENAME = "common_words.txt"
 WordNet::DB.path = "WordNet3.1/"
 WORDNET_TAGSENSE_COUNT_MULTIPLICATION_FACTOR = 100 # each tagsense_count from wordnet counts as this many occurrences in some corpus
 
-RHYME_SIGNATURE_DICT_HEADER = "# Rhyme Ninja's Rhyme Signature Dictionary
-# https://github.com/pacesmith/rhyme-ninja
+RHYME_SIGNATURE_DICT_HEADER = "# RhymeCrime's Rhyme Signature Dictionary
+# https://github.com/paceheart/rhymecrime
 #
 # Each line is of the form:
 #
@@ -54,8 +54,8 @@ RHYME_SIGNATURE_DICT_HEADER = "# Rhyme Ninja's Rhyme Signature Dictionary
 # Singleton signatures are excluded.
 #"
 
-WORD_DICT_HEADER = "# Rhyme Ninja's word info dictionary
-# https://github.com/pacesmith/rhyme-ninja
+WORD_DICT_HEADER = "# RhymeCrime's word info dictionary
+# https://github.com/paceheart/rhymecrime
 #
 # Each line is of the form:
 #
@@ -482,7 +482,7 @@ def build_word_dict(cmudict, lemmadict, freqdict, rdict)
   return filter_word_dict(word_dict)
 end
 
-def rebuild_rhyme_ninja_dictionaries()
+def rebuild_rhymecrime_dictionaries()
   cmudict = load_cmudict
   delete_blacklisted_keys_from_hash(cmudict)
   rdict = build_rhyme_signature_dict(cmudict)
@@ -492,4 +492,4 @@ def rebuild_rhyme_ninja_dictionaries()
   save_word_dict(word_dict)
 end
 
-rebuild_rhyme_ninja_dictionaries
+rebuild_rhymecrime_dictionaries
