@@ -1,7 +1,7 @@
 #!/usr/bin/env ruby
 
 #
-# Spanish front end for Rhyme Ninja.
+# Spanish front end for RhymeCrime.
 #
 
 require_relative 'frontend'
