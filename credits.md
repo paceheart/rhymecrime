@@ -1,6 +1,6 @@
-Rhyme Ninja was created by <a href="http://pacesmith.com">Pace Smith</a> and extended/maintained by all the contributors to this repository.
+RhymeCrime was created by <a href="http://pacesmith.com">Pace Heart</a> and extended/maintained by all the contributors to this repository.
 
-## Rhyme Ninja uses:
+## RhymeCrime uses:
 
 * The <a href="https://www.datamuse.com/api/">Datamuse API</a>
 * The <a href="https://github.com/cmusphinx/cmudict/">CMU Pronunciation Dictionary</a>, copyright &copy; 1993-2015 Carnegie Mellon University (see credits/cmudict_license.txt)
