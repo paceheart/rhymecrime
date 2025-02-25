@@ -7,10 +7,10 @@ OUTPUT_FORMAT = 'cgi'
 DEBUG_MODE = false
 
 #
-# Front end for Rhyme Ninja.
+# Front end for RhymeCrime.
 #
 
-require_relative 'ninja'
+require_relative 'crime'
 
 def cgi_puts(string)
   if(OUTPUT_FORMAT == 'cgi')
@@ -40,7 +40,7 @@ def print_html_header(word1, word2, lang)
       clarifier += " / #{word2}"
     end
   end
-  head = head.gsub("<title>Rhyme Ninja</title>","<title>Rhyme Ninja#{clarifier}</title>")
+  head = head.gsub("<title>RhymeCrime</title>","<title>RhymeCrime#{clarifier}</title>")
 
   if(lang=="es")
     head = head.gsub("rhyme.rb", "rimar.rb")
@@ -75,7 +75,7 @@ def compute_and_print_html_middle(word1, word2, lang)
   goals.length.times do |i|
     goal = goals[i]
     width = widths[i]
-    output, dregs, type, header = rhyme_ninja(word1, word2, goal, lang, OUTPUT_FORMAT, DEBUG_MODE)
+    output, dregs, type, header = rhymecrime(word1, word2, goal, lang, OUTPUT_FORMAT, DEBUG_MODE)
     print_html_column(goal, output, dregs, word1, type, header, width, lang, i == goals.length - 1)
   end
 end
