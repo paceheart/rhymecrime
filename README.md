@@ -20,7 +20,7 @@ You can change OUTPUT_TYPE from 'cgi' to 'text' if you want to use it at the com
 
 * put everything into your cgi-bin directory
 * configure your webserver to allow Ruby scripts
-* cd /<whatever>/cgi-bin/
+* cd /WHATEVER/cgi-bin/
 * chmod +x *.rb
 * cd dict
 * ./dict.rb
