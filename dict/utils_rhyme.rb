@@ -39,7 +39,7 @@ def blacklisted?(word)
 end
 
 def load_blacklist_as_array
-  if(File.exists?("blacklist.txt"))
+  if(File.exist?("blacklist.txt"))
      return IO.readlines("blacklist.txt", chomp: true)
   else
     return IO.readlines("dict/blacklist.txt", chomp: true)
@@ -83,7 +83,7 @@ def all_forms(word)
 end
 
 def load_variants_raw
-  if(File.exists?("spelling_variants.txt"))
+  if(File.exist?("spelling_variants.txt"))
      return IO.readlines("spelling_variants.txt", chomp: true)
   else
     return IO.readlines("dict/spelling_variants.txt", chomp: true)
@@ -450,7 +450,7 @@ end
 
 def load_word_dict()
   pathname = "dict/" + WORD_DICT_FILENAME
-  unless File.exists?(pathname)
+  unless File.exist?(pathname)
     die "First run dict/dict.rb to generate dictionary caches"
   end
   word_dict = Hash.new

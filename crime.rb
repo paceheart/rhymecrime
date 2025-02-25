@@ -365,7 +365,7 @@ def really_find_datamuse_results(rhyme, rel, lang)
   if($datamuse_max != 100) # 100 is the default
     request += "max=#{$datamuse_max}" # no trailing &, must be the last thing
   end
-  request = URI.escape(request)
+  # request = URI.escape(request) # @todo fix this
 
   debug "#{request}<br/><br/>";
   uri = URI.parse(request);

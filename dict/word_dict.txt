@@ -1,5 +1,5 @@
-# Rhyme Ninja's word info dictionary
-# https://github.com/pacesmith/rhyme-ninja
+# RhymeCrime's word info dictionary
+# https://github.com/paceheart/rhymecrime
 #
 # Each line is of the form:
 #

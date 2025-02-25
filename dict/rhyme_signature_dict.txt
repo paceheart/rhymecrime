@@ -1,5 +1,5 @@
-# Rhyme Ninja's Rhyme Signature Dictionary
-# https://github.com/pacesmith/rhyme-ninja
+# RhymeCrime's Rhyme Signature Dictionary
+# https://github.com/paceheart/rhymecrime
 #
 # Each line is of the form:
 #
