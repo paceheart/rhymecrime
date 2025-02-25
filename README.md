@@ -1,16 +1,14 @@
 # RhymeCrime
 Find semantically related rhymes
 
-## Project Status
-
-No longer under active development by its original creator, Pace Heart. Feel free to branch, fork, whatever you wish!
-
-Also, you can just use the dictionaries without the Ruby code. cmudict 0.7c (my forked version) has several improvements over 0.7b. And there's a rhyming dictionary text file that you're free to use under the GPL.
-
 ## Installation
 
-* First install the required packages, such as wordnet and rwordnet. Sorry I didn't package this into a nice gem, feel free to do so.
-* Run rspec from the install directory to verify installation. All tests should pass.
+* dnf install git
+* git clone http://github.com/paceheart/rhymecrime/
+* dnf install ruby
+* gem install rwordnet
+* gem install rspec
+* Run rspec from the rhymecrime directory to verify installation. All tests should pass.
 
 ## Command Line Usage
 
