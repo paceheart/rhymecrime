@@ -62,14 +62,14 @@ def compute_and_print_html_middle(word1, word2, lang)
   elsif(word2 == "")
     if(DEBUG_MODE)
       goals = [ "rhymes", "related", "set_related" ]
-      widths = [25, 25, 46]
+      widths = [25, 25, 44]
     else
       goals = [ "rhymes", "set_related" ]
-      widths = [22, 76]
+      widths = [22, 75]
     end
   else
     goals = [ "related_rhymes", "pair_related" ]
-    widths = [45, 53]
+    widths = [45, 52]
   end
 
   goals.length.times do |i|
@@ -85,6 +85,8 @@ def print_html_column(goal, output, dregs, input_word1, type, header, width, lan
   print_html_column_data(output, dregs, input_word1, type, header, lang)
   cgi_puts "</td>"
   unless(is_last_column)
+    # 3% spacing between columns
+    cgi_puts "<td style='width:1%;'> </td>" # @todo fix width computation
     cgi_puts "<td style='border-left: 2px solid; width:2%;'> </td>"
   end  
 end
@@ -111,7 +113,7 @@ def print_html_column_data(output, dregs, input_word1, type, header, lang)
     when "es"
       puts "Error muy inesperado."
     else
-      puts "Unexpected language #{lang}"
+      puts "Very unexpected language #{lang}"
     end
   end
 end
