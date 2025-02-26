@@ -672,10 +672,10 @@ def rhymecrime(word1, word2, goal, lang='en', output_format='text', debug_mode=f
   if(word1 == "" and word2 != "")
     word1, word2 = word2, word1
   end
-  if(word1 == "smiley" and word2 == "love" and goal == "related_rhymes")
-    result_header = "<font size=80><bold>KYELI!</bold></font>"; # easter egg for Kyeli
-    return [ ], :words, result_header
-  end
+  # if(word1 == "smiley" and word2 == "love" and goal == "related_rhymes")
+  #  result_header = "<font size=80><bold>KYELI!</bold></font>"; # easter egg for Kyeli
+  #  return [ ], :words, result_header
+  # end
 
   # main list of cases
   case goal
