@@ -644,6 +644,7 @@ describe 'RELATED' do
   
   context 'pirate' do
     ought_not_be_related 'pirate', 'pew', NOT_WORKING
+    oughta_be_related 'pirate', 'doubloons', NOT_WORKING
   end
 
   context 'halloween' do
