@@ -11,8 +11,7 @@ require 'msgpack'
 
 EMBED_VEC_FILE = 'wiki-news-220k.vec'
 EMBED_DICT_FILE = 'embed-dict.msgpack'
-SIMILARITY_THRESHOLD = 0.42
-print "SIMILARITY_THRESHOLD = #{SIMILARITY_THRESHOLD}\n"
+SIMILARITY_THRESHOLD = 0.38
 
 $embed_dict = nil
 def embed_dict()
