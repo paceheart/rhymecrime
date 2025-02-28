@@ -391,7 +391,7 @@ def find_rhyming_pairs(input_rel1, input_rel2, lang)
   related_rhymes = Hash.new {|h,k| h[k] = [] } # hash of arrays
   unless(blacklisted?(input_rel1) || blacklisted?(input_rel2))
     relateds1 = find_related_words(input_rel1, true, lang)
-    relateds2 = find_related_words(input_rel2, true, lang)
+    relateds2 = find_related_words(input_rel2, true, lang).to_set
     relateds1.each { |rel1|
       # rel1 is a word related to input_rel1. We're looking for rhyming pairs [rel1 rel2].
       debug "rhymes for #{rel1} (#{debug_info(rel1)}):<br>"
