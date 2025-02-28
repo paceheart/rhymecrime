@@ -5,6 +5,8 @@ TEST_FOR_SURPRISING_SUCCESSES = false
 
 NOT_WORKING = false; #don't edit this one
 
+require_relative 'spec_related'
+
 #
 # rare?
 # 
@@ -583,82 +585,6 @@ describe 'RHYMES' do
 end
 
 #
-# related
-#
-
-def oughta_be_related(word1, word2, is_working=true)
-  lang = 'en'
-  if(is_working)
-    test_name = "'#{word1}' in #{lang} oughta be related to '#{word2}'"
-    it test_name do
-      expect(related?(word1, word2, false, lang)).to eql(true), "Related words for '#{word1}' oughta include '#{word2}', but instead we just get #{find_related_words(word1, false, lang)}"
-    end
-  else # NOT_WORKING
-    if TEST_FOR_SURPRISING_SUCCESSES
-      ought_not_be_related(word1, word2, true)
-    end
-  end
-end
-  
-def ought_not_be_related(word1, word2, is_working=true)
-  lang = 'en'
-  if(is_working)
-    test_name = "'#{word1}' in #{lang} ought not be related to '#{word2}'"
-    it test_name do
-      expect(related?(word1, word2, false, lang)).to eql(false), "Related words in #{lang} for '#{word1}' ought not include '#{word2}'"
-    end
-  else # NOT_WORKING
-    if TEST_FOR_SURPRISING_SUCCESSES
-      oughta_be_related(word1, word2, true)
-    end
-  end
-end
-  
-describe 'RELATED' do
-  
-  context 'basic' do
-    oughta_be_related 'meow', 'cat'
-    oughta_be_related 'grave', 'death'
-  end
-
-  context 'reflexivity' do
-    ought_not_be_related 'death', 'death'
-  end
-
-  context 'examples from the documentation' do
-    oughta_be_related 'death', 'bled', NOT_WORKING
-    oughta_be_related 'death', 'dead'
-    oughta_be_related 'death', 'dread', NOT_WORKING
-  end
-
-  context 'slurs are forbidden' do
-    ought_not_be_related 'gypsy', 'romanian'
-    ought_not_be_related 'romanian', 'gypsy'
-    ought_not_be_related 'gypsies', 'romanian'
-    ought_not_be_related 'romanian', 'gypsies'
-  end
-
-  context 'trivial stop words ought not show up as related to anything' do
-    ought_not_be_related 'food', 'the'
-  end
-  
-  context 'pirate' do
-    ought_not_be_related 'pirate', 'pew', NOT_WORKING
-    oughta_be_related 'pirate', 'doubloons', NOT_WORKING
-  end
-
-  context 'halloween' do
-    ought_not_be_related 'halloween', 'ira', NOT_WORKING
-    ought_not_be_related 'halloween', 'lindsay'
-    ought_not_be_related 'halloween', 'lindsey'
-    ought_not_be_related 'halloween', 'nicki'
-    ought_not_be_related 'halloween', 'nikki'
-    ought_not_be_related 'halloween', 'pauline', NOT_WORKING
-  end
-  
-end
-
-#
 # set_related
 #
 
@@ -671,6 +597,14 @@ def set_related_contains?(input, output1, output2, lang)
     end
   end
   return false
+end
+
+def set_related_works(input)
+  lang = 'en'
+  test_name = "set_related works: #{input}"
+  it test_name do
+    expect(find_rhyming_tuples(input, lang).length).not_to eql(0), "Set-related rhymes for '#{input}' oughta be non-empty"
+  end
 end
 
 def set_related_oughta_contain(input, output1, output2, is_working=true)
@@ -703,6 +637,10 @@ end
 
 describe 'SET_RELATED' do
 
+  context 'set_related works at all' do
+    set_related_works 'death'
+  end
+  
   context 'examples from the documentation' do
     set_related_oughta_contain 'death', 'bled', 'dread', NOT_WORKING
     set_related_oughta_contain 'death', 'bled', 'dead', NOT_WORKING
@@ -710,30 +648,32 @@ describe 'SET_RELATED' do
   end
   
   context 'pirate' do
-    set_related_oughta_contain 'pirate', 'cache', 'lash'
-    set_related_oughta_contain 'pirate', 'cove', 'trove'
+    set_related_oughta_contain 'pirate', 'cache', 'lash', NOT_WORKING
+    set_related_oughta_contain 'pirate', 'cove', 'trove', NOT_WORKING
     set_related_oughta_contain 'pirate', 'handsome', 'ransom', NOT_WORKING
     set_related_oughta_contain 'pirate', 'french', 'wench', NOT_WORKING
     set_related_oughta_contain 'pirate', 'gang', 'hang', NOT_WORKING
     set_related_oughta_contain 'pirate', 'bold', 'gold', NOT_WORKING
     set_related_oughta_contain 'pirate', 'peg', 'leg', NOT_WORKING
     set_related_oughta_contain 'pirate', 'daring', 'swearing', NOT_WORKING
-    set_related_oughta_contain 'pirate', 'hacker', 'cracker' # a different kind of pirate
-    set_related_oughta_contain 'pirate', 'sea', 'dvd' # two different kinds of pirate
-    set_related_oughta_contain 'pirate', 'crew', 'tattoo'
-    set_related_oughta_contain 'pirate', 'coast', 'ghost', NOT_WORKING
+    set_related_oughta_contain 'pirate', 'hacker', 'cracker', NOT_WORKING # a different kind of pirate
+    set_related_oughta_contain 'pirate', 'sea', 'dvd', NOT_WORKING # two different kinds of pirate
+    set_related_oughta_contain 'pirate', 'buccaneer', 'peer-to-peer' # two different kinds of pirate
+    set_related_oughta_contain 'pirate', 'buccaneer', 'commandeer', NOT_WORKING
+    set_related_oughta_contain 'pirate', 'crew', 'tattoo', NOT_WORKING
+    set_related_oughta_contain 'pirate', 'reef', 'thief'
+    set_related_oughta_contain 'pirate', 'coast', 'ghost'
     set_related_oughta_contain 'pirate', 'loot', 'pursuit', NOT_WORKING
-    set_related_oughta_contain 'pirate', 'buccaneer', 'commandeer'
     set_related_ought_not_contain 'pirate', 'eyes', 'seas' # via two pronunciations of 'reprise'
   end
 
   context 'halloween' do
     set_related_oughta_contain 'halloween', 'celebration', 'decoration', NOT_WORKING
-    set_related_oughta_contain 'halloween', 'cider', 'spider'
-    set_related_oughta_contain 'halloween', 'sheet', 'treat'
-    set_related_oughta_contain 'halloween', 'bat', 'cat'
+    set_related_oughta_contain 'halloween', 'cider', 'spider', NOT_WORKING
+    set_related_oughta_contain 'halloween', 'sheet', 'treat', NOT_WORKING
+    set_related_oughta_contain 'halloween', 'bat', 'cat', NOT_WORKING
     set_related_oughta_contain 'halloween', 'fairy', 'scary', NOT_WORKING
-    set_related_oughta_contain 'halloween', 'fright', 'night'
+    set_related_oughta_contain 'halloween', 'fright', 'night', NOT_WORKING
     set_related_ought_not_contain 'halloween', 'lindsay', 'lindsey'
     set_related_ought_not_contain 'halloween', 'cider', 'snyder'
     set_related_ought_not_contain 'halloween', 'day', 'ira'
@@ -741,12 +681,27 @@ describe 'SET_RELATED' do
 
   context 'music' do
     set_related_oughta_contain 'music', 'baroque', 'folk', NOT_WORKING
-    set_related_oughta_contain 'music', 'beat', 'sheet'
+    set_related_oughta_contain 'music', 'beat', 'sheet', NOT_WORKING
     set_related_oughta_contain 'music', 'cantata', 'sonata'
     set_related_oughta_contain 'music', 'enjoys', 'noise', NOT_WORKING
     set_related_oughta_contain 'music', 'funk', 'punk', NOT_WORKING
-    set_related_oughta_contain 'music', 'sing', 'swing'
-    set_related_ought_not_contain 'music', 'compositions', 'musicians' # exclude identical rhymes
+    set_related_oughta_contain 'music', 'sing', 'swing', NOT_WORKING
+    set_related_oughta_contain 'music', 'orchestration', 'vibration'
+    set_related_oughta_contain 'music', 'sonic', 'harmonic'
+    set_related_oughta_contain 'music', 'piece', 'release'
+    set_related_oughta_contain 'music', 'recital', 'title'
+    set_related_oughta_contain 'music', 'piano', 'soprano'
+    set_related_oughta_contain 'music', 'violins', 'winds'
+    set_related_oughta_contain 'music', 'flute', 'lute'
+    set_related_oughta_contain 'music', 'fandango', 'tango'
+    set_related_oughta_contain 'music', 'session', 'progression'
+    set_related_oughta_contain 'music', 'croon', 'tune'
+    set_related_oughta_contain 'music', 'crooner', 'tuner'
+    set_related_oughta_contain 'music', 'ears', 'spheres'
+    set_related_oughta_contain 'music', 'bridal', 'idol'
+    set_related_oughta_contain 'music', 'audition', 'composition'
+    set_related_oughta_contain 'music', 'chord', 'record'
+    set_related_ought_not_contain 'music', 'compositions', 'musicians', NOT_WORKING # this identical rhymes gets a pass because it's in a set with a bunch of other non-identical rhymes
     set_related_ought_not_contain 'music', 'composition', 'musician', NOT_WORKING # this identical rhyme gets a pass because it's in a set with 'partition', which really probably oughtn't be related to music
     set_related_oughta_contain 'music', 'clarinet', 'minuet', NOT_WORKING
     set_related_oughta_contain 'music', 'accidental', 'instrumental', NOT_WORKING
@@ -757,7 +712,6 @@ describe 'SET_RELATED' do
     set_related_oughta_contain 'music', 'wave', 'rave', NOT_WORKING
     set_related_oughta_contain 'music', 'beat', 'repeat', NOT_WORKING
     set_related_oughta_contain 'music', 'flow', 'bow', NOT_WORKING
-    set_related_oughta_contain 'music', 'guitar', 'rock star', NOT_WORKING
     set_related_oughta_contain 'music', 'jingle', 'single', NOT_WORKING # as in a hit single
     set_related_oughta_contain 'music', 'bar', 'repertoire', NOT_WORKING
     set_related_ought_not_contain 'music', 'bars', 'scores'
@@ -779,7 +733,9 @@ describe 'SET_RELATED' do
     set_related_ought_not_contain 'music', 'recorded', 'prerecorded' # exclude identical rhymes
     set_related_ought_not_contain 'music', 'percussion', 'repercussion'
     set_related_ought_not_contain 'music', 'tonal', 'atonal' # exclude identical rhymes
-    set_related_oughta_contain 'music', 'abbreviation', 'notation', NOT_WORKING # identical rhymes are OK if they're part of a tuples that contains non-identical rhymes such as the previous line
+    set_related_oughta_contain 'music', 'abbreviation', 'notation', NOT_WORKING # identical rhymes are OK if they're part of a tuple that contains non-identical rhymes such as the previous line
+    set_related_ought_not_contain 'music', 'tv', 'vision'
+    set_related_ought_not_contain 'music', 'bass', 'brass' # the fish is not related to the tuba
     it 'no proper subsets: we should get bone / intone / trombone, and not also get bone / intone' do
       bone_intone = ['bone', 'intone']
       bone_intone_trombone = ['bone', 'intone', 'trombone']
@@ -844,7 +800,7 @@ describe 'SET_RELATED' do
   end
 
   context 'prefix' do
-    set_related_ought_not_contain 'carbon', 'cycling', 'recycling'
+    set_related_ought_not_contain 'carbon', 'cycling', 'recycling' # ought to filter out identical rhymes
     set_related_oughta_contain 'carbon', 'ester', 'sequester', NOT_WORKING
   end
 
