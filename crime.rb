@@ -28,6 +28,7 @@ require 'cgi'
 require_relative 'dict/utils_rhyme'
 require_relative 'dict/phoneme.rb'
 require_relative 'dict/pronunciation.rb'
+require_relative 'semantic-similarity'
 
 #
 # utilities
@@ -313,73 +314,36 @@ def find_synonyms(word)
 end
 
 #
-# Datamuse stuff
+# Semantic Relatedness
 #
 
-def results_to_related_words(results)
-  results_to_words(results).select { |res| relatable_word?(res) }
-end
-
-def results_to_words(results)
-  words = [ ]
-  results.each { |result|
-    word = result["word"]
-    unless(blacklisted?(word))
-      words.push(word)
-    end
-  }
-  return words
-end
-  
 def find_related_words(word, include_self, lang)
-  words = results_to_related_words(find_datamuse_results("", word, lang))
-  if(include_self)
-    words.push(word)
+  words = []
+  unless blacklisted?(word)
+    words = find_semantically_related_words(word, include_self, lang)
+    words = filter_out_dispreferred_words(words, word)
   end
-  return filter_out_dispreferred_words(words, word)
+  return words
 end
 
 def find_related_rhymes(rhyme, rel, lang)
-  filter_out_dispreferred_words(results_to_related_words(find_datamuse_results(rhyme, rel, lang)), rhyme)
+  result = find_rhyming_words(rhyme, lang, false)
+  result = filter_out_dispreferred_words(result, rhyme)
+  result = result.select{|w| semantically_related?(rhyme, w)}
 end
 
-def find_datamuse_results(rhyme, rel, lang)
-  if(blacklisted?(rhyme) || blacklisted?(rel) || !DATAMUSE_ENABLED)
-    return [ ]
-  else
-    return really_find_datamuse_results(rhyme, rel, lang)
-  end
-end
-
-def really_find_datamuse_results(rhyme, rel, lang)
-  request = "https://api.datamuse.com/words?"
-  if(lang != "en")
-    request += "v=#{lang}&"
-  end
-  if(rhyme != "")
-    request += "rel_rhy=#{rhyme}&";
-  end
-  if(rel != "")
-    request += "ml=#{rel}&";
-  end
-  if($datamuse_max != 100) # 100 is the default
-    request += "max=#{$datamuse_max}" # no trailing &, must be the last thing
-  end
-  # request = URI.escape(request) # @todo fix this
-
-  debug "#{request}<br/><br/>";
-  uri = URI.parse(request);
-  response = Net::HTTP.get_response(uri)
-  if(response.body() != "")
-    JSON.parse(response.body());
-  else
-    # @todo refactor
-    puts "Error connecting to Datamuse API: #{request} <br> Try again later."
-    abort
-  end
-end
-
+$rhyming_tuple_cache = Hash.new()
 def find_rhyming_tuples(input_rel1, lang)
+  if $rhyming_tuple_cache.key?(input_rel1)
+    return $rhyming_tuple_cache[input_rel1]
+  else
+    results = really_find_rhyming_tuples(input_rel1, lang)
+    $rhyming_tuple_cache[input_rel1] = results
+    return results
+  end
+end
+
+def really_find_rhyming_tuples(input_rel1, lang)
   # Rhyming word sets that are related to INPUT_REL1.
   # Each element of the returned array is an array of words that rhyme with each other and are all related to INPUT_REL1.
   # Algorithm:
@@ -740,14 +704,14 @@ end
 # Utilities
 #
 
+def related?(word1, word2, include_self=false, lang="en")
+  # Is word1 conceptually related to word2?
+  not blacklisted?(word1) and not blacklisted?(word2) and semantically_related?(word1, word2)
+end
+
 def rhymes?(word1, word2, lang="en", identical_ok=true)
   # Does word1 rhyme with word2?
   find_rhyming_words(word1, lang, identical_ok).include?(word2)
-end
-
-def related?(word1, word2, include_self=false, lang="en")
-  # Is word1 conceptually related to word2?
-  find_related_words(word1, include_self, lang).include?(word2)
 end
 
 # this is useful for manually filtering out crap from lemma_en. I've done it for 1 through 4.
