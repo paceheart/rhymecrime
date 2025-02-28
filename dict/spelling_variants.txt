@@ -169,6 +169,8 @@ italicizes italicises
 jail gaol
 jails gaols
 jewelry jewellery
+jeweler jeweller
+jewelers jewellers
 judgment judgement
 judgments judgements
 kilometer kilometre
@@ -191,6 +193,7 @@ liter litre
 liters litres
 lodgement lodgment
 lodgements lodgments
+makeover make-over
 maneuver manoeuvre
 maneuvered manoeuvred
 maneuvers manoeuvres
@@ -224,6 +227,7 @@ mustached moustached
 mustaches moustaches
 neighbor neighbour
 neighbors neighbours
+non-stick nonstick
 ocher ochre
 odor odour
 odors odours
