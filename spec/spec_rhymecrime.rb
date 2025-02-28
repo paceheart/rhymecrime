@@ -6,6 +6,7 @@ TEST_FOR_SURPRISING_SUCCESSES = false
 NOT_WORKING = false; #don't edit this one
 
 require_relative 'spec_related'
+#require 'stackprof'
 
 #
 # rare?
@@ -576,11 +577,11 @@ describe 'RHYMES' do
   context 'rhymes too imperfect to live' do
     ought_not_rhyme 'fennel', 'mental' # don't elide the t in 'mental'
     ought_not_rhyme 'just', 'kissed' # this could work in dialect, but ought not be standard
-
   end
   
   context 'loan words' do
     oughta_rhyme 'amour', 'bonjour'
+    ought_not_rhyme 'bocce', 'mocha'
   end
 end
 
@@ -799,6 +800,19 @@ describe 'SET_RELATED' do
     set_related_oughta_contain 'carbon', 'sink', 'zinc'
   end
 
+  context 'bread' do
+    set_related_oughta_contain 'bread', 'feast', 'yeast'
+  end
+  
+  context 'pasta' do
+    set_related_oughta_contain 'pasta', 'champagne', 'grain'
+    set_related_oughta_contain 'pasta', 'clam', 'ham'
+    set_related_oughta_contain 'pasta', 'dish', 'fish'
+    set_related_oughta_contain 'pasta', 'fork', 'pork'
+    set_related_oughta_contain 'pasta', 'italian', 'scallion'
+    set_related_oughta_contain 'pasta', 'paste', 'taste'
+  end 
+
   context 'prefix' do
     set_related_ought_not_contain 'carbon', 'cycling', 'recycling' # ought to filter out identical rhymes
     set_related_oughta_contain 'carbon', 'ester', 'sequester', NOT_WORKING
@@ -831,10 +845,17 @@ end
 # pair_related
 #
 
+$dump_id = 0
 def pair_related_contains?(lang, input1, input2, output1, output2)
   # Generate pair_related rhymes for INPUT1 / INPUT2. Is one of them "OUTPUT1 / OUTPUT2"?
-  target_pair = [output1, output2]
-  find_rhyming_pairs(input1, input2, lang).include? target_pair
+  #dumpfile = "/tmp/stackprof-cpu-rhymecrime-" + $dump_id.to_s() + ".dump"
+  result = false
+  #StackProf.run(mode: :cpu, out: dumpfile) do
+  #  $dump_id += 1
+  #  target_pair = [output1, output2]
+    result = find_rhyming_pairs(input1, input2, lang).include? target_pair
+  #end
+  return result
 end
 
 def pair_related_oughta_contain(input1, input2, output1, output2, is_working=true)
@@ -905,6 +926,8 @@ describe 'PAIR_RELATED' do
     pair_related_oughta_contain 'food', 'evil', 'organic', 'satanic'
     pair_related_oughta_contain 'food', 'evil', 'starvation', 'abomination'
     pair_related_oughta_contain 'food', 'evil', 'wine', 'malign'
+    pair_related_oughta_contain 'food', 'evil', 'waiter', 'traitor'
+    pair_related_oughta_contain 'food', 'evil', 'wheat', 'deceit'
     pair_related_oughta_contain 'food', 'evil', 'dessert', 'hurt'
     pair_related_ought_not_contain 'food', 'evil', 'produce', 'abuse', NOT_WORKING # the food sense of 'produce' is pronounced PRO-duce, which ought not rhyme with 'abuse'
   end

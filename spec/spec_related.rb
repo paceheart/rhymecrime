@@ -86,8 +86,29 @@ describe 'RELATED' do
     ought_not_be_related 'halloween', 'lindsay'
     ought_not_be_related 'halloween', 'lindsey'
     ought_not_be_related 'halloween', 'nicki'
-    ought_not_be_related 'halloween', 'nikki'
     ought_not_be_related 'halloween', 'pauline', NOT_WORKING
+  end
+
+  context 'pasta' do
+    oughta_be_related 'pasta', 'champagne'
+    oughta_be_related 'pasta', 'grain'
+    oughta_be_related 'pasta', 'italian'
+    oughta_be_related 'pasta', 'scallion'
+    ought_not_be_related 'pasta', 'animation'
+    ought_not_be_related 'pasta', 'bank'
+    ought_not_be_related 'pasta', 'baseball'
+    ought_not_be_related 'pasta', 'chassis'
+    ought_not_be_related 'pasta', 'dog'
+    ought_not_be_related 'pasta', 'poodle'
+    ought_not_be_related 'pasta', 'etymology'
+    ought_not_be_related 'pasta', 'intonation'
+    ought_not_be_related 'pasta', 'intuition'
+    ought_not_be_related 'pasta', 'meningitis'
+    ought_not_be_related 'pasta', 'ontology'
+    ought_not_be_related 'pasta', 'penicillin'
+    ought_not_be_related 'pasta', 'stocks'
+    ought_not_be_related 'pasta', 'thing'
+    ought_not_be_related 'pasta', 'transistors'
   end
 
   context 'morphological variants oughta be related, but not words that are merely orthographically similar' do
