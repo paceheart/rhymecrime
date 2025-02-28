@@ -1,0 +1,7 @@
+embed-dict-1.msgpack
+embed-dict-2.msgpack
+embed-dict-3.msgpack
+*.rb~
+hugging-face-access-token.txt
+semantic-similarity - HuggingFace Copy.rb
+embed-dict.msgpack
