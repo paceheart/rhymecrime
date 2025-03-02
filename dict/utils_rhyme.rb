@@ -499,17 +499,6 @@ end
 # rhyme signature
 #
 
-def lang(lang, en_string, es_string)
-  case lang
-  when "en"
-    return en_string
-  when "es"
-    return es_string
-  else
-    abort "Unexpected language #{lang}"
-  end
-end
-
 def single_consonant?(phoneme_cluster)
   return phoneme_cluster.length == 1 && !phoneme_cluster[0].vowel?
 end

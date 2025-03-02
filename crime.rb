@@ -46,11 +46,10 @@ def debug(string)
   end
 end
 
-def debug_info(word, lang='en')
-  lang = 'en' # @hack
+def debug_info(word)
   result = ""
   i = 0
-  prons = pronunciations(word, lang)
+  prons = pronunciations(word)
   for pron in prons
     i = i + 1
     unless i == 1
@@ -113,28 +112,13 @@ def load_rhyme_signature_dict_as_hash()
   load_string_hash("dict/#{RHYME_SIGNATURE_DICT_FILENAME}") or die "First run dict/dict.rb to generate dictionary caches"
 end
 
-def pronunciations(word, lang)
-  case lang
-  when "en"
-    return english_pronunciations(word)
-  when "es"
-    return spanish_pronunciations(word)
-  else
-    abort "Unexpected language #{lang}"
-  end
-end
-
-def english_pronunciations(word)
+def pronunciations(word)
   word_info = word_dict[word]
   if(word_info)
     return word_info[1]
   else
     return [ ]
   end
-end
-
-def spanish_pronunciations(word)
-  english_pronunciations(word) # stub
 end
 
 def frequency(word)
@@ -150,8 +134,8 @@ def rdict_lookup(rsig)
   rdict[rsig] || [ ]
 end
 
-def find_preferred_rhyming_words(word, lang)
-  return filter_out_dispreferred_words(find_rhyming_words(word, lang, false), word)
+def find_preferred_rhyming_words(word)
+  return filter_out_dispreferred_words(find_rhyming_words(word, false), word)
 end
 
 def filter_out_dispreferred_words(words, focal_word)
@@ -206,14 +190,14 @@ def prefix_words(words, focal_word)
   return result
 end
 
-def find_rhyming_words(word, lang, identical_ok=true)
+def find_rhyming_words(word, identical_ok=true)
   # merges multiple pronunciations of WORD
   # use our compiled rhyme signature dictionary; we don't need the Datamuse API for simple rhyme lookup
   rhyming_words = Array.new
   unless(blacklisted?(word))
     for form in all_forms(word) # to increase the likelihood of a hit, try all spelling variants
       debug "Finding rhyming words for #{form} #{debug_info(form)}:"
-      for pron in pronunciations(form, lang)
+      for pron in pronunciations(form)
         for rhyme in find_rhyming_words_for_pronunciation(pron, identical_ok)
           rhyming_words.push(rhyme)
         end
@@ -231,8 +215,7 @@ def identical_rhyme?(rhyme, target_rhyme_syllables_array)
   # Used to filter out identical rhymes, where the entire final stressed syllable is identical to the one in RSIG.
   # e.g. if you input "leave", this will return "grieve" but not "believe", because the rhyming syllable
   # "L_IY_V" is identical.
-  lang = 'en' # @hack
-  for pron in pronunciations(rhyme, lang)
+  for pron in pronunciations(rhyme)
     if pron.rhyme_syllables_array != target_rhyme_syllables_array
       return false; # we found a pronunciation with a different rhyming syllable; this rhyme is perfect
     end
@@ -241,10 +224,9 @@ def identical_rhyme?(rhyme, target_rhyme_syllables_array)
 end
 
 def all_identical_rhymes?(words)
-  lang = 'en' # @hack
   syllable_signatures = Hash.new
   for word in words do
-    for pron in pronunciations(word, lang)
+    for pron in pronunciations(word)
       syllable_signatures[pron.rhyme_syllables_string] = true
     end
   end
@@ -276,9 +258,9 @@ def find_rhyming_words_for_pronunciation(pron, identical_ok=true)
   return results || [ ]
 end
 
-def has_rhyming_word?(word, lang)
+def has_rhyming_word?(word)
   unless(blacklisted?(word))
-    for pron in pronunciations(word, lang)
+    for pron in pronunciations(word)
       rsig = pron.rhyme_signature
       if(! rdict_lookup(rsig).empty?)
         return true
@@ -288,16 +270,15 @@ def has_rhyming_word?(word, lang)
   return false
 end
 
-def filter_out_rhymeless_words(words, lang)
-  words.select { |word| has_rhyming_word?(word, lang) }
+def filter_out_rhymeless_words(words)
+  words.select { |word| has_rhyming_word?(word) }
 end
 
 #
 # WordNet stuff
 #
 
-def find_synsets(word, lang)
-  # ignore lang, @todo hook up Spanish WordNet
+def find_synsets(word)
   lemmas = WordNet::Lemma.find_all(word)
   synsets = lemmas.map { |lemma| lemma.synsets }
   return synsets.flatten || [ ]
@@ -317,33 +298,33 @@ end
 # Semantic Relatedness
 #
 
-def find_related_words(word, include_self, lang)
+def find_related_words(word, include_self)
   words = []
   unless blacklisted?(word)
-    words = find_semantically_related_words(word, include_self, lang)
+    words = find_semantically_related_words(word, include_self)
     words = filter_out_dispreferred_words(words, word)
   end
   return words
 end
 
-def find_related_rhymes(rhyme, rel, lang)
-  result = find_rhyming_words(rhyme, lang, false)
+def find_related_rhymes(rhyme, rel)
+  result = find_rhyming_words(rhyme, false)
   result = filter_out_dispreferred_words(result, rhyme)
   result = result.select{|w| semantically_related?(rhyme, w)}
 end
 
 $rhyming_tuple_cache = Hash.new()
-def find_rhyming_tuples(input_rel1, lang)
+def find_rhyming_tuples(input_rel1)
   if $rhyming_tuple_cache.key?(input_rel1)
     return $rhyming_tuple_cache[input_rel1]
   else
-    results = really_find_rhyming_tuples(input_rel1, lang)
+    results = really_find_rhyming_tuples(input_rel1)
     $rhyming_tuple_cache[input_rel1] = results
     return results
   end
 end
 
-def really_find_rhyming_tuples(input_rel1, lang)
+def really_find_rhyming_tuples(input_rel1)
   # Rhyming word sets that are related to INPUT_REL1.
   # Each element of the returned array is an array of words that rhyme with each other and are all related to INPUT_REL1.
   # Algorithm:
@@ -354,9 +335,9 @@ def really_find_rhyming_tuples(input_rel1, lang)
   # Return all buckets with two or more words in them.
   related_rhymes = Hash.new {|h,k| h[k] = [] } # hash of arrays
   unless(blacklisted?(input_rel1))
-    relateds1 = find_related_words(input_rel1, true, lang)
+    relateds1 = find_related_words(input_rel1, true)
     relateds1.each { |rel1|
-      for rel1pron in pronunciations(rel1, lang)
+      for rel1pron in pronunciations(rel1)
         rsig = rel1pron.rhyme_signature
         debug "Rhymes for #{rel1} [#{rsig}] #{debug_info(rel1)}:"
         find_rhyming_words_for_pronunciation(rel1pron, true).each { |rhyme1|
@@ -379,7 +360,7 @@ def really_find_rhyming_tuples(input_rel1, lang)
   return tuples
 end
 
-def find_rhyming_pairs(input_rel1, input_rel2, lang)
+def find_rhyming_pairs(input_rel1, input_rel2)
   # Pairs of rhyming words where the first word is related to INPUT_REL1 and the second word is related to INPUT_REL2
   # Each element of the returned array is a pair of rhyming words [W1 W2] where W1 is related to INPUT_REL1 and W2 is related to INPUT_REL2
   # Algorithm:
@@ -390,12 +371,12 @@ def find_rhyming_pairs(input_rel1, input_rel2, lang)
   #   If RHYME rhymes with REL1 and is related to INPUT_REL2, we win! "REL1 / RHYME" is a pair.
   related_rhymes = Hash.new {|h,k| h[k] = [] } # hash of arrays
   unless(blacklisted?(input_rel1) || blacklisted?(input_rel2))
-    relateds1 = find_related_words(input_rel1, true, lang)
-    relateds2 = find_related_words(input_rel2, true, lang).to_set
+    relateds1 = find_related_words(input_rel1, true)
+    relateds2 = find_related_words(input_rel2, true).to_set
     relateds1.each { |rel1|
       # rel1 is a word related to input_rel1. We're looking for rhyming pairs [rel1 rel2].
       debug "rhymes for #{rel1} (#{debug_info(rel1)}):<br>"
-      find_rhyming_words(rel1, lang, false).each { |rhyme| # check all non-identical rhymes of REL1, call each one 'RHYME'
+      find_rhyming_words(rel1, false).each { |rhyme| # check all non-identical rhymes of REL1, call each one 'RHYME'
         if(relateds2.include? rhyme) # is RHYME related to INPUT_REL2? If so, we win!
           related_rhymes[rel1].push(rhyme)
           debug " " + rhyme + " " + debug_info(rhyme)
@@ -419,7 +400,7 @@ end
 # Display
 #
 
-def print_synsets(synsets, input_word, lang)
+def print_synsets(synsets, input_word)
   # prints the synsets in SYNSETS that are nontrivial wrt INPUT_WORD
   isFirst = true
   for synset in synsets
@@ -433,7 +414,7 @@ def print_synsets(synsets, input_word, lang)
       puts short_gloss(synset)
       cgi_print "</i>"
       puts
-      print_words(synonyms, lang)
+      print_words(synonyms)
     end
   end
 end
@@ -448,55 +429,55 @@ def short_gloss(synset)
   end
 end
 
-def print_tuple(tuple, lang)
+def print_tuple(tuple)
   # this basically just pushes the rare words to the end, but we could do something snazzier if we want
   cgi_print "<div class='output_tuple'><p class='output_p'>"
   good_tuple = tuple.reject{ |t| rare?(t) }
   bad_tuple  = tuple.select{ |t| rare?(t) }
   if(good_tuple.empty?)
-    print_half_of_tuple(bad_tuple, lang)
+    print_half_of_tuple(bad_tuple)
   elsif(bad_tuple.empty?)
-    print_half_of_tuple(good_tuple, lang)
+    print_half_of_tuple(good_tuple)
   else
-    print_half_of_tuple(good_tuple, lang)
+    print_half_of_tuple(good_tuple)
     print " / "
-    print_half_of_tuple(bad_tuple, lang)
+    print_half_of_tuple(bad_tuple)
   end
   cgi_print "</p></div>"
   puts
   STDOUT.flush
 end
   
-def print_half_of_tuple(tuple, lang)
+def print_half_of_tuple(tuple)
   # print TUPLE separated by slashes
   i = 0
   tuple.each { |elem|
     if(i > 0)
       print " / "
     end
-    print_word(elem, lang)
+    print_word(elem)
     i += 1
   }
 end
 
-def print_tuples(tuples, lang)
+def print_tuples(tuples)
   # return boolean, did I print anything? i.e. was TUPLES nonempty?
   success = !tuples.empty?
   if(success)
     tuples.sort.uniq.each { |tuple|
-      print_tuple(tuple, lang)
+      print_tuple(tuple)
     }
   end
   return success
 end
 
-def print_words(words, lang)
+def print_words(words)
   success = !words.empty?
   if(success)
     words.sort.uniq.each { |word|
       cgi_print "<div class='output_tuple'>"
       cgi_print "<p class='output_p'>"
-      print_word(word, lang)
+      print_word(word)
       if($display_word_frequencies)
         print " (#{frequency(word)})"
       end
@@ -584,12 +565,12 @@ def filter_out_rare_pairs(tuples)
   return good, bad
 end
 
-def print_word(word, lang)
+def print_word(word)
   word = word.gsub(/\(.*\)/, '') # remove stuff in parentheses
-  got_rhymes = !pronunciations(word, lang).empty?
+  got_rhymes = !pronunciations(word).empty?
   if(got_rhymes)
     # @todo urlencode
-    cgi_print lang(lang, "<a href='rhyme.rb?word1=#{word}'>", "<a href='rimar.rb?word1=#{word}'>")
+    cgi_print "<a href='rhyme.rb?word1=#{word}'>"
   end
   ubiq = 255
   if(rare?(word))
@@ -612,7 +593,7 @@ def focal_word(word)
   return "\"<span class='focal_word'>#{word}</span>\""
 end
 
-def rhymecrime(word1, word2, goal, lang='en', output_format='text', debug_mode=false, datamuse_max=DEFAULT_DATAMUSE_MAX)
+def rhymecrime(word1, word2, goal, output_format='text', debug_mode=false, datamuse_max=DEFAULT_DATAMUSE_MAX)
   # When you enter a single word,
   #   RhymeCrime displays rhymes for that word (see find_rhyming_words), separating out the rare words (see rare?)
   #   and in a separate column, displays sets of rhyming words (see find_rhyming_tuples)
@@ -644,55 +625,37 @@ def rhymecrime(word1, word2, goal, lang='en', output_format='text', debug_mode=f
   # main list of cases
   case goal
   when "rhymes"
-    result_header = lang(lang, "Rhymes for", "Rimas para") + " " + focal_word(word1) + header_eol
-    result, dregs = filter_out_rare_words(find_preferred_rhyming_words(word1, lang))
+    result_header = "Rhymes for " +_word(word1) + header_eol
+    result, dregs = filter_out_rare_words(find_preferred_rhyming_words(word1))
     result_type = :words
   when "related"
-    result_header = lang(lang, "Words related to", "Palabras relacionadas con") + " " + focal_word(word1) + header_eol
-    unless DATAMUSE_ENABLED
-      result_header = "<i>This section currently under (re)construction. Try back in a couple of days. I'm working on it! -Pace</i>"
-    end
-    result, dregs = filter_out_rare_words(filter_out_rhymeless_words(find_related_words(word1, false, lang), lang))
+    result_header = "Words related to " +_word(word1) + header_eol
+    result, dregs = filter_out_rare_words(filter_out_rhymeless_words(find_related_words(word1, false)))
     result_type = :words
   when "set_related"
-    result_header = lang(lang, "Rhyming word sets related to", "Conjuntos de rimas relacionadas con") + " " + focal_word(word1) + header_eol
-    unless DATAMUSE_ENABLED
-      result_header = "<i>This section currently under (re)construction. Try back in a couple of days. I'm working on it! -Pace</i>"
-    end
-    result, dregs = filter_out_rare_tuples(find_rhyming_tuples(word1, lang))
+    result_header = "Rhyming word sets related to " + focal_word(word1) + header_eol
+    result, dregs = filter_out_rare_tuples(find_rhyming_tuples(word1))
     result_type = :tuples
   when "pair_related"
     if(word1 == "" or word2 == "")
-      result_header = lang(lang, "I need two words to find rhyming pairs. For example, Word 1 = <span class='focal_word'>crime</span>, Word 2 = <span class='focal_word'>heaven</span>", "Necesito dos palabras para buscar pares rimandos")
-      unless DATAMUSE_ENABLED
-        result_header = "<i>This section currently under (re)construction. Try back in a couple of days. I'm working on it! -Pace</i>"
-      end
+      result_header = "I need two words to find rhyming pairs. For example, Word 1 = <span class='focal_word'>crime</span>, Word 2 = <span class='focal_word'>heaven</span>"
       result_type = :bad_input
     else
-      result_header = lang(lang, "Rhyming word pairs where the first word is related to", "Pares de palabras rimandas, la primera palabra está relacionada con") + " " + focal_word(word1) + " " + lang(lang, "and the second word is related to ", "y la segunda palabra está relacionada con") + " " + focal_word(word2) + header_eol
-      unless DATAMUSE_ENABLED
-        result_header = "<i>This section currently under (re)construction. Try back in a couple of days. I'm working on it! -Pace</i>"
-      end
-      result, dregs = filter_out_rare_tuples(find_rhyming_pairs(word1, word2, lang))
+      result_header = "Rhyming word pairs where the first word is related to" + " " + focal_word(word1) + " and the second word is related to " + " " + focal_word(word2) + header_eol
+      result, dregs = filter_out_rare_tuples(find_rhyming_pairs(word1, word2))
       result_type = :tuples
     end
   when "related_rhymes"
     if(word1 == "" or word2 == "")
-      result_header = lang(lang, "I need two words to find related rhyming pairs. For example, Word 1 = <span class='focal_word'>please</span>, Word 2 = <span class='focal_word'>cats</span>", "Necesito dos palabras para buscar pares rimandos relacionados.")
-      unless DATAMUSE_ENABLED
-        result_header = "<i>This section currently under (re)construction. Try back in a couple of days. I'm working on it! -Pace</i>"
-      end
+      result_header = "I need two words to find related rhyming pairs. For example, Word 1 = <span class='focal_word'>please</span>, Word 2 = <span class='focal_word'>cats</span>")
       result_type = :bad_input
     else
-      result_header = lang(lang, "Rhymes for", "Rimas para") + " " + focal_word(word1) + " " + lang(lang, "that are related to", "que están relacionadas con") + " " + focal_word(word2) + header_eol
-      unless DATAMUSE_ENABLED
-        result_header = "<i>This section currently under (re)construction. Try back in a couple of days. I'm working on it! -Pace</i>"
-      end
-      result, dregs = filter_out_rare_words(find_related_rhymes(word1, word2, lang))
+      result_header = "Rhymes for" + " " + focal_word(word1) + " that are related to " + focal_word(word2) + header_eol
+      result, dregs = filter_out_rare_words(find_related_rhymes(word1, word2))
       result_type = :words
     end
   else
-    result_header = lang(lang, "Invalid selection.", "Selección invalida.")
+    result_header = "Invalid selection."
     result_type = :bad_input
   end
   debug "result = #{result}"
@@ -704,14 +667,14 @@ end
 # Utilities
 #
 
-def related?(word1, word2, include_self=false, lang="en")
+def related?(word1, word2, include_self=false)
   # Is word1 conceptually related to word2?
   not blacklisted?(word1) and not blacklisted?(word2) and semantically_related?(word1, word2)
 end
 
-def rhymes?(word1, word2, lang="en", identical_ok=true)
+def rhymes?(word1, word2, identical_ok=true)
   # Does word1 rhyme with word2?
-  find_rhyming_words(word1, lang, identical_ok).include?(word2)
+  find_rhyming_words(word1, identical_ok).include?(word2)
 end
 
 # this is useful for manually filtering out crap from lemma_en. I've done it for 1 through 4.

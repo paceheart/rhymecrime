@@ -12,6 +12,7 @@ require 'msgpack'
 EMBED_VEC_FILE = 'wiki-news-220k.vec'
 EMBED_DICT_FILE = 'embed-dict.msgpack'
 SIMILARITY_THRESHOLD = 0.38
+print "SIMILARITY_THRESHOLD = #{SIMILARITY_THRESHOLD}\n"
 
 $embed_dict = nil
 def embed_dict()
@@ -74,7 +75,7 @@ def percent_similarity_threshold
   (SIMILARITY_THRESHOLD * 100).round
 end
 
-def semantically_related?(word1, word2, include_self=false, lang="en")
+def semantically_related?(word1, word2, include_self=false)
   # Is word1 semantically related to word2?
   similarity(word1, word2) >= SIMILARITY_THRESHOLD
 end
@@ -97,7 +98,7 @@ def print_similarity(word1, word2)
   println(word1 + " " + word2 + ": " + percent_similarity(word1, word2))
 end
 
-def find_semantically_related_words(word, include_self, lang)
+def find_semantically_related_words(word, include_self)
   words = find_all_semantically_related_words(word)
   if(include_self)
     words.push(word)
@@ -129,11 +130,13 @@ end
 
 def really_find_all_semantically_related_words(word)
   words = []
+  print "Finding words related to #{word}... "
   for w in word_dict().keys do
     if w != word and semantically_related?(word, w)
       words.push(w)
     end
   end
+  print "#{words.length()}\n"
   return words
 end
 

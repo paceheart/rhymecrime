@@ -5,4 +5,4 @@
 #
 
 require_relative 'frontend'
-compute_and_print_html('en')
+compute_and_print_html
