@@ -225,6 +225,24 @@ describe 'SET_RELATED' do
     set_related_oughta_contain 'pasta', 'paste', 'taste'
   end 
 
+  context 'crime' do
+    set_related_oughta_contain 'crime', 'acquit', 'commit'
+    set_related_oughta_contain 'crime', 'acquitted', 'committed'
+    set_related_oughta_contain 'crime', 'arrest', 'confessed'
+    set_related_oughta_contain 'crime', 'sleuth', 'truth'
+    set_related_oughta_contain 'crime', 'drugs', 'thugs'
+    set_related_oughta_contain 'crime', 'denial', 'trial'
+    set_related_oughta_contain 'crime', 'job', 'mob'
+    set_related_oughta_contain 'crime', 'sentence', 'repentance'
+    set_related_oughta_contain 'crime', 'skulduggery', 'thuggery'
+    set_related_ought_not_contain 'crime', 'dishonesty', 'honesty'
+    set_related_ought_not_contain 'crime', 'dog', 'smog'
+    set_related_ought_not_contain 'crime', 'gas', 'mass'
+    set_related_ought_not_contain 'crime', 'lake', 'quake'
+    set_related_ought_not_contain 'crime', 'nerd', 'word'
+    set_related_ought_not_contain 'crime', 'sky', 'sci-fi'
+  end
+  
   context 'prefix' do
     set_related_ought_not_contain 'carbon', 'cycling', 'recycling' # ought to filter out identical rhymes
     set_related_oughta_contain 'carbon', 'ester', 'sequester', NOT_WORKING
@@ -264,7 +282,7 @@ def pair_related_contains?(input1, input2, output1, output2)
   result = false
   #StackProf.run(mode: :cpu, out: dumpfile) do
   #  $dump_id += 1
-  #  target_pair = [output1, output2]
+    target_pair = [output1, output2]
     result = find_rhyming_pairs(input1, input2).include? target_pair
   #end
   return result
@@ -327,7 +345,7 @@ describe 'PAIR_RELATED' do
     pair_related_oughta_contain 'food', 'evil', 'bread', 'undead', NOT_WORKING
     pair_related_oughta_contain 'food', 'evil', 'heinz', 'maligns', NOT_WORKING
     pair_related_oughta_contain 'food', 'evil', 'served', 'undeserved', NOT_WORKING # this is not quite an identical rhyme becauze the s in undeserved is pronounced like a z
-    pair_related_ought_not_contain 'food', 'evil', 'sanitation', 'temptation'
+    pair_related_ought_not_contain 'food', 'evil', 'sanitation', 'temptation' # identical rhyme
     pair_related_ought_not_contain 'food', 'evil', 'healthy', 'unhealthy'
     pair_related_ought_not_contain 'food', 'evil', 'contamination', 'condemnation'
     pair_related_oughta_contain 'food', 'evil', 'savory', 'slavery', NOT_WORKING
@@ -344,6 +362,16 @@ describe 'PAIR_RELATED' do
 
   context 'food dark' do
     pair_related_oughta_contain 'food', 'dark', 'turkey', 'murky'
+    pair_related_oughta_contain 'food', 'dark', 'veggie', 'edgy'
+    pair_related_oughta_contain 'food', 'dark', 'consume', 'gloom'
+    pair_related_oughta_contain 'food', 'dark', 'buffet', 'gray'
+    pair_related_oughta_contain 'food', 'dark', 'crab', 'drab'
+    pair_related_oughta_contain 'food', 'dark', 'crustacean', 'illumination'
+    pair_related_oughta_contain 'food', 'dark', 'hydration', 'illumination'
+    pair_related_oughta_contain 'food', 'dark', 'metabolic', 'melancholic'
+    pair_related_oughta_contain 'food', 'dark', 'ration', 'ashen'
+    pair_related_oughta_contain 'food', 'dark', 'snack', 'black'
+    pair_related_oughta_contain 'food', 'dark', 'cuisine', 'unseen'
   end
 
 end

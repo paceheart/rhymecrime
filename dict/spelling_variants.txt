@@ -142,6 +142,7 @@ harmonizing harmonising
 hematology haematology
 heme haem
 hemophilia haemophilia
+heroes heros
 homolog homologue
 homologs homologues
 honor honour

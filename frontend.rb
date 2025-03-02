@@ -29,7 +29,7 @@ def parse_cgi_input
   return word1, word2
 end
 
-def print_html_header(word1, word2)
+def print_html_header(word1, word2, title="RhymeCrime", handler="rhyme.rb")
   head = IO.read("html/header.html");
 
   # tweak the title of the webpage to include the submitted word(s)
@@ -41,6 +41,8 @@ def print_html_header(word1, word2)
     end
   end
   head = head.gsub("<title>RhymeCrime</title>","<title>RhymeCrime#{clarifier}</title>")
+  head = head.gsub("RhymeCrime", title)
+  head = head.gsub("rhyme.rb", handler)
 
   cgi_puts head
   debug "DEBUG MODE"
@@ -130,7 +132,7 @@ def print_html_footer
 end
 
 # RhymeCrime
-def compute_and_print_html()
+def compute_and_print_html
   # CGI Input: word1, word2 (optional)
   # Output: A bunch of stuff
   word1, word2 = parse_cgi_input
@@ -176,10 +178,22 @@ def print_similar_words(similar_words, focal_word)
   return success
 end
 
-def compute_and_print_html_similar_middle(word1)
-  print_similarity_color_legend
-  similar_words = find_related_words(word1, false)
+def compute_and_print_html_similar_pair(word1, word2)
+  cgi_print "'#{word1}' is <span style='color: #{word_similarity_color(word1, word2)}'>#{percent_similarity(word1, word2)} similar</span> to '#{word2}'\n"
+end
+
+def compute_and_print_html_all_similar(word1)
+  similar_words, dregs = filter_out_rare_words(find_related_words(word1, false))
   print_similar_words(similar_words, word1)
+end
+
+def compute_and_print_html_similar_middle(word1, word2)
+  print_similarity_color_legend
+  if word2 != ""
+    compute_and_print_html_similar_pair(word1, word2)
+  else
+    compute_and_print_html_all_similar(word1)
+  end
 end
 
 # Similar
@@ -187,7 +201,7 @@ def compute_and_print_similar_html
   # CGI Input: word1, word2 (optional)
   # Output: A bunch of stuff
   word1, word2 = parse_cgi_input
-  print_html_header("stub", "stub")
-  compute_and_print_html_similar_middle(word1)
+  print_html_header(word1, word2, title="Semantic Similarity", handler="dev/similar.rb")
+  compute_and_print_html_similar_middle(word1, word2)
   print_html_footer
 end

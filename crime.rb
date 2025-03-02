@@ -298,10 +298,10 @@ end
 # Semantic Relatedness
 #
 
-def find_related_words(word, include_self)
+def find_related_words(word, include_self, include_rhymeless=true)
   words = []
   unless blacklisted?(word)
-    words = find_semantically_related_words(word, include_self)
+    words = find_semantically_related_words(word, include_self, include_rhymeless)
     words = filter_out_dispreferred_words(words, word)
   end
   return words
