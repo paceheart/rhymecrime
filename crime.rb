@@ -625,11 +625,11 @@ def rhymecrime(word1, word2, goal, output_format='text', debug_mode=false, datam
   # main list of cases
   case goal
   when "rhymes"
-    result_header = "Rhymes for " +_word(word1) + header_eol
+    result_header = "Rhymes for " + focal_word(word1) + header_eol
     result, dregs = filter_out_rare_words(find_preferred_rhyming_words(word1))
     result_type = :words
   when "related"
-    result_header = "Words related to " +_word(word1) + header_eol
+    result_header = "Words related to " + focal_word(word1) + header_eol
     result, dregs = filter_out_rare_words(filter_out_rhymeless_words(find_related_words(word1, false)))
     result_type = :words
   when "set_related"
@@ -647,7 +647,7 @@ def rhymecrime(word1, word2, goal, output_format='text', debug_mode=false, datam
     end
   when "related_rhymes"
     if(word1 == "" or word2 == "")
-      result_header = "I need two words to find related rhyming pairs. For example, Word 1 = <span class='focal_word'>please</span>, Word 2 = <span class='focal_word'>cats</span>")
+      result_header = "I need two words to find related rhyming pairs. For example, Word 1 = <span class='focal_word'>please</span>, Word 2 = <span class='focal_word'>cats</span>"
       result_type = :bad_input
     else
       result_header = "Rhymes for" + " " + focal_word(word1) + " that are related to " + focal_word(word2) + header_eol
