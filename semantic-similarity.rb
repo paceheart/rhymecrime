@@ -7,12 +7,12 @@
 
 require_relative 'Cosine'
 require 'msgpack'
-#require_relative 'crime'
 
 EMBED_VEC_FILE = 'wiki-news-220k.vec'
 EMBED_DICT_FILE = 'embed-dict.msgpack'
 SIMILARITY_THRESHOLD = 0.38
-print "SIMILARITY_THRESHOLD = #{SIMILARITY_THRESHOLD}\n"
+#print "SIMILARITY_THRESHOLD = #{SIMILARITY_THRESHOLD}\n"S
+SIMILAR_MAX = 1000
 
 $embed_dict = nil
 def embed_dict()
@@ -98,14 +98,6 @@ def print_similarity(word1, word2)
   println(word1 + " " + word2 + ": " + percent_similarity(word1, word2))
 end
 
-def find_semantically_related_words(word, include_self)
-  words = find_all_semantically_related_words(word)
-  if(include_self)
-    words.push(word)
-  end
-  return words
-end
-
 $related_dict = nil
 def related_dict
   # word => array of semantically related words
@@ -119,6 +111,18 @@ def load_related_dict
   Hash.new() # @todo load from cache
 end
   
+def find_semantically_related_words(word, include_self)
+  words = find_all_semantically_related_words(word)
+  if(include_self)
+    words.push(word)
+  end
+  if words.length > SIMILAR_MAX
+    words = words.sort_by!{|w| similarity(w, word)}
+    words = words[0..SIMILAR_MAX-1]
+  end
+  return words
+end
+
 def find_all_semantically_related_words(word)
   if related_dict().key?(word)
     return related_dict()[word]
@@ -130,14 +134,56 @@ end
 
 def really_find_all_semantically_related_words(word)
   words = []
-  print "Finding words related to #{word}... "
+  debug "Finding words related to #{word}... "
   for w in word_dict().keys do
     if w != word and semantically_related?(word, w)
       words.push(w)
     end
   end
-  print "#{words.length()}\n"
+  debug "#{words.length()}\n"
   return words
+end
+
+def similarity_color(similarity)
+  case similarity
+  when -1..0.34999
+    "#ff5555" # red
+  when 0.35..0.37999
+    "orange"
+  when 0.38..0.38999
+    "yellow"
+  when 0.39..0.39999
+    "#00cc22" # green
+  when 0.40..0.40999
+    "#8888ff" # blue
+  when 0.41..0.41999
+    "#aa33cc" # purple
+  when 0.42..0.44999
+    "violet"
+  else
+    "white"
+  end
+end
+
+def print_similarity_color_legend_entry(similarity, text)
+  cgi_print "<td style='color: #{similarity_color(similarity)}'><font size=-2>#{text}</font></td><td>&nbsp;</td>"
+end
+
+def print_similarity_color_legend
+  cgi_print "<table><tr><td><font size=-2>legend:&nbsp;</font></td>"
+  print_similarity_color_legend_entry(0.50, "related af")
+  print_similarity_color_legend_entry(0.42, "strongly related")
+  print_similarity_color_legend_entry(0.41, "related")
+  print_similarity_color_legend_entry(0.40, "somewhat related")
+  print_similarity_color_legend_entry(0.39, "weakly related")
+  print_similarity_color_legend_entry(0.38, "barely related")
+  print_similarity_color_legend_entry(0.35, "almost related")
+  print_similarity_color_legend_entry(0.30, "unrelated")
+  cgi_print "</tr></table>"
+end
+
+def word_similarity_color(word1, word2)
+  similarity_color(similarity(word1, word2))
 end
 
 # tbp
@@ -145,17 +191,3 @@ def println(str)
   print str
   print "\n"
 end
-
-def test_stuff
-  print_similarity('cat', 'meow')
-  print_similarity('cat', 'meow')
-  print_similarity('mow', 'lawn')
-  print_similarity('mow', 'mows')
-  print_similarity('mow', 'mowed')
-  print_similarity('mow', 'moll')
-  print_similarity('mow', 'mosh')
-end
-
-# Main
-#compute_and_save_embed_dict
-#test_stuff

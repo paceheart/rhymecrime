@@ -11,12 +11,12 @@ Gem.paths = { 'GEM_PATH' => '/usr/local/rvm/gems/ruby-2.6.5/' }
 DEFAULT_DATAMUSE_MAX = 1000
 $datamuse_max = DEFAULT_DATAMUSE_MAX
 $debug_mode = false
-$output_format = 'text'
+$output_format = 'cgi'
 $display_word_frequencies = false
 DATAMUSE_ENABLED = true
 
 #
-# Public interface: rhyme_crime(word1, word2, goal, output_format='text', debug_mode=false, datamuse_max=400)
+# Public interface: rhymecrime(word1, word2, goal, output_format='text', debug_mode=false, datamuse_max=400)
 # see rhyme.rb for documentation
 # 
 

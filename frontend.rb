@@ -138,3 +138,56 @@ def compute_and_print_html()
   compute_and_print_html_middle(word1, word2)
   print_html_footer
 end
+
+#
+# Similar
+#
+
+def similar_column_count
+  12 # @todo compute dynamically based on screen width
+end
+
+def print_similar_word(word, focal_word)
+  word = word.gsub(/\(.*\)/, '') # remove stuff in parentheses
+  cgi_print "<td style='color: #{word_similarity_color(word, focal_word)}'>"
+  word = word.gsub('_', ' ')
+  print word
+ cgi_print "</td>"
+end
+
+def print_similar_words(similar_words, focal_word)
+  success = !similar_words.empty?
+  if(success)
+    cgi_print "<table><tr>"
+    i = 0
+    for word in similar_words.sort_by!{|w| -similarity(focal_word, w)}
+      if i > 0 && i % similar_column_count == 0
+        cgi_print "</tr><tr>"
+      end
+      i += 1
+      print_similar_word(word, focal_word)
+      if($display_word_frequencies)
+        print " (#{frequency(word)})"
+      end
+      puts
+      end
+    cgi_print "</tr></table>"
+  end
+  return success
+end
+
+def compute_and_print_html_similar_middle(word1)
+  print_similarity_color_legend
+  similar_words = find_related_words(word1, false)
+  print_similar_words(similar_words, word1)
+end
+
+# Similar
+def compute_and_print_similar_html
+  # CGI Input: word1, word2 (optional)
+  # Output: A bunch of stuff
+  word1, word2 = parse_cgi_input
+  print_html_header("stub", "stub")
+  compute_and_print_html_similar_middle(word1)
+  print_html_footer
+end
