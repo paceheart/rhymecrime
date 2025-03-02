@@ -3,11 +3,10 @@
 #
 
 def oughta_be_related(word1, word2, is_working=true)
-  lang = 'en'
   if(is_working)
     test_name = "'#{word1}' oughta be related to '#{word2}'"
     it test_name do
-      expect(related?(word1, word2, false, lang)).to eql(true), "'#{word1}' is #{percent_similarity(word1, word2)} related to '#{word2}', which is under the similarity threshold of #{percent_similarity_threshold()}"
+      expect(related?(word1, word2, false)).to eql(true), "'#{word1}' is #{percent_similarity(word1, word2)} related to '#{word2}', which is under the similarity threshold of #{percent_similarity_threshold()}"
     end
   else # NOT_WORKING
     if TEST_FOR_SURPRISING_SUCCESSES
@@ -17,11 +16,10 @@ def oughta_be_related(word1, word2, is_working=true)
 end
   
 def ought_not_be_related(word1, word2, is_working=true)
-  lang = 'en'
   if(is_working)
     test_name = "'#{word1}' ought not be related to '#{word2}'"
     it test_name do
-      expect(related?(word1, word2, false, lang)).to eql(false), "'#{word1}' is #{percent_similarity(word1, word2)} related to '#{word2}', which meets the similarity threshold of #{percent_similarity_threshold()}"
+      expect(related?(word1, word2, false)).to eql(false), "'#{word1}' is #{percent_similarity(word1, word2)} related to '#{word2}', which meets the similarity threshold of #{percent_similarity_threshold()}"
     end
   else # NOT_WORKING
     if TEST_FOR_SURPRISING_SUCCESSES
@@ -31,10 +29,9 @@ def ought_not_be_related(word1, word2, is_working=true)
 end
 
 def related_words_ought_not_include(word1, word2, is_working=true)
-  lang = 'en'
   if(is_working)
     test_name = "'Words related to #{word1}' ought not include '#{word2}'"
-    related_words = find_related_words(word1, false, lang)
+    related_words = find_related_words(word1, false)
     it test_name do
       expect(related_words.include?(word2)).to eql(false), "Words related to '#{word1}' ought not include '#{word2}', but they do: #{related_words}"
     end
@@ -126,4 +123,3 @@ describe 'RELATED' do
     ought_not_be_related 'tree', 'treesh'
   end
 end
-
