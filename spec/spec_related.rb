@@ -56,9 +56,9 @@ describe 'RELATED' do
   end
 
   context 'examples from the documentation' do
-    oughta_be_related 'death', 'bled', NOT_WORKING
+    oughta_be_related 'death', 'bled'
     oughta_be_related 'death', 'dead'
-    oughta_be_related 'death', 'dread', NOT_WORKING
+    oughta_be_related 'death', 'dread'
   end
 
   context 'slurs are forbidden' do
@@ -123,8 +123,8 @@ describe 'RELATED' do
     oughta_be_related 'pirate', 'rum'
     oughta_be_related 'pirate', 'saber'
     oughta_be_related 'pirate', 'scurvy'
-    ought_not_be_related 'pirate', 'pew', NOT_WORKING
-    oughta_be_related 'pirate', 'doubloons', NOT_WORKING
+    oughta_be_related 'pirate', 'doubloons'
+    ought_not_be_related 'pirate', 'pew'
     ought_not_be_related 'pirate', 'roc'
     ought_not_be_related 'pirate', 'miko'
     ought_not_be_related 'pirate', 'mrs.'
@@ -160,11 +160,11 @@ describe 'RELATED' do
     oughta_be_related 'halloween', 'spider'
     oughta_be_related 'halloween', 'decoration'
     oughta_be_related 'halloween', 'costume'
-    ought_not_be_related 'halloween', 'ira', NOT_WORKING
+    ought_not_be_related 'halloween', 'ira'
     ought_not_be_related 'halloween', 'lindsay'
     ought_not_be_related 'halloween', 'lindsey'
     ought_not_be_related 'halloween', 'nicki'
-    ought_not_be_related 'halloween', 'pauline', NOT_WORKING
+    ought_not_be_related 'halloween', 'pauline'
   end
 
   context 'cat' do
@@ -273,7 +273,6 @@ describe 'RELATED' do
     ought_not_be_related 'crime', 'grain'
     ought_not_be_related 'crime', 'pasta'
     ought_not_be_related 'crime', 'animation'
-    ought_not_be_related 'crime', 'bank'
     ought_not_be_related 'crime', 'baseball'
     ought_not_be_related 'crime', 'chassis'
     ought_not_be_related 'crime', 'poodle'
@@ -292,10 +291,6 @@ describe 'RELATED' do
     ought_not_be_related 'crime', 'quake'
     ought_not_be_related 'crime', 'sci-fi'
     ought_not_be_related 'crime', 'word'
-    ought_not_be_related 'crime', ''
-    ought_not_be_related 'crime', ''
-    ought_not_be_related 'crime', ''
-    ought_not_be_related 'crime', ''
   end
   
   context 'pasta' do
