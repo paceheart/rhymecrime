@@ -9,7 +9,6 @@ require_relative 'Cosine'
 require 'msgpack'
 
 EMBED_VEC_FILE = 'wiki-news-subword-220k.vec'
-EMBED_DICT_FILE = 'embed-dict-subword.msgpack'
 SIMILARITY_THRESHOLD = 0.34
 #print "SIMILARITY_THRESHOLD = #{SIMILARITY_THRESHOLD}\n"
 SIMILAR_MAX = 500
@@ -27,13 +26,20 @@ def embed_dict()
   $embed_dict
 end
 
+def embed_dict_file
+  result = EMBED_VEC_FILE
+  result = result.gsub(".vec", ".msgpack")
+  result = result.gsub(".txt", ".msgpack")
+  return result
+end
+
 def load_embed_dict
-  MessagePack.unpack(File.binread(EMBED_DICT_FILE))
+  MessagePack.unpack(File.binread(embed_dict_file))
 end
 
 def save_embed_dict()
   pickled_embed_dict = $embed_dict.to_msgpack
-  File.binwrite(EMBED_DICT_FILE, pickled_embed_dict)
+  File.binwrite(embed_dict_file, pickled_embed_dict)
   return $embed_dict
 end
 
@@ -178,12 +184,12 @@ end
 
 def print_similarity_color_legend
   cgi_print "<table><tr><td><font size=-2>legend:&nbsp;</font></td>"
-  print_similarity_color_legend_entry(0.30, "unrelated")
-  print_similarity_color_legend_entry(0.35, "almost related")
-  print_similarity_color_legend_entry(0.38, "barely related")
-  print_similarity_color_legend_entry(0.39, "weakly related")
-  print_similarity_color_legend_entry(0.40, "somewhat related")
-  print_similarity_color_legend_entry(0.41, "related")
+  print_similarity_color_legend_entry(0, "unrelated")
+  print_similarity_color_legend_entry(0.30, "almost related")
+  print_similarity_color_legend_entry(0.34, "barely related")
+  print_similarity_color_legend_entry(0.36, "weakly related")
+  print_similarity_color_legend_entry(0.38, "somewhat related")
+  print_similarity_color_legend_entry(0.40, "related")
   print_similarity_color_legend_entry(0.42, "strongly related")
   print_similarity_color_legend_entry(0.50, "related af")
   cgi_print "</tr></table>"
