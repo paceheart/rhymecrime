@@ -96,6 +96,10 @@ def word_dict()
   $word_dict
 end
 
+def word_we_care_about?(word)
+  word_dict.key?(word) && any_rhyming_words?(word)
+end
+
 $rdict = nil # rhyme signature -> words hash
 def rdict
   # rhyme_signature => [rhyming_word1 rhyming_word2 ...]
@@ -186,6 +190,10 @@ def prefix_words(words, focal_word)
     debug "Filtering out prefix words #{result} from #{words}"
   end
   return result
+end
+
+def any_rhyming_words?(word)
+  !!find_rhyming_words(word)
 end
 
 def find_rhyming_words(word, identical_ok=true)
@@ -681,3 +689,15 @@ def print_lemma_en_entries_with_frequency(freq)
     end
   end
 end
+
+def print_some_embed_dict_words
+  i = 0
+  for word, vec in embed_dict do
+    i += 1
+    if i % 1000 == 0
+      print "#{word} #{find_rhyming_words(word, false)}\n"
+    end
+  end
+end
+
+print_some_embed_dict_words

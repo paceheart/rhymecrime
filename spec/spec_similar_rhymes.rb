@@ -372,6 +372,11 @@ describe 'PAIR_RELATED' do
     pair_related_oughta_contain 'food', 'dark', 'ration', 'ashen'
     pair_related_oughta_contain 'food', 'dark', 'snack', 'black'
     pair_related_oughta_contain 'food', 'dark', 'cuisine', 'unseen'
+    pair_related_oughta_contain 'food', 'dark', 'leek', 'bleak'
+  end
+
+  context 'sinister sister' do
+    pair_related_oughta_contain 'sinister', 'sister', 'shady', 'lady'
   end
 
 end
