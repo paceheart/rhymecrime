@@ -8,15 +8,13 @@ Gem.paths = { 'GEM_PATH' => '/usr/local/rvm/gems/ruby-2.6.5/' }
 # Don't tweak these here, tweak them in frontend.rb
 #
 
-DEFAULT_DATAMUSE_MAX = 1000
-$datamuse_max = DEFAULT_DATAMUSE_MAX
 $debug_mode = false
 $output_format = 'cgi'
 $display_word_frequencies = false
-DATAMUSE_ENABLED = true
+$display_word_similarities = false
 
 #
-# Public interface: rhymecrime(word1, word2, goal, output_format='text', debug_mode=false, datamuse_max=400)
+# Public interface: rhymecrime(word1, word2, goal, output_format='text', debug_mode=false)
 # see rhyme.rb for documentation
 # 
 
@@ -192,7 +190,7 @@ end
 
 def find_rhyming_words(word, identical_ok=true)
   # merges multiple pronunciations of WORD
-  # use our compiled rhyme signature dictionary; we don't need the Datamuse API for simple rhyme lookup
+  # use our compiled rhyme signature dictionary
   rhyming_words = Array.new
   unless(blacklisted?(word))
     for form in all_forms(word) # to increase the likelihood of a hit, try all spelling variants
@@ -244,7 +242,7 @@ def duplicates?(array)
 end
 
 def find_rhyming_words_for_pronunciation(pron, identical_ok=true)
-  # use our compiled rhyme signature dictionary; we don't need the Datamuse API for simple rhyme lookup
+  # use our compiled rhyme signature dictionary
   results = Array.new
   rsig = pron.rhyme_signature
   rsyllables = pron.rhyme_syllables_array
@@ -429,55 +427,55 @@ def short_gloss(synset)
   end
 end
 
-def print_tuple(tuple)
+def print_tuple(tuple, focal_word=false)
   # this basically just pushes the rare words to the end, but we could do something snazzier if we want
   cgi_print "<div class='output_tuple'><p class='output_p'>"
   good_tuple = tuple.reject{ |t| rare?(t) }
   bad_tuple  = tuple.select{ |t| rare?(t) }
   if(good_tuple.empty?)
-    print_half_of_tuple(bad_tuple)
+    print_half_of_tuple(bad_tuple, focal_word)
   elsif(bad_tuple.empty?)
-    print_half_of_tuple(good_tuple)
+    print_half_of_tuple(good_tuple, focal_word)
   else
-    print_half_of_tuple(good_tuple)
+    print_half_of_tuple(good_tuple, focal_word)
     print " / "
-    print_half_of_tuple(bad_tuple)
+    print_half_of_tuple(bad_tuple, focal_word)
   end
   cgi_print "</p></div>"
   puts
   STDOUT.flush
 end
   
-def print_half_of_tuple(tuple)
+def print_half_of_tuple(tuple, focal_word=false)
   # print TUPLE separated by slashes
   i = 0
   tuple.each { |elem|
     if(i > 0)
       print " / "
     end
-    print_word(elem)
+    print_word(elem, focal_word)
     i += 1
   }
 end
 
-def print_tuples(tuples)
+def print_tuples(tuples, focal_word=false)
   # return boolean, did I print anything? i.e. was TUPLES nonempty?
   success = !tuples.empty?
   if(success)
     tuples.sort.uniq.each { |tuple|
-      print_tuple(tuple)
+      print_tuple(tuple, focal_word)
     }
   end
   return success
 end
 
-def print_words(words)
+def print_words(words, focal_word=false)
   success = !words.empty?
   if(success)
     words.sort.uniq.each { |word|
       cgi_print "<div class='output_tuple'>"
       cgi_print "<p class='output_p'>"
-      print_word(word)
+      print_word(word, focal_word)
       if($display_word_frequencies)
         print " (#{frequency(word)})"
       end
@@ -565,7 +563,7 @@ def filter_out_rare_pairs(tuples)
   return good, bad
 end
 
-def print_word(word)
+def print_word(word, focal_word=false)
   word = word.gsub(/\(.*\)/, '') # remove stuff in parentheses
   got_rhymes = !pronunciations(word).empty?
   if(got_rhymes)
@@ -583,6 +581,9 @@ def print_word(word)
   if(got_rhymes)
     cgi_print "</a>"
   end
+  if($display_word_similarities)
+    print_html_percent_similarity(word, focal_word)
+  end
 end
 
 #
@@ -593,7 +594,7 @@ def focal_word(word)
   return "\"<span class='focal_word'>#{word}</span>\""
 end
 
-def rhymecrime(word1, word2, goal, output_format='text', debug_mode=false, datamuse_max=DEFAULT_DATAMUSE_MAX)
+def rhymecrime(word1, word2, goal, output_format='text', debug_mode=false)
   # When you enter a single word,
   #   RhymeCrime displays rhymes for that word (see find_rhyming_words), separating out the rare words (see rare?)
   #   and in a separate column, displays sets of rhyming words (see find_rhyming_tuples)
@@ -602,7 +603,6 @@ def rhymecrime(word1, word2, goal, output_format='text', debug_mode=false, datam
   #   and in a separate column, displays pairs of rhyming words (RHYME1 / RHYME2) in which RHYME1 is related to WORD1 and RHYME2 is related to WORD2. (see find_rhyming_pairs)
   $output_format = output_format
   $debug_mode = debug_mode
-  $datamuse_max = datamuse_max
   header_eol = ":<div class='results'>"
   
   result = nil
@@ -617,10 +617,6 @@ def rhymecrime(word1, word2, goal, output_format='text', debug_mode=false, datam
   if(word1 == "" and word2 != "")
     word1, word2 = word2, word1
   end
-  # if(word1 == "smiley" and word2 == "love" and goal == "related_rhymes")
-  #  result_header = "<font size=80><bold>KYELI!</bold></font>"; # easter egg for Kyeli
-  #  return [ ], :words, result_header
-  # end
 
   # main list of cases
   case goal
