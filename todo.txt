@@ -1,6 +1,0 @@
-sentence_word_counts.json is filled with nulls. looks broken.
-consider deduping sentence word counts
-Identify that documents like document 180380 are crap.
-Downweight sentences within the same document?
-- Definitely don't count duplicate sentences within the same document
-
