@@ -55,6 +55,8 @@ def tokenize_jsonl_chunk(file)
       print "."
     end
   end
+  save_chunk_sentence_count(chunk_id)
+  save_chunk_word_count(chunk_id)
   puts "done!"
   return chunk_id
 end
@@ -93,7 +95,7 @@ def tokenize_json_doc(json, chunk_id)
 end
 
 def save_chunk_specific_file(filename_uniquifier, object, chunk_id)
-  unless object.empty?
+  unless object.respond_to?('empty?') and object.empty?
     filename = construct_chunk_specific_filename(chunk_id, filename_uniquifier)
     FileUtils.ensure_file_directory_exists(filename)
     JSON.save(filename, object)
@@ -101,7 +103,7 @@ def save_chunk_specific_file(filename_uniquifier, object, chunk_id)
 end
 
 def save_document_specific_file(filename_uniquifier, object, doc_id)
-  unless object.empty?
+  unless object.respond_to?('empty?') and object.empty?
     filename = construct_document_specific_filename(doc_id, filename_uniquifier)
     FileUtils.ensure_file_directory_exists(filename)
     JSON.save(filename, object)
@@ -109,11 +111,11 @@ def save_document_specific_file(filename_uniquifier, object, doc_id)
 end
 
 def save_sentence_word_count_dict(sentence_word_count_dict, doc_id)
-  save_document_specific_file($WET_SENTENCE_COUNTS_UNIQUIFIER, sentence_word_count_dict, doc_id) # see $WET_SENTENCE_INDEX_FILE_TEMPLATE
+  save_document_specific_file($WET_SENTENCE_COUNTS_UNIQUIFIER, sentence_word_count_dict, doc_id)
 end
 
 def save_word_count_dict(word_count_dict, doc_id)
-  save_document_specific_file($WET_WORD_COUNTS_UNIQUIFIER, word_count_dict, doc_id) # see $WET_WORD_INDEX_FILE_TEMPLATE
+  save_document_specific_file($WET_WORD_COUNTS_UNIQUIFIER, word_count_dict, doc_id)
 end
 
 def save_urls(chunk_id)
@@ -130,6 +132,14 @@ end
 
 def save_doc_word_counts(chunk_id)
   save_chunk_specific_file($WET_DOC_WORD_COUNTS_UNIQUIFIER, $doc_word_counts, chunk_id)
+end
+
+def save_chunk_sentence_count(chunk_id)
+  save_chunk_specific_file($WET_CHUNK_SENTENCE_COUNT_UNIQUIFIER, $doc_sentence_counts.sum, chunk_id)
+end
+
+def save_chunk_word_count(chunk_id)
+  save_chunk_specific_file($WET_CHUNK_WORD_COUNT_UNIQUIFIER, $doc_word_counts.sum, chunk_id)
 end
 
 def compute_word_counts(input_jsonl_file)

@@ -19,6 +19,8 @@ $WET_URLS_UNIQUIFIER = 'urls'
 $WET_DOC_SENTENCE_COUNTS_UNIQUIFIER = 'doc-sentence-counts'
 $WET_SENTENCE_WORD_COUNTS_UNIQUIFIER = 'sentence-word-counts'
 $WET_DOC_WORD_COUNTS_UNIQUIFIER = 'doc-word-counts'
+$WET_CHUNK_SENTENCE_COUNT_UNIQUIFIER = 'chunk-total-sentence-count'
+$WET_CHUNK_WORD_COUNT_UNIQUIFIER = 'chunk-total-word-count'
 # Global files:
 $WET_GLOBAL_WORD_COUNTS_FILENAME = 'global-word-counts.json'
 $WET_GLOBAL_DOC_INDEX_FILENAME = 'global-doc-index.json'

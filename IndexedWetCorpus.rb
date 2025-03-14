@@ -22,9 +22,10 @@ class IndexedWetCorpus
   def initialize(directory=".")
     @dir = directory.ensure_trailing_slash
 
-    @urls = load_chunk_specific_files(@dir, $WET_URLS_UNIQUIFIER)
-    @doc_sentence_counts = load_chunk_specific_files(@dir, $WET_DOC_SENTENCE_COUNTS_UNIQUIFIER)
-    @sentence_word_counts = load_chunk_specific_files(@dir, $WET_SENTENCE_WORD_COUNTS_UNIQUIFIER)
+    # @todo lazily initialize
+    #@urls = load_chunk_specific_files(@dir, $WET_URLS_UNIQUIFIER)
+    #@doc_sentence_counts = load_chunk_specific_files(@dir, $WET_DOC_SENTENCE_COUNTS_UNIQUIFIER)
+    #@sentence_word_counts = load_chunk_specific_files(@dir, $WET_SENTENCE_WORD_COUNTS_UNIQUIFIER)
     @doc_word_counts = load_chunk_specific_files(@dir, $WET_DOC_WORD_COUNTS_UNIQUIFIER)
     
     @word_doc_ids = JSON.load!(@dir + $WET_GLOBAL_DOC_INDEX_FILENAME)
@@ -56,11 +57,13 @@ class IndexedWetCorpus
   end
   
   memoize def total_sentence_count
-    @doc_sentence_counts.sum_numeric
+    30146267 # @todo unstub
+    #@doc_sentence_counts.sum_numeric
   end
 
   memoize def total_doc_count
-    @doc_word_counts.non_nil_count
+    1425279 # @todo unstub
+    #@doc_word_counts.non_nil_count
   end
 
   # for sleuthing
@@ -156,14 +159,14 @@ class IndexedWetCorpus
   end
 
   # Which sentences contain both WORD1 and WORD2? Return their sentence IDs.
-  def both_words_sentence_ids(word1, word2)
+  memoize def both_words_sentence_ids(word1, word2)
     word1_sentence_ids = word_sentence_ids(word1)
     word2_sentence_ids = word_sentence_ids(word2)
     return word1_sentence_ids.intersection_assuming_sorted(word2_sentence_ids)
   end
 
   # Which documents contain both WORD1 and WORD2? Return their doc IDs.
-  def both_words_doc_ids(word1, word2)
+  memoize def both_words_doc_ids(word1, word2)
     word1_docs = word_doc_ids(word1)
     word2_docs = word_doc_ids(word2)
     return word1_docs.intersection_assuming_sorted(word2_docs)
@@ -308,13 +311,7 @@ def pirate_test(wet)
 end
 
 #require 'stackprof'
-wet = IndexedWetCorpus.new
+#wet = IndexedWetCorpus.new
 #StackProf.run(mode: :cpu, out:'/tmp/crime.dump') do
 #  pirate_test(wet)
 #end
-
-for word in words_we_care_about.sort_by { |w| -wet.inverse_document_frequency(w) }
-  print word
-  print " "
-  puts wet.inverse_document_frequency(word)
-end
