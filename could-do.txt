@@ -1,4 +1,4 @@
-- merge nonnative onto non-native and same for all other nons
+- try cooccurrence within a certain number of words
 - consider only returning the top 1000 most closely related words; maybe make relatedness asymmetric
 - make tests for 'ass'
 - integrate espeak-ng
@@ -9,3 +9,7 @@
 -- don't host on pacesmith.com
 -- rename
 -- make it cooler
+
+corpora
+- C4 https://stanford-cs324.github.io/winter2022/lectures/data/
+- "the pile"
