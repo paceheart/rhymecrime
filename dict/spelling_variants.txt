@@ -68,6 +68,8 @@ counselor counsellor
 cozy cosy
 curb kerb
 curbs kerbs
+cutthroat cut-throat
+cutthroats cut-throats
 defense defence
 defenses defences
 dialog dialogue
