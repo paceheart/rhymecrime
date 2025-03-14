@@ -1,4 +1,7 @@
 - try cooccurrence within a certain number of words
+- consider deduping sentence word counts
+- Downweight sentences within the same document?
+-- Definitely don't count duplicate sentences within the same document
 - consider only returning the top 1000 most closely related words; maybe make relatedness asymmetric
 - make tests for 'ass'
 - integrate espeak-ng
