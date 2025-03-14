@@ -51,7 +51,8 @@
 ;;;   - comments (like this section) are allowed
 ;;;   - file name is major version; vers/rev information is now in the header
 ;;;
-;;;  [20191024] (pace) Pace Smith made some fixes without permission.
+;;;  [20191024] (pace) Pace Heart made some fixes without permission.
+;;;  [20250314] (pace) Pace Heart made some more fixes without permission.
 ;;; 
 ;;; ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; 
@@ -22573,7 +22574,6 @@ COCOS  K OW1 K OW2 Z
 COCOZZA  K OW0 K OW1 T S AH0
 COCUZZA  K OW0 K UW1 T S AH0
 COD  K AA1 D
-COD(1)  S IY1 OW1 D IY1
 CODA  K OW1 D AH0
 CODAG  K OW1 D AE1 G
 CODAY  K OW1 D EY1
@@ -70669,9 +70669,7 @@ LLOYD  L OY1 D
 LLOYD'S  L OY1 D Z
 LLOYDS  L OY1 D Z
 LLOYDS'  L OY1 D Z
-LN  L EY1 N
 LO  L OW1
-LO'S  L OW1 Z
 LOAD  L OW1 D
 LOADED  L OW1 D AH0 D
 LOADED(1)  L OW1 D IH0 D
@@ -113781,10 +113779,6 @@ SRPSKA  S R AH1 P S K AH0
 SSANGYONG  S AE1 NG Y AO2 NG
 ST-JAMES  S EY1 N T JH EY1 M Z
 ST-JOHNS  S EY1 N T JH AA1 N Z
-ST.  S T R IY1 T
-ST.(1)  S EY1 N T
-STA  S T AH1
-STA(1)  EH1 S T IY1 EY1
 STAAB  S T AA1 B
 STAACK  S T AA1 K
 STAAL  S T AA1 L
