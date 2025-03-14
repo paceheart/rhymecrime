@@ -121,7 +121,7 @@ def print_output(output, input_word1, output_type)
   when :words
     print_words(output)
   when :tuples
-    print_tuples(output, input_word1)
+    print_tuples(output)
   when :synsets
     print_synsets(output, input_word1)
   end
@@ -178,20 +178,8 @@ def print_similar_words(similar_words, focal_word)
   return success
 end
 
-def print_html_percent_similarity(word1, word2, verbose=false)
-  cgi_print "<span style='color: #{word_similarity_color(word1, word2)}'>"
-  if verbose
-    cgi_print "#{percent_similarity(word1, word2)} similar"
-  else
-    cgi_print " (#{percent_similarity(word1, word2)})"
-  end
-  cgi_print "</span>"
-end
-
 def compute_and_print_html_similar_pair(word1, word2)
-  cgi_print "'#{word1}' is "
-  print_html_percent_similarity(word1, word2, true)
-  cgi_print " to '#{word2}'\n"
+  cgi_print "'#{word1}' is <span style='color: #{word_similarity_color(word1, word2)}'>#{percent_similarity(word1, word2)} similar</span> to '#{word2}'\n"
 end
 
 def compute_and_print_html_all_similar(word1)
