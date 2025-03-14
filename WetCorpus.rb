@@ -1,0 +1,121 @@
+#!/usr/bin/env ruby
+
+require 'scalpel'
+require_relative 'json_extensions'
+require_relative 'pace_utils'
+require_relative 'spec/test_utils'
+
+$LIMIT_TO_TEST_WORDS = true # set this to true for testing
+$MAX_SENTENCES_PER_DOCUMENT = 1000
+
+$WET_INPUT_FILE_TEMPLATE = "c4-train.CHUNK_ID-of-01024.json"
+# Document-specific files:
+$WET_DOC_SPECIFIC_FILE_TEMPLATE = "word-counts/chunk-CHUNK_ID/_UNIQUIFIER_-LOCAL_DOC_ID.json"
+$WET_SENTENCE_COUNTS_UNIQUIFIER = "sentence-word-counts"
+$WET_WORD_COUNTS_UNIQUIFIER = "word-counts"
+# Chunk-specific files:
+$WET_CHUNK_SPECIFIC_FILE_TEMPLATE = "word-counts/chunk-CHUNK_ID/_UNIQUIFIER_.json"
+$WET_URLS_UNIQUIFIER = 'urls'
+$WET_DOC_SENTENCE_COUNTS_UNIQUIFIER = 'doc-sentence-counts'
+$WET_SENTENCE_WORD_COUNTS_UNIQUIFIER = 'sentence-word-counts'
+$WET_DOC_WORD_COUNTS_UNIQUIFIER = 'doc-word-counts'
+# Global files:
+$WET_GLOBAL_WORD_COUNTS_FILENAME = 'global-word-counts.json'
+$WET_GLOBAL_DOC_INDEX_FILENAME = 'global-doc-index.json'
+$WET_GLOBAL_SENTENCE_INDEX_FILENAME = 'global-sentence-index.json'
+
+def construct_chunk_specific_filename(chunk_id, uniquifier)
+  filename = $WET_CHUNK_SPECIFIC_FILE_TEMPLATE
+  filename = filename.gsub('CHUNK_ID', chunk_id.to_s.rjust(5, "0"))
+  filename = filename.gsub('_UNIQUIFIER_', uniquifier)
+  return filename
+end
+
+def construct_document_specific_filename(doc_id, uniquifier)
+  chunk_id, local_doc_id = split_doc_id(doc_id)
+  filename = $WET_DOC_SPECIFIC_FILE_TEMPLATE
+  filename = filename.gsub('CHUNK_ID', chunk_id.to_s.rjust(5, "0"))
+  filename = filename.gsub('_UNIQUIFIER_', uniquifier)
+  filename = filename.gsub('LOCAL_DOC_ID', local_doc_id.to_s.rjust(6, "0"))
+  return filename
+end
+
+# Assumes no more than a million documents per chunk
+def compute_doc_id(chunk_id, local_doc_id)
+  return chunk_id * 1000000 + local_doc_id
+end
+
+# Return 0 chunk_id
+# Return 1 local_doc_id
+def split_doc_id(doc_id)
+  doc_id.divmod(1000000)
+end
+
+# Assumes no more than a thousand sentences per document
+def compute_sentence_id(doc_id, local_sentence_id)
+  if local_sentence_id >= $MAX_SENTENCES_PER_DOCUMENT
+    raise "sentence ID #{local_sentence_id} exceeded max sentences per document threshold (#{$MAX_SENTENCES_PER_DOCUMENT}) for document #{doc_id}"
+  end
+  return doc_id * $MAX_SENTENCES_PER_DOCUMENT + local_sentence_id
+end
+
+def split_sentence_id(sentence_id)
+  sentence_id.divmod($MAX_SENTENCES_PER_DOCUMENT)
+end
+
+# Filter out 'sentences' like 'B.'
+def non_trivial_sentence?(str)
+  str.length > 2 and str.count_alpha > 1
+end
+
+def tokenize_by_sentence(text)
+  Scalpel.cut(text).select { |s| non_trivial_sentence?(s) }
+end
+
+$all_test_words = nil
+def all_test_words
+  if $all_test_words.nil?
+    $all_test_words = compute_all_test_words
+  end
+  return $all_test_words
+end
+
+def compute_all_test_words
+  results = Set.new
+  for file in `ls spec/spec_*.rb`.split
+    results.merge(all_test_words_in_rb_file file)
+  end
+  for file in `ls spec/*.csv`.split
+    results.merge(all_test_words_in_csv_file file)
+  end
+  results.reject! { |w| stop_word?(w) }
+  return results
+end
+
+def all_test_words_in_csv_file(filename)
+  results = Set.new
+  for c in load_relatedness_test_cases
+    results.add(c['word1'])
+    results.add(c['word2'])
+  end
+  return results
+end
+
+def all_test_words_in_rb_file(filename)
+  results = Set.new
+  for line in IO.readlines(filename)
+    if line.include?("ought")
+      tokens = line.split /\s+|,\s*/
+      for token in tokens
+        if token[0] == "'" and token[-1] == "'" and !token.include?('#')
+          results.add token[1..-2]
+        end
+      end
+    end
+  end
+  return results
+end
+
+def words_we_care_about
+  $LIMIT_TO_TEST_WORDS ? all_test_words : word_dict.keys
+end

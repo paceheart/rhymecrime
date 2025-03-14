@@ -7,10 +7,13 @@
 
 require_relative 'Cosine'
 require 'msgpack'
+require_relative 'pace_utils'
+require_relative 'IndexedWetCorpus'
 
 EMBED_VEC_FILE = 'wiki-news-subword-220k.vec'
-SIMILARITY_THRESHOLD = 0.34
-#print "SIMILARITY_THRESHOLD = #{SIMILARITY_THRESHOLD}\n"
+EMBED_DICT_FILE = 'embed-dict-subword.msgpack'
+SIMILARITY_THRESHOLD = 1 # @todo adjust colors once this is stable
+DOC_SIMILARITY_ADJUSTMENT = 50
 SIMILAR_MAX = 500
 
 $embed_dict = nil
@@ -26,20 +29,14 @@ def embed_dict()
   $embed_dict
 end
 
-def embed_dict_file
-  result = EMBED_VEC_FILE
-  result = result.gsub(".vec", ".msgpack")
-  result = result.gsub(".txt", ".msgpack")
-  return result
-end
-
 def load_embed_dict
-  MessagePack.unpack(File.binread(embed_dict_file))
+  puts "loading embed dict"
+  MessagePack.unpack(File.binread(EMBED_DICT_FILE))
 end
 
 def save_embed_dict()
   pickled_embed_dict = $embed_dict.to_msgpack
-  File.binwrite(embed_dict_file, pickled_embed_dict)
+  File.binwrite(EMBED_DICT_FILE, pickled_embed_dict)
   return $embed_dict
 end
 
@@ -81,8 +78,13 @@ def get_embedding(word)
   embed_dict()[word]
 end
 
-def percent_similarity_threshold
-  (SIMILARITY_THRESHOLD * 100).round
+$wet = nil
+def wet_corpus
+  $wet ||= IndexedWetCorpus.new
+end
+
+def similarity_threshold
+  SIMILARITY_THRESHOLD
 end
 
 def semantically_related?(word1, word2, include_self=false)
@@ -94,6 +96,14 @@ def similarity(word1, word2)
   if stop_word?(word1) or stop_word?(word2)
     return 0
   end
+  #cosine_similarity(word1, word2)
+  sentence_cooccurrence = wet_corpus.cooccurrence(word1, word2, true)
+  doc_cooccurrence = wet_corpus.cooccurrence(word1, word2, false)
+  adjusted_doc_cooccurrence = doc_cooccurrence - DOC_SIMILARITY_ADJUSTMENT
+  return sentence_cooccurrence + adjusted_doc_cooccurrence
+end
+
+def cosine_similarity(word1, word2)
   vec1 = get_embedding(word1)
   vec2 = get_embedding(word2)
   if vec1.nil? or vec2.nil?
@@ -103,58 +113,36 @@ def similarity(word1, word2)
   end
 end
 
-def percent_similarity(word1, word2)
-  "#{(similarity(word1, word2) * 100).round()}%"
-end
-
 def print_similarity(word1, word2)
-  println(word1 + " " + word2 + ": " + percent_similarity(word1, word2))
+  puts(word1 + " " + word2 + ": " + similarity(word1, word2))
 end
 
-$related_dict = nil
-def related_dict
-  # word => array of semantically related words
-  if $related_dict.nil?
-    $related_dict = load_related_dict
-  end
-  $related_dict
-end
+class IndexedWetCorpus
 
-def load_related_dict
-  Hash.new() # @todo load from cache
-end
-  
-def find_semantically_related_words(word, include_self, include_rhymeless=true)
-  words = find_all_semantically_related_words(word, include_rhymeless)
-  if(include_self)
-    words.push(word)
-  end
-  if words.length > SIMILAR_MAX
-    words = words.sort_by!{|w| -similarity(w, word)}
-    words = words[0..SIMILAR_MAX-1]
-  end
-  return words
-end
-
-def find_all_semantically_related_words(word, include_rhymeless=true)
-  if related_dict().key?(word)
-    return related_dict()[word]
-  else
-    result = really_find_all_semantically_related_words(word, include_rhymeless)
-    related_dict()[word] = result
-  end
-end
-
-def really_find_all_semantically_related_words(word, include_rhymeless=true)
-  words = []
-  debug "Finding words related to #{word}... "
-  for w in word_dict().keys do
-    if w != word and (include_rhymeless or has_rhyming_word?(word)) and semantically_related?(word, w)
-      words.push(w)
+  def find_semantically_related_words(word, include_self, include_rhymeless=true)
+    words = find_all_semantically_related_words(word, include_rhymeless)
+    if(include_self)
+      words.push(word)
     end
+    if words.length > SIMILAR_MAX
+      words = words.sort_by!{|w| -similarity(w, word)}
+      words = words[0..SIMILAR_MAX-1]
+    end
+    return words
   end
-  debug "#{words.length()}\n"
-  return words
+
+  memoize def find_all_semantically_related_words(word, include_rhymeless=true)
+    words = []
+    debug "Finding words related to #{word}... "
+    for w in words_we_care_about do
+      if w != word and (include_rhymeless or has_rhyming_word?(word)) and semantically_related?(word, w)
+        words.push(w)
+      end
+    end
+    debug "#{words.length()}\n"
+    return words
+  end
+
 end
 
 def similarity_color(similarity)
@@ -184,12 +172,12 @@ end
 
 def print_similarity_color_legend
   cgi_print "<table><tr><td><font size=-2>legend:&nbsp;</font></td>"
-  print_similarity_color_legend_entry(0, "unrelated")
-  print_similarity_color_legend_entry(0.30, "almost related")
-  print_similarity_color_legend_entry(0.34, "barely related")
-  print_similarity_color_legend_entry(0.36, "weakly related")
-  print_similarity_color_legend_entry(0.38, "somewhat related")
-  print_similarity_color_legend_entry(0.40, "related")
+  print_similarity_color_legend_entry(0.30, "unrelated")
+  print_similarity_color_legend_entry(0.35, "almost related")
+  print_similarity_color_legend_entry(0.38, "barely related")
+  print_similarity_color_legend_entry(0.39, "weakly related")
+  print_similarity_color_legend_entry(0.40, "somewhat related")
+  print_similarity_color_legend_entry(0.41, "related")
   print_similarity_color_legend_entry(0.42, "strongly related")
   print_similarity_color_legend_entry(0.50, "related af")
   cgi_print "</tr></table>"
@@ -197,10 +185,4 @@ end
 
 def word_similarity_color(word1, word2)
   similarity_color(similarity(word1, word2))
-end
-
-# tbp
-def println(str)
-  print str
-  print "\n"
 end

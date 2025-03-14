@@ -8,7 +8,6 @@ Gem.paths = { 'GEM_PATH' => '/usr/local/rvm/gems/ruby-2.6.5/' }
 # Don't tweak these here, tweak them in frontend.rb
 #
 
-$debug_mode = false
 $output_format = 'cgi'
 $display_word_frequencies = false
 $display_word_similarities = false
@@ -35,12 +34,6 @@ require_relative 'semantic-similarity'
 def cgi_print(string)
   if($output_format == 'cgi')
     print string
-  end
-end
-
-def debug(string)
-  if($debug_mode)
-    puts string
   end
 end
 
@@ -82,7 +75,7 @@ def debug_info(word)
 end
 
 #
-# Local rhyme computation
+# rhyme computation
 #
 
 $word_dict = nil
@@ -97,8 +90,13 @@ def word_dict()
 end
 
 def word_we_care_about?(word)
-  word_dict.key?(word) && any_rhyming_words?(word)
+  word_dict.key?(word)
 end
+
+WORDS_NEEDED_FOR_TESTING = ['arpeggio', 'asterisk', 'blackmail', 'bobcat', 'burglar', 'burglary', 'cat', 'celebrity', 'costume', 'crime', 'doubloons', 'drumsticks', 'fanciers', 'feline', 'fortissimo', 'galaxy', 'glissando', 'halloween', 'hemiola', 'homicide', 'item', 'jaguar', 'mandolin', 'music', 'overtone', 'pianissimo', 'pirate', 'pussy', 'repertoire', 'ritardando', 'scurvy', 'star', 'thing', 'tree', 'treetop', 'trespassing', 'whiskers', 'wildcat', 'xylophone'] # include these even if they don't have any rhymes
+def needed_for_testing?(word)
+  WORDS_NEEDED_FOR_TESTING.include?(word)
+end  
 
 $rdict = nil # rhyme signature -> words hash
 def rdict
@@ -193,14 +191,14 @@ def prefix_words(words, focal_word)
 end
 
 def any_rhyming_words?(word)
-  !!find_rhyming_words(word)
+  !find_rhyming_words(word).empty?
 end
 
 def find_rhyming_words(word, identical_ok=true)
   # merges multiple pronunciations of WORD
   # use our compiled rhyme signature dictionary
   rhyming_words = Array.new
-  unless(blacklisted?(word))
+  unless(explicitly_forbidden?(word))
     for form in all_forms(word) # to increase the likelihood of a hit, try all spelling variants
       debug "Finding rhyming words for #{form} #{debug_info(form)}:"
       for pron in pronunciations(form)
@@ -244,11 +242,6 @@ def all_identical_rhymes?(words)
   end
 end
 
-def duplicates?(array)
-  # does ARRAY contain any duplicate items?
-  return array.length != array.uniq.length
-end
-
 def find_rhyming_words_for_pronunciation(pron, identical_ok=true)
   # use our compiled rhyme signature dictionary
   results = Array.new
@@ -265,7 +258,7 @@ def find_rhyming_words_for_pronunciation(pron, identical_ok=true)
 end
 
 def has_rhyming_word?(word)
-  unless(blacklisted?(word))
+  unless(explicitly_forbidden?(word))
     for pron in pronunciations(word)
       rsig = pron.rhyme_signature
       if(! rdict_lookup(rsig).empty?)
@@ -306,8 +299,8 @@ end
 
 def find_related_words(word, include_self, include_rhymeless=true)
   words = []
-  unless blacklisted?(word)
-    words = find_semantically_related_words(word, include_self, include_rhymeless)
+  unless explicitly_forbidden?(word)
+    words = wet_corpus.find_semantically_related_words(word, include_self, include_rhymeless)
     words = filter_out_dispreferred_words(words, word)
   end
   return words
@@ -340,7 +333,7 @@ def really_find_rhyming_tuples(input_rel1)
   #   If R is in RELATEDS1, compute R's rhyme signature RSIG and put RHYME1 in the bucket labeled RSIG.
   # Return all buckets with two or more words in them.
   related_rhymes = Hash.new {|h,k| h[k] = [] } # hash of arrays
-  unless(blacklisted?(input_rel1))
+  unless(explicitly_forbidden?(input_rel1))
     relateds1 = find_related_words(input_rel1, true)
     relateds1.each { |rel1|
       for rel1pron in pronunciations(rel1)
@@ -376,7 +369,7 @@ def find_rhyming_pairs(input_rel1, input_rel2)
   #   Get all non-identical rhymes RHYME of REL1.
   #   If RHYME rhymes with REL1 and is related to INPUT_REL2, we win! "REL1 / RHYME" is a pair.
   related_rhymes = Hash.new {|h,k| h[k] = [] } # hash of arrays
-  unless(blacklisted?(input_rel1) || blacklisted?(input_rel2))
+  unless(explicitly_forbidden?(input_rel1) || explicitly_forbidden?(input_rel2))
     relateds1 = find_related_words(input_rel1, true)
     relateds2 = find_related_words(input_rel2, true).to_set
     relateds1.each { |rel1|
@@ -673,7 +666,7 @@ end
 
 def related?(word1, word2, include_self=false)
   # Is word1 conceptually related to word2?
-  not blacklisted?(word1) and not blacklisted?(word2) and semantically_related?(word1, word2)
+  not explicitly_forbidden?(word1) and not explicitly_forbidden?(word2) and semantically_related?(word1, word2)
 end
 
 def rhymes?(word1, word2, identical_ok=true)
@@ -690,14 +683,13 @@ def print_lemma_en_entries_with_frequency(freq)
   end
 end
 
+# for testing
 def print_some_embed_dict_words
   i = 0
   for word, vec in embed_dict do
     i += 1
     if i % 1000 == 0
-      print "#{word} #{find_rhyming_words(word, false)}\n"
+      puts word
     end
   end
 end
-
-print_some_embed_dict_words
