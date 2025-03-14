@@ -67,14 +67,14 @@ WORD_DICT_HEADER = "# RhymeCrime's word info dictionary
 # parse cmudict
 #
 
-def delete_blacklisted_keys_from_hash(cmudict)
+def delete_explicitly_forbidden_keys_from_hash(cmudict)
   count = 0
-  for bad_word in blacklist
+  for bad_word in forbid_list
     if(cmudict.delete(bad_word.chomp))
       count = count + 1
     end
   end
-  puts "Removed #{count} blacklisted words from the dictionary"
+  puts "Removed #{count} explicitly_forbidden words from the dictionary"
 end
 
 def useful_cmudict_line?(line)
@@ -484,7 +484,7 @@ end
 
 def rebuild_rhymecrime_dictionaries()
   cmudict = load_cmudict
-  delete_blacklisted_keys_from_hash(cmudict)
+  delete_explicitly_forbidden_keys_from_hash(cmudict)
   rdict = build_rhyme_signature_dict(cmudict)
   save_string_hash(rdict, RHYME_SIGNATURE_DICT_FILENAME, RHYME_SIGNATURE_DICT_HEADER)
   lemma_dict, freq_dict = load_lemma_dict

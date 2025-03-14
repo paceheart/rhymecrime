@@ -23,31 +23,31 @@ def relatable_word?(word)
 end
 
 #
-# blacklist
+# forbid_list
 #
 
-$blacklist = nil
-def blacklist()
-  if $blacklist.nil?
-    $blacklist = load_blacklist_as_array
+$forbid_list = nil
+def forbid_list()
+  if $forbid_list.nil?
+    $forbid_list = load_forbid_list_as_array
   end
-  return $blacklist
+  return $forbid_list
 end
 
-def blacklisted?(word)
-  return blacklist.include?(word)
+def explicitly_forbidden?(word)
+  return forbid_list.include?(word)
 end
 
-def load_blacklist_as_array
-  if(File.exist?("blacklist.txt"))
-     return IO.readlines("blacklist.txt", chomp: true)
+def load_forbid_list_as_array
+  if(File.exist?("forbid_list.txt"))
+     return IO.readlines("forbid_list.txt", chomp: true)
   else
-    return IO.readlines("dict/blacklist.txt", chomp: true)
+    return IO.readlines("dict/forbid_list.txt", chomp: true)
   end
 end
 
-def delete_blacklisted_words_from_array(array)
-  return array.reject { |word| blacklisted?(word) }
+def delete_explicitly_forbidden_words_from_array(array)
+  return array.reject { |word| explicitly_forbidden?(word) }
 end
 
 #
