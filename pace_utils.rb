@@ -141,3 +141,7 @@ class String
     self.count("a-zA-Z")
   end
 end
+
+def coin_flip
+  rand < 0.5
+end

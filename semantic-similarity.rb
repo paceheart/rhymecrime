@@ -9,11 +9,12 @@ require_relative 'Cosine'
 require 'msgpack'
 require_relative 'pace_utils'
 require_relative 'IndexedWetCorpus'
+require_relative 'dict/utils_rhyme'
 
 EMBED_VEC_FILE = 'wiki-news-subword-220k.vec'
 EMBED_DICT_FILE = 'embed-dict-subword.msgpack'
-SIMILARITY_THRESHOLD = 1 # @todo adjust colors once this is stable
-DOC_SIMILARITY_ADJUSTMENT = 50
+$SIMILARITY_THRESHOLD = 1 # @todo adjust colors once this is stable
+$DOC_SIMILARITY_ADJUSTMENT = 50
 SIMILAR_MAX = 500
 
 $embed_dict = nil
@@ -84,12 +85,12 @@ def wet_corpus
 end
 
 def similarity_threshold
-  SIMILARITY_THRESHOLD
+  $SIMILARITY_THRESHOLD
 end
 
 def semantically_related?(word1, word2, include_self=false)
   # Is word1 semantically related to word2?
-  similarity(word1, word2) >= SIMILARITY_THRESHOLD
+  similarity(word1, word2) >= $SIMILARITY_THRESHOLD
 end
 
 def similarity(word1, word2)
@@ -99,7 +100,7 @@ def similarity(word1, word2)
   #cosine_similarity(word1, word2)
   sentence_cooccurrence = wet_corpus.cooccurrence(word1, word2, true)
   doc_cooccurrence = wet_corpus.cooccurrence(word1, word2, false)
-  adjusted_doc_cooccurrence = doc_cooccurrence - DOC_SIMILARITY_ADJUSTMENT
+  adjusted_doc_cooccurrence = doc_cooccurrence - $DOC_SIMILARITY_ADJUSTMENT
   return sentence_cooccurrence + adjusted_doc_cooccurrence
 end
 
