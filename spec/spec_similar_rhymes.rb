@@ -242,6 +242,18 @@ describe 'SET_RELATED' do
     set_related_ought_not_contain 'crime', 'nerd', 'word'
     set_related_ought_not_contain 'crime', 'sky', 'sci-fi'
   end
+
+  context 'magic' do
+    set_related_oughta_contain 'magic', 'chants', 'trance'
+    set_related_ought_not_contain 'magic', 'enchanted', 'disenchanted' # identical rhyme
+  end
+
+  context 'medical' do
+    set_related_oughta_contain 'medical', 'disease', 'expertise'
+    set_related_oughta_contain 'medical', 'fees', 'ccs'
+    set_related_oughta_contain 'medicine', 'disease', 'expertise'
+    set_related_oughta_contain 'medicine', 'fees', 'ccs'
+  end
   
   context 'prefix' do
     set_related_ought_not_contain 'carbon', 'cycling', 'recycling' # ought to filter out identical rhymes
