@@ -1,20 +1,11 @@
-- compare espeak-ng to wiktionary and use one to improve the other (or both)
-
-RhymeCrime
 - merge nonnative onto non-native and same for all other nons
-- compute semantic similarity myself
--- optimize
---- are the word vectors normalized? if not, I could normalize them up front
--- tune the threshold
---- maybe make the threshold be a sum or product for set_related; if one rhyme is hella related and the other one is a stretch, that might be worth including
-- consider only returning the top 1000 most closely related words
+- consider only returning the top 1000 most closely related words; maybe make relatedness asymmetric
 - make tests for 'ass'
 - integrate espeak-ng
 -- use for input phonemization even if it's not in the dictionary
-- integrate wiktionary
+- integrate wordnet
+-- possibly also wiktionary
 - favicon
 -- don't host on pacesmith.com
 -- rename
 -- make it cooler
-
-elastic IP 44.232.228.9
