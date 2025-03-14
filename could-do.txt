@@ -3,7 +3,7 @@
 - make tests for 'ass'
 - integrate espeak-ng
 -- use for input phonemization even if it's not in the dictionary
-- integrate wordnet
+- integrate wordnet. For example, 'pirate' is very similar to 'trove' via cosine similarity, and then I can get synonyms for 'trove' which gets me 'cache' via wordnet.
 -- possibly also wiktionary
 - favicon
 -- don't host on pacesmith.com
