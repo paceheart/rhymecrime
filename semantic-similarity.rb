@@ -13,8 +13,10 @@ require_relative 'dict/utils_rhyme'
 
 EMBED_VEC_FILE = 'wiki-news-subword-220k.vec'
 EMBED_DICT_FILE = 'embed-dict-subword.msgpack'
-$SIMILARITY_THRESHOLD = 1 # @todo adjust colors once this is stable
-$DOC_SIMILARITY_ADJUSTMENT = 50
+$SIMILARITY_THRESHOLD = 190 # @todo adjust colors once this is stable
+$SENTENCE_SIMILARITY_ADJUSTMENT = 0
+$DOC_SIMILARITY_ADJUSTMENT = 5
+$DOC_SIMILARITY_WEIGHT = 1
 SIMILAR_MAX = 500
 
 $embed_dict = nil
@@ -98,10 +100,17 @@ def similarity(word1, word2)
     return 0
   end
   #cosine_similarity(word1, word2)
-  sentence_cooccurrence = wet_corpus.cooccurrence(word1, word2, true)
+  sentence_cooccurrence = wet_corpus.cooccurrence(word1, word2, true) + $SENTENCE_SIMILARITY_ADJUSTMENT
   doc_cooccurrence = wet_corpus.cooccurrence(word1, word2, false)
-  adjusted_doc_cooccurrence = doc_cooccurrence - $DOC_SIMILARITY_ADJUSTMENT
-  return sentence_cooccurrence + adjusted_doc_cooccurrence
+  adjusted_doc_cooccurrence = doc_cooccurrence * $DOC_SIMILARITY_WEIGHT + $DOC_SIMILARITY_ADJUSTMENT
+  rarity = rarity(word1, word2)
+  return (sentence_cooccurrence + adjusted_doc_cooccurrence) * rarity
+end
+
+def rarity(word1, word2)
+  idf1 = wet_corpus.inverse_document_frequency(word1)
+  idf2 = wet_corpus.inverse_document_frequency(word2)
+  most_common_idf = [idf1, idf2].min # the rarity of a word pair is defined by its most common word
 end
 
 def cosine_similarity(word1, word2)
