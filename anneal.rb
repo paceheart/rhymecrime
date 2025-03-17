@@ -4,14 +4,45 @@ require 'annealing'
 require_relative 'semantic-similarity'
 require_relative 'spec/test_utils'
 
-state = [5, 55] # or [45, 15]
-$coldest_state = state
+#state = [190, 5, 1] # -> 81 # $SIMILARITY_THRESHOLD, $DOC_SIMILARITY_ADJUSTMENT, $DOC_SIMILARITY_WEIGHT
 
-$tweak_increment = 1
+# adjust first, weight later:
+#new best! [0.02, 5, 0, 0] -> 103 # with doc weight fixed at zero
+#new best! [0, 0, 0.04, -47] -> 121 # with sentence weight fixed at zero
+#new best! [0.12, 20, 0.09, -80] -> 98
+
+# weight first, adjust later:
+#new best! [0.2, 40, 0.2, -75] -> 95
+#new best! [0.2, -70, 0.24, 30] -> 95
+#new best! [0.14, 15, 0.12, -35] -> 95
+#new best! [0.38, -25, 0.24, -15] -> 94
+# Why can't I get 81 with either of the two new algorithms? Whatever. I'll just revert to the old one: adjusted_doc_cooccurrence = doc_cooccurrence * $DOC_SIMILARITY_WEIGHT + $DOC_SIMILARITY_ADJUSTMENT; return (sentence_cooccurrence + adjusted_doc_cooccurrence) * rarity
+
+state = [190, 0, 1.0, 5]
+
+$MIN_SIMILARITY_THRESHOLD = 180
+$MAX_SIMILARITY_THRESHOLD = 200
+$SIMILARITY_THRESHOLD_INCREMENT = 1
+
+$MIN_SENTENCE_ADJUSTMENT = -10
+$MAX_SENTENCE_ADJUSTMENT = 10
+$SENTENCE_ADJUSTMENT_INCREMENT = 1
+
+$MIN_SENTENCE_WEIGHT = 0.1
+$MAX_SENTENCE_WEIGHT = 2
+$SENTENCE_WEIGHT_INCREMENT = 0.1
+
+$MIN_DOC_ADJUSTMENT = -20
+$MAX_DOC_ADJUSTMENT = 20
+$DOC_ADJUSTMENT_INCREMENT = 1
+
+$MIN_DOC_WEIGHT = 0.1
+$MAX_DOC_WEIGHT = 2
+$DOC_WEIGHT_INCREMENT = 0.1
 
 Annealing.configure do |config|
   config.cooling_rate = 0.001
-  config.temperature = 30
+  config.temperature = 10
 end
 
 class FailCount
@@ -26,54 +57,135 @@ end
 $foo = FailCount.new
 
 energy_calculator = lambda do |state|
-  $SIMILARITY_THRESHOLD = state[0]
-  $DOC_SIMILARITY_ADJUSTMENT = state[1]
+  $SIMILARITY_THRESHOLD, $SENTENCE_SIMILARITY_ADJUSTMENT, $DOC_SIMILARITY_WEIGHT, $DOC_SIMILARITY_ADJUSTMENT = state
   result = $foo.fail_count(state)
-  puts "#{state} -> #{result.round(3)}"
+  puts "#{state} -> #{result}"
   return result
 end
 
 state_change = lambda do |state|
-  thresh = state[0]
-  doc_adjustment = state[1]
-  tweak = $tweak_increment
+  thresh, sentence_adjustment, doc_weight, doc_adjustment = state
+  mult = coin_flip ? 1 : -1
   if coin_flip
-    tweak = -tweak
-  end
-  if coin_flip
-    thresh += tweak
+    if coin_flip
+      sentence_adjustment += $SENTENCE_ADJUSTMENT_INCREMENT * mult
+    else
+      thresh += $SIMILARITY_THRESHOLD_INCREMENT * mult
+      #sentence_weight += $SENTENCE_WEIGHT_INCREMENT * mult
+      #sentence_weight = sentence_weight.round(2)
+    end
   else
-    doc_adjustment += tweak
+    if coin_flip
+      doc_adjustment += $DOC_ADJUSTMENT_INCREMENT * mult
+    else
+      doc_weight += $DOC_WEIGHT_INCREMENT * mult
+      doc_weight = doc_weight.round(2)
+    end
   end
-  thresh = -100 unless thresh > -100 
-  thresh = 100 unless thresh < 100
-  doc_adjustment = -100 unless doc_adjustment > -100
-  doc_adjustment = 100 unless doc_adjustment < 100
-  return [thresh, doc_adjustment]
+  thresh = $MIN_SIMILARITY_THRESHOLD unless thresh > $MIN_SIMILARITY_THRESHOLD 
+  thresh = $MAX_SIMILARITY_THRESHOLD unless thresh < $MAX_SIMILARITY_THRESHOLD
+  sentence_adjustment = $MIN_SENTENCE_ADJUSTMENT unless sentence_adjustment > $MIN_SENTENCE_ADJUSTMENT
+  sentence_adjustment = $MAX_SENTENCE_ADJUSTMENT unless sentence_adjustment < $MAX_SENTENCE_ADJUSTMENT
+  #sentence_weight = $MIN_SENTENCE_WEIGHT unless sentence_weight > $MIN_SENTENCE_WEIGHT
+  #sentence_weight = $MAX_SENTENCE_WEIGHT unless sentence_weight < $MAX_SENTENCE_WEIGHT
+  doc_adjustment = $MIN_DOC_ADJUSTMENT unless doc_adjustment > $MIN_DOC_ADJUSTMENT
+  doc_adjustment = $MAX_DOC_ADJUSTMENT unless doc_adjustment < $MAX_DOC_ADJUSTMENT
+  doc_weight = $MIN_DOC_WEIGHT unless doc_weight > $MIN_DOC_WEIGHT
+  doc_weight = $MAX_DOC_WEIGHT unless doc_weight < $MAX_DOC_WEIGHT
+  return [thresh, sentence_adjustment, doc_weight, doc_adjustment]
 end
 
 Annealing::Metal.class_eval do
 
-  def prefer?(cooled_metal)
-    result = really_prefer?(cooled_metal)
-    if result
-      $coldest_state = @state
+    # True if cooled_metal.energy is lower than current energy.
+    def lower_energy?(cooled_metal)
+      cooled_metal.energy < energy
     end
-    return result
+    
+    # True if cooled_metal.energy is lower than current energy. Otherwise, let
+    # probability determine if we should accept a higher value over a lower
+    # value
+    def prefer?(cooled_metal)
+      lower_energy?(cooled_metal) or prefer_despite_higher_energy?(cooled_metal)
+    end
+
+    def prefer_despite_higher_energy?(cooled_metal)
+      energy_delta = energy - cooled_metal.energy
+      (Math::E**(energy_delta / cooled_metal.temperature)) > rand
+    end
+end
+
+Annealing::Simulator.class_eval do
+  class Metal
+     attr_reader :configuration, :state, :temperature
+  def initialize(current_state, current_temperature, configuration = nil)
+      @configuration = configuration || Annealing.configuration.merge({})
+      @state = current_state
+      @temperature = current_temperature
   end
 
-  def really_prefer?(cooled_metal)
-    return true if cooled_metal.energy < energy
+     def energy
+      @energy ||= configuration.energy_calculator.call(state)
+    end
 
-    energy_delta = energy - cooled_metal.energy
-    temp = cooled_metal.temperature
-    num = (Math::E**(energy_delta / cooled_metal.temperature))
-    #puts "delta = #{energy_delta.round(3)}, temp = #{temp.round(2)}, #{(num.round(2)*100).to_i}% chance to prefer hotter"
-    num > rand
-  end
+    # This method is not idempotent!
+    # It relies on random probability to select the next state
+    def cool!(new_temperature)
+      cooled_metal = cool(new_temperature)
+      if prefer?(cooled_metal)
+        cooled_metal
+      else
+        @temperature = new_temperature
+        self
+      end
+    end
+
+    # True if cooled_metal.energy is lower than current energy.
+    def lower_energy?(cooled_metal)
+      cooled_metal.energy < energy
+    end
+    
+    private
+
+    # True if cooled_metal.energy is lower than current energy. Otherwise, let
+    # probability determine if we should accept a higher value over a lower
+    # value
+    def prefer?(cooled_metal)
+      lower_energy?(cooled_metal) or prefer_despite_higher_energy?(cooled_metal)
+    end
+
+    def prefer_despite_higher_energy?(cooled_metal)
+      energy_delta = energy - cooled_metal.energy
+      (Math::E**(energy_delta / cooled_metal.temperature)) > rand
+    end
+
+    def cool(new_temperature)
+      next_state = configuration.state_change.call(state)
+      Metal.new(next_state, new_temperature, configuration)
+    end
+  end # end class Metal
+  
+    def run(initial_state, config_hash = {})
+      with_runtime_config(config_hash) do |runtime_config|
+        initial_temperature = runtime_config.temperature
+        current = Metal.new(initial_state, initial_temperature, runtime_config)
+        best = current
+        steps = 0
+        until termination_condition_met?(current, runtime_config)
+          steps += 1
+          current = reduce_temperature(current, steps, runtime_config)
+          # If the current state has lower energy than the previous best (lowest energy) state
+          # we've seen so far, the current state is the new best state.
+          if best.lower_energy?(current)
+            best = current
+            puts "new best! #{best.state} -> #{best.energy}"
+          end
+        end
+        best
+      end
+    end
 end
 
 optimal_settings = Annealing.simulate(state, energy_calculator: energy_calculator, state_change: state_change)
 p optimal_settings
-p $coldest_state
-p $foo.fail_count($coldest_state)
+p $foo.fail_count(optimal_settings)
