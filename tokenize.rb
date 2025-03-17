@@ -41,15 +41,16 @@ def note_doc_word_count(doc_id, word_count)
   $doc_word_counts[local_doc_id] = word_count
 end
 
-# saves sentence word count dicts and word count dicts in passing
+# saves sentence and word indexes in passing
 def tokenize_jsonl_chunk(file)
   line_num = 0
   chunk_id = file[/.*\.(.+)-of-.*/,1].to_i # implicitly relies on $WET_INPUT_FILE_TEMPLATE
-  print "Tokenizing chunk #{chunk_id}"
+  puts "Tokenizing chunk #{chunk_id}"
+  save_metadata(chunk_id, file)
   for line in IO.readlines(file)
-    sentence_word_count_dict, word_count_dict, doc_id = tokenize_json_doc(JSON.parse!(line), chunk_id)
-    save_sentence_word_count_dict(sentence_word_count_dict, doc_id)
-    save_word_count_dict(word_count_dict, doc_id)
+    local_sentence_index, local_doc_index, doc_id = tokenize_json_doc(JSON.parse!(line), chunk_id)
+    save_local_sentence_index(local_sentence_index, doc_id)
+    save_local_doc_index(local_doc_index, doc_id)
     line_num += 1
     if line_num % 1000 == 0
       print "."
@@ -67,8 +68,8 @@ def tokenize_json_doc(json, chunk_id)
   local_doc_id = note_url_local_doc_id(url)
   doc_id = compute_doc_id(chunk_id, local_doc_id)
   doc_word_count = 0
-  sentence_word_count_dict = Hash.new_hash_of_integer_arrays
-  word_count_dict = Hash.new(0)
+  local_sentence_index = Hash.new_hash_of_integer_arrays
+  local_doc_index = Hash.new(0)
   local_sentence_id = 0
   for sentence in tokenize_by_sentence(text)
     if local_sentence_id < $MAX_SENTENCES_PER_DOCUMENT
@@ -76,8 +77,8 @@ def tokenize_json_doc(json, chunk_id)
       for word in sentence.split
         word = word.downcase
         if tokenizer_allowed_word?(word)
-          sentence_word_count_dict.push(word, local_sentence_id)
-          word_count_dict[word] += 1
+          local_sentence_index.push(word, local_sentence_id)
+          local_doc_index[word] += 1
           doc_word_count += 1
           sentence_word_count += 1
         end
@@ -91,31 +92,30 @@ def tokenize_json_doc(json, chunk_id)
   end
   note_doc_sentence_count(doc_id, local_sentence_id)
   note_doc_word_count(doc_id, doc_word_count)
-  return sentence_word_count_dict, word_count_dict, doc_id
+  return local_sentence_index, local_doc_index, doc_id
 end
 
-def save_chunk_specific_file(filename_uniquifier, object, chunk_id)
-  unless object.respond_to?('empty?') and object.empty?
-    filename = construct_chunk_specific_filename(chunk_id, filename_uniquifier)
-    FileUtils.ensure_file_directory_exists(filename)
-    JSON.save(filename, object)
+def save_local_sentence_index(local_sentence_index, doc_id)
+  save_document_specific_file($WET_LOCAL_SENTENCE_INDEX_UNIQUIFIER, local_sentence_index, doc_id)
+end
+
+def save_local_doc_index(local_doc_index, doc_id)
+  save_document_specific_file($WET_LOCAL_DOC_INDEX_UNIQUIFIER, local_doc_index, doc_id)
+end
+
+def save_metadata(chunk_id, input_file)
+  metadata = ""
+  metadata += "Input file: #{input_file}\n"
+  metadata += "Relevant words: "
+  if $LIMIT_TO_TEST_WORDS
+    metadata += "#{all_test_words.length}, namely #{all_test_words.to_a}"
+  else
+    metadata += "all"
   end
-end
-
-def save_document_specific_file(filename_uniquifier, object, doc_id)
-  unless object.respond_to?('empty?') and object.empty?
-    filename = construct_document_specific_filename(doc_id, filename_uniquifier)
-    FileUtils.ensure_file_directory_exists(filename)
-    JSON.save(filename, object)
-  end
-end
-
-def save_sentence_word_count_dict(sentence_word_count_dict, doc_id)
-  save_document_specific_file($WET_SENTENCE_COUNTS_UNIQUIFIER, sentence_word_count_dict, doc_id)
-end
-
-def save_word_count_dict(word_count_dict, doc_id)
-  save_document_specific_file($WET_WORD_COUNTS_UNIQUIFIER, word_count_dict, doc_id)
+  metadata += "\n"
+  filename = construct_chunk_specific_filename(chunk_id, $WET_METADATA_UNIQUIFIER).gsub('.json', '.txt')
+  File.write(filename, metadata)
+  print metadata
 end
 
 def save_urls(chunk_id)
@@ -142,12 +142,9 @@ def save_chunk_word_count(chunk_id)
   save_chunk_specific_file($WET_CHUNK_WORD_COUNT_UNIQUIFIER, $doc_word_counts.sum, chunk_id)
 end
 
-def compute_word_counts(input_jsonl_file)
+def tokenize_wet_chunk(input_jsonl_file)
   if input_jsonl_file.nil?
     raise "Must specify file to tokenize."
-  end
-  if $limit_to_test_words
-    puts "Limiting tokenization to only the #{all_test_words.length} words that appear in the tests"
   end
   chunk_id = tokenize_jsonl_chunk(input_jsonl_file)
   save_urls(chunk_id)
@@ -156,4 +153,4 @@ def compute_word_counts(input_jsonl_file)
   save_doc_word_counts(chunk_id)
 end
 
-compute_word_counts(ARGV[0])
+tokenize_wet_chunk(ARGV[0])

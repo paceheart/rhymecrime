@@ -11,7 +11,6 @@ require_relative 'json_extensions'
 require_relative 'pace_utils'
 require_relative 'WetCorpus'
 
-$global_sentence_word_counts = Hash.new(0)
 $global_word_counts = Hash.new(0)
 $global_sentence_index = Hash.new_hash_of_arrays
 $global_doc_index = Hash.new_hash_of_arrays
@@ -48,27 +47,27 @@ def collate_word_counts(json_filename, chunk_id)
 end
 
 def save_global_word_counts
-  JSON.save('global-word-counts.json', $global_word_counts)
-end
-
-def save_global_doc_index
-  JSON.save('global-doc-index.json', $global_doc_index.sort_values)
+  JSON.save($WET_GLOBAL_WORD_COUNTS_FILENAME, $global_word_counts)
 end
 
 def save_global_sentence_index
-  JSON.save('global-sentence-index.json', $global_sentence_index.sort_values)
+  JSON.save($WET_GLOBAL_SENTENCE_INDEX_FILENAME, $global_sentence_index.sort_values)
+end
+
+def save_global_doc_index
+  JSON.save($WET_GLOBAL_DOC_INDEX_FILENAME, $global_doc_index.sort_values)
 end
 
 def collate_everything
-  Dir.foreach('word-counts') do |chunk_dir|
+  Dir.foreach('index') do |chunk_dir|
     if chunk_dir.include?('chunk')
       print "Collating #{chunk_dir}"
       chunk_id = chunk_dir[6..].to_i
-      chunk_path = 'word-counts/' + chunk_dir
+      chunk_path = 'index/' + chunk_dir
       Dir.foreach(chunk_path) do |filename|
-        if filename.include?('sentence-word-counts-')
+        if filename.include?($WET_LOCAL_SENTENCE_INDEX_UNIQUIFIER)
           collate_sentence_word_counts(chunk_path + "/" + filename, chunk_id)
-        elsif filename.include?('word-counts-')
+        elsif filename.include?($WET_LOCAL_DOC_INDEX_UNIQUIFIER)
           collate_word_counts(chunk_path + "/" + filename, chunk_id)
         end
         if filename.include?('1000.')

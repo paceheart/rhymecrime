@@ -9,66 +9,52 @@ class IndexedWetCorpus
   include Memery
   
   String @dir
-
-  Array @urls # array where the index is global doc_id and the value is the URL for that document, just for efficiency to avoid passing long strings around
-  Array @doc_sentence_counts # DOC_ID -> total # of sentences in that document
-  Array @sentence_word_counts # SENTENCE_ID -> total # of (relevant) words in that sentence
-  Array @doc_word_counts # DOC_ID -> total # of (relevant) words in that document
-  
-  Hash @global_word_counts # WORD -> total # of occurrences across the entire corpus
-  Hash @word_doc_ids # WORD -> array of doc_ids containing WORD
   Hash @word_sentence_ids # WORD -> array of sentence IDs containing WORD
+  Hash @word_doc_ids # WORD -> array of doc_ids containing WORD
+  Hash @global_word_counts # WORD -> total # of occurrences across the entire corpus
 
   def initialize(directory=".")
     @dir = directory.ensure_trailing_slash
-
-    # @todo lazily initialize
-    #@urls = load_chunk_specific_files(@dir, $WET_URLS_UNIQUIFIER)
-    #@doc_sentence_counts = load_chunk_specific_files(@dir, $WET_DOC_SENTENCE_COUNTS_UNIQUIFIER)
-    #@sentence_word_counts = load_chunk_specific_files(@dir, $WET_SENTENCE_WORD_COUNTS_UNIQUIFIER)
-    @doc_word_counts = load_chunk_specific_files(@dir, $WET_DOC_WORD_COUNTS_UNIQUIFIER)
-    
-    @word_doc_ids = JSON.load!(@dir + $WET_GLOBAL_DOC_INDEX_FILENAME)
-    @word_doc_ids = @word_doc_ids.sort_values # @todo remove as soon as we re-collate
     @word_sentence_ids = JSON.load!(@dir + $WET_GLOBAL_SENTENCE_INDEX_FILENAME)
-    @word_sentence_ids = @word_sentence_ids.sort_values # @todo remove as soon as we re-collate
+    @word_doc_ids = JSON.load!(@dir + $WET_GLOBAL_DOC_INDEX_FILENAME)
     @global_word_counts = JSON.load!(@dir + $WET_GLOBAL_WORD_COUNTS_FILENAME)
   end
 
   def global_word_count(word)
     @global_word_counts[word] || 0
-    #@global_word_counts.key?(word) ? @global_word_counts[word] : 0
   end
 
-  def chunk_ids
-    `ls -d word-counts/chunk-*`.split.map { |chunk_dir| chunk_dir[-5..-1].to_i }
-  end
-  
-  def load_chunk_specific_files(dir, uniquifier)
-    result = []
-    for chunk_id in chunk_ids
-      chunk_result = JSON.load!(construct_chunk_specific_filename(chunk_id, uniquifier))
-      for value, local_doc_id in chunk_result.each_with_index
-        doc_id = compute_doc_id(chunk_id, local_doc_id)
-        result[doc_id] = value
-      end
-    end
-    return result
-  end
-  
   memoize def total_sentence_count
-    30146267 # @todo unstub
-    #@doc_sentence_counts.sum_numeric
+    JSON.load($WET_TOTAL_SENTENCE_COUNT_FILENAME)
   end
 
   memoize def total_doc_count
-    1425279 # @todo unstub
-    #@doc_word_counts.non_nil_count
+    JSON.load($WET_TOTAL_DOC_COUNT_FILENAME)
   end
 
+  # array where the index is global doc_id and the value is the URL for that document, just for efficiency to avoid passing long strings around
+  memoize def urls
+    load_chunk_specific_files(@dir, $WET_URLS_UNIQUIFIER)
+  end
+
+  # DOC_ID -> total # of sentences in that document
+  memoize def doc_sentence_counts
+    load_chunk_specific_files(@dir, $WET_DOC_SENTENCE_COUNTS_UNIQUIFIER)
+  end
+
+  # SENTENCE_ID -> total # of (relevant) words in that sentence
+  memoize def sentence_word_counts
+    raise "@todo write an analogue of load_chunk_specific_files that handles sentence_id instead of doc_id"
+  end
+
+  # DOC_ID -> total # of (relevant) words in that document
+  memoize def doc_word_counts
+    load_chunk_specific_files(@dir, $WET_DOC_WORD_COUNTS_UNIQUIFIER)
+  end
+  
   # for sleuthing
   def print_doc_ids_with_tons_of_sentences
-    for doc_sentence_count, doc_id in @doc_sentence_counts.each_with_index
+    for doc_sentence_count, doc_id in doc_sentence_counts.each_with_index
       if doc_sentence_count > 1500
         puts "#{doc_id} -> #{doc_sentence_count}"
       end
@@ -77,7 +63,7 @@ class IndexedWetCorpus
 
   # for sleuthing
   def print_doc_ids_with_tons_of_words
-    for doc_word_count, doc_id in @doc_word_counts.each_with_index
+    for doc_word_count, doc_id in doc_word_counts.each_with_index
       if doc_word_count > 500
         puts "#{doc_id} -> #{doc_word_count}"
       end
@@ -106,7 +92,7 @@ class IndexedWetCorpus
   end
 
   def doc_url(doc_id)
-    @urls[doc_id]
+    urls[doc_id]
   end
   
   def doc_sentences(doc_id)
@@ -257,14 +243,15 @@ class IndexedWetCorpus
       word2_doc_count = word_doc_count(word2)
       word1_idf = inverse_document_frequency(word1)
       word2_idf = inverse_document_frequency(word2)
+      rarity = rarity(word1, word2)
       both_sentence_count = both_words_sentence_count(word1, word2)
       both_doc_count = both_words_doc_count(word1, word2)
-    return "\n#{word1} #{word1_sentence_count} #{word1_doc_count} #{word1_idf} #{word2} #{word2_sentence_count} #{word2_doc_count} #{word2_idf} both #{both_sentence_count} #{both_doc_count}"
+    return "\n#{word1} #{word1_sentence_count} #{word1_doc_count} #{word1_idf} #{word2} #{word2_sentence_count} #{word2_doc_count} #{word2_idf} both #{both_sentence_count} #{both_doc_count} #{rarity}"
   end
 
   # The frequency of WORD within DOC_ID
   def doc_word_frequency(word, doc_id)
-    doc_word_occurrence_count(word, doc_id).to_f / @doc_word_counts[doc_id]
+    doc_word_occurrence_count(word, doc_id).to_f / doc_word_counts[doc_id]
   end
 
   # The rarity of WORD across the corpus

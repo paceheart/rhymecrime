@@ -31,3 +31,8 @@ cd /var/www/cgi-bin/
 sudo chmod o+x *
 
 sudo dnf install xorg-x11-xauth.x86_64 xorg-x11-server-utils.x86_64 dbus-x11.x86_64
+
+./tokenize.rb c4-train-00000-of-01024.json
+[tokenize more files if desired]
+./collate.rb
+./total.rb

@@ -9,22 +9,25 @@ $LIMIT_TO_TEST_WORDS = true # set this to true for testing
 $MAX_SENTENCES_PER_DOCUMENT = 1000
 
 $WET_INPUT_FILE_TEMPLATE = "c4-train.CHUNK_ID-of-01024.json"
-# Document-specific files:
-$WET_DOC_SPECIFIC_FILE_TEMPLATE = "word-counts/chunk-CHUNK_ID/_UNIQUIFIER_-LOCAL_DOC_ID.json"
-$WET_SENTENCE_COUNTS_UNIQUIFIER = "sentence-word-counts"
-$WET_WORD_COUNTS_UNIQUIFIER = "word-counts"
+# Document-specific and sentence-specific files:
+$WET_DOC_SPECIFIC_FILE_TEMPLATE = "index/chunk-CHUNK_ID/_UNIQUIFIER_-LOCAL_DOC_ID.json"
+$WET_LOCAL_SENTENCE_INDEX_UNIQUIFIER = "local-sentence-index" # WORD -> local_sentence_ids: the sentences within that document that contain WORD
+$WET_LOCAL_DOC_INDEX_UNIQUIFIER = "local-doc-index" # word -> # of occurrences in that document
 # Chunk-specific files:
-$WET_CHUNK_SPECIFIC_FILE_TEMPLATE = "word-counts/chunk-CHUNK_ID/_UNIQUIFIER_.json"
-$WET_URLS_UNIQUIFIER = 'urls'
-$WET_DOC_SENTENCE_COUNTS_UNIQUIFIER = 'doc-sentence-counts'
-$WET_SENTENCE_WORD_COUNTS_UNIQUIFIER = 'sentence-word-counts'
-$WET_DOC_WORD_COUNTS_UNIQUIFIER = 'doc-word-counts'
+$WET_CHUNK_SPECIFIC_FILE_TEMPLATE = "index/chunk-CHUNK_ID/_UNIQUIFIER_.json"
+$WET_METADATA_UNIQUIFIER = 'metadata'
+$WET_URLS_UNIQUIFIER = 'urls' # [local_doc_id] -> url
+$WET_DOC_SENTENCE_COUNTS_UNIQUIFIER = 'doc-sentence-counts' # local_doc_id -> # of sentences in that document
+$WET_SENTENCE_WORD_COUNTS_UNIQUIFIER = 'sentence-word-counts' # local_sentence_id -> # of words in that sentence
+$WET_DOC_WORD_COUNTS_UNIQUIFIER = 'doc-word-counts' # local_doc_id -> # of words in that document
 $WET_CHUNK_SENTENCE_COUNT_UNIQUIFIER = 'chunk-total-sentence-count'
 $WET_CHUNK_WORD_COUNT_UNIQUIFIER = 'chunk-total-word-count'
 # Global files:
-$WET_GLOBAL_WORD_COUNTS_FILENAME = 'global-word-counts.json'
-$WET_GLOBAL_DOC_INDEX_FILENAME = 'global-doc-index.json'
-$WET_GLOBAL_SENTENCE_INDEX_FILENAME = 'global-sentence-index.json'
+$WET_GLOBAL_WORD_COUNTS_FILENAME = 'global-word-counts.json' # word -> total # of occurrences
+$WET_GLOBAL_SENTENCE_INDEX_FILENAME = 'global-sentence-index.json' # word -> sentence_ids
+$WET_GLOBAL_DOC_INDEX_FILENAME = 'global-doc-index.json' # word -> doc_ids
+$WET_TOTAL_SENTENCE_COUNT_FILENAME = 'total-sentence-count.json' # total # of sentences in the entire corpus
+$WET_TOTAL_WORD_COUNT_FILENAME = 'total-word-count.json' # total # of words in the entire corpus
 
 def construct_chunk_specific_filename(chunk_id, uniquifier)
   filename = $WET_CHUNK_SPECIFIC_FILE_TEMPLATE
@@ -74,12 +77,13 @@ def tokenize_by_sentence(text)
   Scalpel.cut(text).select { |s| non_trivial_sentence?(s) }
 end
 
+#
+# Limit to test words
+#
+
 $all_test_words = nil
 def all_test_words
-  if $all_test_words.nil?
-    $all_test_words = compute_all_test_words
-  end
-  return $all_test_words
+  $all_test_words ||= compute_all_test_words
 end
 
 def compute_all_test_words
@@ -120,4 +124,57 @@ end
 
 def words_we_care_about
   $LIMIT_TO_TEST_WORDS ? all_test_words : word_dict.keys
+end
+
+#
+# Chunk-specific
+#
+
+def chunk_ids
+  `ls -d word-counts/chunk-*`.split.map { |chunk_dir| chunk_dir[-5..-1].to_i }
+end
+  
+def save_chunk_specific_file(filename_uniquifier, object, chunk_id)
+  unless object.respond_to?('empty?') and object.empty?
+    filename = construct_chunk_specific_filename(chunk_id, filename_uniquifier)
+    FileUtils.ensure_file_directory_exists(filename)
+    JSON.save(filename, object)
+  end
+end
+
+def load_chunk_specific_files(dir, uniquifier)
+  result = []
+  for chunk_id in chunk_ids
+    chunk_result = JSON.load!(construct_chunk_specific_filename(chunk_id, uniquifier))
+    for value, local_doc_id in chunk_result.each_with_index
+      doc_id = compute_doc_id(chunk_id, local_doc_id)
+      result[doc_id] = value
+    end
+  end
+  return result
+end
+  
+def sum_chunk_specific_files(dir, uniquifier)
+  key_count = 0
+  value_sum = 0
+  for chunk_id in chunk_ids
+    chunk_result = JSON.load!(construct_chunk_specific_filename(chunk_id, uniquifier))
+    for value in chunk_result.each_with_index.values
+      key_count += 1
+      value_sum += value
+    end
+  end
+  return key_count, value_sum
+end
+
+#
+# Document-specific
+#
+
+def save_document_specific_file(filename_uniquifier, object, doc_id)
+  unless object.respond_to?('empty?') and object.empty?
+    filename = construct_document_specific_filename(doc_id, filename_uniquifier)
+    FileUtils.ensure_file_directory_exists(filename)
+    JSON.save(filename, object)
+  end
 end
