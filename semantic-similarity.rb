@@ -13,10 +13,10 @@ require_relative 'dict/utils_rhyme'
 
 EMBED_VEC_FILE = 'wiki-news-subword-220k.vec'
 EMBED_DICT_FILE = 'embed-dict-subword.msgpack'
-$SIMILARITY_THRESHOLD = 190 # @todo adjust colors once this is stable
-$SENTENCE_SIMILARITY_ADJUSTMENT = 0
-$DOC_SIMILARITY_ADJUSTMENT = 5
-$DOC_SIMILARITY_WEIGHT = 1
+$SIMILARITY_THRESHOLD = 158 # @todo adjust colors once this is stable
+$SENTENCE_SIMILARITY_ADJUSTMENT = -21
+$DOC_SIMILARITY_WEIGHT = 0.51
+$DOC_SIMILARITY_ADJUSTMENT = 38
 SIMILAR_MAX = 500
 
 $embed_dict = nil
