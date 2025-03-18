@@ -23,11 +23,11 @@ $WET_DOC_WORD_COUNTS_UNIQUIFIER = 'doc-word-counts' # local_doc_id -> # of words
 $WET_CHUNK_SENTENCE_COUNT_UNIQUIFIER = 'chunk-total-sentence-count'
 $WET_CHUNK_WORD_COUNT_UNIQUIFIER = 'chunk-total-word-count'
 # Global files:
-$WET_GLOBAL_WORD_COUNTS_FILENAME = 'global-word-counts.json' # word -> total # of occurrences
-$WET_GLOBAL_SENTENCE_INDEX_FILENAME = 'global-sentence-index.json' # word -> sentence_ids
-$WET_GLOBAL_DOC_INDEX_FILENAME = 'global-doc-index.json' # word -> doc_ids
-$WET_TOTAL_SENTENCE_COUNT_FILENAME = 'total-sentence-count.json' # total # of sentences in the entire corpus
-$WET_TOTAL_WORD_COUNT_FILENAME = 'total-word-count.json' # total # of words in the entire corpus
+$WET_GLOBAL_WORD_COUNTS_FILENAME = 'index/global-word-counts.json' # word -> total # of occurrences
+$WET_GLOBAL_SENTENCE_INDEX_FILENAME = 'index/global-sentence-index.json' # word -> sentence_ids
+$WET_GLOBAL_DOC_INDEX_FILENAME = 'index/global-doc-index.json' # word -> doc_ids
+$WET_TOTAL_SENTENCE_COUNT_FILENAME = 'index/total-sentence-count.json' # total # of sentences in the entire corpus
+$WET_TOTAL_DOC_COUNT_FILENAME = 'index/total-doc-count.json' # total # of documents in the entire corpus
 
 def construct_chunk_specific_filename(chunk_id, uniquifier)
   filename = $WET_CHUNK_SPECIFIC_FILE_TEMPLATE
@@ -131,7 +131,7 @@ end
 #
 
 def chunk_ids
-  `ls -d word-counts/chunk-*`.split.map { |chunk_dir| chunk_dir[-5..-1].to_i }
+  `ls -d index/chunk-*`.split.map { |chunk_dir| chunk_dir[-5..-1].to_i }
 end
   
 def save_chunk_specific_file(filename_uniquifier, object, chunk_id)
@@ -159,7 +159,7 @@ def sum_chunk_specific_files(dir, uniquifier)
   value_sum = 0
   for chunk_id in chunk_ids
     chunk_result = JSON.load!(construct_chunk_specific_filename(chunk_id, uniquifier))
-    for value in chunk_result.each_with_index.values
+    for value in chunk_result
       key_count += 1
       value_sum += value
     end
