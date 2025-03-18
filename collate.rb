@@ -82,4 +82,25 @@ def collate_everything
   save_global_doc_index
 end
 
+# Next, add up the total number of sentences and documents in the entire corpus,
+# then save those totals.
+
+def save_total_sentence_count(count)
+  puts "Total sentence count: #{count}"
+  JSON.save($WET_TOTAL_SENTENCE_COUNT_FILENAME, count)
+end
+
+def save_total_doc_count(count)
+  puts "Total document count: #{count}"
+  JSON.save($WET_TOTAL_DOC_COUNT_FILENAME, count)
+end
+
+def total_everything
+  total_doc_count, total_sentence_count = sum_chunk_specific_files('.', $WET_DOC_SENTENCE_COUNTS_UNIQUIFIER)
+  save_total_sentence_count(total_sentence_count)
+  save_total_doc_count(total_doc_count)
+end
+
+# Now do it!
 collate_everything
+total_everything
