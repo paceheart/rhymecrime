@@ -114,6 +114,7 @@ def save_metadata(chunk_id, input_file)
   end
   metadata += "\n"
   filename = construct_chunk_specific_filename(chunk_id, $WET_METADATA_UNIQUIFIER).gsub('.json', '.txt')
+  FileUtils.ensure_file_directory_exists(filename)
   File.write(filename, metadata)
   print metadata
 end
