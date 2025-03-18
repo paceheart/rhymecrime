@@ -6,39 +6,30 @@ require_relative 'spec/test_utils'
 
 #state = [190, 5, 1] # -> 81 # $SIMILARITY_THRESHOLD, $DOC_SIMILARITY_ADJUSTMENT, $DOC_SIMILARITY_WEIGHT
 
-# adjust first, weight later:
-#new best! [0.02, 5, 0, 0] -> 103 # with doc weight fixed at zero
-#new best! [0, 0, 0.04, -47] -> 121 # with sentence weight fixed at zero
-#new best! [0.12, 20, 0.09, -80] -> 98
+# $SIMILARITY_THRESHOLD, $SENTENCE_SIMILARITY_ADJUSTMENT, $DOC_SIMILARITY_WEIGHT, $DOC_SIMILARITY_ADJUSTMENT
+#state = [30, -14, 0.25, 9] # -> 75
+#state = [160, -20, 0.5, 39] # -> 66
+state = [158, -21, 0.51, 38] # -> 64
 
-# weight first, adjust later:
-#new best! [0.2, 40, 0.2, -75] -> 95
-#new best! [0.2, -70, 0.24, 30] -> 95
-#new best! [0.14, 15, 0.12, -35] -> 95
-#new best! [0.38, -25, 0.24, -15] -> 94
-# Why can't I get 81 with either of the two new algorithms? Whatever. I'll just revert to the old one: adjusted_doc_cooccurrence = doc_cooccurrence * $DOC_SIMILARITY_WEIGHT + $DOC_SIMILARITY_ADJUSTMENT; return (sentence_cooccurrence + adjusted_doc_cooccurrence) * rarity
-
-state = [190, 0, 1.0, 5]
-
-$MIN_SIMILARITY_THRESHOLD = 180
-$MAX_SIMILARITY_THRESHOLD = 200
+$MIN_SIMILARITY_THRESHOLD = 0
+$MAX_SIMILARITY_THRESHOLD = 400
 $SIMILARITY_THRESHOLD_INCREMENT = 1
 
-$MIN_SENTENCE_ADJUSTMENT = -10
-$MAX_SENTENCE_ADJUSTMENT = 10
+#$MIN_SENTENCE_WEIGHT = 0.1
+#$MAX_SENTENCE_WEIGHT = 2
+#$SENTENCE_WEIGHT_INCREMENT = 0.1
+
+$MIN_SENTENCE_ADJUSTMENT = -100
+$MAX_SENTENCE_ADJUSTMENT = 100
 $SENTENCE_ADJUSTMENT_INCREMENT = 1
 
-$MIN_SENTENCE_WEIGHT = 0.1
-$MAX_SENTENCE_WEIGHT = 2
-$SENTENCE_WEIGHT_INCREMENT = 0.1
-
-$MIN_DOC_ADJUSTMENT = -20
-$MAX_DOC_ADJUSTMENT = 20
-$DOC_ADJUSTMENT_INCREMENT = 1
-
-$MIN_DOC_WEIGHT = 0.1
+$MIN_DOC_WEIGHT = 0.01
 $MAX_DOC_WEIGHT = 2
-$DOC_WEIGHT_INCREMENT = 0.1
+$DOC_WEIGHT_INCREMENT = 0.01
+
+$MIN_DOC_ADJUSTMENT = -200
+$MAX_DOC_ADJUSTMENT = 200
+$DOC_ADJUSTMENT_INCREMENT = 1
 
 Annealing.configure do |config|
   config.cooling_rate = 0.001
