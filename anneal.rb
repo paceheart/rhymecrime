@@ -9,27 +9,38 @@ require_relative 'spec/test_utils'
 # $SIMILARITY_THRESHOLD, $SENTENCE_SIMILARITY_ADJUSTMENT, $DOC_SIMILARITY_WEIGHT, $DOC_SIMILARITY_ADJUSTMENT
 #state = [30, -14, 0.25, 9] # -> 75
 #state = [160, -20, 0.5, 39] # -> 66
-state = [158, -21, 0.51, 38] # -> 64
+#state = [158, -21, 0.51, 38] # -> 64
+
+# subtract 1 from rarity
+state = [50, 56, 0.3, -52] # -> 64
+
+# raise to the power of rarity
+#state = [40, 40, 0.08, -40] # -> 102
+#state = [37, 43, 0.06, -42] # -> 98
+# nope
+
+$FINE_GRAINED = true
+$ANNEAL_MULT = $FINE_GRAINED ? 1 : 10
 
 $MIN_SIMILARITY_THRESHOLD = 0
 $MAX_SIMILARITY_THRESHOLD = 400
-$SIMILARITY_THRESHOLD_INCREMENT = 1
+$SIMILARITY_THRESHOLD_INCREMENT = 1 * $ANNEAL_MULT
 
-#$MIN_SENTENCE_WEIGHT = 0.1
+#$MIN_SENTENCE_WEIGHT = 0.01 * $ANNEAL_MULT
 #$MAX_SENTENCE_WEIGHT = 2
-#$SENTENCE_WEIGHT_INCREMENT = 0.1
+#$SENTENCE_WEIGHT_INCREMENT = 0.01 * $ANNEAL_MULT
 
 $MIN_SENTENCE_ADJUSTMENT = -100
 $MAX_SENTENCE_ADJUSTMENT = 100
-$SENTENCE_ADJUSTMENT_INCREMENT = 1
+$SENTENCE_ADJUSTMENT_INCREMENT = 1 * $ANNEAL_MULT
 
 $MIN_DOC_WEIGHT = 0.01
 $MAX_DOC_WEIGHT = 2
-$DOC_WEIGHT_INCREMENT = 0.01
+$DOC_WEIGHT_INCREMENT = 0.01 * $ANNEAL_MULT
 
 $MIN_DOC_ADJUSTMENT = -200
 $MAX_DOC_ADJUSTMENT = 200
-$DOC_ADJUSTMENT_INCREMENT = 1
+$DOC_ADJUSTMENT_INCREMENT = 1 * $ANNEAL_MULT
 
 Annealing.configure do |config|
   config.cooling_rate = 0.001
@@ -169,7 +180,7 @@ Annealing::Simulator.class_eval do
           # we've seen so far, the current state is the new best state.
           if best.lower_energy?(current)
             best = current
-            puts "new best! #{best.state} -> #{best.energy}"
+            puts "state = #{best.state} # -> #{best.energy}"
           end
         end
         best
@@ -178,5 +189,4 @@ Annealing::Simulator.class_eval do
 end
 
 optimal_settings = Annealing.simulate(state, energy_calculator: energy_calculator, state_change: state_change)
-p optimal_settings
-p $foo.fail_count(optimal_settings)
+puts "state = #{optimal_settings} # -> #{$foo.fail_count(optimal_settings)}"
