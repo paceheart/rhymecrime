@@ -13,10 +13,6 @@ require_relative 'fileutils_extensions'
 require_relative 'pace_utils'
 require_relative 'dict/utils_rhyme'
 
-def tokenizer_allowed_word?(word)
-  !stop_word?(word) and !explicitly_forbidden?(word) and words_we_care_about.include?(word)
-end
-
 # We assume the data has already been deduped
 $urls = Array.new
 def note_url_local_doc_id(url)
@@ -98,9 +94,9 @@ def tokenize_json_doc(json, chunk_id)
   for sentence in tokenize_by_sentence(text)
     if local_sentence_id < $MAX_SENTENCES_PER_DOCUMENT
       sentence_word_count = 0
-      for word in sentence.split
+      for word in sentence.scan(/[\w'-]+|[[:punct:]]+/)
         word = word.downcase
-        if tokenizer_allowed_word?(word)
+        if word_we_care_about?(word)
           local_sentence_index.push(word, local_sentence_id)
           local_doc_index[word] += 1
           doc_word_count += 1

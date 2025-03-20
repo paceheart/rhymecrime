@@ -135,8 +135,20 @@ def all_test_words_in_rb_file(filename)
   return results
 end
 
-def words_we_care_about
+def exclude_word?(word)
+  stop_word?(word) || explicitly_forbidden?(word)
+end
+  
+def words_we_care_about_internal
   $LIMIT_TO_TEST_WORDS ? all_test_words : word_dict.keys
+end
+
+def word_we_care_about?(word)
+   !exclude_word?(word) && words_we_care_about_internal.include?(word)
+end
+
+def words_we_care_about
+  words_we_care_about_internal.reject { |w| exclude_word? (w) }
 end
 
 #
