@@ -9,5 +9,8 @@ puts "Debugging '#{word1}' and '#{word2}'"
 
 wet = IndexedWetCorpus.new
 $debug_mode = true
+
+puts "related? #{related?(word1, word2)}"
+puts "adjusted gloss cooccurrence: #{adjusted_gloss_cooccurrence(word1, word2)}"
 wet.print_cooccurrence(word1, word2)
 puts wet.cooccurrence_documents(word1, word2)

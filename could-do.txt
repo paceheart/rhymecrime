@@ -1,16 +1,18 @@
-- respect spelling-variants.txt to fix the lindsay test
 - scale sentence cooccurrence by number of words in the sentence
 - scale document cooccurrence by number of words in the document
 - scale sentence cooccurrence by the number of sentences in the docuemnt
-- morphology
+- integrate wordnet
+-- use gloss cooccurrence
+-- For example, 'pirate' is very similar to 'trove' via cosine similarity, and then I can get synonyms for 'trove' which gets me 'cache' via wordnet.
+-- possibly also wiktionary
+- use morphology to fix the 'medicine' tests; the 'medical' versions of the same tests already succeed
+-- 'glissando', 'accidental', 'flat', and 'sharp' are related to 'musical' so we just have to get from 'music' to 'musical'
 - try cooccurrence within a certain number of words
 - consider deduping sentence word counts
 - Downweight sentences within the same document?
 -- Definitely don't count duplicate sentences within the same document
 - consider only returning the top 1000 most closely related words; maybe make relatedness asymmetric
 - make tests for 'ass'
-- integrate wordnet. For example, 'pirate' is very similar to 'trove' via cosine similarity, and then I can get synonyms for 'trove' which gets me 'cache' via wordnet.
--- possibly also wiktionary
 - favicon
 -- don't host on pacesmith.com
 -- rename
@@ -19,6 +21,7 @@
 -- use for input phonemization even if it's not in the dictionary
 - handle multisyllabic rhymes like "snapshot" and "trap's wrought"
 -- handle multisyllabic almost-rhymes like "company" and "humping me"
+- wizard: are / far / grimoire. Relax similarity threshold for common words if the rhyme set contains at least one legitimately related word
 
 corpora
 - C4 https://stanford-cs324.github.io/winter2022/lectures/data/

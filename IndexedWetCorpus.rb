@@ -9,6 +9,7 @@ require 'msgpack'
 class IndexedWetCorpus
   include Memery
   
+  USE_WEIGHTED = false # control parameter; whether the cooccurrence computation weights by sentence/document length
   String @dir
   Hash @word_sentence_ids # WORD -> array of sentence IDs containing WORD
   Hash @word_doc_ids # WORD -> array of doc_ids containing WORD
@@ -227,8 +228,32 @@ class IndexedWetCorpus
     weighted_doc_count(both_words_doc_ids(word1, word2))
   end
 
-  # Return an integer between -100 and 100
   def cooccurrence(word1, word2, use_sentences=true)
+    USE_WEIGHTED ? weighted_cooccurrence(word1, word2, use_sentences) : unweighted_cooccurrence(word1, word2, use_sentences)
+  end
+  
+  # Return an integer between -100 and 100
+  def weighted_cooccurrence(word1, word2, use_sentences=true)
+    if use_sentences
+      word1_count = weighted_word_sentence_count(word1)
+      word2_count = weighted_word_sentence_count(word2)
+      both_count = weighted_both_words_sentence_count(word1, word2)
+      total = total_sentence_count
+      result = cooccurrence_1(word1_count, word2_count, both_count, total)
+      if $debug_mode
+        debug cooccurrence_sentences(word1, word2, 5)
+      end
+      return result
+    else
+      word1_count = weighted_word_doc_count(word1)
+      word2_count = weighted_word_doc_count(word2)
+      both_count = weighted_both_words_doc_count(word1, word2)
+      total = total_doc_count
+      return cooccurrence_1(word1_count, word2_count, both_count, total)
+    end
+  end
+
+  def unweighted_cooccurrence(word1, word2, use_sentences=true)
     if use_sentences
       word1_count = word_sentence_count(word1)
       word2_count = word_sentence_count(word2)

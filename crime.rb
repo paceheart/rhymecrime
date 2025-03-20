@@ -89,10 +89,6 @@ def word_dict()
   $word_dict
 end
 
-def word_we_care_about?(word)
-  word_dict.key?(word)
-end
-
 WORDS_NEEDED_FOR_TESTING = ['arpeggio', 'asterisk', 'blackmail', 'bobcat', 'burglar', 'burglary', 'cat', 'celebrity', 'costume', 'crime', 'doubloons', 'drumsticks', 'fanciers', 'feline', 'fortissimo', 'galaxy', 'glissando', 'halloween', 'hemiola', 'homicide', 'item', 'jaguar', 'mandolin', 'music', 'overtone', 'pianissimo', 'pirate', 'pussy', 'repertoire', 'ritardando', 'scurvy', 'star', 'thing', 'tree', 'treetop', 'trespassing', 'whiskers', 'wildcat', 'xylophone'] # include these even if they don't have any rhymes
 def needed_for_testing?(word)
   WORDS_NEEDED_FOR_TESTING.include?(word)
@@ -666,6 +662,8 @@ end
 
 def related?(word1, word2, include_self=false)
   # Is word1 conceptually related to word2?
+  word1 = preferred_form(word1)
+  word2 = preferred_form(word2)
   not explicitly_forbidden?(word1) and not explicitly_forbidden?(word2) and semantically_related?(word1, word2)
 end
 
