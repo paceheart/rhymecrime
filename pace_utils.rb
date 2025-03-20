@@ -145,3 +145,13 @@ end
 def coin_flip
   rand < 0.5
 end
+
+class MessagePackUtils
+  def self.load_and_unpack(filename)
+    MessagePack.unpack(File.binread(filename))
+  end
+
+  def self.pack_and_save(filename, object)
+    File.binwrite(filename, object.to_msgpack)
+  end
+end

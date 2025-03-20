@@ -4,6 +4,7 @@ require_relative 'json_extensions'
 require_relative 'pace_utils'
 require_relative 'WetCorpus'
 require 'memery'
+require 'msgpack'
 
 class IndexedWetCorpus
   include Memery
@@ -13,11 +14,15 @@ class IndexedWetCorpus
   Hash @word_doc_ids # WORD -> array of doc_ids containing WORD
   Hash @global_word_counts # WORD -> total # of occurrences across the entire corpus
 
+  def load_packed_json_file(json_version_of_filename)
+    MessagePackUtils.load_and_unpack(json_version_of_filename.gsub('.json', '.msgpack'))
+  end
+
   def initialize(directory=".")
     @dir = directory.ensure_trailing_slash
-    @word_sentence_ids = JSON.load!(@dir + $WET_GLOBAL_SENTENCE_INDEX_FILENAME)
-    @word_doc_ids = JSON.load!(@dir + $WET_GLOBAL_DOC_INDEX_FILENAME)
-    @global_word_counts = JSON.load!(@dir + $WET_GLOBAL_WORD_COUNTS_FILENAME)
+    @word_sentence_ids = load_packed_json_file($WET_GLOBAL_SENTENCE_INDEX_FILENAME)
+    @word_doc_ids = load_packed_json_file($WET_GLOBAL_DOC_INDEX_FILENAME)
+    @global_word_counts = load_packed_json_file($WET_GLOBAL_WORD_COUNTS_FILENAME)
   end
 
   def global_word_count(word)
@@ -34,22 +39,39 @@ class IndexedWetCorpus
 
   # array where the index is global doc_id and the value is the URL for that document, just for efficiency to avoid passing long strings around
   memoize def urls
-    load_chunk_specific_files(@dir, $WET_URLS_UNIQUIFIER)
+    MessagePackUtils.load_and_unpack($WET_GLOBAL_URLS_FILENAME)
   end
 
+  def doc_url(doc_id)
+    urls[doc_id]
+  end
+  
   # DOC_ID -> total # of sentences in that document
   memoize def doc_sentence_counts
-    load_chunk_specific_files(@dir, $WET_DOC_SENTENCE_COUNTS_UNIQUIFIER)
+    MessagePackUtils.load_and_unpack($WET_GLOBAL_DOC_SENTENCE_COUNTS_FILENAME)
+  end
+
+  def doc_sentence_count(doc_id)
+    doc_sentence_counts[doc_id]
   end
 
   # SENTENCE_ID -> total # of (relevant) words in that sentence
   memoize def sentence_word_counts
-    raise "@todo write an analogue of load_chunk_specific_files that handles sentence_id instead of doc_id"
+    MessagePackUtils.load_and_unpack($WET_GLOBAL_SENTENCE_WORD_COUNTS_FILENAME)
+  end
+
+  def sentence_word_count(sentence_id)
+    doc_id, local_sentence_id = split_sentence_id(sentence_id)
+    sentence_word_counts[doc_id][local_sentence_id]
   end
 
   # DOC_ID -> total # of (relevant) words in that document
   memoize def doc_word_counts
-    load_chunk_specific_files(@dir, $WET_DOC_WORD_COUNTS_UNIQUIFIER)
+    MessagePackUtils.load_and_unpack($WET_GLOBAL_DOC_WORD_COUNTS_FILENAME)
+  end
+
+  def doc_word_count(doc_id)
+    doc_word_counts[doc_id]
   end
   
   # for sleuthing
@@ -91,10 +113,6 @@ class IndexedWetCorpus
     return json["text"]
   end
 
-  def doc_url(doc_id)
-    urls[doc_id]
-  end
-  
   def doc_sentences(doc_id)
     tokenize_by_sentence(doc_text(doc_id))
   end
@@ -123,7 +141,7 @@ class IndexedWetCorpus
   def word_sentence_count(word)
     word_sentence_ids(word).length
   end
-
+  
   # How many documents contain WORD?
   def word_doc_count(word)
     word_doc_ids(word).length
@@ -139,7 +157,7 @@ class IndexedWetCorpus
     word_sentence_ids(word).select { |sent_id| sentence_in_doc?(sent_id, doc_id) }
   end
 
-  # How many sentences in DOC_ID conatin WORD?
+  # How many sentences in DOC_ID contain WORD?
   def word_sentence_count_in_doc(word, doc_id)
     word_sentence_ids_in_doc(word, doc_id).length
   end
@@ -168,6 +186,47 @@ class IndexedWetCorpus
     both_words_doc_ids(word1, word2).length
   end
 
+  $AVG_SENTENCE_LENGTH = $LIMIT_TO_TEST_WORDS ? 1.3 : 10.0 # it's not important for this to be precise, just in the right ballpark
+  def weighted_sentence_count(sentence_ids)
+    result = 0
+    for sentence_id in sentence_ids
+      number_of_words_in_sentence = sentence_word_count(sentence_id)
+      weight = $AVG_SENTENCE_LENGTH / number_of_words_in_sentence
+      result += weight
+    end
+    result
+  end
+  
+  # Gets the number of sentences that contain WORD,
+  # then scales the result based on the lengths of those sentences.
+  # Short sentences will increase the returned value.
+  def weighted_word_sentence_count(word)
+    weighted_sentence_count(word_sentence_ids(word))
+  end
+
+  def weighted_both_words_sentence_count(word1, word2)
+    weighted_sentence_count(both_words_sentence_ids(word1, word2))
+  end
+
+  $AVG_DOC_LENGTH = $LIMIT_TO_TEST_WORDS ? 3 : 1000 # it's not important for this to be precise, just in the right ballpark
+  def weighted_doc_count(doc_ids)
+    result = 0
+    for doc_id in doc_ids
+      number_of_words_in_doc = doc_word_count(doc_id)
+      weight = $AVG_DOC_LENGTH / number_of_words_in_doc
+      result += weight
+    end
+    result
+  end
+
+  def weighted_word_doc_count(word)
+    weighted_doc_count(word_doc_ids(word))
+  end
+
+  def weighted_both_words_doc_count(word1, word2)
+    weighted_doc_count(both_words_doc_ids(word1, word2))
+  end
+
   # Return an integer between -100 and 100
   def cooccurrence(word1, word2, use_sentences=true)
     if use_sentences
@@ -193,12 +252,13 @@ class IndexedWetCorpus
     word1_a_priori_prob = word1_count.to_f / total
     word2_a_priori_prob = word2_count.to_f / total
     both_words_independent_prob = word1_a_priori_prob * word2_a_priori_prob # if word1 and word2 were independently distributed, this would be the probability of a document containing both of them
-    actual_prob = both_count.to_f / total
-    # If the actual probability is less than the independent probability, word1 is negatively correlated with word2.
-    # If the actual probability is greater than the independent probability, word1 is positively correlated with word2.
-    prob_diff = actual_prob - both_words_independent_prob
+    actual_freq = both_count.to_f / total
+    # If the actual frequency is less than the independent probability, word1 is negatively correlated with word2.
+    # If the actual frequency is greater than the independent probability, word1 is positively correlated with word2.
+    prob_diff = actual_freq - both_words_independent_prob
+    debug "w1 #{word1_count} w2 #{word2_count} both #{both_count} w1p #{word1_a_priori_prob} w2p #{word2_a_priori_prob} bothp #{both_words_independent_prob} actual #{actual_freq} pdiff #{prob_diff}"
     result = massage_prob_diff(prob_diff)
-    debug "w1 #{word1_count} w2 #{word2_count} both #{both_count} w1p #{word1_a_priori_prob} w2p #{word2_a_priori_prob} bothp #{both_words_independent_prob} actualp #{actual_prob} pdiff #{prob_diff} result #{result}"
+    debug "w1 #{word1_count} w2 #{word2_count} both #{both_count} w1p #{word1_a_priori_prob} w2p #{word2_a_priori_prob} bothp #{both_words_independent_prob} actual #{actual_freq} pdiff #{prob_diff} result #{result}"
     return result
   end
 
@@ -251,7 +311,7 @@ class IndexedWetCorpus
 
   # The frequency of WORD within DOC_ID
   def doc_word_frequency(word, doc_id)
-    doc_word_occurrence_count(word, doc_id).to_f / doc_word_counts[doc_id]
+    doc_word_occurrence_count(word, doc_id).to_f / doc_word_count(doc_id)
   end
 
   # The rarity of WORD across the corpus
@@ -291,13 +351,15 @@ end
 
 def pirate_test(wet)
   test_words = ['ship', 'cache', 'lash', 'cove', 'trove', 'handsome', 'ransom', 'wench', 'gang', 'hang', 'plank', 'peg', 'leg', 'daring', 'swearing', 'hacker', 'cracker', 'sea', 'dvd', 'gold', 'bold', 'buccaneer', 'peer-to-peer', 'commandeer', 'crew', 'tattoo', 'reef', 'thief', 'coast', 'ghost', 'loot', 'pursuit', 'rum', 'saber', 'scurvy', 'pew', 'roc', 'miko', 'mrs.', 'needlework', 'popcorn', 'galaxy', 'ebony', 'ballerina', 'bungee', 'homemade', 'pimping', 'prehistoric', 'reindeer', 'adipose', 'asexual', 'doodle', 'frisbee', 'isaac', 'laser', 'homophobic', 'pedantic']
-  test_words = test_words.sort_by { |w| -wet.cooccurrence('pirate', w, false) }
-  for word in test_words.sort_by { |w| -wet.cooccurrence('pirate', w) }
+  #test_words = test_words.sort_by { |w| -wet.cooccurrence('pirate', w, false) }
+  #for word in test_words.sort_by { |w| -wet.cooccurrence('pirate', w) }
+  for word in test_words
     wet.print_cooccurrence('pirate', word)
   end
 end
 
 #require 'stackprof'
+#$debug_mode = false
 #wet = IndexedWetCorpus.new
 #StackProf.run(mode: :cpu, out:'/tmp/crime.dump') do
 #  pirate_test(wet)

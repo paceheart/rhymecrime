@@ -1,4 +1,5 @@
 require 'csv'
+require_relative '../pace_utils'
 
 def zerone_string_to_boolean(str)
   str = str.strip
@@ -9,6 +10,11 @@ def zerone_string_to_boolean(str)
   else
     raise "zerone_string_to_boolean called on a non-zerone string: " + str
   end
+end
+
+$cases = nil
+def relatedness_test_cases
+  $cases ||= load_relatedness_test_cases
 end
 
 # word1, word2, oughta be related?, notes
@@ -54,4 +60,21 @@ end
 
 def load_and_define_relatedness_test_cases
   load_relatedness_test_cases.each { |c| define_relatedness_test_case(c) }
+end
+
+def relatedness_test_passes?(test_case)
+  expected = test_case['oughta be related?']
+  actual = semantically_related?(test_case["word1"], test_case["word2"], false)
+  debug expected == actual ? "." : "F"
+  return expected == actual
+end
+
+def succeeding_test_count
+  cases = relatedness_test_cases
+  success_count = cases.count { |c| relatedness_test_passes?(c) }
+  return success_count
+end
+
+def failing_test_count
+  relatedness_test_cases.count - succeeding_test_count
 end
