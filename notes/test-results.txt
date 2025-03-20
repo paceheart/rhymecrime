@@ -1,3 +1,758 @@
+[ec2-user@ip-172-31-46-211 dev]$ rspec --no-color
+...............................................F............F.......FF...F.F.....F...............F..................F......................FF.FF....F....FF...F........................................FFF...F......F...........F.F..F....F...........F....F..................F......F..FF.................................F.....F.......F...FF.FF...F.........FF.F.F..F.FF..............................................................F.........................F.....F.......F..............F......FF.......................FFFFF...............F..............FF
+
+Failures:
+
+  1) RELATED  'pirate' oughta be related to 'bold'
+     Failure/Error: expect(related?(word1, word2, false)).to eql(true), "'#{word1}' is #{similarity(word1, word2).round} related to '#{word2}', which is under the similarity threshold of #{similarity_threshold()}" + $wet.debug_info(word1, word2)
+
+       'pirate' is 16 related to 'bold', which is under the similarity threshold of 41
+       pirate 4538 2594 3.63 bold 15272 12681 3.1 both 0 56 2.1
+       Diff:
+       @@ -1 +1 @@
+       -true
+       +false
+     # ./spec/spec_related.rb:11:in `block in oughta_be_related'
+
+  2) RELATED  'pirate' oughta be related to 'saber'
+     Failure/Error: expect(related?(word1, word2, false)).to eql(true), "'#{word1}' is #{similarity(word1, word2).round} related to '#{word2}', which is under the similarity threshold of #{similarity_threshold()}" + $wet.debug_info(word1, word2)
+
+       'pirate' is 40 related to 'saber', which is under the similarity threshold of 41
+       pirate 4538 2594 3.63 saber 758 485 4.4 both 0 6 2.63
+       Diff:
+       @@ -1 +1 @@
+       -true
+       +false
+     # ./spec/spec_related.rb:11:in `block in oughta_be_related'
+
+  3) RELATED  'pirate' ought not be related to 'popcorn'
+     Failure/Error: expect(related?(word1, word2, false)).to eql(false), "'#{word1}' is #{similarity(word1, word2).round} related to '#{word2}', which meets the similarity threshold of #{similarity_threshold()}" + $wet.debug_info(word1, word2)
+
+       'pirate' is 83 related to 'popcorn', which meets the similarity threshold of 41
+       pirate 4538 2594 3.63 popcorn 3625 2083 3.73 both 3 18 2.63
+       Diff:
+       @@ -1 +1 @@
+       -false
+       +true
+     # ./spec/spec_related.rb:24:in `block in ought_not_be_related'
+
+  4) RELATED  'pirate' ought not be related to 'galaxy'
+     Failure/Error: expect(related?(word1, word2, false)).to eql(false), "'#{word1}' is #{similarity(word1, word2).round} related to '#{word2}', which meets the similarity threshold of #{similarity_threshold()}" + $wet.debug_info(word1, word2)
+
+       'pirate' is 70 related to 'galaxy', which meets the similarity threshold of 41
+       pirate 4538 2594 3.63 galaxy 14781 5716 3.12 both 4 69 2.12
+       Diff:
+       @@ -1 +1 @@
+       -false
+       +true
+     # ./spec/spec_related.rb:24:in `block in ought_not_be_related'
+
+  5) RELATED  'pirate' ought not be related to 'homemade'
+     Failure/Error: expect(related?(word1, word2, false)).to eql(false), "'#{word1}' is #{similarity(word1, word2).round} related to '#{word2}', which meets the similarity threshold of #{similarity_threshold()}" + $wet.debug_info(word1, word2)
+
+       'pirate' is 41 related to 'homemade', which meets the similarity threshold of 41
+       pirate 4538 2594 3.63 homemade 14363 9683 3.13 both 2 47 2.13
+       Diff:
+       @@ -1 +1 @@
+       -false
+       +true
+     # ./spec/spec_related.rb:24:in `block in ought_not_be_related'
+
+  6) RELATED  'pirate' ought not be related to 'prehistoric'
+     Failure/Error: expect(related?(word1, word2, false)).to eql(false), "'#{word1}' is #{similarity(word1, word2).round} related to '#{word2}', which meets the similarity threshold of #{similarity_threshold()}" + $wet.debug_info(word1, word2)
+
+       'pirate' is 44 related to 'prehistoric', which meets the similarity threshold of 41
+       pirate 4538 2594 3.63 prehistoric 1872 1401 4.01 both 0 17 2.63
+       Diff:
+       @@ -1 +1 @@
+       -false
+       +true
+     # ./spec/spec_related.rb:24:in `block in ought_not_be_related'
+
+  7) RELATED  'pirate' ought not be related to 'isaac'
+     Failure/Error: expect(related?(word1, word2, false)).to eql(false), "'#{word1}' is #{similarity(word1, word2).round} related to '#{word2}', which meets the similarity threshold of #{similarity_threshold()}" + $wet.debug_info(word1, word2)
+
+       'pirate' is 49 related to 'isaac', which meets the similarity threshold of 41
+       pirate 4538 2594 3.63 isaac 3976 2556 3.68 both 1 21 2.63
+       Diff:
+       @@ -1 +1 @@
+       -false
+       +true
+     # ./spec/spec_related.rb:24:in `block in ought_not_be_related'
+
+  8) RELATED  'halloween' ought not be related to 'lindsay'
+     Failure/Error: expect(related?(word1, word2, false)).to eql(false), "'#{word1}' is #{similarity(word1, word2).round} related to '#{word2}', which meets the similarity threshold of #{similarity_threshold()}" + $wet.debug_info(word1, word2)
+
+       'halloween' is 52 related to 'lindsay', which meets the similarity threshold of 41
+       halloween 14839 6597 3.12 lindsay 2699 1685 3.85 both 2 23 2.12
+       Diff:
+       @@ -1 +1 @@
+       -false
+       +true
+     # ./spec/spec_related.rb:24:in `block in ought_not_be_related'
+
+  9) RELATED  'cat' oughta be related to 'bobcat'
+     Failure/Error: expect(related?(word1, word2, false)).to eql(true), "'#{word1}' is #{similarity(word1, word2).round} related to '#{word2}', which is under the similarity threshold of #{similarity_threshold()}" + $wet.debug_info(word1, word2)
+
+       'cat' is 31 related to 'bobcat', which is under the similarity threshold of 41
+       cat 30174 13853 2.81 bobcat 763 264 4.4 both 0 34 1.81
+       Diff:
+       @@ -1 +1 @@
+       -true
+       +false
+     # ./spec/spec_related.rb:11:in `block in oughta_be_related'
+
+  10) RELATED  'cat' ought not be related to 'object'
+      Failure/Error: expect(related?(word1, word2, false)).to eql(false), "'#{word1}' is #{similarity(word1, word2).round} related to '#{word2}', which meets the similarity threshold of #{similarity_threshold()}" + $wet.debug_info(word1, word2)
+
+        'cat' is 66 related to 'object', which meets the similarity threshold of 41
+        cat 30174 13853 2.81 object 31054 16937 2.8 both 23 352 1.7999999999999998
+        Diff:
+        @@ -1 +1 @@
+        -false
+        +true
+      # ./spec/spec_related.rb:24:in `block in ought_not_be_related'
+
+  11) RELATED  'cat' ought not be related to 'objects'
+      Failure/Error: expect(related?(word1, word2, false)).to eql(false), "'#{word1}' is #{similarity(word1, word2).round} related to '#{word2}', which meets the similarity threshold of #{similarity_threshold()}" + $wet.debug_info(word1, word2)
+
+        'cat' is 75 related to 'objects', which meets the similarity threshold of 41
+        cat 30174 13853 2.81 objects 24176 15643 2.91 both 21 332 1.81
+        Diff:
+        @@ -1 +1 @@
+        -false
+        +true
+      # ./spec/spec_related.rb:24:in `block in ought_not_be_related'
+
+  12) RELATED  'cat' ought not be related to 'items'
+      Failure/Error: expect(related?(word1, word2, false)).to eql(false), "'#{word1}' is #{similarity(word1, word2).round} related to '#{word2}', which meets the similarity threshold of #{similarity_threshold()}" + $wet.debug_info(word1, word2)
+
+        'cat' is 64 related to 'items', which meets the similarity threshold of 41
+        cat 30174 13853 2.81 items 96173 58917 2.32 both 73 996 1.3199999999999998
+        Diff:
+        @@ -1 +1 @@
+        -false
+        +true
+      # ./spec/spec_related.rb:24:in `block in ought_not_be_related'
+
+  13) RELATED  'cat' ought not be related to 'thing'
+      Failure/Error: expect(related?(word1, word2, false)).to eql(false), "'#{word1}' is #{similarity(word1, word2).round} related to '#{word2}', which meets the similarity threshold of #{similarity_threshold()}" + $wet.debug_info(word1, word2)
+
+        'cat' is 60 related to 'thing', which meets the similarity threshold of 41
+        cat 30174 13853 2.81 thing 206466 136378 2.01 both 165 3315 1.0099999999999998
+        Diff:
+        @@ -1 +1 @@
+        -false
+        +true
+      # ./spec/spec_related.rb:24:in `block in ought_not_be_related'
+
+  14) RELATED  'cat' ought not be related to 'chunk'
+      Failure/Error: expect(related?(word1, word2, false)).to eql(false), "'#{word1}' is #{similarity(word1, word2).round} related to '#{word2}', which meets the similarity threshold of #{similarity_threshold()}" + $wet.debug_info(word1, word2)
+
+        'cat' is 59 related to 'chunk', which meets the similarity threshold of 41
+        cat 30174 13853 2.81 chunk 4201 3760 3.66 both 5 110 1.81
+        Diff:
+        @@ -1 +1 @@
+        -false
+        +true
+      # ./spec/spec_related.rb:24:in `block in ought_not_be_related'
+
+  15) RELATED  'cat' ought not be related to 'tool'
+      Failure/Error: expect(related?(word1, word2, false)).to eql(false), "'#{word1}' is #{similarity(word1, word2).round} related to '#{word2}', which meets the similarity threshold of #{similarity_threshold()}" + $wet.debug_info(word1, word2)
+
+        'cat' is 48 related to 'tool', which meets the similarity threshold of 41
+        cat 30174 13853 2.81 tool 69300 43759 2.46 both 46 595 1.46
+        Diff:
+        @@ -1 +1 @@
+        -false
+        +true
+      # ./spec/spec_related.rb:24:in `block in ought_not_be_related'
+
+  16) RELATED  'cat' ought not be related to 'duck'
+      Failure/Error: expect(related?(word1, word2, false)).to eql(false), "'#{word1}' is #{similarity(word1, word2).round} related to '#{word2}', which meets the similarity threshold of #{similarity_threshold()}" + $wet.debug_info(word1, word2)
+
+        'cat' is 69 related to 'duck', which meets the similarity threshold of 41
+        cat 30174 13853 2.81 duck 7118 4347 3.43 both 9 177 1.81
+        Diff:
+        @@ -1 +1 @@
+        -false
+        +true
+      # ./spec/spec_related.rb:24:in `block in ought_not_be_related'
+
+  17) RELATED  'cat' ought not be related to 'melancholy'
+      Failure/Error: expect(related?(word1, word2, false)).to eql(false), "'#{word1}' is #{similarity(word1, word2).round} related to '#{word2}', which meets the similarity threshold of #{similarity_threshold()}" + $wet.debug_info(word1, word2)
+
+        'cat' is 56 related to 'melancholy', which meets the similarity threshold of 41
+        cat 30174 13853 2.81 melancholy 1224 1117 4.2 both 3 49 1.81
+        Diff:
+        @@ -1 +1 @@
+        -false
+        +true
+      # ./spec/spec_related.rb:24:in `block in ought_not_be_related'
+
+  18) RELATED  'crime' oughta be related to 'repentance'
+      Failure/Error: expect(related?(word1, word2, false)).to eql(true), "'#{word1}' is #{similarity(word1, word2).round} related to '#{word2}', which is under the similarity threshold of #{similarity_threshold()}" + $wet.debug_info(word1, word2)
+
+        'crime' is 32 related to 'repentance', which is under the similarity threshold of 41
+        crime 28567 16576 2.83 repentance 1290 822 4.17 both 1 47 1.83
+        Diff:
+        @@ -1 +1 @@
+        -true
+        +false
+      # ./spec/spec_related.rb:11:in `block in oughta_be_related'
+
+  19) RELATED  'crime' oughta be related to 'skulduggery'
+      Failure/Error: expect(related?(word1, word2, false)).to eql(true), "'#{word1}' is #{similarity(word1, word2).round} related to '#{word2}', which is under the similarity threshold of #{similarity_threshold()}" + $wet.debug_info(word1, word2)
+
+        'crime' is 28 related to 'skulduggery', which is under the similarity threshold of 41
+        crime 28567 16576 2.83 skulduggery 51 41 5.58 both 0 6 1.83
+        Diff:
+        @@ -1 +1 @@
+        -true
+        +false
+      # ./spec/spec_related.rb:11:in `block in oughta_be_related'
+
+  20) RELATED  'crime' oughta be related to 'thuggery'
+      Failure/Error: expect(related?(word1, word2, false)).to eql(true), "'#{word1}' is #{similarity(word1, word2).round} related to '#{word2}', which is under the similarity threshold of #{similarity_threshold()}" + $wet.debug_info(word1, word2)
+
+        'crime' is 29 related to 'thuggery', which is under the similarity threshold of 41
+        crime 28567 16576 2.83 thuggery 50 48 5.58 both 0 9 1.83
+        Diff:
+        @@ -1 +1 @@
+        -true
+        +false
+      # ./spec/spec_related.rb:11:in `block in oughta_be_related'
+
+  21) RELATED  'crime' ought not be related to 'person'
+      Failure/Error: expect(related?(word1, word2, false)).to eql(false), "'#{word1}' is #{similarity(word1, word2).round} related to '#{word2}', which meets the similarity threshold of #{similarity_threshold()}" + $wet.debug_info(word1, word2)
+
+        'crime' is 83 related to 'person', which meets the similarity threshold of 41
+        crime 28567 16576 2.83 person 187384 113546 2.05 both 466 4147 1.0499999999999998
+        Diff:
+        @@ -1 +1 @@
+        -false
+        +true
+      # ./spec/spec_related.rb:24:in `block in ought_not_be_related'
+
+  22) RELATED  'crime' ought not be related to 'animation'
+      Failure/Error: expect(related?(word1, word2, false)).to eql(false), "'#{word1}' is #{similarity(word1, word2).round} related to '#{word2}', which meets the similarity threshold of #{similarity_threshold()}" + $wet.debug_info(word1, word2)
+
+        'crime' is 67 related to 'animation', which meets the similarity threshold of 41
+        crime 28567 16576 2.83 animation 10327 5839 3.27 both 10 168 1.83
+        Diff:
+        @@ -1 +1 @@
+        -false
+        +true
+      # ./spec/spec_related.rb:24:in `block in ought_not_be_related'
+
+  23) RELATED  'crime' ought not be related to 'sky'
+      Failure/Error: expect(related?(word1, word2, false)).to eql(false), "'#{word1}' is #{similarity(word1, word2).round} related to '#{word2}', which meets the similarity threshold of #{similarity_threshold()}" + $wet.debug_info(word1, word2)
+
+        'crime' is 53 related to 'sky', which meets the similarity threshold of 41
+        crime 28567 16576 2.83 sky 22834 15576 2.93 both 15 454 1.83
+        Diff:
+        @@ -1 +1 @@
+        -false
+        +true
+      # ./spec/spec_related.rb:24:in `block in ought_not_be_related'
+
+  24) RELATED  'crime' ought not be related to 'mass'
+      Failure/Error: expect(related?(word1, word2, false)).to eql(false), "'#{word1}' is #{similarity(word1, word2).round} related to '#{word2}', which meets the similarity threshold of #{similarity_threshold()}" + $wet.debug_info(word1, word2)
+
+        'crime' is 106 related to 'mass', which meets the similarity threshold of 41
+        crime 28567 16576 2.83 mass 41609 25645 2.67 both 83 1220 1.67
+        Diff:
+        @@ -1 +1 @@
+        -false
+        +true
+      # ./spec/spec_related.rb:24:in `block in ought_not_be_related'
+
+  25) RELATED  'crime' ought not be related to 'sci-fi'
+      Failure/Error: expect(related?(word1, word2, false)).to eql(false), "'#{word1}' is #{similarity(word1, word2).round} related to '#{word2}', which meets the similarity threshold of #{similarity_threshold()}" + $wet.debug_info(word1, word2)
+
+        'crime' is 92 related to 'sci-fi', which meets the similarity threshold of 41
+        crime 28567 16576 2.83 sci-fi 3660 2787 3.72 both 19 199 1.83
+        Diff:
+        @@ -1 +1 @@
+        -false
+        +true
+      # ./spec/spec_related.rb:24:in `block in ought_not_be_related'
+
+  26) RELATED  'pasta' oughta be related to 'scallion'
+      Failure/Error: expect(related?(word1, word2, false)).to eql(true), "'#{word1}' is #{similarity(word1, word2).round} related to '#{word2}', which is under the similarity threshold of #{similarity_threshold()}" + $wet.debug_info(word1, word2)
+
+        'pasta' is 38 related to 'scallion', which is under the similarity threshold of 41
+        pasta 8686 4402 3.35 scallion 187 135 5.01 both 0 12 2.35
+        Diff:
+        @@ -1 +1 @@
+        -true
+        +false
+      # ./spec/spec_related.rb:11:in `block in oughta_be_related'
+
+  27) RELATED  'pasta' ought not be related to 'penicillin'
+      Failure/Error: expect(related?(word1, word2, false)).to eql(false), "'#{word1}' is #{similarity(word1, word2).round} related to '#{word2}', which meets the similarity threshold of #{similarity_threshold()}" + $wet.debug_info(word1, word2)
+
+        'pasta' is 48 related to 'penicillin', which meets the similarity threshold of 41
+        pasta 8686 4402 3.35 penicillin 608 367 4.5 both 1 6 2.35
+        Diff:
+        @@ -1 +1 @@
+        -false
+        +true
+      # ./spec/spec_related.rb:24:in `block in ought_not_be_related'
+
+  28) RELATED  'pasta' ought not be related to 'duck'
+      Failure/Error: expect(related?(word1, word2, false)).to eql(false), "'#{word1}' is #{similarity(word1, word2).round} related to '#{word2}', which meets the similarity threshold of #{similarity_threshold()}" + $wet.debug_info(word1, word2)
+
+        'pasta' is 96 related to 'duck', which meets the similarity threshold of 41
+        pasta 8686 4402 3.35 duck 7118 4347 3.43 both 7 112 2.35
+        Diff:
+        @@ -1 +1 @@
+        -false
+        +true
+      # ./spec/spec_related.rb:24:in `block in ought_not_be_related'
+
+  29) RELATED  'star' oughta be related to 'asterisk'
+      Failure/Error: expect(related?(word1, word2, false)).to eql(true), "'#{word1}' is #{similarity(word1, word2).round} related to '#{word2}', which is under the similarity threshold of #{similarity_threshold()}" + $wet.debug_info(word1, word2)
+
+        'star' is 33 related to 'asterisk', which is under the similarity threshold of 41
+        star 71437 42581 2.45 asterisk 672 512 4.46 both 2 30 1.4500000000000002
+        Diff:
+        @@ -1 +1 @@
+        -true
+        +false
+      # ./spec/spec_related.rb:11:in `block in oughta_be_related'
+
+  30) RELATED  'star' ought not be related to 'duck'
+      Failure/Error: expect(related?(word1, word2, false)).to eql(false), "'#{word1}' is #{similarity(word1, word2).round} related to '#{word2}', which meets the similarity threshold of #{similarity_threshold()}" + $wet.debug_info(word1, word2)
+
+        'star' is 75 related to 'duck', which meets the similarity threshold of 41
+        star 71437 42581 2.45 duck 7118 4347 3.43 both 30 421 1.4500000000000002
+        Diff:
+        @@ -1 +1 @@
+        -false
+        +true
+      # ./spec/spec_related.rb:24:in `block in ought_not_be_related'
+
+  31) RELATED  'star' ought not be related to 'rancid'
+      Failure/Error: expect(related?(word1, word2, false)).to eql(false), "'#{word1}' is #{similarity(word1, word2).round} related to '#{word2}', which meets the similarity threshold of #{similarity_threshold()}" + $wet.debug_info(word1, word2)
+
+        'star' is 44 related to 'rancid', which meets the similarity threshold of 41
+        star 71437 42581 2.45 rancid 346 291 4.74 both 3 22 1.4500000000000002
+        Diff:
+        @@ -1 +1 @@
+        -false
+        +true
+      # ./spec/spec_related.rb:24:in `block in ought_not_be_related'
+
+  32) RELATED  'star' ought not be related to 'justice'
+      Failure/Error: expect(related?(word1, word2, false)).to eql(false), "'#{word1}' is #{similarity(word1, word2).round} related to '#{word2}', which meets the similarity threshold of #{similarity_threshold()}" + $wet.debug_info(word1, word2)
+
+        'star' is 62 related to 'justice', which meets the similarity threshold of 41
+        star 71437 42581 2.45 justice 38748 21764 2.7 both 64 1316 1.4500000000000002
+        Diff:
+        @@ -1 +1 @@
+        -false
+        +true
+      # ./spec/spec_related.rb:24:in `block in ought_not_be_related'
+
+  33) RELATED  'music' oughta be related to 'croon'
+      Failure/Error: expect(related?(word1, word2, false)).to eql(true), "'#{word1}' is #{similarity(word1, word2).round} related to '#{word2}', which is under the similarity threshold of #{similarity_threshold()}" + $wet.debug_info(word1, word2)
+
+        'music' is 22 related to 'croon', which is under the similarity threshold of 41
+        music 176572 74327 2.07 croon 84 81 5.36 both 1 42 1.0699999999999998
+        Diff:
+        @@ -1 +1 @@
+        -true
+        +false
+      # ./spec/spec_related.rb:11:in `block in oughta_be_related'
+
+  34) RELATED  'music' oughta be related to 'bridal'
+      Failure/Error: expect(related?(word1, word2, false)).to eql(true), "'#{word1}' is #{similarity(word1, word2).round} related to '#{word2}', which is under the similarity threshold of #{similarity_threshold()}" + $wet.debug_info(word1, word2)
+
+        'music' is -7 related to 'bridal', which is under the similarity threshold of 41
+        music 176572 74327 2.07 bridal 6349 3344 3.48 both 15 251 1.0699999999999998
+        Diff:
+        @@ -1 +1 @@
+        -true
+        +false
+      # ./spec/spec_related.rb:11:in `block in oughta_be_related'
+
+  35) RELATED  'music' oughta be related to 'accidental'
+      Failure/Error: expect(related?(word1, word2, false)).to eql(true), "'#{word1}' is #{similarity(word1, word2).round} related to '#{word2}', which is under the similarity threshold of #{similarity_threshold()}" + $wet.debug_info(word1, word2)
+
+        'music' is -9 related to 'accidental', which is under the similarity threshold of 41
+        music 176572 74327 2.07 accidental 4360 3596 3.64 both 5 241 1.0699999999999998
+        Diff:
+        @@ -1 +1 @@
+        -true
+        +false
+      # ./spec/spec_related.rb:11:in `block in oughta_be_related'
+
+  36) RELATED  'music' oughta be related to 'glissando'
+      Failure/Error: expect(related?(word1, word2, false)).to eql(true), "'#{word1}' is #{similarity(word1, word2).round} related to '#{word2}', which is under the similarity threshold of #{similarity_threshold()}" + $wet.debug_info(word1, word2)
+
+        'music' is 37 related to 'glissando', which is under the similarity threshold of 41
+        music 176572 74327 2.07 glissando 53 36 5.56 both 4 22 1.0699999999999998
+        Diff:
+        @@ -1 +1 @@
+        -true
+        +false
+      # ./spec/spec_related.rb:11:in `block in oughta_be_related'
+
+  37) RELATED  'music' oughta be related to 'ritardando'
+      Failure/Error: expect(related?(word1, word2, false)).to eql(true), "'#{word1}' is #{similarity(word1, word2).round} related to '#{word2}', which is under the similarity threshold of #{similarity_threshold()}" + $wet.debug_info(word1, word2)
+
+        'music' is 14 related to 'ritardando', which is under the similarity threshold of 41
+        music 176572 74327 2.07 ritardando 1 1 7.28 both 0 1 1.0699999999999998
+        Diff:
+        @@ -1 +1 @@
+        -true
+        +false
+      # ./spec/spec_related.rb:11:in `block in oughta_be_related'
+
+  38) RELATED  'music' oughta be related to 'hemiola'
+      Failure/Error: expect(related?(word1, word2, false)).to eql(true), "'#{word1}' is #{similarity(word1, word2).round} related to '#{word2}', which is under the similarity threshold of #{similarity_threshold()}" + $wet.debug_info(word1, word2)
+
+        'music' is 16 related to 'hemiola', which is under the similarity threshold of 41
+        music 176572 74327 2.07 hemiola 7 5 6.44 both 0 5 1.0699999999999998
+        Diff:
+        @@ -1 +1 @@
+        -true
+        +false
+      # ./spec/spec_related.rb:11:in `block in oughta_be_related'
+
+  39) RELATED  'music' oughta be related to 'overtone'
+      Failure/Error: expect(related?(word1, word2, false)).to eql(true), "'#{word1}' is #{similarity(word1, word2).round} related to '#{word2}', which is under the similarity threshold of #{similarity_threshold()}" + $wet.debug_info(word1, word2)
+
+        'music' is 33 related to 'overtone', which is under the similarity threshold of 41
+        music 176572 74327 2.07 overtone 163 101 5.07 both 3 32 1.0699999999999998
+        Diff:
+        @@ -1 +1 @@
+        -true
+        +false
+      # ./spec/spec_related.rb:11:in `block in oughta_be_related'
+
+  40) RELATED  'music' oughta be related to 'repeat'
+      Failure/Error: expect(related?(word1, word2, false)).to eql(true), "'#{word1}' is #{similarity(word1, word2).round} related to '#{word2}', which is under the similarity threshold of #{similarity_threshold()}" + $wet.debug_info(word1, word2)
+
+        'music' is -15 related to 'repeat', which is under the similarity threshold of 41
+        music 176572 74327 2.07 repeat 20213 16144 2.98 both 49 1294 1.0699999999999998
+        Diff:
+        @@ -1 +1 @@
+        -true
+        +false
+      # ./spec/spec_related.rb:11:in `block in oughta_be_related'
+
+  41) RELATED  'music' oughta be related to 'sharp'
+      Failure/Error: expect(related?(word1, word2, false)).to eql(true), "'#{word1}' is #{similarity(word1, word2).round} related to '#{word2}', which is under the similarity threshold of #{similarity_threshold()}" + $wet.debug_info(word1, word2)
+
+        'music' is -7 related to 'sharp', which is under the similarity threshold of 41
+        music 176572 74327 2.07 sharp 19296 15706 3.0 both 60 1432 1.0699999999999998
+        Diff:
+        @@ -1 +1 @@
+        -true
+        +false
+      # ./spec/spec_related.rb:11:in `block in oughta_be_related'
+
+  42) RELATED  'music' oughta be related to 'flat'
+      Failure/Error: expect(related?(word1, word2, false)).to eql(true), "'#{word1}' is #{similarity(word1, word2).round} related to '#{word2}', which is under the similarity threshold of #{similarity_threshold()}" + $wet.debug_info(word1, word2)
+
+        'music' is -23 related to 'flat', which is under the similarity threshold of 41
+        music 176572 74327 2.07 flat 40927 28479 2.68 both 85 2082 1.0699999999999998
+        Diff:
+        @@ -1 +1 @@
+        -true
+        +false
+      # ./spec/spec_related.rb:11:in `block in oughta_be_related'
+
+  43) RELATED  'music' oughta be related to 'arpeggio'
+      Failure/Error: expect(related?(word1, word2, false)).to eql(true), "'#{word1}' is #{similarity(word1, word2).round} related to '#{word2}', which is under the similarity threshold of #{similarity_threshold()}" + $wet.debug_info(word1, word2)
+
+        'music' is 40 related to 'arpeggio', which is under the similarity threshold of 41
+        music 176572 74327 2.07 arpeggio 100 69 5.28 both 5 36 1.0699999999999998
+        Diff:
+        @@ -1 +1 @@
+        -true
+        +false
+      # ./spec/spec_related.rb:11:in `block in oughta_be_related'
+
+  44) RELATED  'music' oughta be related to 'drumsticks'
+      Failure/Error: expect(related?(word1, word2, false)).to eql(true), "'#{word1}' is #{similarity(word1, word2).round} related to '#{word2}', which is under the similarity threshold of #{similarity_threshold()}" + $wet.debug_info(word1, word2)
+
+        'music' is 18 related to 'drumsticks', which is under the similarity threshold of 41
+        music 176572 74327 2.07 drumsticks 219 121 4.94 both 1 31 1.0699999999999998
+        Diff:
+        @@ -1 +1 @@
+        -true
+        +false
+      # ./spec/spec_related.rb:11:in `block in oughta_be_related'
+
+  45) RELATED  'music' oughta be related to 'rest'
+      Failure/Error: expect(related?(word1, word2, false)).to eql(true), "'#{word1}' is #{similarity(word1, word2).round} related to '#{word2}', which is under the similarity threshold of #{similarity_threshold()}" + $wet.debug_info(word1, word2)
+
+        'music' is -21 related to 'rest', which is under the similarity threshold of 41
+        music 176572 74327 2.07 rest 105297 82147 2.28 both 329 7263 1.0699999999999998
+        Diff:
+        @@ -1 +1 @@
+        -true
+        +false
+      # ./spec/spec_related.rb:11:in `block in oughta_be_related'
+
+  46) RELATED  'music' oughta be related to 'fortissimo'
+      Failure/Error: expect(related?(word1, word2, false)).to eql(true), "'#{word1}' is #{similarity(word1, word2).round} related to '#{word2}', which is under the similarity threshold of #{similarity_threshold()}" + $wet.debug_info(word1, word2)
+
+        'music' is 22 related to 'fortissimo', which is under the similarity threshold of 41
+        music 176572 74327 2.07 fortissimo 32 27 5.78 both 1 9 1.0699999999999998
+        Diff:
+        @@ -1 +1 @@
+        -true
+        +false
+      # ./spec/spec_related.rb:11:in `block in oughta_be_related'
+
+  47) RELATED  'music' oughta be related to 'pianissimo'
+      Failure/Error: expect(related?(word1, word2, false)).to eql(true), "'#{word1}' is #{similarity(word1, word2).round} related to '#{word2}', which is under the similarity threshold of #{similarity_threshold()}" + $wet.debug_info(word1, word2)
+
+        'music' is 23 related to 'pianissimo', which is under the similarity threshold of 41
+        music 176572 74327 2.07 pianissimo 38 36 5.7 both 1 20 1.0699999999999998
+        Diff:
+        @@ -1 +1 @@
+        -true
+        +false
+      # ./spec/spec_related.rb:11:in `block in oughta_be_related'
+
+  48) RELATED  'prayers' oughta be related to 'exhortations'
+      Failure/Error: expect(related?(word1, word2, false)).to eql(true), "'#{word1}' is #{similarity(word1, word2).round} related to '#{word2}', which is under the similarity threshold of #{similarity_threshold()}" + $wet.debug_info(word1, word2)
+
+        'prayers' is 39 related to 'exhortations', which is under the similarity threshold of 41
+        prayers 7715 5250 3.4 exhortations 116 107 5.22 both 0 11 2.4
+        Diff:
+        @@ -1 +1 @@
+        -true
+        +false
+      # ./spec/spec_related.rb:11:in `block in oughta_be_related'
+
+  49) RELATED  'geometry' oughta be related to 'rhombus'
+      Failure/Error: expect(related?(word1, word2, false)).to eql(true), "'#{word1}' is #{similarity(word1, word2).round} related to '#{word2}', which is under the similarity threshold of #{similarity_threshold()}" + $wet.debug_info(word1, word2)
+
+        'geometry' is 41 related to 'rhombus', which is under the similarity threshold of 41
+        geometry 4178 2743 3.66 rhombus 96 52 5.3 both 0 5 2.66
+        Diff:
+        @@ -1 +1 @@
+        -true
+        +false
+      # ./spec/spec_related.rb:11:in `block in oughta_be_related'
+
+  50) RELATED  'geometry' oughta be related to 'bisect'
+      Failure/Error: expect(related?(word1, word2, false)).to eql(true), "'#{word1}' is #{similarity(word1, word2).round} related to '#{word2}', which is under the similarity threshold of #{similarity_threshold()}" + $wet.debug_info(word1, word2)
+
+        'geometry' is 36 related to 'bisect', which is under the similarity threshold of 41
+        geometry 4178 2743 3.66 bisect 56 50 5.54 both 0 1 2.66
+        Diff:
+        @@ -1 +1 @@
+        -true
+        +false
+      # ./spec/spec_related.rb:11:in `block in oughta_be_related'
+
+  51) RELATED  'geometry' oughta be related to 'survey'
+      Failure/Error: expect(related?(word1, word2, false)).to eql(true), "'#{word1}' is #{similarity(word1, word2).round} related to '#{word2}', which is under the similarity threshold of #{similarity_threshold()}" + $wet.debug_info(word1, word2)
+
+        'geometry' is 18 related to 'survey', which is under the similarity threshold of 41
+        geometry 4178 2743 3.66 survey 35827 20791 2.74 both 2 127 1.7400000000000002
+        Diff:
+        @@ -1 +1 @@
+        -true
+        +false
+      # ./spec/spec_related.rb:11:in `block in oughta_be_related'
+
+  52) RELATED uncommon words 'melancholy' ought not be related to 'frolic'
+      Failure/Error: expect(related?(word1, word2, false)).to eql(false), "'#{word1}' is #{similarity(word1, word2).round} related to '#{word2}', which meets the similarity threshold of #{similarity_threshold()}" + $wet.debug_info(word1, word2)
+
+        'melancholy' is 47 related to 'frolic', which meets the similarity threshold of 41
+        melancholy 1224 1117 4.2 frolic 389 348 4.69 both 0 3 3.2
+        Diff:
+        @@ -1 +1 @@
+        -false
+        +true
+      # ./spec/spec_related.rb:24:in `block in ought_not_be_related'
+
+  53) RELATED very common words 'thing' oughta be related to 'item'
+      Failure/Error: expect(related?(word1, word2, false)).to eql(true), "'#{word1}' is #{similarity(word1, word2).round} related to '#{word2}', which is under the similarity threshold of #{similarity_threshold()}" + $wet.debug_info(word1, word2)
+
+        'thing' is -19 related to 'item', which is under the similarity threshold of 41
+        thing 206466 136378 2.01 item 54476 31685 2.56 both 183 5501 1.0099999999999998
+        Diff:
+        @@ -1 +1 @@
+        -true
+        +false
+      # ./spec/spec_related.rb:11:in `block in oughta_be_related'
+
+  54) RELATED a very common word and a common word 'thing' ought not be related to 'cat'
+      Failure/Error: expect(related?(word1, word2, false)).to eql(false), "'#{word1}' is #{similarity(word1, word2).round} related to '#{word2}', which meets the similarity threshold of #{similarity_threshold()}" + $wet.debug_info(word1, word2)
+
+        'thing' is 60 related to 'cat', which meets the similarity threshold of 41
+        thing 206466 136378 2.01 cat 30174 13853 2.81 both 165 3315 1.0099999999999998
+        Diff:
+        @@ -1 +1 @@
+        -false
+        +true
+      # ./spec/spec_related.rb:24:in `block in ought_not_be_related'
+
+  55) RELATED  'person' ought not be related to 'malice'
+      Failure/Error: expect(related?(word1, word2, false)).to eql(false), "'#{word1}' is #{similarity(word1, word2).round} related to '#{word2}', which meets the similarity threshold of #{similarity_threshold()}" + $wet.debug_info(word1, word2)
+
+        'person' is 45 related to 'malice', which meets the similarity threshold of 41
+        person 187384 113546 2.05 malice 604 491 4.5 both 10 188 1.0499999999999998
+        Diff:
+        @@ -1 +1 @@
+        -false
+        +true
+      # ./spec/spec_related.rb:24:in `block in ought_not_be_related'
+
+  56) RELATED  'person' ought not be related to 'woe'
+      Failure/Error: expect(related?(word1, word2, false)).to eql(false), "'#{word1}' is #{similarity(word1, word2).round} related to '#{word2}', which meets the similarity threshold of #{similarity_threshold()}" + $wet.debug_info(word1, word2)
+
+        'person' is 44 related to 'woe', which meets the similarity threshold of 41
+        person 187384 113546 2.05 woe 666 555 4.46 both 9 169 1.0499999999999998
+        Diff:
+        @@ -1 +1 @@
+        -false
+        +true
+      # ./spec/spec_related.rb:24:in `block in ought_not_be_related'
+
+  57) RELATED  'person' ought not be related to 'sever'
+      Failure/Error: expect(related?(word1, word2, false)).to eql(false), "'#{word1}' is #{similarity(word1, word2).round} related to '#{word2}', which meets the similarity threshold of #{similarity_threshold()}" + $wet.debug_info(word1, word2)
+
+        'person' is 45 related to 'sever', which meets the similarity threshold of 41
+        person 187384 113546 2.05 sever 676 607 4.45 both 10 156 1.0499999999999998
+        Diff:
+        @@ -1 +1 @@
+        -false
+        +true
+      # ./spec/spec_related.rb:24:in `block in ought_not_be_related'
+
+  58) RELATED  'person' ought not be related to 'appeal'
+      Failure/Error: expect(related?(word1, word2, false)).to eql(false), "'#{word1}' is #{similarity(word1, word2).round} related to '#{word2}', which meets the similarity threshold of #{similarity_threshold()}" + $wet.debug_info(word1, word2)
+
+        'person' is 70 related to 'appeal', which meets the similarity threshold of 41
+        person 187384 113546 2.05 appeal 25616 18449 2.88 both 183 3455 1.0499999999999998
+        Diff:
+        @@ -1 +1 @@
+        -false
+        +true
+      # ./spec/spec_related.rb:24:in `block in ought_not_be_related'
+
+  59) RELATED  'person' ought not be related to 'proof'
+      Failure/Error: expect(related?(word1, word2, false)).to eql(false), "'#{word1}' is #{similarity(word1, word2).round} related to '#{word2}', which meets the similarity threshold of #{similarity_threshold()}" + $wet.debug_info(word1, word2)
+
+        'person' is 76 related to 'proof', which meets the similarity threshold of 41
+        person 187384 113546 2.05 proof 23761 18274 2.91 both 239 4384 1.0499999999999998
+        Diff:
+        @@ -1 +1 @@
+        -false
+        +true
+      # ./spec/spec_related.rb:24:in `block in ought_not_be_related'
+
+  60) RELATED  'person' ought not be related to 'loot'
+      Failure/Error: expect(related?(word1, word2, false)).to eql(false), "'#{word1}' is #{similarity(word1, word2).round} related to '#{word2}', which meets the similarity threshold of #{similarity_threshold()}" + $wet.debug_info(word1, word2)
+
+        'person' is 44 related to 'loot', which meets the similarity threshold of 41
+        person 187384 113546 2.05 loot 1871 1275 4.01 both 14 235 1.0499999999999998
+        Diff:
+        @@ -1 +1 @@
+        -false
+        +true
+      # ./spec/spec_related.rb:24:in `block in ought_not_be_related'
+
+  61) RELATED  'medicine' oughta be related to 'fees'
+      Failure/Error: expect(related?(word1, word2, false)).to eql(true), "'#{word1}' is #{similarity(word1, word2).round} related to '#{word2}', which is under the similarity threshold of #{similarity_threshold()}" + $wet.debug_info(word1, word2)
+
+        'medicine' is -17 related to 'fees', which is under the similarity threshold of 41
+        medicine 35140 19390 2.75 fees 33757 20676 2.76 both 12 355 1.75
+        Diff:
+        @@ -1 +1 @@
+        -true
+        +false
+      # ./spec/spec_related.rb:11:in `block in oughta_be_related'
+
+  62) RELATED  'medicine' oughta be related to 'ccs'
+      Failure/Error: expect(related?(word1, word2, false)).to eql(true), "'#{word1}' is #{similarity(word1, word2).round} related to '#{word2}', which is under the similarity threshold of #{similarity_threshold()}" + $wet.debug_info(word1, word2)
+
+        'medicine' is 27 related to 'ccs', which is under the similarity threshold of 41
+        medicine 35140 19390 2.75 ccs 762 379 4.4 both 0 16 1.75
+        Diff:
+        @@ -1 +1 @@
+        -true
+        +false
+      # ./spec/spec_related.rb:11:in `block in oughta_be_related'
+
+Finished in 9.51 seconds (files took 8.7 seconds to load)
+549 examples, 62 failures
+
+Failed examples:
+
+rspec ./spec/spec_related.rb[1:45:1] # RELATED  'pirate' oughta be related to 'bold'
+rspec ./spec/spec_related.rb[1:58:1] # RELATED  'pirate' oughta be related to 'saber'
+rspec ./spec/spec_related.rb[1:66:1] # RELATED  'pirate' ought not be related to 'popcorn'
+rspec ./spec/spec_related.rb[1:67:1] # RELATED  'pirate' ought not be related to 'galaxy'
+rspec ./spec/spec_related.rb[1:71:1] # RELATED  'pirate' ought not be related to 'homemade'
+rspec ./spec/spec_related.rb[1:73:1] # RELATED  'pirate' ought not be related to 'prehistoric'
+rspec ./spec/spec_related.rb[1:79:1] # RELATED  'pirate' ought not be related to 'isaac'
+rspec ./spec/spec_related.rb[1:95:1] # RELATED  'halloween' ought not be related to 'lindsay'
+rspec ./spec/spec_related.rb[1:114:1] # RELATED  'cat' oughta be related to 'bobcat'
+rspec ./spec/spec_related.rb[1:137:1] # RELATED  'cat' ought not be related to 'object'
+rspec ./spec/spec_related.rb[1:138:1] # RELATED  'cat' ought not be related to 'objects'
+rspec ./spec/spec_related.rb[1:140:1] # RELATED  'cat' ought not be related to 'items'
+rspec ./spec/spec_related.rb[1:141:1] # RELATED  'cat' ought not be related to 'thing'
+rspec ./spec/spec_related.rb[1:146:1] # RELATED  'cat' ought not be related to 'chunk'
+rspec ./spec/spec_related.rb[1:151:1] # RELATED  'cat' ought not be related to 'tool'
+rspec ./spec/spec_related.rb[1:152:1] # RELATED  'cat' ought not be related to 'duck'
+rspec ./spec/spec_related.rb[1:156:1] # RELATED  'cat' ought not be related to 'melancholy'
+rspec ./spec/spec_related.rb[1:197:1] # RELATED  'crime' oughta be related to 'repentance'
+rspec ./spec/spec_related.rb[1:198:1] # RELATED  'crime' oughta be related to 'skulduggery'
+rspec ./spec/spec_related.rb[1:199:1] # RELATED  'crime' oughta be related to 'thuggery'
+rspec ./spec/spec_related.rb[1:203:1] # RELATED  'crime' ought not be related to 'person'
+rspec ./spec/spec_related.rb[1:210:1] # RELATED  'crime' ought not be related to 'animation'
+rspec ./spec/spec_related.rb[1:222:1] # RELATED  'crime' ought not be related to 'sky'
+rspec ./spec/spec_related.rb[1:224:1] # RELATED  'crime' ought not be related to 'mass'
+rspec ./spec/spec_related.rb[1:227:1] # RELATED  'crime' ought not be related to 'sci-fi'
+rspec ./spec/spec_related.rb[1:232:1] # RELATED  'pasta' oughta be related to 'scallion'
+rspec ./spec/spec_related.rb[1:244:1] # RELATED  'pasta' ought not be related to 'penicillin'
+rspec ./spec/spec_related.rb[1:249:1] # RELATED  'pasta' ought not be related to 'duck'
+rspec ./spec/spec_related.rb[1:268:1] # RELATED  'star' oughta be related to 'asterisk'
+rspec ./spec/spec_related.rb[1:275:1] # RELATED  'star' ought not be related to 'duck'
+rspec ./spec/spec_related.rb[1:278:1] # RELATED  'star' ought not be related to 'rancid'
+rspec ./spec/spec_related.rb[1:279:1] # RELATED  'star' ought not be related to 'justice'
+rspec ./spec/spec_related.rb[1:313:1] # RELATED  'music' oughta be related to 'croon'
+rspec ./spec/spec_related.rb[1:319:1] # RELATED  'music' oughta be related to 'bridal'
+rspec ./spec/spec_related.rb[1:327:1] # RELATED  'music' oughta be related to 'accidental'
+rspec ./spec/spec_related.rb[1:331:1] # RELATED  'music' oughta be related to 'glissando'
+rspec ./spec/spec_related.rb[1:332:1] # RELATED  'music' oughta be related to 'ritardando'
+rspec ./spec/spec_related.rb[1:334:1] # RELATED  'music' oughta be related to 'hemiola'
+rspec ./spec/spec_related.rb[1:335:1] # RELATED  'music' oughta be related to 'overtone'
+rspec ./spec/spec_related.rb[1:339:1] # RELATED  'music' oughta be related to 'repeat'
+rspec ./spec/spec_related.rb[1:349:1] # RELATED  'music' oughta be related to 'sharp'
+rspec ./spec/spec_related.rb[1:350:1] # RELATED  'music' oughta be related to 'flat'
+rspec ./spec/spec_related.rb[1:352:1] # RELATED  'music' oughta be related to 'arpeggio'
+rspec ./spec/spec_related.rb[1:354:1] # RELATED  'music' oughta be related to 'drumsticks'
+rspec ./spec/spec_related.rb[1:357:1] # RELATED  'music' oughta be related to 'rest'
+rspec ./spec/spec_related.rb[1:359:1] # RELATED  'music' oughta be related to 'fortissimo'
+rspec ./spec/spec_related.rb[1:360:1] # RELATED  'music' oughta be related to 'pianissimo'
+rspec ./spec/spec_related.rb[1:423:1] # RELATED  'prayers' oughta be related to 'exhortations'
+rspec ./spec/spec_related.rb[1:449:1] # RELATED  'geometry' oughta be related to 'rhombus'
+rspec ./spec/spec_related.rb[1:455:1] # RELATED  'geometry' oughta be related to 'bisect'
+rspec ./spec/spec_related.rb[1:463:1] # RELATED  'geometry' oughta be related to 'survey'
+rspec ./spec/spec_related.rb[1:478:1] # RELATED uncommon words 'melancholy' ought not be related to 'frolic'
+rspec ./spec/spec_related.rb[1:485:1] # RELATED very common words 'thing' oughta be related to 'item'
+rspec ./spec/spec_related.rb[1:486:1] # RELATED a very common word and a common word 'thing' ought not be related to 'cat'
+rspec ./spec/spec_related.rb[1:510:1] # RELATED  'person' ought not be related to 'malice'
+rspec ./spec/spec_related.rb[1:511:1] # RELATED  'person' ought not be related to 'woe'
+rspec ./spec/spec_related.rb[1:512:1] # RELATED  'person' ought not be related to 'sever'
+rspec ./spec/spec_related.rb[1:513:1] # RELATED  'person' ought not be related to 'appeal'
+rspec ./spec/spec_related.rb[1:514:1] # RELATED  'person' ought not be related to 'proof'
+rspec ./spec/spec_related.rb[1:530:1] # RELATED  'person' ought not be related to 'loot'
+rspec ./spec/spec_related.rb[1:545:1] # RELATED  'medicine' oughta be related to 'fees'
+rspec ./spec/spec_related.rb[1:546:1] # RELATED  'medicine' oughta be related to 'ccs'
+
 [ec2-user@ip-172-31-45-186 dev]$ rspec --no-color
 .............................F...........F.F...F..F.........F.......FF...F.F.....F...............F..................F.........F...........F.F.FF..........F...F........................................FFF...F.......F...........F.FF.F....F................F..................F......F....F..........................F.....F.....F.......F...FF.FF...F.........FF.F.F..F.FF............................................................F.F.........................F.....F.......F.....................FF.......................F.FFF...........................F..FF
 
