@@ -1,3 +1,4 @@
+- respect spelling-variants.txt to fix the lindsay test
 - scale sentence cooccurrence by number of words in the sentence
 - scale document cooccurrence by number of words in the document
 - scale sentence cooccurrence by the number of sentences in the docuemnt
