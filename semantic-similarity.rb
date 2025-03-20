@@ -10,12 +10,13 @@ require 'msgpack'
 require_relative 'pace_utils'
 require_relative 'IndexedWetCorpus'
 require_relative 'dict/utils_rhyme'
+require_relative 'WordNetReverseDictionary'
 
 EMBED_VEC_FILE = 'wiki-news-subword-220k.vec'
 EMBED_DICT_FILE = 'embed-dict-subword.msgpack'
 SIMILAR_MAX = 500
 # @todo adjust colors once $SIMILARITY_THRESHOLD is stable
-$SIMILARITY_THRESHOLD, $SENTENCE_SIMILARITY_ADJUSTMENT, $DOC_SIMILARITY_WEIGHT, $DOC_SIMILARITY_ADJUSTMENT = 41, 51, 0.13, -42 # -> 62
+$SIMILARITY_THRESHOLD, $SENTENCE_SIMILARITY_ADJUSTMENT, $DOC_SIMILARITY_WEIGHT, $DOC_SIMILARITY_ADJUSTMENT, $GLOSS_SIMILARITY = 39, 90, 0.1, -80, 120 # -> 56
 
 $embed_dict = nil
 def embed_dict()
@@ -101,8 +102,18 @@ def similarity(word1, word2)
   sentence_cooccurrence = wet_corpus.cooccurrence(word1, word2, true) + $SENTENCE_SIMILARITY_ADJUSTMENT
   doc_cooccurrence = wet_corpus.cooccurrence(word1, word2, false)
   adjusted_doc_cooccurrence = doc_cooccurrence * $DOC_SIMILARITY_WEIGHT + $DOC_SIMILARITY_ADJUSTMENT
+  adjusted_gloss_cooccurrence = adjusted_gloss_cooccurrence(word1, word2)
   rarity = rarity(word1, word2)
-  (sentence_cooccurrence + adjusted_doc_cooccurrence) * rarity
+  (sentence_cooccurrence + adjusted_doc_cooccurrence + adjusted_gloss_cooccurrence) * rarity
+end
+
+$wn_dict = nil
+def wn_dict
+  $wn_dict ||= WordNetReverseDictionary.new
+end
+
+def adjusted_gloss_cooccurrence(word, gloss_word)
+  wn_dict.gloss_cooccurs?(word, gloss_word) ? $GLOSS_SIMILARITY : 0
 end
 
 def rarity(word1, word2)

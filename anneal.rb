@@ -12,7 +12,7 @@ require_relative 'spec/test_utils'
 #state = [158, -21, 0.51, 38] # -> 64
 
 # subtract 1 from rarity
-state = [50, 56, 0.3, -52] # -> 64
+#state = [50, 56, 0.3, -52] # -> 64
 
 # raise to the power of rarity
 #state = [40, 40, 0.08, -40] # -> 102
@@ -23,7 +23,16 @@ state = [50, 56, 0.3, -52] # -> 64
 #state = [10, 26, 0.11, -22] # -> 97
 #state = [30, 56, 0.11, -52] # -> 65
 #state = [42, 77, 0.24, -75] # -> 63
-state = [41, 51, 0.13, -42] # -> 62
+#state = [41, 51, 0.13, -42] # -> 62
+
+#state = [11, 31, 0.01, -32] # -> 99 # best so far with weighted cooccurrence computation
+
+# $SIMILARITY_THRESHOLD, $SENTENCE_SIMILARITY_ADJUSTMENT, $DOC_SIMILARITY_WEIGHT, $DOC_SIMILARITY_ADJUSTMENT, $GLOSS_SIMILARITY
+#state = [41, 51, 0.13, -42, 30]
+#state = [41, 51, 0.13, -42, 100]
+#state = [50, 40, 0.2, -30, 120] # -> 65
+#state = [40, 90, 0.1, -80, 120] # -> 64
+state = [39, 90, 0.1, -80, 120] # -> 56
 
 $FINE_GRAINED = true
 $ANNEAL_MULT = $FINE_GRAINED ? 1 : 10
@@ -40,13 +49,17 @@ $MIN_SENTENCE_ADJUSTMENT = -100
 $MAX_SENTENCE_ADJUSTMENT = 100
 $SENTENCE_ADJUSTMENT_INCREMENT = 1 * $ANNEAL_MULT
 
-$MIN_DOC_WEIGHT = 0.01
+$MIN_DOC_WEIGHT = 0.0
 $MAX_DOC_WEIGHT = 2
 $DOC_WEIGHT_INCREMENT = 0.01 * $ANNEAL_MULT
 
 $MIN_DOC_ADJUSTMENT = -200
 $MAX_DOC_ADJUSTMENT = 200
 $DOC_ADJUSTMENT_INCREMENT = 1 * $ANNEAL_MULT
+
+$MIN_GLOSS_SIMILARITY = 0
+$MAX_GLOSS_SIMILARITY = 200
+$GLOSS_SIMILARITY_INCREMENT = 1 * $ANNEAL_MULT
 
 Annealing.configure do |config|
   config.cooling_rate = 0.001
@@ -72,22 +85,26 @@ energy_calculator = lambda do |state|
 end
 
 state_change = lambda do |state|
-  thresh, sentence_adjustment, doc_weight, doc_adjustment = state
+  thresh, sentence_adjustment, doc_weight, doc_adjustment, gloss_sim = state
   mult = coin_flip ? 1 : -1
   if coin_flip
-    if coin_flip
-      sentence_adjustment += $SENTENCE_ADJUSTMENT_INCREMENT * mult
-    else
-      thresh += $SIMILARITY_THRESHOLD_INCREMENT * mult
-      #sentence_weight += $SENTENCE_WEIGHT_INCREMENT * mult
-      #sentence_weight = sentence_weight.round(2)
-    end
+    gloss_sim += $GLOSS_SIMILARITY_INCREMENT * mult
   else
     if coin_flip
-      doc_adjustment += $DOC_ADJUSTMENT_INCREMENT * mult
+      if coin_flip
+        sentence_adjustment += $SENTENCE_ADJUSTMENT_INCREMENT * mult
+      else
+        thresh += $SIMILARITY_THRESHOLD_INCREMENT * mult
+        #sentence_weight += $SENTENCE_WEIGHT_INCREMENT * mult
+        #sentence_weight = sentence_weight.round(2)
+      end
     else
-      doc_weight += $DOC_WEIGHT_INCREMENT * mult
-      doc_weight = doc_weight.round(2)
+      if coin_flip
+        doc_adjustment += $DOC_ADJUSTMENT_INCREMENT * mult
+      else
+        doc_weight += $DOC_WEIGHT_INCREMENT * mult
+        doc_weight = doc_weight.round(2)
+      end
     end
   end
   thresh = $MIN_SIMILARITY_THRESHOLD unless thresh > $MIN_SIMILARITY_THRESHOLD 
@@ -100,7 +117,10 @@ state_change = lambda do |state|
   doc_adjustment = $MAX_DOC_ADJUSTMENT unless doc_adjustment < $MAX_DOC_ADJUSTMENT
   doc_weight = $MIN_DOC_WEIGHT unless doc_weight > $MIN_DOC_WEIGHT
   doc_weight = $MAX_DOC_WEIGHT unless doc_weight < $MAX_DOC_WEIGHT
-  return [thresh, sentence_adjustment, doc_weight, doc_adjustment]
+  gloss_sim = $MIN_GLOSS_SIMILARITY unless gloss_sim > $MIN_GLOSS_SIMILARITY
+  gloss_sim = $MAX_GLOSS_SIMILARITY unless gloss_sim < $MAX_GLOSS_SIMILARITY
+  
+  return [thresh, sentence_adjustment, doc_weight, doc_adjustment, gloss_sim]
 end
 
 Annealing::Metal.class_eval do

@@ -326,7 +326,7 @@ music,accidental,1,
 music,instrumental,1,
 music,sings,1,
 music,strings,1,
-music,glissando,1,
+music,glissando,1,'glissando' is related to 'musical' so we just have to get from 'music' to 'musical'
 music,ritardando,1,
 music,viola,1,
 music,hemiola,1,
