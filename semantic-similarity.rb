@@ -13,11 +13,9 @@ require_relative 'dict/utils_rhyme'
 
 EMBED_VEC_FILE = 'wiki-news-subword-220k.vec'
 EMBED_DICT_FILE = 'embed-dict-subword.msgpack'
-$SIMILARITY_THRESHOLD = 50 # @todo adjust colors once this is stable
-$SENTENCE_SIMILARITY_ADJUSTMENT = 56
-$DOC_SIMILARITY_WEIGHT = 0.3
-$DOC_SIMILARITY_ADJUSTMENT = -52
 SIMILAR_MAX = 500
+# @todo adjust colors once $SIMILARITY_THRESHOLD is stable
+$SIMILARITY_THRESHOLD, $SENTENCE_SIMILARITY_ADJUSTMENT, $DOC_SIMILARITY_WEIGHT, $DOC_SIMILARITY_ADJUSTMENT = 41, 51, 0.13, -42 # -> 62
 
 $embed_dict = nil
 def embed_dict()
@@ -111,7 +109,7 @@ def rarity(word1, word2)
   idf1 = wet_corpus.inverse_document_frequency(word1)
   idf2 = wet_corpus.inverse_document_frequency(word2)
   most_common_idf = [idf1, idf2].min # the rarity of a word pair is defined by its most common word
-  most_common_idf - 1 # subtract 1 for funsies
+  most_common_idf - 1 # subtract 1 to make common words closer to 1
 end
 
 def cosine_similarity(word1, word2)

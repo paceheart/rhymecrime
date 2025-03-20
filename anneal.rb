@@ -19,6 +19,12 @@ state = [50, 56, 0.3, -52] # -> 64
 #state = [37, 43, 0.06, -42] # -> 98
 # nope
 
+# rebuild with noblocklist corpus
+#state = [10, 26, 0.11, -22] # -> 97
+#state = [30, 56, 0.11, -52] # -> 65
+#state = [42, 77, 0.24, -75] # -> 63
+state = [41, 51, 0.13, -42] # -> 62
+
 $FINE_GRAINED = true
 $ANNEAL_MULT = $FINE_GRAINED ? 1 : 10
 
@@ -188,5 +194,8 @@ Annealing::Simulator.class_eval do
     end
 end
 
-optimal_settings = Annealing.simulate(state, energy_calculator: energy_calculator, state_change: state_change)
-puts "state = #{optimal_settings} # -> #{$foo.fail_count(optimal_settings)}"
+require 'stackprof'
+StackProf.run(mode: :cpu, out:'/tmp/anneal.dump') do
+  optimal_settings = Annealing.simulate(state, energy_calculator: energy_calculator, state_change: state_change)
+  puts "state = #{optimal_settings} # -> #{$foo.fail_count(optimal_settings)}"
+end
