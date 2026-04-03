@@ -60,31 +60,37 @@ def save_global_doc_index
 end
 
 def collate_chunk_dir(chunk_dir)
-  print "Collating #{chunk_dir}"
   chunk_id = chunk_dir[6..].to_i
   chunk_path = 'index/' + chunk_dir
-  Dir.foreach(chunk_path) do |filename|
+  files = Dir.children(chunk_path)
+  total = files.size
+  puts "Collating #{chunk_dir} (#{total} files)"
+  start_time = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+  files.each_with_index do |filename, i|
     if filename.include?($WET_LOCAL_SENTENCE_INDEX_UNIQUIFIER)
       collate_sentence_index(chunk_path + "/" + filename, chunk_id)
     elsif filename.include?($WET_LOCAL_DOC_INDEX_UNIQUIFIER)
       collate_doc_index(chunk_path + "/" + filename, chunk_id)
     end
-    if filename.include?('1000.')
-      print "."
+    if (i + 1) % 10000 == 0
+      elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC) - start_time
+      rate = ((i + 1) / elapsed).round
+      pct = (100.0 * (i + 1) / total).round(1)
+      eta_s = rate > 0 ? ((total - i - 1) / rate).round : '?'
+      print "\r  #{i + 1}/#{total} files (#{pct}%) | ETA #{eta_s}s   "
     end
   end
-  puts "complete!"
+  elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC) - start_time
+  puts "\r  #{total}/#{total} files in #{elapsed.round(1)}s                              "
 end
 
 def collate_everything
-  Dir.foreach('index') do |chunk_dir|
-    if chunk_dir.include?('chunk')
-      collate_chunk_dir(chunk_dir)
-    end
-  end
-  save_global_sentence_index
-  save_global_word_counts
-  save_global_doc_index
+  chunk_dirs = Dir.children('index').select { |d| d.include?('chunk') }.sort
+  puts "Collating #{chunk_dirs.size} chunk(s)..."
+  chunk_dirs.each { |chunk_dir| collate_chunk_dir(chunk_dir) }
+  print "Saving global sentence index... "; save_global_sentence_index; puts "done"
+  print "Saving global word counts... "; save_global_word_counts; puts "done"
+  print "Saving global doc index... "; save_global_doc_index; puts "done"
 end
 
 # Next, add up the total number of sentences and documents in the entire corpus,
@@ -127,13 +133,17 @@ def json2msgpack(file)
 end
 
 def msgpack_everything
-  json2msgpack($WET_GLOBAL_SENTENCE_INDEX_FILENAME)
-  json2msgpack($WET_GLOBAL_DOC_INDEX_FILENAME)
-  json2msgpack($WET_GLOBAL_WORD_COUNTS_FILENAME)
+  print "Converting to msgpack: sentence index... "
+  json2msgpack($WET_GLOBAL_SENTENCE_INDEX_FILENAME); print "doc index... "
+  json2msgpack($WET_GLOBAL_DOC_INDEX_FILENAME); print "word counts... "
+  json2msgpack($WET_GLOBAL_WORD_COUNTS_FILENAME); puts "done"
 end
 
 # Now do it!
+overall_start = Process.clock_gettime(Process::CLOCK_MONOTONIC)
 collate_everything
-total_everything
-append_everything(".")
+print "Totaling... "; total_everything
+print "Appending... "; append_everything("."); puts "done"
 msgpack_everything
+elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC) - overall_start
+puts "All done in #{elapsed.round(1)}s"
