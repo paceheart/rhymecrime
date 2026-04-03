@@ -121,7 +121,8 @@ def tokenize_jsonl_chunk(file)
   chunk_id = file[/.*\.(.+)-of-.*/,1].to_i # implicitly relies on $WET_INPUT_FILE_TEMPLATE
   puts "Tokenizing chunk #{chunk_id}"
   compute_and_save_metadata(chunk_id, file)
-  for line in IO.readlines(file)
+  File.foreach(file, chomp: true, encoding: 'UTF-8') do |line|
+    next if line.empty?
     local_sentence_index, local_doc_index, local_doc_id = tokenize_json_doc(JSON.parse!(line), chunk_id)
     save_local_sentence_index(local_sentence_index, chunk_id, local_doc_id)
     save_local_doc_index(local_doc_index, chunk_id, local_doc_id)
