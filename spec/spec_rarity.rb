@@ -139,7 +139,383 @@ describe 'RARITY' do
     oughta_be_common 'inbound'
   end
 
-  context 'rare' do
+  context 'colloquial and slang' do
+    oughta_be_common 'dude'
+    oughta_be_common 'gonna'
+    oughta_be_common 'wanna'
+    oughta_be_common 'gotta'
+    oughta_be_common 'awesome'
+    oughta_be_common 'bummer'
+    oughta_be_common 'chill'
+    oughta_be_common 'sketchy'
+    oughta_be_common 'crappy'
+    oughta_be_common 'goofy'
+    oughta_be_common 'nerdy'
+    oughta_be_common 'snarky'
+    oughta_be_common 'quirky'
+    oughta_be_common 'freaky'
+    oughta_be_common 'cheesy'
+    oughta_be_common 'trashy'
+    oughta_be_common 'grumpy'
+    oughta_be_common 'feisty'
+    oughta_be_common 'badass'
+    oughta_be_common 'cranky'
+  end
+
+  context 'food and drink' do
+    oughta_be_common 'pizza'
+    oughta_be_common 'sushi'
+    oughta_be_common 'taco'
+    oughta_be_common 'burrito'
+    oughta_be_common 'burger'
+    oughta_be_common 'pasta'
+    oughta_be_common 'whiskey'
+    oughta_be_common 'vanilla'
+    oughta_be_common 'cinnamon'
+    oughta_be_common 'garlic'
+    oughta_be_common 'avocado'
+    oughta_be_common 'chocolate'
+  end
+
+  context 'common animals' do
+    oughta_be_common 'alligator'
+    oughta_be_common 'cheetah'
+    oughta_be_common 'dolphin'
+    oughta_be_common 'flamingo'
+    oughta_be_common 'gator'
+    oughta_be_common 'gorilla'
+    oughta_be_common 'hedgehog'
+    oughta_be_common 'jellyfish'
+    oughta_be_common 'kangaroo'
+    oughta_be_common 'octopus'
+    oughta_be_common 'penguin'
+    oughta_be_common 'raccoon'
+    oughta_be_common 'porcupine'
+  end
+
+  context 'emotions and personality' do
+    oughta_be_common 'anxious'
+    oughta_be_common 'cynical'
+    oughta_be_common 'desperate'
+    oughta_be_common 'eccentric'
+    oughta_be_common 'furious'
+    oughta_be_common 'gullible'
+    oughta_be_common 'jealous'
+    oughta_be_common 'paranoid'
+    oughta_be_common 'nostalgic'
+    oughta_be_common 'skeptical'
+    oughta_be_common 'arrogant'
+    oughta_be_common 'ecstatic'
+  end
+
+  context 'performing arts' do
+    oughta_be_common 'acoustic'
+    oughta_be_common 'ballad'
+    oughta_be_common 'encore'
+    oughta_be_common 'graffiti'
+    oughta_be_common 'karaoke'
+    oughta_be_common 'lullaby'
+    oughta_be_common 'symphony'
+  end
+
+  context 'common science knowledge' do
+    oughta_be_common 'algorithm'
+    oughta_be_common 'satellite'
+    oughta_be_common 'telescope'
+    oughta_be_common 'molecule'
+    oughta_be_common 'oxygen'
+    oughta_be_common 'gravity'
+    oughta_be_common 'bacteria'
+  end
+
+  context 'crime and law' do
+    oughta_be_common 'alibi'
+    oughta_be_common 'contraband'
+    oughta_be_common 'extortion'
+    oughta_be_common 'felony'
+    oughta_be_common 'arson'
+    oughta_be_common 'blackmail'
+    oughta_be_common 'treason'
+  end
+
+  context 'medical terms everyone knows' do
+    oughta_be_common 'allergic'
+    oughta_be_common 'bruise'
+    oughta_be_common 'bruised'
+    oughta_be_common 'bruiser'
+    oughta_be_common 'bruisers'
+    oughta_be_common 'bruising'
+    oughta_be_common 'unbruised'
+    oughta_be_common 'dizzy'
+    oughta_be_common 'insomnia'
+    oughta_be_common 'migraine'
+    oughta_be_common 'concussion'
+    oughta_be_common 'pneumonia'
+  end
+
+  context 'sophisticated but widely known' do
+    oughta_be_common 'absurd'
+    oughta_be_common 'clandestine'
+    oughta_be_common 'eloquent'
+    oughta_be_common 'flamboyant'
+    oughta_be_common 'grotesque'
+    oughta_be_common 'hypocrite'
+    oughta_be_common 'infamous'
+    oughta_be_common 'macabre'
+    oughta_be_common 'mediocre'
+    oughta_be_common 'outrageous'
+    oughta_be_common 'preposterous'
+    oughta_be_common 'sinister'
+    oughta_be_common 'treacherous'
+  end
+
+  context 'profanity and insults' do
+    oughta_be_common 'damn'
+    oughta_be_common 'crap'
+    oughta_be_common 'moron'
+    oughta_be_common 'idiot'
+    oughta_be_common 'bastard'
+  end
+
+  context 'body parts and household objects' do
+    oughta_be_common 'elbow'
+    oughta_be_common 'armpit'
+    oughta_be_common 'nostril'
+    oughta_be_common 'eyebrow'
+    oughta_be_common 'doorknob'
+    oughta_be_common 'dishwasher'
+    oughta_be_common 'microwave'
+    oughta_be_common 'toothbrush'
+  end
+
+  context 'weather and natural disasters' do
+    oughta_be_common 'avalanche'
+    oughta_be_common 'blizzard'
+    oughta_be_common 'drought'
+    oughta_be_common 'tornado'
+    oughta_be_common 'tsunami'
+    oughta_be_common 'hurricane'
+  end
+
+  context 'sounds and textures' do
+    oughta_be_common 'screech'
+    oughta_be_common 'rumble'
+    oughta_be_common 'sizzle'
+    oughta_be_common 'crackle'
+    oughta_be_common 'velvet'
+    oughta_be_common 'velvety'
+    oughta_be_common 'grit'
+    oughta_be_common 'gritty'
+    oughta_be_common 'slime'
+    oughta_be_common 'slimy'
+    oughta_be_common 'crunch'
+    oughta_be_common 'crunchy'
+  end
+
+  context 'french loanwords naturalized in english' do
+    oughta_be_common 'rendezvous'
+    oughta_be_common 'chauffeur'
+    oughta_be_common 'silhouette'
+    oughta_be_common 'sabotage'
+    oughta_be_common 'camouflage'
+  end
+
+  context 'japanese loanwords naturalized in english' do
+    oughta_be_common 'origami'
+    oughta_be_common 'samurai'
+    oughta_be_common 'karate'
+    oughta_be_common 'judo'
+  end
+
+  context 'clothing and fabric' do
+    oughta_be_common 'tuxedo'
+    oughta_be_common 'flannel'
+    oughta_be_common 'corduroy'
+    oughta_be_common 'denim'
+  end
+
+  context 'words that sound rare but are widely known' do
+    oughta_be_common 'cantankerous'
+    oughta_be_common 'curmudgeon'
+    oughta_be_common 'serendipity'
+    oughta_be_common 'brouhaha'
+    oughta_be_common 'kerfuffle'
+    oughta_be_common 'hullabaloo'
+    oughta_be_common 'shenanigans'
+    oughta_be_common 'bamboozled'
+  end
+
+  context 'common words seldom used in writing' do
+    oughta_be_common 'sycophant'
+    oughta_be_common 'obsequious'
+    oughta_be_common 'nefarious'
+    oughta_be_common 'insidious'
+    oughta_be_common 'malarkey'
+    oughta_be_common 'tomfoolery'
+    oughta_be_common 'skulduggery'
+    oughta_be_common 'flabbergasted'
+  end
+
+  context 'modern words (post-2009)' do
+    oughta_be_common 'selfie'
+    oughta_be_common 'hashtag'
+    oughta_be_common 'emoji'
+    oughta_be_common 'meme'
+    oughta_be_common 'malware'
+  end
+
+  context 'surnames in cmudict' do
+    oughta_be_rare 'attaway'
+    oughta_be_rare 'beaupre'
+    oughta_be_rare 'bergstrom'
+    oughta_be_rare 'carstens'
+    oughta_be_rare 'colborn'
+    oughta_be_rare 'drinkwater'
+    oughta_be_rare 'gruenhagen'
+    oughta_be_rare 'hanauer'
+    oughta_be_rare 'kirkbride'
+    oughta_be_rare 'kreimer'
+    oughta_be_rare 'lamarque'
+    oughta_be_rare 'massingill'
+    oughta_be_rare 'nordlund'
+    oughta_be_rare 'pfleger'
+    oughta_be_rare 'schnabel'
+    oughta_be_rare 'stankiewicz'
+    oughta_be_rare 'tewksbury'
+    oughta_be_rare 'vandermeer'
+    oughta_be_rare 'mcnaughton'
+    oughta_be_rare 'brumfield'
+  end
+
+  context 'more surnames' do
+    oughta_be_rare 'abernethy'
+    oughta_be_rare 'baumgardner'
+    oughta_be_rare 'crenwelge'
+    oughta_be_rare 'dettweiler'
+    oughta_be_rare 'eckstrom'
+    oughta_be_rare 'fitzgibbons'
+    oughta_be_rare 'grzelak'
+    oughta_be_rare 'humpherys'
+    oughta_be_rare 'iannaccone'
+    oughta_be_rare 'kriegshauser'
+    oughta_be_rare 'muehlberger'
+    oughta_be_rare 'oesterling'
+    oughta_be_rare 'przybylski'
+    oughta_be_rare 'rheinhardt'
+    oughta_be_rare 'thistlethwaite'
+  end
+
+  context 'obscure place names' do
+    oughta_be_uncommon 'djibouti'
+    oughta_be_rare 'kinshasa'
+    oughta_be_rare 'liechtenstein'
+    oughta_be_rare 'suriname'
+    oughta_be_rare 'vladivostok'
+    oughta_be_uncommon 'mogadishu'
+    oughta_be_rare 'ouagadougou'
+    oughta_be_rare 'turkmenistan'
+    oughta_be_rare 'kyrgyzstan'
+    oughta_be_rare 'tajikistan'
+  end
+
+  context 'obscure english words' do
+    oughta_be_rare 'anfractuous'
+    oughta_be_rare 'borborygmus'
+    oughta_be_rare 'clerihew'
+    oughta_be_rare 'colophon'
+    oughta_be_uncommon 'defenestrate'
+    oughta_be_rare 'escritoire'
+    oughta_be_rare 'fylfot'
+    oughta_be_rare 'gallimaufry'
+    oughta_be_rare 'gegenschein'
+    oughta_be_rare 'haruspex'
+    oughta_be_rare 'inspissate'
+    oughta_be_rare 'jeremiad'
+    oughta_be_rare 'louche'
+    oughta_be_rare 'maffick'
+    oughta_be_rare 'narthex'
+    oughta_be_rare 'oppugn'
+    oughta_be_rare 'quahog'
+    oughta_be_rare 'rebarbative'
+    oughta_be_rare 'tatterdemalion'
+    oughta_be_rare 'widdershins'
+  end
+
+  context 'literary and rhetorical terms' do
+    oughta_be_uncommon 'palimpsest'
+    oughta_be_uncommon 'quincunx'
+    oughta_be_rare 'tmesis'
+    oughta_be_rare 'hendiadys'
+    oughta_be_rare 'litotes'
+    oughta_be_rare 'zeugma'
+    oughta_be_rare 'chiasmus'
+  end
+
+  context 'academic and scientific jargon' do
+    oughta_be_rare 'anisotropic'
+    oughta_be_rare 'stoichiometry'
+    oughta_be_rare 'titration'
+    oughta_be_rare 'eschatology'
+    oughta_be_rare 'homiletics'
+    oughta_be_rare 'hagiography'
+    oughta_be_common 'isomorphic'
+    oughta_be_uncommon 'isomorphism'
+    oughta_be_rare 'hermeneutics'
+    oughta_be_rare 'eigenvalue'
+    oughta_be_rare 'chromatography'
+    oughta_be_rare 'electrophoresis'
+    oughta_be_rare 'spectrometer'
+    oughta_be_uncommon 'reagent'
+    oughta_be_rare 'adiabatic'
+  end
+
+  context 'obscure animals' do
+    oughta_be_uncommon 'axolotl'
+    oughta_be_uncommon 'cassowary'
+    oughta_be_uncommon 'dugong'
+    oughta_be_uncommon 'echidna'
+    oughta_be_rare 'gharial'
+    oughta_be_uncommon 'pangolin'
+    oughta_be_uncommon 'tapir'
+    oughta_be_rare 'numbat'
+  end
+
+  context 'archaic vocabulary' do
+    oughta_be_uncommon 'forsooth'
+    oughta_be_uncommon 'hauberk'
+    oughta_be_rare 'varlet'
+    oughta_be_rare 'seneschal'
+    oughta_be_rare 'pottage'
+    oughta_be_rare 'prithee'
+    oughta_be_rare 'diapason'
+    oughta_be_rare 'cynosure'
+    oughta_be_rare 'panegyric'
+    oughta_be_uncommon 'synecdoche'
+    oughta_be_rare 'schenectady'
+  end
+
+  context 'astronomy' do
+    oughta_be_rare 'umbra'
+    oughta_be_rare 'penumbra'
+    oughta_be_rare 'parallax'
+    oughta_be_rare 'aphelion'
+    oughta_be_rare 'perihelion'
+  end
+
+  context 'miscellaneous rare' do
+    oughta_be_rare 'petrichor'
+    oughta_be_rare 'spoonerism'
+    oughta_be_rare 'malapropism'
+    oughta_be_rare 'kafkaesque'
+    oughta_be_rare 'cupola'
+    oughta_be_rare 'balustrade'
+    oughta_be_rare 'evanescent'
+    oughta_be_rare 'velleity'
+    oughta_be_rare 'zugzwang'
+    oughta_be_rare 'ephemeron'
+  end
+
+  context 'rare (original)' do
     oughta_be_rare 'alam'
     oughta_be_rare 'bahm'
     oughta_be_rare 'beacham'
@@ -239,5 +615,27 @@ describe 'RARITY' do
     oughta_be_rare 'devine'
     oughta_be_rare 'pote'
     oughta_be_rare 'fifer'
+  end
+
+  # Some of these ought to be nonexistent rather than rare. TODO create oughta_be_nonexistent and refactor this context
+  context 'rare word forms' do
+    oughta_be_rare 'rebruised'
+    oughta_be_rare 'rebruiser'
+    oughta_be_rare 'rebruisers'
+    oughta_be_rare 'rebruising'
+    oughta_be_rare 'bruisedness'
+    oughta_be_rare 'bruisednesses'
+    oughta_be_rare 'bruisingly'
+    oughta_be_rare 'unbruise'
+    oughta_be_rare 'unbruising'
+    oughta_be_rare 'unrebruised'
+    oughta_be_rare 'unrebruising'
+    oughta_be_rare 'unrebruisedness'
+    oughta_be_rare 'unrebruisednesses'
+    oughta_be_rare 'unrebruisingly'
+    oughta_be_rare 'unrebruisingness'
+    oughta_be_rare 'unrebruisingnesses'
+    oughta_be_rare 'unrebruisingly'
+    oughta_be_rare 'rerebruised'
   end
 end
