@@ -25,9 +25,13 @@ TRACE_WORD = nil
 # having Step 2 be an array lookup instead of a hash lookup.
 
 require 'rwordnet'
+require 'json'
+require 'set'
 require_relative 'utils_rhyme'
 require_relative 'phoneme.rb'
 require_relative 'pronunciation.rb'
+require_relative 'wiktionary'
+require_relative 'inflect'
 
 CMUDICT_FILENAME = "cmudict/cmudict-0.7c.txt"
 RARE_WORDS_FILENAME = "rare_words.txt"
@@ -35,6 +39,11 @@ COMMON_WORDS_FILENAME = "common_words.txt"
 
 WordNet::DB.path = "WordNet3.1/"
 WORDNET_TAGSENSE_COUNT_MULTIPLICATION_FACTOR = 100 # each tagsense_count from wordnet counts as this many occurrences in some corpus
+SUBTLEX_FILENAME = "subtlex/SUBTLEXus.tsv"
+SUBTLEX_PRESENCE_BONUS = 5 # being in SUBTLEX (lowercase) at all means you're a word people know
+
+WORDFREQ_FILENAME = "wordfreq/wordfreq.tsv"
+WIKTIONARY_FLOOR = 5 # minimum freq for modern words confirmed by Wiktionary + wordfreq
 
 RHYME_SIGNATURE_DICT_HEADER = "# RhymeCrime's Rhyme Signature Dictionary
 # https://github.com/paceheart/rhymecrime
@@ -211,7 +220,7 @@ def load_cmudict()
   # word => [pronunciation1, pronunciation2 ...]
   # pronunciation = [syllable1, syllable1, ...]
   hash = Hash.new {|h,k| h[k] = [] } # hash of arrays
-  IO.readlines(CMUDICT_FILENAME).each{ |line|
+  IO.readlines(CMUDICT_FILENAME, encoding: 'UTF-8').each{ |line|
     if(useful_cmudict_line?(line))
       line = preprocess_cmudict_line(line)
       tokens = line.split
@@ -293,7 +302,7 @@ def load_lemma_dict()
   lemmahash = Hash.new # word form => base word (lemma)
   freqhash = Hash.new(0) # hash of numbers (word occurrence frequencies), default 0
   wordcount = 0
-  IO.readlines("lemma_en/lemma.en.txt").each{ |line|
+  IO.readlines("lemma_en/lemma.en.txt", encoding: 'UTF-8').each{ |line|
     if(useful_lemma_dict_line?(line))
       line.chomp!
       wordcount += 1
@@ -329,27 +338,92 @@ def useful_lemma_dict_line?(line)
 end
 
 #
+# SUBTLEX-US (movie subtitle corpus, 51M words, 74K unique word forms)
+# Source: Brysbaert & New (2009), full TSV from openlexicon.fr
+# We use FREQlow (lowercase occurrences only) to avoid counting
+# sentence-initial capitalization and proper noun uses.
+#
+
+def load_subtlex()
+  subtlex_hash = Hash.new(0)
+  first = true
+  IO.readlines(SUBTLEX_FILENAME, encoding: 'UTF-8').each do |line|
+    if first
+      first = false
+      next
+    end
+    fields = line.chomp.split("\t")
+    word_lower = fields[0].downcase
+    freq_low = fields[3].to_i
+    subtlex_hash[word_lower] = freq_low if freq_low > subtlex_hash[word_lower]
+  end
+  puts "Loaded #{subtlex_hash.length} words from SUBTLEX-US"
+  return subtlex_hash
+end
+
+def subtlex_frequency(word, subtlex_hash)
+  count = subtlex_hash[word]
+  return 0 if count == 0
+  SUBTLEX_PRESENCE_BONUS + Math.log2(count).round
+end
+
+#
+# wordfreq (frozen 2021, aggregates Wikipedia/Reddit/Twitter/OpenSubtitles/Common Crawl)
+#
+
+def load_wordfreq()
+  wordfreq_hash = Hash.new
+  unless File.exist?(WORDFREQ_FILENAME)
+    puts "Warning: #{WORDFREQ_FILENAME} not found, skipping wordfreq"
+    return wordfreq_hash
+  end
+  File.foreach(WORDFREQ_FILENAME, encoding: 'UTF-8') do |line|
+    word, zipf_str = line.chomp.split("\t")
+    next if word.nil? || zipf_str.nil?
+    wordfreq_hash[word] = zipf_str.to_f
+  end
+  puts "Loaded #{wordfreq_hash.length} words from wordfreq"
+  wordfreq_hash
+end
+
+#
 # WordNet
 #
+
+def wn_word_is_proper_in_synset?(word, synset)
+  matching_forms = synset.words.select { |w| w.downcase.tr('_', ' ') == word }
+  return false if matching_forms.empty?
+  matching_forms.all? { |w| w[0] != w[0].downcase }
+end
 
 def wn_frequency(word, lemmadict)
   frequency = 0
   lemmas = WordNet::Lemma.find_all(word)
-  # If you didn't find it, try using the lemmadict to get the base form of WORD
+  lookup_word = word
   if(lemmas.empty?)
     base_word = lemmadict[word]
     if(base_word)
       lemmas = WordNet::Lemma.find_all(base_word)
+      lookup_word = base_word
     end
   end
+  all_proper = !lemmas.empty?
   lemmas.each { |lemma|
-    # +1 because words get a boost just from being in WordNet at all
-    frequency += (lemma.tagsense_count + 1) * WORDNET_TAGSENSE_COUNT_MULTIPLICATION_FACTOR
+    lemma.synsets.each { |synset|
+      if wn_word_is_proper_in_synset?(lookup_word, synset)
+        if(word == TRACE_WORD)
+          puts "TRACE skipping proper noun synset: #{synset.words.inspect}"
+        end
+        next
+      end
+      all_proper = false
+      frequency += lemma.tagsense_count * WORDNET_TAGSENSE_COUNT_MULTIPLICATION_FACTOR
+    }
     if(word == TRACE_WORD)
       puts "TRACE lemma #{lemma.inspect}, tagsense_count = #{lemma.tagsense_count}, wn_frequency = #{frequency}"
     end
   }
-  return frequency
+  return frequency, all_proper
 end
 
 #
@@ -432,63 +506,205 @@ def filter_word_dict(word_dict)
   return filtered_word_dict
 end
 
-def add_frequency_info(cmudict, lemmadict, freqdict)
-  # we use lemma_en and WordNet for word frequency data,
-  # to distinguish rare words from common words.
-  count = 0;
+def compute_frequency(word, lemmadict, freqdict, subtlex_hash)
+  subtlex_freq = subtlex_frequency(word, subtlex_hash)
+  wn_freq, wn_all_proper = wn_frequency(word, lemmadict)
+
+  if wn_all_proper
+    subtlex_freq = 0
+    wn_freq = 0
+  end
+
+  lemma_freq = freqdict[word] || 0
+  confirmed = (subtlex_freq > 0 || wn_freq > 0)
+  lemma_contribution = confirmed ? lemma_freq : 0
+
+  freq = subtlex_freq + wn_freq + lemma_contribution
+
+  # Broader "traditional presence" check for Wiktionary floor gating.
+  # Includes WordNet existence (even with tagsense_count=0) and BNC presence.
+  traditional_present = (subtlex_hash[word] > 0) ||
+    !WordNet::Lemma.find_all(word).empty? ||
+    lemmadict.key?(word) ||
+    freqdict.key?(word)
+
+  if(word == TRACE_WORD)
+    puts "TRACE compute_frequency: subtlex=#{subtlex_freq} wn=#{wn_freq} (all_proper=#{wn_all_proper}) lemma=#{lemma_freq} (confirmed=#{confirmed}) traditional_present=#{traditional_present} => #{freq}"
+  end
+  return freq, traditional_present
+end
+
+def add_frequency_info(cmudict, lemmadict, freqdict, subtlex_hash, wordfreq_hash, wiktionary_words)
+  count = 0
   hash = Hash.new
-  rare_words = IO.readlines(RARE_WORDS_FILENAME, chomp: true)
-  common_words = IO.readlines(COMMON_WORDS_FILENAME, chomp: true)
+  has_traditional = {} # tracks words with traditional corpus evidence (for Wiktionary floor)
+  rare_words = IO.readlines(RARE_WORDS_FILENAME, chomp: true, encoding: 'UTF-8')
+  common_words = IO.readlines(COMMON_WORDS_FILENAME, chomp: true, encoding: 'UTF-8')
   for word, prons in cmudict
     if(stop_word?(word))
-      freq = 999999 # very common
-# Even if we let 'Vlad' through, it would have incorrect syllable boundaries because it won't accept VL as a conconant cluster
-#    elsif(WHITELIST.include?(word))
-#      freq = 212 # common enough to be worth mentioning explicitly
+      freq = 999999
     elsif(common_words.include?(word))
       freq = 99
     elsif(rare_words.include?(word))
       freq = 0
     else
-      freqdict_freq = freqdict[word] || 0
-      wn_freq = wn_frequency(word, lemmadict)
-      freq = freqdict_freq + wn_freq
+      freq, trad = compute_frequency(word, lemmadict, freqdict, subtlex_hash)
+      has_traditional[word] = true if trad
     end
-    # lemma_en (freqdict_freq) has better coverage than WordNet,
-    # but also includes some false positives. It has the pro of including good things like
-    #   bettor 1, holy 2994, mod 456, paroled 237, saffron 180, slacker 561, trillion 1, vanes 153
-    # at the cost of including some crap and proper nouns like
-    #   nardo 1, bors 27, matias 2, soweto 96, steinman 1
-    # A random sample of 15 words with a freqdict_freq of 1 yielded:
-    #   5 good: gasoline (wn 1), chicanery, noncombatants, propagandize, psilocybin
-    #   1 whatever: parimutuel (wn 1)
-    #   5 names: adam (wn 1), ciardi, cydonia, tuscaloosa, walter
-    #   2 initialisms: cctv, ni
-    #   2 rare: junco, stylites
-    # Only a third of them are good. Is it worth adding 2/3 crap to get the 1/3 good?
     if(freq > 0)
       count += 1
     end
-    entry = [freq, prons]
-    hash[word] = entry
+    hash[word] = [freq, prons]
   end
-  puts "#{count} of those entries have frequency data"
+  puts "#{count} of those entries have frequency data (from cmudict/wiktionary words)"
+
+  # Phase 4: add words from SUBTLEX/lemma_en that aren't in cmudict.
+  extra = 0
+  subtlex_hash.each_key do |word|
+    next if hash.key?(word)
+    next unless word.match?(/\A[a-z]([a-z'\-]*[a-z])?\z/)
+    if(stop_word?(word))
+      freq = 999999
+    elsif(common_words.include?(word))
+      freq = 99
+    elsif(rare_words.include?(word))
+      freq = 0
+    else
+      freq, trad = compute_frequency(word, lemmadict, freqdict, subtlex_hash)
+      has_traditional[word] = true if trad
+    end
+    if freq > 0
+      hash[word] = [freq, []]
+      extra += 1
+    end
+  end
+  puts "#{extra} extra words added from SUBTLEX (not in cmudict)"
+
+  # Phase 5: add words from common_words.txt not already in the dict.
+  common_extra = 0
+  common_words.each do |word|
+    next if hash.key?(word)
+    hash[word] = [99, []]
+    common_extra += 1
+  end
+  puts "#{common_extra} extra words added from common_words.txt" if common_extra > 0
+
+  # Phase 5.5: Wiktionary existence floor for modern words.
+  # Applies to words in Wiktionary AND wordfreq but absent from traditional corpora.
+  # These are "confirmed modern words too new for traditional corpora."
+  floor_applied = 0
+  hash.each do |word, entry|
+    next if entry[0] > WIKTIONARY_FLOOR
+    next unless wiktionary_words.include?(word)
+    next unless wordfreq_hash.key?(word)
+    next if has_traditional[word]
+    entry[0] = WIKTIONARY_FLOOR
+    floor_applied += 1
+  end
+  puts "#{floor_applied} words received Wiktionary existence floor" if floor_applied > 0
+
+  # Phase 6: frequency inheritance for inflected forms.
+  # Inherit from any common base word, but skip inflected forms that have
+  # independent wordfreq data — trust wordfreq's direct measurement over inheritance.
+  inherited = 0
+  $inflection_base_words.each do |inflected, base|
+    next unless hash.key?(inflected)
+    next if hash[inflected][0] > 0
+    next if wordfreq_hash.key?(inflected)
+    if hash.key?(base) && hash[base][0] > 4
+      hash[inflected][0] = hash[base][0]
+      inherited += 1
+    end
+  end
+  puts "#{inherited} inflected forms inherited frequency from base words" if inherited > 0
+
+  puts "#{count + extra + common_extra + floor_applied + inherited} total entries with frequency data"
   return hash
 end
 
-def build_word_dict(cmudict, lemmadict, freqdict, rdict)
-  cmudict = filter_cmudict(cmudict,rdict)
-  word_dict = add_frequency_info(cmudict, lemmadict, freqdict)
+def build_word_dict(cmudict, lemmadict, freqdict, rdict, subtlex_hash, wordfreq_hash, wiktionary_words)
+  cmudict = filter_cmudict(cmudict, rdict)
+  word_dict = add_frequency_info(cmudict, lemmadict, freqdict, subtlex_hash, wordfreq_hash, wiktionary_words)
   return filter_word_dict(word_dict)
 end
 
+def merge_wiktionary!(cmudict, wiktionary)
+  added = 0
+  wiktionary.each do |word, prons|
+    next if cmudict.key?(word)
+    next if ignore_cmudict_word?(word, cmudict)
+    valid_prons = prons.select do |pron|
+      next false if pron.empty?
+      next false unless pron.phonemes.any?(&:vowel?)
+      word_ok = true
+      unless WHITELIST.include?(word)
+        word_ok = false unless initial_consonant_cluster_ok?(pron.initial_consonant_cluster_array)
+        word_ok = false unless final_consonant_cluster_ok?(pron.final_consonant_cluster_array)
+      end
+      word_ok
+    end
+    next if valid_prons.empty?
+    cmudict[word] = valid_prons.map(&:syllabify)
+    added += 1
+  end
+  puts "Merged #{added} new words from Wiktionary into pronunciation dict"
+end
+
+def merge_inflected_forms!(cmudict, forms_map)
+  added = 0
+  forms_map.each do |base_word, form_pairs|
+    base_prons = cmudict[base_word]
+    next if base_prons.nil? || base_prons.empty?
+
+    base_pron = base_prons.first
+    form_pairs.each do |inflected_word, _|
+      next if cmudict.key?(inflected_word)
+      next if ignore_cmudict_word?(inflected_word, cmudict)
+
+      derived = Inflect.derive(base_pron, base_word, inflected_word)
+      next if derived.nil? || derived.empty?
+      next unless derived.phonemes.any?(&:vowel?)
+
+      syllabified = derived.syllabify
+      unless WHITELIST.include?(inflected_word)
+        next unless final_consonant_cluster_ok?(syllabified.final_consonant_cluster_array)
+      end
+
+      cmudict[inflected_word] = [syllabified]
+      added += 1
+    end
+  end
+  puts "Generated #{added} inflected-form pronunciations"
+end
+
+$inflection_base_words = {}
+
 def rebuild_rhymecrime_dictionaries()
   cmudict = load_cmudict
+  wiktionary_prons, forms_map = load_wiktionary
+  merge_wiktionary!(cmudict, wiktionary_prons)
+  merge_inflected_forms!(cmudict, forms_map)
+  # Track which words are inflected forms for frequency inheritance
+  forms_map.each do |base_word, form_pairs|
+    form_pairs.each do |inflected_word, base|
+      $inflection_base_words[inflected_word] = base if cmudict.key?(inflected_word)
+    end
+  end
+  # Build set of all words with Wiktionary presence (for existence floor)
+  wiktionary_words = Set.new(wiktionary_prons.keys)
+  forms_map.each do |base_word, form_pairs|
+    wiktionary_words.add(base_word)
+    form_pairs.each do |inflected_word, _|
+      wiktionary_words.add(inflected_word) if cmudict.key?(inflected_word)
+    end
+  end
   delete_explicitly_forbidden_keys_from_hash(cmudict)
   rdict = build_rhyme_signature_dict(cmudict)
   save_string_hash(rdict, RHYME_SIGNATURE_DICT_FILENAME, RHYME_SIGNATURE_DICT_HEADER)
   lemma_dict, freq_dict = load_lemma_dict
-  word_dict = build_word_dict(cmudict, lemma_dict, freq_dict, rdict)
+  subtlex_hash = load_subtlex
+  wordfreq_hash = load_wordfreq
+  word_dict = build_word_dict(cmudict, lemma_dict, freq_dict, rdict, subtlex_hash, wordfreq_hash, wiktionary_words)
   save_word_dict(word_dict)
 end
 

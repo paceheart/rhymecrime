@@ -254,6 +254,10 @@ describe 'SET_RELATED' do
     set_related_oughta_contain 'medicine', 'disease', 'expertise'
     set_related_oughta_contain 'medicine', 'fees', 'ccs'
   end
+
+  context 'football' do
+    set_related_oughta_contain 'football', 'yeet', 'incomplete'
+  end
   
   context 'prefix' do
     set_related_ought_not_contain 'carbon', 'cycling', 'recycling' # ought to filter out identical rhymes

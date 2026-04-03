@@ -34,6 +34,24 @@ sudo chmod o+x *
 
 sudo dnf install xorg-x11-xauth.x86_64 xorg-x11-server-utils.x86_64 dbus-x11.x86_64
 
+# Wiktionary pronunciation + POS + forms data (kaikki.org / wiktextract)
+mkdir -p dict/wiktionary
+curl -fL "https://kaikki.org/dictionary/English/kaikki.org-dictionary-English.jsonl" \
+  | ruby -rjson -e '
+    $stdin.set_encoding("UTF-8")
+    $stdin.each_line do |l|
+      obj = JSON.parse(l) rescue next
+      pos = obj["pos"]; next unless pos
+      word = obj["word"]; next unless word
+      sounds = obj["sounds"]&.select { |s| s["ipa"] }
+      next if sounds.nil? || sounds.empty?
+      forms = obj["forms"]&.select { |f| f["form"] && f["tags"] }
+      out = { word: word, pos: pos, sounds: sounds.map { |s| { ipa: s["ipa"], tags: s["tags"] } } }
+      out[:forms] = forms.map { |f| { form: f["form"], tags: f["tags"] } } if forms && !forms.empty?
+      puts JSON.generate(out)
+    end
+  ' | gzip > dict/wiktionary/kaikki-english-filtered.jsonl.gz
+
 # WET / C4: paths match WetCorpus.rb ($WET_INPUT_FILE_TEMPLATE) and Hugging Face allenai/c4 (en/)
 mkdir -p corpus
 curl -fL -o corpus/c4-train.00000-of-01024.json.gz \

@@ -15,6 +15,44 @@ def oughta_be_common(word, is_working=true)
   end
 end
 
+# Rhymeless words are filtered out early, so we can't test their rarity,
+# but we can still verify that they have no rhymes
+def oughta_be_common_but_has_no_rhymes(word, is_working=true)
+  ought_not_have_rhymes(word, is_working)
+end
+
+# Rhymeless words are filtered out early, so we can't test their rarity,
+# but we can still verify that they have no rhymes
+def oughta_be_rare_but_has_no_rhymes(word, is_working=true)
+  ought_not_have_rhymes(word, is_working)
+end
+
+def ought_not_have_rhymes(word, is_working=true)
+  if(is_working)
+    test_name = "'#{word}' oughta have no rhymes"
+    it test_name do
+      expect(find_preferred_rhyming_words(word)).to be_empty, "'#{word}' ought not have any rhymes, but it does: #{find_preferred_rhyming_words(word)}"
+    end
+  else # NOT_WORKING
+    if TEST_FOR_SURPRISING_SUCCESSES
+      oughta_have_rhymes(word, true)
+    end
+  end
+end
+
+def oughta_have_rhymes(word, is_working=true)
+  if(is_working)
+    test_name = "'#{word}' oughta have rhymes"
+    it test_name do
+      expect(find_preferred_rhyming_words(word)).not_to be_empty, "'#{word}' oughta have rhymes, but it doesn't."
+    end
+  else # NOT_WORKING
+    if TEST_FOR_SURPRISING_SUCCESSES
+      oughta_have_rhymes(word, true)
+    end
+  end
+end
+
 # borderline - it's okay if these are either common or rare
 def oughta_be_uncommon(word, is_working=true)
   # intentional no-op
@@ -369,15 +407,25 @@ describe 'RARITY' do
     oughta_be_common 'hashtag'
     oughta_be_common 'emoji'
     oughta_be_common 'meme'
-    oughta_be_common 'malware'
+    oughta_be_common_but_has_no_rhymes 'malware'
     oughta_be_common 'trans'
     oughta_be_common 'bi'
     oughta_be_common 'poly'
-    oughta_be_common 'polyam'
+    oughta_be_common_but_has_no_rhymes 'polyam'
     oughta_be_common 'polyamory'
     oughta_be_common 'polyamorous'
     oughta_be_common 'throuple'
     oughta_be_common 'throuples'
+    oughta_be_rare 'thrupple'
+    oughta_be_common 'yeet'
+    oughta_be_common 'yeets'
+    oughta_be_common 'yeeted'
+    oughta_be_common 'yeeting'
+    oughta_be_uncommon 'yote' # past tense of 'yeet'
+    oughta_be_common 'twerk'
+    oughta_be_common 'twerks'
+    oughta_be_common 'twerked'
+    oughta_be_common 'twerking'
   end
 
   context 'surnames in cmudict' do
@@ -439,7 +487,7 @@ describe 'RARITY' do
     oughta_be_rare 'borborygmus'
     oughta_be_rare 'clerihew'
     oughta_be_rare 'colophon'
-    oughta_be_common 'defenestrate'
+    oughta_be_common_but_has_no_rhymes 'defenestrate'
     oughta_be_rare 'escritoire'
     oughta_be_rare 'fylfot'
     oughta_be_rare 'gallimaufry'
@@ -458,8 +506,8 @@ describe 'RARITY' do
   end
 
   context 'literary and rhetorical terms' do
-    oughta_be_common 'palimpsest'
-    oughta_be_common 'quincunx'
+    oughta_be_common_but_has_no_rhymes 'palimpsest'
+    oughta_be_common_but_has_no_rhymes 'quincunx'
     oughta_be_rare 'tmesis'
     oughta_be_rare 'hendiadys'
     oughta_be_rare 'litotes'
@@ -486,7 +534,7 @@ describe 'RARITY' do
   end
 
   context 'obscure animals' do
-    oughta_be_common 'axolotl'
+    oughta_be_common_but_has_no_rhymes 'axolotl'
     oughta_be_uncommon 'cassowary'
     oughta_be_uncommon 'dugong'
     oughta_be_common 'echidna'
@@ -653,5 +701,64 @@ describe 'RARITY' do
     oughta_be_rare 'unrebruisingnesses'
     oughta_be_rare 'unrebruisingly'
     oughta_be_rare 'rerebruised'
+  end
+
+  context 'inflections' do
+    oughta_be_common "sky"
+    oughta_be_rare "skys"
+    oughta_be_rare "skying"
+    oughta_be_common "goose"
+    oughta_be_common "geese"
+    oughta_be_common "gooses"
+    oughta_be_common "mouse"
+    oughta_be_common "mice"
+    oughta_be_uncommon "mouses"
+    oughta_be_uncommon "mousing"
+    oughta_be_uncommon "moused"
+    oughta_be_rare "mousingly"
+    oughta_be_common "mousiness"
+    oughta_be_rare "mousinesses"
+    oughta_be_rare "mousinessly"
+    oughta_be_rare "mousinessly"
+    oughta_be_common "mouser"
+    oughta_be_common "mousers"
+    oughta_be_common "fox"
+    oughta_be_common "foxes"
+    oughta_be_rare "foxs"
+    oughta_be_rare "foxed"
+    oughta_be_rare "foxing"
+    oughta_be_rare "foxly"
+    oughta_be_common "foxy"
+    oughta_be_rare "foxyness"
+    oughta_be_common "foxily"
+    oughta_be_rare "foxyly"
+    oughta_be_common "foxiness"
+    oughta_be_rare "foxinesses"
+    oughta_be_common "foxier"
+    oughta_be_common "foxiest"
+    oughta_be_rare "foxyer"
+    oughta_be_rare "foxyest"
+    oughta_be_rare "foxynesses"
+    oughta_be_common "crotch"
+    oughta_be_common "crotches"
+    oughta_be_rare "crotchs"
+    oughta_be_rare "crotched"
+    oughta_be_rare "crotching"
+    oughta_be_common "tulip"
+    oughta_be_common "tulips"
+    oughta_be_rare "tulipes"
+    oughta_be_rare "tulipped"
+    oughta_be_rare "tulipping"
+    oughta_be_common "free"
+    oughta_be_common "frees"
+    oughta_be_common "freed"
+    oughta_be_common "freer"
+    oughta_be_common "freest"
+    oughta_be_common "freeing"
+    oughta_be_common "ghost"
+    oughta_be_common "ghosts"
+    oughta_be_common "ghosted"
+    oughta_be_common "ghosting"
+    oughta_be_common "ghostly"
   end
 end

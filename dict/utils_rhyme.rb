@@ -40,9 +40,9 @@ end
 
 def load_forbid_list_as_array
   if(File.exist?("forbid_list.txt"))
-     return IO.readlines("forbid_list.txt", chomp: true)
+     return IO.readlines("forbid_list.txt", chomp: true, encoding: 'UTF-8')
   else
-    return IO.readlines("dict/forbid_list.txt", chomp: true)
+    return IO.readlines("dict/forbid_list.txt", chomp: true, encoding: 'UTF-8')
   end
 end
 
@@ -84,9 +84,9 @@ end
 
 def load_variants_raw
   if(File.exist?("spelling_variants.txt"))
-     return IO.readlines("spelling_variants.txt", chomp: true)
+     return IO.readlines("spelling_variants.txt", chomp: true, encoding: 'UTF-8')
   else
-    return IO.readlines("dict/spelling_variants.txt", chomp: true)
+    return IO.readlines("dict/spelling_variants.txt", chomp: true, encoding: 'UTF-8')
   end
 end
 
@@ -409,7 +409,7 @@ def load_string_hash(filename)
   # KEY  STRING1 STRING2 ...
   # substitutes "_" with " " in keys after loading
   hash = Hash.new # hash of strings
-  IO.readlines(filename).each{ |line|
+  IO.readlines(filename, encoding: 'UTF-8').each{ |line|
     if(useful_line?(line))
       tokens = line.split
       key = tokens.shift # now TOKENS contains only the value strings
@@ -424,7 +424,7 @@ def load_string_hash(filename)
 end
 def save_string_hash(hash, filename, header="")
   # sanitizes spaces into underscores
-  @fh=File.open(filename, 'w')
+  @fh=File.open(filename, 'w', encoding: 'UTF-8')
   unless header.empty?
     @fh.puts(header)
   end
@@ -454,7 +454,7 @@ def load_word_dict()
     die "First run dict/dict.rb to generate dictionary caches"
   end
   word_dict = Hash.new
-  IO.readlines(pathname).each{ |line|
+  IO.readlines(pathname, encoding: 'UTF-8').each{ |line|
     if(useful_line?(line))
       word, freq, pronunciations_str = line.split(",")
       word = word.desanitize
@@ -474,7 +474,7 @@ def load_word_dict()
 end
 
 def save_word_dict(word_dict)
-  f=File.open(WORD_DICT_FILENAME, 'w')
+  f=File.open(WORD_DICT_FILENAME, 'w', encoding: 'UTF-8')
   f.puts(WORD_DICT_HEADER)
   for word, word_info in word_dict
     word = word.sanitize

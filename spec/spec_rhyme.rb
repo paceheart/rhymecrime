@@ -319,10 +319,32 @@ describe 'RHYMES' do
   context 'rhymes too imperfect to live' do
     ought_not_rhyme 'fennel', 'mental' # don't elide the t in 'mental'
     ought_not_rhyme 'just', 'kissed' # this could work in dialect, but ought not be standard
+    ought_not_rhyme 'selfie', 'healthy' #F != TH
   end
   
   context 'loan words' do
     oughta_rhyme 'amour', 'bonjour'
     ought_not_rhyme 'bocce', 'mocha'
+  end
+
+  context 'modern words' do
+    oughta_rhyme 'yeet', 'feet'
+    oughta_rhyme 'yeets', 'feats'
+    oughta_rhyme 'yeeted', 'defeated'
+    oughta_rhyme 'yeeting', 'defeating'
+    oughta_rhyme 'meme', 'team'
+    oughta_rhyme 'memes', 'teams'
+    oughta_rhyme 'blog', 'vlog'
+    oughta_rhyme 'blogs', 'vlogs'
+    oughta_rhyme 'blogged', 'vlogged'
+    oughta_rhyme 'blogging', 'vlogging'
+    oughta_rhyme 'couple', 'throuple'
+    oughta_rhyme 'couples', 'throuples'
+  end
+
+  context '-er' do
+    ought_not_rhyme 'freer', 'beer'
+    oughta_rhyme 'freer', 'seer'
+    ought_not_rhyme 'seer', 'beer'
   end
 end
