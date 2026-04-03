@@ -134,7 +134,7 @@ def tokenize_jsonl_chunk(file)
       rate = (line_num / elapsed).round
       pct = total_lines > 0 ? (100.0 * line_num / total_lines).round(1) : '?'
       eta_s = rate > 0 ? ((total_lines - line_num) / rate).round : '?'
-      print "\r  #{line_num}/#{total_lines} docs (#{pct}%) | #{rate} docs/s | ETA #{eta_s}s   "
+      print "\r  #{line_num}/#{total_lines} docs (#{pct}%) | ETA #{eta_s}s   "
     end
   end
   elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC) - start_time
