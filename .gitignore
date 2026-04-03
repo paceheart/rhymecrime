@@ -8,3 +8,4 @@ semantic-similarity - HuggingFace Copy.rb
 *.*#
 corpus/*
 index/*
+analysis/*
