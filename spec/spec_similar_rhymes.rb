@@ -395,6 +395,12 @@ describe 'PAIR_RELATED' do
     pair_related_oughta_contain 'sinister', 'sister', 'shady', 'lady'
   end
 
+  context 'gay food' do
+    pair_related_oughta_contain 'gay', 'food', 'bi', 'pie'
+    pair_related_oughta_contain 'gay', 'food', 'pan', 'flan'
+    pair_related_oughta_contain 'gay', 'food', 'trans', 'flans'
+  end
+
 end
 
 #

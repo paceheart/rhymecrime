@@ -590,11 +590,13 @@ def add_frequency_info(cmudict, lemmadict, freqdict, subtlex_hash, wordfreq_hash
   puts "#{common_extra} extra words added from common_words.txt" if common_extra > 0
 
   # Phase 5.5: Wiktionary existence floor for modern words.
-  # Applies to words in Wiktionary AND wordfreq but absent from traditional corpora.
+  # Applies to BASE words in Wiktionary AND wordfreq but absent from traditional corpora.
   # These are "confirmed modern words too new for traditional corpora."
+  # Excludes inflected forms — they inherit frequency via Phase 6 instead.
   floor_applied = 0
   hash.each do |word, entry|
     next if entry[0] > WIKTIONARY_FLOOR
+    next if $inflection_base_words.key?(word)
     next unless wiktionary_words.include?(word)
     next unless wordfreq_hash.key?(word)
     next if has_traditional[word]
@@ -604,17 +606,22 @@ def add_frequency_info(cmudict, lemmadict, freqdict, subtlex_hash, wordfreq_hash
   puts "#{floor_applied} words received Wiktionary existence floor" if floor_applied > 0
 
   # Phase 6: frequency inheritance for inflected forms.
-  # Inherit from any common base word, but skip inflected forms that have
-  # independent wordfreq data — trust wordfreq's direct measurement over inheritance.
+  # Inherit from any common base word. When the base has traditional corpus
+  # evidence, skip inflected forms that have independent wordfreq data (trust
+  # wordfreq's direct measurement — e.g. "foxing" stays rare despite "fox" being
+  # common). But when the base is common only via the Wiktionary floor (modern
+  # words like "yeet"), allow inheritance freely so that "yeeted" etc. become common.
   inherited = 0
   $inflection_base_words.each do |inflected, base|
     next unless hash.key?(inflected)
     next if hash[inflected][0] > 0
-    next if wordfreq_hash.key?(inflected)
-    if hash.key?(base) && hash[base][0] > 4
-      hash[inflected][0] = hash[base][0]
-      inherited += 1
+    base_freq = hash.key?(base) ? hash[base][0] : 0
+    next unless base_freq > 4
+    if wordfreq_hash.key?(inflected) && has_traditional[base]
+      next
     end
+    hash[inflected][0] = base_freq
+    inherited += 1
   end
   puts "#{inherited} inflected forms inherited frequency from base words" if inherited > 0
 
