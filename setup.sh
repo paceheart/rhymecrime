@@ -7,6 +7,8 @@ cd /var/www/cgi-bin/
 git clone http://github.com/paceheart/rhymecrime/
 gem install rwordnet
 gem install rspec
+# tokenize.rb, collate.rb, WetCorpus / IndexedWetCorpus / semantic-similarity
+gem install scalpel memery msgpack
 
 # webserver setup
 sudo dnf install -y httpd php php-mysqli mariadb105
@@ -32,7 +34,13 @@ sudo chmod o+x *
 
 sudo dnf install xorg-x11-xauth.x86_64 xorg-x11-server-utils.x86_64 dbus-x11.x86_64
 
-./tokenize.rb c4-train-00000-of-01024.json
-[tokenize more files if desired]
+# WET / C4: paths match WetCorpus.rb ($WET_INPUT_FILE_TEMPLATE) and Hugging Face allenai/c4 (en/)
+mkdir -p corpus
+curl -fL -o corpus/c4-train.00000-of-01024.json.gz \
+  "https://huggingface.co/datasets/allenai/c4/resolve/main/en/c4-train.00000-of-01024.json.gz"
+gunzip -fk corpus/c4-train.00000-of-01024.json.gz
+
+./tokenize.rb corpus/c4-train.00000-of-01024.json
+# [tokenize more shards if desired: corpus/c4-train.00001-of-01024.json, ...]
 ./collate.rb
-./total.rb
+# collate.rb runs total_everything, append_everything, and msgpack_everything (no separate total.rb)

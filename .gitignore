@@ -6,3 +6,5 @@ hugging-face-access-token.txt
 semantic-similarity - HuggingFace Copy.rb
 *.*~
 *.*#
+corpus/*
+index/*
