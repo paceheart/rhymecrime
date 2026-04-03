@@ -83,17 +83,17 @@ describe 'RARITY' do
   end
 
   context 'initialisms' do
-    oughta_be_rare 'ni', NOT_WORKING
+    oughta_be_rare 'ni'
     oughta_be_rare 'cctv'
   end
 
   context 'names' do
-    oughta_be_rare 'ciardi', NOT_WORKING
-    oughta_be_rare 'tuscaloosa', NOT_WORKING
+    oughta_be_rare 'ciardi'
+    oughta_be_rare 'tuscaloosa'
     oughta_be_rare 'bors', NOT_WORKING
     oughta_be_rare 'matias'
-    oughta_be_rare 'soweto', NOT_WORKING
-    oughta_be_rare 'steinman', NOT_WORKING
+    oughta_be_rare 'soweto'
+    oughta_be_rare 'steinman'
     oughta_be_rare 'vicker'
     oughta_be_rare 'timmins'
     oughta_be_rare 'phileas'
@@ -109,7 +109,7 @@ describe 'RARITY' do
     oughta_be_common 'underway'
     oughta_be_common 'renowned'
     oughta_be_common 'newfound'
-    oughta_be_common 'shat', NOT_WORKING
+    oughta_be_common 'shat'
     oughta_be_common 'bra'
     oughta_be_common 'daft'
     oughta_be_common 'evict'
@@ -589,8 +589,8 @@ describe 'RARITY' do
     oughta_be_rare 'vandam'
     oughta_be_rare 'vandamme'
     oughta_be_rare 'zahm'
-    oughta_be_rare 'sadat', NOT_WORKING
-    oughta_be_rare 'spratt', NOT_WORKING
+    oughta_be_rare 'sadat'
+    oughta_be_rare 'spratt'
     oughta_be_rare 'arnatt'
     oughta_be_rare 'balyeat'
     oughta_be_rare 'batte'
@@ -626,8 +626,8 @@ describe 'RARITY' do
     oughta_be_rare 'shatt'
     oughta_be_rare 'slaght'
     oughta_be_rare 'tvsat'
-    oughta_be_rare 'junco', NOT_WORKING
-    oughta_be_rare 'stylites', NOT_WORKING
+    oughta_be_rare 'junco'
+    oughta_be_rare 'stylites'
     oughta_be_rare 'devine'
     oughta_be_rare 'pote'
     oughta_be_rare 'fifer'
