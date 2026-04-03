@@ -110,7 +110,7 @@ class IndexedWetCorpus
   def doc_text(doc_id)
     chunk_id, local_doc_id = split_doc_id(doc_id)
     file = $WET_INPUT_FILE_TEMPLATE.gsub("CHUNK_ID", chunk_id.to_s.rjust(5, "0"))
-    json = JSON.parse!(IO.readlines(file)[local_doc_id])
+    json = JSON.parse!(IO.readlines(file, encoding: 'UTF-8')[local_doc_id])
     return json["text"]
   end
 

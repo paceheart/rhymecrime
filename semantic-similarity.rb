@@ -52,7 +52,7 @@ def compute_embed_dict()
   isFirstLine = true
   print("Loading #{EMBED_VEC_FILE}")
   i = 0
-  for line in IO.readlines(EMBED_VEC_FILE, chomp: true)
+  for line in IO.readlines(EMBED_VEC_FILE, chomp: true, encoding: 'UTF-8')
     i += 1
     if i % 1000 == 0
       print "."

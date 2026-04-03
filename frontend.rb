@@ -30,7 +30,7 @@ def parse_cgi_input
 end
 
 def print_html_header(word1, word2, title="RhymeCrime", handler="rhyme.rb")
-  head = IO.read("html/header.html");
+  head = IO.read("html/header.html", encoding: 'UTF-8');
 
   # tweak the title of the webpage to include the submitted word(s)
   clarifier = ""
@@ -128,7 +128,7 @@ def print_output(output, input_word1, output_type)
 end
 
 def print_html_footer
-  cgi_puts IO.read("html/footer.html");
+  cgi_puts IO.read("html/footer.html", encoding: 'UTF-8');
 end
 
 # RhymeCrime

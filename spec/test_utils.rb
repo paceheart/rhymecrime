@@ -20,7 +20,7 @@ end
 # word1, word2, oughta be related?, notes
 def load_relatedness_test_cases
   CSV::Converters[:boolean] = ->(value) { zerone_string_to_boolean(value) rescue value }
-  cases = CSV.parse(File.read("spec/related.csv"), headers:true, converters: :boolean) or raise "Could not read/parse related.csv"
+  cases = CSV.parse(File.read("spec/related.csv", encoding: 'UTF-8'), headers:true, converters: :boolean) or raise "Could not read/parse related.csv"
   for c in cases
     repair_relatedness_test_case(c)
   end

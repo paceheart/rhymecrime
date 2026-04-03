@@ -122,7 +122,7 @@ end
 
 def all_test_words_in_rb_file(filename)
   results = Set.new
-  for line in IO.readlines(filename)
+  for line in IO.readlines(filename, encoding: 'UTF-8')
     if line.include?("ought")
       tokens = line.split /\s+|,\s*/
       for token in tokens

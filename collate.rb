@@ -27,7 +27,7 @@ def note_word_mentioned_in_doc(word, chunk_id, local_doc_id)
 end
 
 def collate_sentence_index(json_filename, chunk_id)
-  sentence_index = JSON.parse!(IO.read(json_filename)) # hash[word] -> local_sentence_ids
+  sentence_index = JSON.parse!(IO.read(json_filename, encoding: 'UTF-8')) # hash[word] -> local_sentence_ids
   local_doc_id = json_filename[-11..-6].to_i
   doc_id = compute_doc_id(chunk_id, local_doc_id)
   for word, local_sentence_ids in sentence_index
@@ -38,7 +38,7 @@ def collate_sentence_index(json_filename, chunk_id)
 end
 
 def collate_doc_index(json_filename, chunk_id)
-  word_counts = JSON.parse!(IO.read(json_filename)) # hash[WORD] -> # of occurrences of WORD in that document
+  word_counts = JSON.parse!(IO.read(json_filename, encoding: 'UTF-8')) # hash[WORD] -> # of occurrences of WORD in that document
   $global_word_counts.hash_increment_all(word_counts)
   local_doc_id = json_filename[-11..-6].to_i
   for word, count in word_counts
