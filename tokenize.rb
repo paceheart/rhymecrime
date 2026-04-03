@@ -119,21 +119,29 @@ end
 def tokenize_jsonl_chunk(file)
   line_num = 0
   chunk_id = file[/.*\.(.+)-of-.*/,1].to_i # implicitly relies on $WET_INPUT_FILE_TEMPLATE
-  puts "Tokenizing chunk #{chunk_id}"
+  total_lines = `wc -l < "#{file}"`.strip.to_i
+  puts "Tokenizing chunk #{chunk_id} (#{total_lines} docs)"
   compute_and_save_metadata(chunk_id, file)
+  start_time = Process.clock_gettime(Process::CLOCK_MONOTONIC)
   File.foreach(file, chomp: true, encoding: 'UTF-8') do |line|
     next if line.empty?
     local_sentence_index, local_doc_index, local_doc_id = tokenize_json_doc(JSON.parse!(line), chunk_id)
     save_local_sentence_index(local_sentence_index, chunk_id, local_doc_id)
     save_local_doc_index(local_doc_index, chunk_id, local_doc_id)
     line_num += 1
-    if line_num % 1000 == 0
-      print "."
+    if line_num % 10000 == 0
+      elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC) - start_time
+      rate = (line_num / elapsed).round
+      pct = total_lines > 0 ? (100.0 * line_num / total_lines).round(1) : '?'
+      eta_s = rate > 0 ? ((total_lines - line_num) / rate).round : '?'
+      print "\r  #{line_num}/#{total_lines} docs (#{pct}%) | #{rate} docs/s | ETA #{eta_s}s   "
     end
   end
+  elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC) - start_time
+  puts "\r  #{line_num}/#{total_lines} docs in #{elapsed.round(1)}s (#{(line_num / elapsed).round} docs/s)        "
   save_chunk_sentence_count(chunk_id)
   save_chunk_word_count(chunk_id)
-  puts "done!"
+  puts "Chunk #{chunk_id} done!"
   return chunk_id
 end
 
