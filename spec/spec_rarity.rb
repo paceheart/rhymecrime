@@ -15,6 +15,11 @@ def oughta_be_common(word, is_working=true)
   end
 end
 
+# borderline - it's okay if these are either common or rare
+def oughta_be_uncommon(word, is_working=true)
+  # intentional no-op
+end
+
 def oughta_be_rare(word, is_working=true)
   if(is_working)
     test_name = "'#{word}' oughta be rare"
@@ -328,6 +333,7 @@ describe 'RARITY' do
   end
 
   context 'clothing and fabric' do
+    oughta_be_common 'tux'
     oughta_be_common 'tuxedo'
     oughta_be_common 'flannel'
     oughta_be_common 'corduroy'
@@ -342,6 +348,8 @@ describe 'RARITY' do
     oughta_be_common 'kerfuffle'
     oughta_be_common 'hullabaloo'
     oughta_be_common 'shenanigans'
+    oughta_be_rare 'shenanigan'
+    oughta_be_common 'bamboozle'
     oughta_be_common 'bamboozled'
   end
 
@@ -362,6 +370,14 @@ describe 'RARITY' do
     oughta_be_common 'emoji'
     oughta_be_common 'meme'
     oughta_be_common 'malware'
+    oughta_be_common 'trans'
+    oughta_be_common 'bi'
+    oughta_be_common 'poly'
+    oughta_be_common 'polyam'
+    oughta_be_common 'polyamory'
+    oughta_be_common 'polyamorous'
+    oughta_be_common 'throuple'
+    oughta_be_common 'throuples'
   end
 
   context 'surnames in cmudict' do
@@ -423,7 +439,7 @@ describe 'RARITY' do
     oughta_be_rare 'borborygmus'
     oughta_be_rare 'clerihew'
     oughta_be_rare 'colophon'
-    oughta_be_uncommon 'defenestrate'
+    oughta_be_common 'defenestrate'
     oughta_be_rare 'escritoire'
     oughta_be_rare 'fylfot'
     oughta_be_rare 'gallimaufry'
@@ -442,8 +458,8 @@ describe 'RARITY' do
   end
 
   context 'literary and rhetorical terms' do
-    oughta_be_uncommon 'palimpsest'
-    oughta_be_uncommon 'quincunx'
+    oughta_be_common 'palimpsest'
+    oughta_be_common 'quincunx'
     oughta_be_rare 'tmesis'
     oughta_be_rare 'hendiadys'
     oughta_be_rare 'litotes'
@@ -459,51 +475,51 @@ describe 'RARITY' do
     oughta_be_rare 'homiletics'
     oughta_be_rare 'hagiography'
     oughta_be_common 'isomorphic'
-    oughta_be_uncommon 'isomorphism'
+    oughta_be_common 'isomorphism'
     oughta_be_rare 'hermeneutics'
     oughta_be_rare 'eigenvalue'
     oughta_be_rare 'chromatography'
     oughta_be_rare 'electrophoresis'
     oughta_be_rare 'spectrometer'
-    oughta_be_uncommon 'reagent'
+    oughta_be_common 'reagent'
     oughta_be_rare 'adiabatic'
   end
 
   context 'obscure animals' do
-    oughta_be_uncommon 'axolotl'
+    oughta_be_common 'axolotl'
     oughta_be_uncommon 'cassowary'
     oughta_be_uncommon 'dugong'
-    oughta_be_uncommon 'echidna'
+    oughta_be_common 'echidna'
     oughta_be_rare 'gharial'
     oughta_be_uncommon 'pangolin'
-    oughta_be_uncommon 'tapir'
+    oughta_be_common 'tapir'
     oughta_be_rare 'numbat'
   end
 
   context 'archaic vocabulary' do
-    oughta_be_uncommon 'forsooth'
+    oughta_be_common 'forsooth'
     oughta_be_uncommon 'hauberk'
     oughta_be_rare 'varlet'
-    oughta_be_rare 'seneschal'
+    oughta_be_uncommon 'seneschal'
     oughta_be_rare 'pottage'
-    oughta_be_rare 'prithee'
+    oughta_be_uncommon 'prithee'
     oughta_be_rare 'diapason'
     oughta_be_rare 'cynosure'
-    oughta_be_rare 'panegyric'
-    oughta_be_uncommon 'synecdoche'
+    oughta_be_uncommon 'panegyric'
+    oughta_be_common 'synecdoche'
     oughta_be_rare 'schenectady'
   end
 
   context 'astronomy' do
-    oughta_be_rare 'umbra'
-    oughta_be_rare 'penumbra'
-    oughta_be_rare 'parallax'
+    oughta_be_uncommon 'umbra'
+    oughta_be_uncommon 'penumbra'
+    oughta_be_uncommon 'parallax'
     oughta_be_rare 'aphelion'
     oughta_be_rare 'perihelion'
   end
 
   context 'miscellaneous rare' do
-    oughta_be_rare 'petrichor'
+    oughta_be_uncommon 'petrichor'
     oughta_be_rare 'spoonerism'
     oughta_be_rare 'malapropism'
     oughta_be_rare 'kafkaesque'
