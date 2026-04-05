@@ -11,5 +11,7 @@ index/*
 analysis/*
 dict/wiktionary/*.jsonl.gz
 dict/wiktionary/*.jsonl
-dict/subtlex/SUBTLEXus.tsv
+dict/subtlex/*.tsv
+dict/subtlex/*.json
+dict/wordfreq/*.tsv
 dict/generated/*
