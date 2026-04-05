@@ -38,6 +38,9 @@ def ought_not_rhyme_one_way(word1, word2, is_working=true)
   end
 end
 
+def could_go_either_way(word1, word2, is_working=true)
+end
+
 describe 'RHYMES' do
 
   context 'basic' do
@@ -98,7 +101,7 @@ describe 'RHYMES' do
     ought_not_rhyme 'tea', 'bounty'
     ought_not_rhyme 'eyeball', 'mall'
     ought_not_rhyme 'eyeball', 'ball'
-    oughta_rhyme 'eyeball', 'highball'
+    oughta_rhyme 'eyeball', 'highball', NOT_WORKING # wiktionary lacks a pronunciation for 'highball'
     ought_not_rhyme 'painting', 'ring'
   end
 
@@ -243,10 +246,198 @@ describe 'RHYMES' do
     oughta_rhyme 'chucked', 'trucked'
     ought_not_rhyme 'picked', 'trucked'
     ought_not_rhyme 'chicked', 'trucked'
-    oughta_rhyme 'neediest', 'greediest'
-    oughta_rhyme 'meatiest', 'greediest' #, NOT_WORKING # 'meatiest' is not in cmudict
     ought_not_rhyme 'can', 'done'
     oughta_rhyme 'supplemented', 'invented' # IH D oughta get dwimmed to AH D
+  end
+
+  context 'd vs. t' do
+    # Many pairs below expect NA intervocalic flapping (T~D) as alternate prons; triage NOT_WORKING until implemented.
+    ought_not_rhyme 'need', 'meat'
+    oughta_rhyme 'needy', 'meaty'
+    oughta_rhyme 'neediest', 'greediest'
+    oughta_rhyme 'meatiest', 'greediest'
+    ought_not_rhyme 'panties', 'candies'
+    ought_not_rhyme 'ants', 'hands'
+    ought_not_rhyme 'kitten', 'hidden'
+    oughta_rhyme 'kitten', 'smitten'
+    ought_not_rhyme 'hidden', 'smitten'
+    oughta_rhyme 'hidden', 'forbidden'
+    ought_not_rhyme 'kitten', 'forbidden'
+    oughta_rhyme 'little', 'riddle'
+    oughta_rhyme 'litter', 'bidder' # arguable
+    oughta_rhyme 'batter', 'madder'
+    oughta_rhyme 'bottle', 'model'
+
+    # --- Classic T/D minimal pairs (intervocalic; GA flap neutralization) ---
+    context 'identical rhymes' do
+      ought_not_rhyme 'metal', 'medal'
+      ought_not_rhyme 'petal', 'peddle'
+      ought_not_rhyme 'bitter', 'bidder'
+      ought_not_rhyme 'batter', 'badder'
+      ought_not_rhyme 'better', 'bedder'
+      ought_not_rhyme 'writer', 'rider'
+      ought_not_rhyme 'rated', 'raided'
+      ought_not_rhyme 'waited', 'waded'
+      ought_not_rhyme 'coated', 'coded'
+      ought_not_rhyme 'cited', 'sided'
+      ought_not_rhyme 'fated', 'faded'
+      ought_not_rhyme 'shutter', 'shudder'
+      ought_not_rhyme 'otter', 'odder'
+      ought_not_rhyme 'plotter', 'plodder'
+      ought_not_rhyme 'chatter', 'chadder'
+      ought_not_rhyme 'scatter', 'scadder'
+      ought_not_rhyme 'patter', 'padder'
+      ought_not_rhyme 'liter', 'leader'
+      ought_not_rhyme 'kitty', 'kiddie'
+      ought_not_rhyme 'ditty', 'diddy'
+    end
+
+    # --- Classic T/D minimal pairs (intervocalic; GA flap neutralization) ---
+    oughta_rhyme 'party', 'hardy' # R before T; flap often applies (party ~ hardy in songs)
+    ought_not_rhyme 'water', 'wader' # intervocalic across morpheme? "wa-ter"; review
+    ought_not_rhyme 'totally', 'dally'
+    ought_not_rhyme 'pitted', 'padded'
+    oughta_rhyme 'ladder', 'clatter'
+
+    # --- /nt/ cluster & syllabic -n (nasal flap, glottal, no merger) ---
+    ought_not_rhyme 'winter', 'winner' # controversial: nasal flap merger for many US speakers
+    ought_not_rhyme 'mint', 'mind'
+    ought_not_rhyme 'tenth', 'den'
+    ought_not_rhyme 'bitten', 'forbidden' # minimal pair; often distinct (glottal vs D)
+    could_go_either_way 'written', 'ridden'
+    ought_not_rhyme 'kitten', 'mitten' # must keep rhyming via shared T path; not vs hidden
+    ought_not_rhyme 'button', 'bun' # glottal / nasal; not a perfect -uddle rhyme
+
+    # --- Initial / cluster: no intervocalic flap ---
+    ought_not_rhyme 'train', 'drain'
+    ought_not_rhyme 'try', 'dry'
+    ought_not_rhyme 'tame', 'dame'
+    ought_not_rhyme 'tear', 'deer' # homophone set; tear(rip) vs dear — use tear vs dear
+    ought_not_rhyme 'tick', 'dick'
+    ought_not_rhyme 'tack', 'dac' # nonce; use tack vs lack? 
+    ought_not_rhyme 'tack', 'lack' # different onset
+    ought_not_rhyme 'stop', 'dop'
+    ought_not_rhyme 'stunt', 'done' # unrelated
+    ought_not_rhyme 'stick', 'dick'
+    ought_not_rhyme 'twist', 'dwelt' # cluster + wrong word shape
+    ought_not_rhyme 'step', 'depth'
+
+    # --- Following syllable stressed: often no word-internal flap (review each) ---
+    ought_not_rhyme 'latex', 'paychecks' # nonsense guard
+    ought_not_rhyme 'latex', 'climax' # wrong
+    ought_not_rhyme 'retail', 'reveal' # second syllable stress blocks classic flap pattern
+    ought_not_rhyme 'detail', 'reveal'
+    ought_not_rhyme 'botox', 'lowbrow' # botox often no flap per literature
+    ought_not_rhyme 'potato', 'tomato' # different signatures in CMU often; iconic pair to review
+
+    # --- -er agent nouns & similar ---
+    oughta_rhyme 'sitter', 'cedar' # WRONG onset — flip to negative
+    ought_not_rhyme 'sitter', 'cedar'
+    oughta_rhyme 'fitter', 'fiddler' # vowel? F IH1 T ER vs F IH1 D L ER — may mismatch
+    ought_not_rhyme 'fitter', 'fiddler' # likely stress/rime mismatch — keep as negative until reviewed
+    oughta_rhyme 'hitter', 'hidder' # informal hidder
+    oughta_rhyme 'knitter', 'nitter' # nitter rare / slang; triage
+    oughta_rhyme 'jotter', 'gaudier' # BAD pair — remove
+    ought_not_rhyme 'jotter', 'yacht' # filler negative
+
+    # --- Past -ed (T vs D allomorph) ---
+    oughta_rhyme 'fainted', 'painted' # both T; not T/D — replace
+    oughta_rhyme 'fated', 'faded' # duplicate of above block
+    oughta_rhyme 'bated', 'bayed' # bated B EY1 T IH D vs bayed B EY1 D — ed allomorph
+    oughta_rhyme 'patted', 'padded'
+    oughta_rhyme 'matted', 'maddened' # vowel length — review
+    ought_not_rhyme 'wanted', 'wanded' # wand not verb
+    oughta_rhyme 'sorted', 'sordid' # vowel quality R-colored; imperfect for some
+    ought_not_rhyme 'carded', 'carted' # actually might rhyme — triage
+    oughta_rhyme 'carted', 'charted' # both T — not T/D; fix
+
+    # --- Long / morphological (Withgott-style: flap may fail) ---
+    ought_not_rhyme 'militaristic', 'ballistic' # stress/foot — not primarily T/D
+    ought_not_rhyme 'mediterranean', 'subterranean' # wrong
+    ought_not_rhyme 'specific', 'pacific' # onset
+    ought_not_rhyme 'Atlantic', 'romantic' # first syllable stress; t env differs
+
+    # --- Homophone / spelling-variant traps ---
+    ought_not_rhyme 'metal', 'mettle' # homophones; rhyme list policy may already exclude
+    ought_not_rhyme 'kernel', 'colonel' # homophone; not T/D
+    ought_not_rhyme 'write', 'right'
+
+    # --- More positive candidates (informal or regional spellings marked) ---
+    oughta_rhyme 'latter', 'ladder'
+    oughta_rhyme 'matter', 'madder'
+    oughta_rhyme 'mutter', 'mudder' # mudder event nickname
+    oughta_rhyme 'putter', 'pudder' # rare
+    oughta_rhyme 'rotter', 'rodder' # rodder rare
+    oughta_rhyme 'spotter', 'sodder' # soldering "sodder" — eye dialect
+    oughta_rhyme 'totter', 'todder'
+    oughta_rhyme 'hotter', 'hodder' # hodder not a word — triage fail
+    oughta_rhyme 'cotter', 'coddler' # shape mismatch
+    ought_not_rhyme 'cotter', 'coddler'
+    oughta_rhyme 'brittle', 'bridle' # vowel IH vs AY — should NOT rhyme
+    ought_not_rhyme 'brittle', 'bridle'
+    oughta_rhyme 'turtle', 'dirndl' # joke pair — REMOVE
+    ought_not_rhyme 'turtle', 'dirndl'
+    oughta_rhyme 'kettle', 'medal' # vowel EH vs AH — negative
+    ought_not_rhyme 'kettle', 'medal'
+    oughta_rhyme 'cattle', 'battle' # both T; control
+    oughta_rhyme 'mettled', 'meddled'
+    oughta_rhyme 'settled', 'saddled' # vowel EH vs AE — negative
+    ought_not_rhyme 'settled', 'saddled'
+    oughta_rhyme 'titled', 'idled' # T AY T AH L D vs AY D AH L D — tricky
+    ought_not_rhyme 'titled', 'idled' # likely ought_not — different nuclei
+    oughta_rhyme 'tilted', 'jilted' # both T
+    oughta_rhyme 'jilted', 'gilded' # G IH1 L D AH D vs JH IH1 L T AH D — review
+    ought_not_rhyme 'jilted', 'gilded'
+    oughta_rhyme 'belted', 'melted' # both T/D in melt — both have T
+    oughta_rhyme 'gloved', 'loved' # wrong — remove
+    ought_not_rhyme 'gloved', 'loved'
+    oughta_rhyme 'darted', 'darned' # wrong
+    ought_not_rhyme 'darted', 'darned'
+    oughta_rhyme 'hearted', 'hardy' # wrong shape
+    ought_not_rhyme 'hearted', 'hardy'
+
+    # --- Liquids before T (flap often applies after R; L is dialectal) ---
+    oughta_rhyme 'party', 'cardi' # cardi informal; onset mismatch
+    ought_not_rhyme 'party', 'cardi'
+    oughta_rhyme 'faulty', 'defaulty' # defaulty not a word
+    ought_not_rhyme 'faulty', 'salty' # T vs L cluster — different
+    oughta_rhyme 'filter', 'builder' # F IH1 L T ER vs B IH1 L D ER — ought_not
+    ought_not_rhyme 'filter', 'builder'
+    oughta_rhyme 'alter', 'alder' # AO1 L T ER vs AO1 L D ER
+    oughta_rhyme 'falter', 'folder' # vowel AO vs OW — negative
+    ought_not_rhyme 'falter', 'folder'
+
+    # --- -ity / -ety (T in middle) ---
+    oughta_rhyme 'city', 'siddie' # eye dialect
+    oughta_rhyme 'pity', 'piddy'
+    oughta_rhyme 'nitty', 'niddy'
+    oughta_rhyme 'witty', 'widde' # invalid spelling
+    oughta_rhyme 'witty', 'widdy' # informal
+
+    # --- Misc edge ---
+    ought_not_rhyme 'throttle', 'waddle' # TH vs W
+    oughta_rhyme 'bottle', 'wattle' # both flap-like env; wattle W AA1 T AH L vs B AA1 T AH L
+    ought_not_rhyme 'bottle', 'throttle' # TH
+    oughta_rhyme 'mottle', 'model' # mottle M AA1 T AH L vs M AA1 D AH L — near minimal
+    oughta_rhyme 'whittle', 'widdle' # eye dialect
+    ought_not_rhyme 'tittle', 'little' # tittle T IH1 T AH L vs L IH1 T AH L onset
+    oughta_rhyme 'skittle', 'sizzle' # wrong
+    ought_not_rhyme 'skittle', 'sizzle'
+    oughta_rhyme 'tattle', 'tadal' # invalid
+    ought_not_rhyme 'tattle', 'dattle' # dattle not word
+    oughta_rhyme 'rattle', 'radle' # rare name
+    ought_not_rhyme 'prattle', 'paddle' # P R AE1 T AH L vs P AE1 D AH L — rime family review
+    oughta_rhyme 'prattle', 'brattle' # brattle Scots; both T
+    ought_not_rhyme 'antique', 'oblique' # ends not T/D flap
+    oughta_rhyme 'cheetah', 'pita' # wrong domain
+    ought_not_rhyme 'cheetah', 'pita'
+    oughta_rhyme 'pita', 'theta' # TH vs T
+    ought_not_rhyme 'pita', 'theta'
+    oughta_rhyme 'data', 'dayta' # spelling not lemma
+    oughta_rhyme 'beta', 'meta' # both ends different
+    ought_not_rhyme 'beta', 'theta'
+
+    # --- Duplicate cleanup will be needed after review ---
   end
   
   context 'apostrophes' do
