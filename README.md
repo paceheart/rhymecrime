@@ -25,7 +25,7 @@ You can change OUTPUT_TYPE from 'cgi' to 'text' if you want to use it at the com
 * cd dict
 * ./dict.rb
 
-That will build the internal dictionaries. Then you ought to be able to go to cgi-bin/rhyme.rb and it will bring up the web interface.
+That runs the thin CLI wrapper, which loads `dict_lib.rb` and builds the internal dictionaries. Then you ought to be able to go to cgi-bin/rhyme.rb and it will bring up the web interface.
 
 ## Examples:
 

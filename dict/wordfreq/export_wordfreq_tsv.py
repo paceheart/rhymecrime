@@ -11,7 +11,7 @@ from pathlib import Path
 
 def main() -> None:
     here = Path(__file__).resolve().parent
-    parser = argparse.ArgumentParser(description="Write wordfreq zipf TSV for dict.rb / analysis.")
+    parser = argparse.ArgumentParser(description="Write wordfreq zipf TSV for dict_lib.rb / analysis.")
     parser.add_argument(
         "-o",
         "--output",

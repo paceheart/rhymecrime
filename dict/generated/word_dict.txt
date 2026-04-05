@@ -1,6 +1,8 @@
 # RhymeCrime's word info dictionary
 # https://github.com/paceheart/rhymecrime
 #
+# Built by dict_lib.rb (CLI: dict/dict.rb).
+#
 # Each line is of the form:
 #
 # WORD,FREQUENCY,PRONUNCIATION1|PRONUNCIATION2...

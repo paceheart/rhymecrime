@@ -8,8 +8,8 @@ require "fileutils"
 RHYME_SIGNATURE_DICT_FILENAME = "rhyme_signature_dict.txt"
 WORD_DICT_FILENAME = "word_dict.txt"
 
-# Outputs of dict/dict.rb → dict_lib.rb (not hand-edited). Paths are relative to the dict/
-# directory when dict.rb is run with cwd = dict/; loaders use paths from the repository root.
+# Outputs of dict/dict_lib.rb (via dict.rb); not hand-edited. Paths are relative to the dict/
+# directory when the build runs with cwd = dict/; loaders use paths from the repository root.
 DICT_GENERATED_SUBDIR = "generated"
 
 def generated_dict_path(basename)

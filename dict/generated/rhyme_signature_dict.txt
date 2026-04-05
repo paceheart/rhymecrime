@@ -1,6 +1,8 @@
 # RhymeCrime's Rhyme Signature Dictionary
 # https://github.com/paceheart/rhymecrime
 #
+# Built by dict_lib.rb (CLI: dict/dict.rb).
+#
 # Each line is of the form:
 #
 # RHYME_SIGNATURE  WORD1 WORD2 WORD3 ...
@@ -11,7 +13,7 @@
 #
 # This data is automatically distilled from a forked version of the
 # CMU Pronouncing Dictionary, with some manual tweaks and some
-# programmatic preprocessing as described in dict.rb.
+# programmatic preprocessing as described in dict_lib.rb.
 #
 # Singleton signatures are excluded.
 #
