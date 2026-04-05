@@ -23,6 +23,11 @@ describe 'Inflect' do
       expect(Inflect.inflection_of_base?('regionalize', 'regionalized')).to eq(true)
       expect(Inflect.inflection_of_base?('sensationalize', 'sensationalized')).to eq(true)
     end
+
+    it 'rejects base+es for silent-e bases (not annualizees)' do
+      expect(Inflect.inflection_of_base?('annualize', 'annualizes')).to eq(true)
+      expect(Inflect.inflection_of_base?('annualize', 'annualizees')).to eq(false)
+    end
   end
 
   context 'plural -s (voiceless final -> S)' do

@@ -1060,6 +1060,7 @@ describe 'RARITY' do
     oughta_be_uncommon 'ferromagnet'
     oughta_be_common_ish 'glock'
     oughta_be_common 'gramophone'
+    oughta_be_rare 'gramophons'
     oughta_be_common 'gramophones'
     oughta_be_rare 'gramaphone'
     oughta_be_rare 'gramaphones'

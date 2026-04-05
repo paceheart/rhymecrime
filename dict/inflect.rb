@@ -73,7 +73,8 @@ module Inflect
 
     bl = base.bytesize
     yield base + "s"
-    yield base + "es"
+    # Plural -es attaches to the stem after silent-e (fox→foxes), not as base+"es" (annualizees junk).
+    yield base + "es" unless base.end_with?("e") && !base.end_with?("ee")
 
     if base.end_with?("y") && bl >= 2
       stem = base.byteslice(0, bl - 1)
@@ -148,6 +149,10 @@ module Inflect
     # --- direct suffix after base ---
     return nil unless inflected.start_with?(base)
     rest = inflected.byteslice(bl, il - bl)
+    # annualize+es→annualizees is not English; real plural is annualize+s (annualizes).
+    if rest == "es" && base.end_with?("e") && !base.end_with?("ee") && inflected == base + "es"
+      return nil
+    end
     case rest
     when "s", "es"
       return :s

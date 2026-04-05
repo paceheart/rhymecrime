@@ -8,8 +8,8 @@ require "fileutils"
 RHYME_SIGNATURE_DICT_FILENAME = "rhyme_signature_dict.txt"
 WORD_DICT_FILENAME = "word_dict.txt"
 
-# Outputs of dict/dict.rb (not hand-edited). Paths are relative to the dict/ directory when
-# dict.rb is run with cwd = dict/; loaders use paths from the repository root.
+# Outputs of dict/dict.rb → dict_lib.rb (not hand-edited). Paths are relative to the dict/
+# directory when dict.rb is run with cwd = dict/; loaders use paths from the repository root.
 DICT_GENERATED_SUBDIR = "generated"
 
 def generated_dict_path(basename)
@@ -488,7 +488,7 @@ end
 def load_word_dict()
   pathname = generated_dict_path(WORD_DICT_FILENAME)
   unless File.exist?(pathname)
-    die "First run dict/dict.rb to generate dictionary caches"
+    die "First run dict/dict.rb from dict/ to generate dictionary caches"
   end
   word_dict = Hash.new
   IO.readlines(pathname, encoding: 'UTF-8').each{ |line|
