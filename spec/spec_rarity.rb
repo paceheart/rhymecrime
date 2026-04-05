@@ -520,6 +520,7 @@ describe 'RARITY' do
     oughta_be_common 'polyamorous'
     oughta_be_common 'throuple'
     oughta_be_common 'throuples'
+    oughta_be_rare 'thruple'
     oughta_be_rare 'thrupple'
     oughta_be_common 'yeet'
     oughta_be_common 'yeets'
