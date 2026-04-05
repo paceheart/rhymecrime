@@ -38,13 +38,22 @@ RARE_WORDS_FILENAME = "rare_words.txt"
 COMMON_WORDS_FILENAME = "common_words.txt"
 
 WordNet::DB.path = "WordNet3.1/"
-WORDNET_TAGSENSE_COUNT_MULTIPLICATION_FACTOR = 100 # each tagsense_count from wordnet counts as this many occurrences in some corpus
 SUBTLEX_FILENAME = "subtlex/SUBTLEXus.tsv"
-SUBTLEX_PRESENCE_BONUS = 5 # being in SUBTLEX (lowercase) at all means you're a word people know
+SUBTLEX_PRESENCE_BONUS = 4
 
 WORDFREQ_FILENAME = "wordfreq/wordfreq.tsv"
-WIKTIONARY_FLOOR = 5 # minimum freq for modern words confirmed by Wiktionary + wordfreq
-
+WORDFREQ_COMMON_ZIPF = 3.0
+WORDFREQ_RARE_ZIPF = 2.0
+# SUBTLEX FREQlow this high means sustained lowercase dialogue use — used with weak_lemma_anchor
+# and with two-letter all-proper handling below.
+SUBTLEX_OVERRIDE_PROPER_MIN = 12
+# Two-letter all-proper, single synset: only clear "all proper" when SUBTLEX FREQlow falls in
+# this band — high enough for real dialogue (bi ~32) but below nickel-style fragment spam (ni)
+# and above iron Fe appearing as dialogue junk (~17).
+SUBTLEX_SINGLE_PROPER_OVERRIDE_MIN = 28
+SUBTLEX_SINGLE_PROPER_OVERRIDE_MAX = 40
+# Phase 5.5: skip weak Zipf for 4-letter no-lemma tokens (surname spam ~2.3) but keep neologisms ≥ this (yeet ~2.51).
+WIKT_FLOOR_4L_WEAK_ZIPF_BELOW = 2.5
 RHYME_SIGNATURE_DICT_HEADER = "# RhymeCrime's Rhyme Signature Dictionary
 # https://github.com/paceheart/rhymecrime
 #
@@ -390,14 +399,7 @@ end
 # WordNet
 #
 
-def wn_word_is_proper_in_synset?(word, synset)
-  matching_forms = synset.words.select { |w| w.downcase.tr('_', ' ') == word }
-  return false if matching_forms.empty?
-  matching_forms.all? { |w| w[0] != w[0].downcase }
-end
-
-def wn_frequency(word, lemmadict)
-  frequency = 0
+def wn_all_proper?(word, lemmadict)
   lemmas = WordNet::Lemma.find_all(word)
   lookup_word = word
   if(lemmas.empty?)
@@ -407,23 +409,64 @@ def wn_frequency(word, lemmadict)
       lookup_word = base_word
     end
   end
-  all_proper = !lemmas.empty?
+  return false if lemmas.empty?
+  found_any_word = false
   lemmas.each { |lemma|
     lemma.synsets.each { |synset|
-      if wn_word_is_proper_in_synset?(lookup_word, synset)
-        if(word == TRACE_WORD)
-          puts "TRACE skipping proper noun synset: #{synset.words.inspect}"
-        end
-        next
-      end
-      all_proper = false
-      frequency += lemma.tagsense_count * WORDNET_TAGSENSE_COUNT_MULTIPLICATION_FACTOR
+      matching = synset.words.select { |w| w.downcase.tr('_', ' ') == lookup_word }
+      next if matching.empty?
+      found_any_word = true
+      return false unless matching.all? { |w| w[0] != w[0].downcase }
     }
-    if(word == TRACE_WORD)
-      puts "TRACE lemma #{lemma.inspect}, tagsense_count = #{lemma.tagsense_count}, wn_frequency = #{frequency}"
-    end
   }
-  return frequency, all_proper
+  found_any_word
+end
+
+def wn_frequency(word, lemmadict)
+  all_proper = wn_all_proper?(word, lemmadict)
+  if(word == TRACE_WORD)
+    puts "TRACE wn_frequency: all_proper=#{all_proper}"
+  end
+  return 0, all_proper
+end
+
+# 2-3 letter lowercase tokens are often initialisms (BBC, NBA). For Zipf>=3 we also treat
+# 4-letter all-alpha tokens as acronym-like (IMAX-style in corpora) when there is no SUBTLEX
+# and no WordNet lemma. 5-letter words are excluded — they are often real lexemes missing
+# from older resources (e.g. emoji). (Four-letter policy may be revisited separately.)
+def short_initialism_shape?(word)
+  word.match?(/\A[a-z]{2,3}\z/)
+end
+
+def two_letter_alpha?(word)
+  word.match?(/\A[a-z]{2}\z/)
+end
+
+def wn_synset_count(word, lemmadict)
+  lemmas = WordNet::Lemma.find_all(word)
+  lemmas = WordNet::Lemma.find_all(lemmadict[word]) if lemmas.empty? && lemmadict[word]
+  return 0 if lemmas.empty?
+  lemmas.sum { |l| l.synsets.size }
+end
+
+def acronym_shape_wordfreq_only?(word)
+  word.match?(/\A[a-z]{2,4}\z/)
+end
+
+def wn_has_lemma?(word, lemmadict)
+  lemmas = WordNet::Lemma.find_all(word)
+  lemmas = WordNet::Lemma.find_all(lemmadict[word]) if lemmas.empty? && lemmadict[word]
+  !lemmas.empty?
+end
+
+# True if WordNet lists the base as a verb (any sense). Used to avoid Phase 6 giving
+# noun-only stems a bogus verbal -ing frequency (kitchening, crotching, jealousing).
+# Bases with no WordNet entry still return true so modern verbs (twerk) can inherit.
+def wn_base_has_verb_lemma?(base, lemmadict)
+  lemmas = WordNet::Lemma.find_all(base)
+  lemmas = WordNet::Lemma.find_all(lemmadict[base]) if lemmas.empty? && lemmadict[base]
+  return true if lemmas.empty?
+  lemmas.any? { |l| l.pos == "v" }
 end
 
 #
@@ -506,38 +549,68 @@ def filter_word_dict(word_dict)
   return filtered_word_dict
 end
 
-def compute_frequency(word, lemmadict, freqdict, subtlex_hash)
-  subtlex_freq = subtlex_frequency(word, subtlex_hash)
-  wn_freq, wn_all_proper = wn_frequency(word, lemmadict)
+def compute_frequency(word, lemmadict, subtlex_hash, wordfreq_hash)
+  _, wn_all_proper = wn_frequency(word, lemmadict)
+  lemma_in_wn = wn_has_lemma?(word, lemmadict)
+  sub_raw = subtlex_hash[word] || 0
+  zipf = wordfreq_hash[word] || 0
+  syn_n = wn_synset_count(word, lemmadict)
 
-  if wn_all_proper
-    subtlex_freq = 0
-    wn_freq = 0
+  # Two-letter all-proper: usually chemical/state abbreviations in WordNet (Al, Bi, AL).
+  # Multiple synsets → keep 0 (al, ba). Single synset → only trust subtitles below a ceiling
+  # so bi can score as dialogue while ni stays 0 despite fragment counts.
+  if wn_all_proper && two_letter_alpha?(word)
+    return 0 if syn_n >= 2
+    return 0 if syn_n == 1 && sub_raw >= SUBTLEX_SINGLE_PROPER_OVERRIDE_MAX
+    if syn_n == 1 && sub_raw >= SUBTLEX_SINGLE_PROPER_OVERRIDE_MIN && sub_raw < SUBTLEX_SINGLE_PROPER_OVERRIDE_MAX
+      wn_all_proper = false
+    elsif syn_n == 1
+      return 0
+    end
   end
 
-  lemma_freq = freqdict[word] || 0
-  confirmed = (subtlex_freq > 0 || wn_freq > 0)
-  lemma_contribution = confirmed ? lemma_freq : 0
+  return 0 if wn_all_proper
 
-  freq = subtlex_freq + wn_freq + lemma_contribution
+  # e.g. atm: WordNet lemma + high Zipf but almost no lowercase subtitle hits — encyclopedic initialism.
+  weak_lemma_anchor = short_initialism_shape?(word) && lemma_in_wn && sub_raw < SUBTLEX_OVERRIDE_PROPER_MIN && zipf >= WORDFREQ_COMMON_ZIPF
 
-  # Broader "traditional presence" check for Wiktionary floor gating.
-  # Includes WordNet existence (even with tagsense_count=0) and BNC presence.
-  traditional_present = (subtlex_hash[word] > 0) ||
-    !WordNet::Lemma.find_all(word).empty? ||
-    lemmadict.key?(word) ||
-    freqdict.key?(word)
+  lexically_anchored = lemma_in_wn && !weak_lemma_anchor
+
+  subtlex_freq = subtlex_frequency(word, subtlex_hash)
+  if zipf > 0 && zipf < WORDFREQ_RARE_ZIPF && subtlex_freq > 4
+    subtlex_freq = 4
+  end
+
+  # Without a lexical anchor, high Zipf often reflects encyclopedic/person-name hits; do not let
+  # SUBTLEX alone push past the rare threshold (e.g. nam ~ Viet Nam fragments in subtitles).
+  if !lexically_anchored && zipf >= WORDFREQ_COMMON_ZIPF
+    subtlex_freq = [subtlex_freq, 4].min
+  end
+
+  block_short_initialism_wordfreq = acronym_shape_wordfreq_only?(word) && subtlex_freq == 0 && !lemma_in_wn
+  wordfreq_boost = (zipf >= WORDFREQ_COMMON_ZIPF && !block_short_initialism_wordfreq) ? 5 : 0
+
+  # Zipf-only boost with no anchor and zero SUBTLEX FREQlow: usually Wikipedia names (graeme, platt).
+  if !lexically_anchored && sub_raw == 0
+    wordfreq_boost = 0
+  end
+
+  # Short initialism-shaped strings with high Zipf but no anchor: treat Zipf as noisy.
+  if !lexically_anchored && short_initialism_shape?(word) && zipf >= WORDFREQ_COMMON_ZIPF
+    wordfreq_boost = 0
+  end
+
+  freq = [subtlex_freq, wordfreq_boost].max
 
   if(word == TRACE_WORD)
-    puts "TRACE compute_frequency: subtlex=#{subtlex_freq} wn=#{wn_freq} (all_proper=#{wn_all_proper}) lemma=#{lemma_freq} (confirmed=#{confirmed}) traditional_present=#{traditional_present} => #{freq}"
+    puts "TRACE compute_frequency: subtlex=#{subtlex_freq} zipf=#{zipf} wordfreq_boost=#{wordfreq_boost} block_short_init=#{block_short_initialism_wordfreq} all_proper=#{wn_all_proper} => #{freq}"
   end
-  return freq, traditional_present
+  return freq
 end
 
-def add_frequency_info(cmudict, lemmadict, freqdict, subtlex_hash, wordfreq_hash, wiktionary_words)
+def add_frequency_info(cmudict, lemmadict, subtlex_hash, wordfreq_hash, wiktionary_words)
   count = 0
   hash = Hash.new
-  has_traditional = {} # tracks words with traditional corpus evidence (for Wiktionary floor)
   rare_words = IO.readlines(RARE_WORDS_FILENAME, chomp: true, encoding: 'UTF-8')
   common_words = IO.readlines(COMMON_WORDS_FILENAME, chomp: true, encoding: 'UTF-8')
   for word, prons in cmudict
@@ -548,8 +621,7 @@ def add_frequency_info(cmudict, lemmadict, freqdict, subtlex_hash, wordfreq_hash
     elsif(rare_words.include?(word))
       freq = 0
     else
-      freq, trad = compute_frequency(word, lemmadict, freqdict, subtlex_hash)
-      has_traditional[word] = true if trad
+      freq = compute_frequency(word, lemmadict, subtlex_hash, wordfreq_hash)
     end
     if(freq > 0)
       count += 1
@@ -558,7 +630,7 @@ def add_frequency_info(cmudict, lemmadict, freqdict, subtlex_hash, wordfreq_hash
   end
   puts "#{count} of those entries have frequency data (from cmudict/wiktionary words)"
 
-  # Phase 4: add words from SUBTLEX/lemma_en that aren't in cmudict.
+  # Phase 4: add words from SUBTLEX that aren't in cmudict.
   extra = 0
   subtlex_hash.each_key do |word|
     next if hash.key?(word)
@@ -570,8 +642,7 @@ def add_frequency_info(cmudict, lemmadict, freqdict, subtlex_hash, wordfreq_hash
     elsif(rare_words.include?(word))
       freq = 0
     else
-      freq, trad = compute_frequency(word, lemmadict, freqdict, subtlex_hash)
-      has_traditional[word] = true if trad
+      freq = compute_frequency(word, lemmadict, subtlex_hash, wordfreq_hash)
     end
     if freq > 0
       hash[word] = [freq, []]
@@ -589,49 +660,80 @@ def add_frequency_info(cmudict, lemmadict, freqdict, subtlex_hash, wordfreq_hash
   end
   puts "#{common_extra} extra words added from common_words.txt" if common_extra > 0
 
-  # Phase 5.5: Wiktionary existence floor for modern words.
-  # Applies to BASE words in Wiktionary AND wordfreq but absent from traditional corpora.
-  # These are "confirmed modern words too new for traditional corpora."
-  # Excludes inflected forms — they inherit frequency via Phase 6 instead.
+  # Phase 5.5: Wiktionary floor for modern words absent from all traditional corpora.
+  # Require Zipf >= RARE so sub-RARE bins do not receive the floor wholesale.
   floor_applied = 0
   hash.each do |word, entry|
-    next if entry[0] > WIKTIONARY_FLOOR
-    next if $inflection_base_words.key?(word)
+    next if entry[0] > 4
+    next if rare_words.include?(word)
     next unless wiktionary_words.include?(word)
-    next unless wordfreq_hash.key?(word)
-    next if has_traditional[word]
-    entry[0] = WIKTIONARY_FLOOR
+    zipf = wordfreq_hash[word] || 0
+    next unless zipf >= WORDFREQ_RARE_ZIPF
+    next if subtlex_hash[word] > 0
+    next if wn_has_lemma?(word, lemmadict)
+    # Four-letter Wiktionary junk: Zipf in [RARE, 2.5) with no WN/SUBTLEX — surnames (~stam);
+    # at/above 2.5 keep the floor for neologisms (yeet).
+    next if word.match?(/\A[a-z]{4}\z/) && zipf >= WORDFREQ_RARE_ZIPF && zipf < WIKT_FLOOR_4L_WEAK_ZIPF_BELOW
+    next if short_initialism_shape?(word) && subtlex_hash[word] <= 0
+    # 2-4 letter strings with strong wordfreq but no lexical anchor: skip floor so
+    # IMAX/DVD-style tokens stay rare; Zipf < 3 keeps yeet-style floor eligibility.
+    next if acronym_shape_wordfreq_only?(word) && subtlex_hash[word] <= 0 && !wn_has_lemma?(word, lemmadict) && zipf >= WORDFREQ_COMMON_ZIPF
+    entry[0] = 5
     floor_applied += 1
   end
   puts "#{floor_applied} words received Wiktionary existence floor" if floor_applied > 0
 
+  # Phase 5.5b: Hyphenated word existence floor.
+  # SUBTLEX and wordfreq tokenize on hyphens, so hyphenated words systematically score 0.
+  # Grant floor when the compound is attested (Wiktionary headword OR WordNet MWE) and
+  # the final segment (the "head word") is not independently useful for rhyming:
+  # no WordNet lemma, and raw SUBTLEX < 12.
+  # Skip inflected forms of hyphenated bases — those are handled by Phase 6 (or blocked).
+  hyp_floor = 0
+  hash.each do |word, entry|
+    next if entry[0] > 4
+    next if rare_words.include?(word)
+    next unless word.include?('-')
+    next if $inflection_base_words.key?(word) && $inflection_base_words[word].include?('-')
+    next unless wiktionary_words.include?(word) || wn_has_lemma?(word, lemmadict)
+    final = word.split('-').last
+    next if wn_has_lemma?(final, lemmadict)
+    next if subtlex_hash[final] >= 12
+    entry[0] = 5
+    hyp_floor += 1
+  end
+  puts "#{hyp_floor} hyphenated words received existence floor" if hyp_floor > 0
+
   # Phase 6: frequency inheritance for inflected forms.
-  # Inherit from any common base word. When the base has traditional corpus
-  # evidence, skip inflected forms that have independent wordfreq data (trust
-  # wordfreq's direct measurement — e.g. "foxing" stays rare despite "fox" being
-  # common). But when the base is common only via the Wiktionary floor (modern
-  # words like "yeet"), allow inheritance freely so that "yeeted" etc. become common.
+  # Inherit from any common base word. Skip only when wordfreq shows the inflection itself
+  # as independently common (Zipf >= COMMON); a mere corpus key with low Zipf still inherits
+  # (yeeted, twerks) so slang bases propagate.
+  # Skip -ing → base when WordNet has the base but only as noun/adj/etc.: prevents
+  # spurious "kitchening" inheriting from "kitchen" (FP-4). Verbal -ing still inherits
+  # when the base has a verb lemma, or when the base is absent from WordNet (slang).
   inherited = 0
   $inflection_base_words.each do |inflected, base|
     next unless hash.key?(inflected)
     next if hash[inflected][0] > 0
+    # Do not copy frequency from hyphenated base to hyphenated inflection (hoity-toity → hoity-toities).
+    next if inflected.include?("-") && base.include?("-")
     base_freq = hash.key?(base) ? hash[base][0] : 0
     next unless base_freq > 4
-    if wordfreq_hash.key?(inflected) && has_traditional[base]
-      next
-    end
+    wf_inf = wordfreq_hash[inflected]
+    next if wf_inf && wf_inf >= WORDFREQ_COMMON_ZIPF
+    next if inflected.end_with?("ing") && !wn_base_has_verb_lemma?(base, lemmadict)
     hash[inflected][0] = base_freq
     inherited += 1
   end
   puts "#{inherited} inflected forms inherited frequency from base words" if inherited > 0
 
-  puts "#{count + extra + common_extra + floor_applied + inherited} total entries with frequency data"
+  puts "#{count + extra + common_extra + floor_applied + hyp_floor + inherited} total entries with frequency data"
   return hash
 end
 
-def build_word_dict(cmudict, lemmadict, freqdict, rdict, subtlex_hash, wordfreq_hash, wiktionary_words)
+def build_word_dict(cmudict, lemmadict, rdict, subtlex_hash, wordfreq_hash, wiktionary_words)
   cmudict = filter_cmudict(cmudict, rdict)
-  word_dict = add_frequency_info(cmudict, lemmadict, freqdict, subtlex_hash, wordfreq_hash, wiktionary_words)
+  word_dict = add_frequency_info(cmudict, lemmadict, subtlex_hash, wordfreq_hash, wiktionary_words)
   return filter_word_dict(word_dict)
 end
 
@@ -708,10 +810,10 @@ def rebuild_rhymecrime_dictionaries()
   delete_explicitly_forbidden_keys_from_hash(cmudict)
   rdict = build_rhyme_signature_dict(cmudict)
   save_string_hash(rdict, RHYME_SIGNATURE_DICT_FILENAME, RHYME_SIGNATURE_DICT_HEADER)
-  lemma_dict, freq_dict = load_lemma_dict
+  lemma_dict, _ = load_lemma_dict
   subtlex_hash = load_subtlex
   wordfreq_hash = load_wordfreq
-  word_dict = build_word_dict(cmudict, lemma_dict, freq_dict, rdict, subtlex_hash, wordfreq_hash, wiktionary_words)
+  word_dict = build_word_dict(cmudict, lemma_dict, rdict, subtlex_hash, wordfreq_hash, wiktionary_words)
   save_word_dict(word_dict)
 end
 
