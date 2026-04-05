@@ -52,7 +52,7 @@ otter / slaughter
 
 ### Building the Rhyming Dictionary
 
-First, run dict/dict.rb offline to compile the rhyming dictionary.
+First, run `dict/dict.rb` offline (from the `dict/` directory) to compile the rhyming dictionary into `dict/generated/`.
 It starts from cmudict, which has a bunch of lines like this:
 
   KITTEN  K IH1 T AH0 N  

@@ -12,3 +12,4 @@ analysis/*
 dict/wiktionary/*.jsonl.gz
 dict/wiktionary/*.jsonl
 dict/subtlex/SUBTLEXus.tsv
+dict/generated/*

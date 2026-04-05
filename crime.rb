@@ -105,7 +105,7 @@ def rdict
 end
 
 def load_rhyme_signature_dict_as_hash()
-  load_string_hash("dict/#{RHYME_SIGNATURE_DICT_FILENAME}") or die "First run dict/dict.rb to generate dictionary caches"
+  load_string_hash(generated_dict_path(RHYME_SIGNATURE_DICT_FILENAME)) or die "First run dict/dict.rb to generate dictionary caches"
 end
 
 def pronunciations(word)

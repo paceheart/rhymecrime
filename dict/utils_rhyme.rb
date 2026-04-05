@@ -1,10 +1,28 @@
 #!/usr/bin/env ruby
 
+require "fileutils"
+
 # Rhyming utilities for RhymeCrime
 # Used both in preprocessing and at runtime
 
 RHYME_SIGNATURE_DICT_FILENAME = "rhyme_signature_dict.txt"
 WORD_DICT_FILENAME = "word_dict.txt"
+
+# Outputs of dict/dict.rb (not hand-edited). Paths are relative to the dict/ directory when
+# dict.rb is run with cwd = dict/; loaders use paths from the repository root.
+DICT_GENERATED_SUBDIR = "generated"
+
+def generated_dict_path(basename)
+  File.join("dict", DICT_GENERATED_SUBDIR, basename)
+end
+
+def generated_dict_path_under_dict_dir(basename)
+  File.join(DICT_GENERATED_SUBDIR, basename)
+end
+
+def ensure_generated_dict_dir!
+  FileUtils.mkdir_p(DICT_GENERATED_SUBDIR)
+end
 
 #
 # stop words
@@ -424,7 +442,8 @@ def load_string_hash(filename)
 end
 def save_string_hash(hash, filename, header="")
   # sanitizes spaces into underscores
-  @fh=File.open(filename, 'w', encoding: 'UTF-8')
+  FileUtils.mkdir_p(File.dirname(filename))
+  @fh = File.open(filename, "w", encoding: "UTF-8")
   unless header.empty?
     @fh.puts(header)
   end
@@ -437,6 +456,7 @@ def save_string_hash(hash, filename, header="")
     end
     @fh.puts
   end
+  @fh.close
 end
 
 def useful_line?(line)
@@ -449,7 +469,7 @@ end
 #
 
 def load_word_dict()
-  pathname = "dict/" + WORD_DICT_FILENAME
+  pathname = generated_dict_path(WORD_DICT_FILENAME)
   unless File.exist?(pathname)
     die "First run dict/dict.rb to generate dictionary caches"
   end
@@ -474,7 +494,9 @@ def load_word_dict()
 end
 
 def save_word_dict(word_dict)
-  f=File.open(WORD_DICT_FILENAME, 'w', encoding: 'UTF-8')
+  ensure_generated_dict_dir!
+  path = generated_dict_path_under_dict_dir(WORD_DICT_FILENAME)
+  f = File.open(path, "w", encoding: "UTF-8")
   f.puts(WORD_DICT_HEADER)
   for word, word_info in word_dict
     word = word.sanitize
@@ -493,6 +515,7 @@ def save_word_dict(word_dict)
     end
     f.puts
   end
+  f.close
 end
 
 #

@@ -4,7 +4,7 @@
 TRACE_WORD = nil
 
 # Preprocess the cmudict data into a format that's efficient for looking up rhyming words.
-# Reads from CMUDICT_FILENAME, writes out RHYME_SIGNATURE_DICT_FILENAME and WORD_DICT_FILENAME.
+# Reads from CMUDICT_FILENAME; writes generated caches under dict/generated/ (see utils_rhyme).
 #
 # cmudict is the CMU Pronouncing Dictionary, a text file with lines like this:
 #  KITTEN  K IH1 T AH0 N
@@ -518,9 +518,9 @@ def compute_frequency(word, subtlex_hash, wordfreq_hash)
   return 0 if wn_all_proper
 
   # e.g. atm: WordNet lemma + high Zipf but almost no lowercase subtitle hits — encyclopedic initialism.
-  weak_lemma_anchor = short_initialism_shape?(word) && in_wordnet && sub_raw < SUBTLEX_OVERRIDE_PROPER_MIN && zipf >= WORDFREQ_COMMON_ZIPF
+  weak_lexical_anchor = short_initialism_shape?(word) && in_wordnet && sub_raw < SUBTLEX_OVERRIDE_PROPER_MIN && zipf >= WORDFREQ_COMMON_ZIPF
 
-  lexically_anchored = in_wordnet && !weak_lemma_anchor
+  lexically_anchored = in_wordnet && !weak_lexical_anchor
 
   subtlex_freq = subtlex_frequency(word, subtlex_hash)
   if zipf > 0 && zipf < WORDFREQ_RARE_ZIPF && subtlex_freq > 4
@@ -755,7 +755,7 @@ def rebuild_rhymecrime_dictionaries()
   end
   delete_explicitly_forbidden_keys_from_hash(cmudict)
   rdict = build_rhyme_signature_dict(cmudict)
-  save_string_hash(rdict, RHYME_SIGNATURE_DICT_FILENAME, RHYME_SIGNATURE_DICT_HEADER)
+  save_string_hash(rdict, generated_dict_path_under_dict_dir(RHYME_SIGNATURE_DICT_FILENAME), RHYME_SIGNATURE_DICT_HEADER)
   subtlex_hash = load_subtlex
   wordfreq_hash = load_wordfreq
   word_dict = build_word_dict(cmudict, rdict, subtlex_hash, wordfreq_hash, wiktionary_words)
