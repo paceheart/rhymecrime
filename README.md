@@ -112,10 +112,8 @@ that rare word is exactly the one you want, or a good word gets
 misfiled as rare. So instead we put them in the 'dregs' bucket,
 which shows up as "For the desperate:" on the website.
 
-we use lemma_en and WordNet for word frequency data,
-to distinguish rare words from common words.
-lemma_en has better coverage than WordNet,
-but also includes some false positives.
+Rare vs common uses SUBTLEX, wordfreq Zipf, WordNet (surface string lookup), Wiktionary
+floors, and manual `common_words.txt` / `rare_words.txt`.
 
 Also we filter out slurs.
 

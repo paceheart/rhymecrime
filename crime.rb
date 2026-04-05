@@ -507,7 +507,7 @@ def ubiquity(word)
 end
 
 def rare?(word)
-  frequency(word) <= 4 # I looked through 4 and fewer in lemma_en and added all the good ones to common_words.txt, so we can consider the rest rare
+  frequency(word) <= 4 # rare_words/common_words + frequency pipeline
 end
 
 def filter_out_rare_words(words)
@@ -670,15 +670,6 @@ end
 def rhymes?(word1, word2, identical_ok=true)
   # Does word1 rhyme with word2?
   find_rhyming_words(word1, identical_ok).include?(word2)
-end
-
-# this is useful for manually filtering out crap from lemma_en. I've done it for 1 through 4.
-def print_lemma_en_entries_with_frequency(freq)
-  for word, value in word_dict
-    if(frequency(word) == freq && !find_preferred_rhyming_words(word, 'en').empty?)
-      puts word
-    end
-  end
 end
 
 # for testing
