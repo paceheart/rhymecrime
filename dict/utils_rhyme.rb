@@ -465,6 +465,23 @@ def useful_line?(line)
 end
 
 #
+# pronunciation lists (dict build + load)
+#
+
+# Appends PRON to PRONS unless an equal Pronunciation is already present.
+def push_pronunciation_unless_duplicate!(prons, pron)
+  return if prons.any? { |existing| existing == pron }
+  prons.push(pron)
+end
+
+# Returns a new array with duplicate pronunciations removed (first occurrence kept).
+def dedupe_pronunciations(prons)
+  result = []
+  prons.each { |p| push_pronunciation_unless_duplicate!(result, p) }
+  result
+end
+
+#
 # word info dictionary
 #
 
@@ -484,7 +501,7 @@ def load_word_dict()
       for pronstr in pronunciation_strings
         phonemes = pronstr.split(" ")
         pron = Pronunciation.new(phonemes)
-        prons << pron
+        push_pronunciation_unless_duplicate!(prons, pron)
       end
       word_info = [freq, prons]
       word_dict[word] = word_info

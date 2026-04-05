@@ -52,6 +52,8 @@ SUBTLEX_OVERRIDE_PROPER_MIN = 12
 # and above iron Fe appearing as dialogue junk (~17).
 SUBTLEX_SINGLE_PROPER_OVERRIDE_MIN = 28
 SUBTLEX_SINGLE_PROPER_OVERRIDE_MAX = 40
+# Phase 11: minimum raw SUBTLEX FREQlow on a base before it may promote non-list inflections.
+MORPH_CORPUS_SUBTLEX_MIN = 40
 # Phase 6: skip weak Zipf for 4-letter tokens with no WordNet entry (surname spam ~2.3) but keep neologisms ≥ this (yeet ~2.51).
 WIKT_FLOOR_4L_WEAK_ZIPF_BELOW = 2.5
 RHYME_SIGNATURE_DICT_HEADER = "# RhymeCrime's Rhyme Signature Dictionary
@@ -109,52 +111,20 @@ end
 
 def preprocess_cmudict_line(line)
   # Step 1.1: Tweak the given pronunciation to deal with quirks of cmudict.
-  # merge some similar-enough-sounding syllables
-  line = line.chomp()
+  # Phoneme-level rules are shared with Wiktionary/kaikki and Inflect-derived prons
+  # (+normalize_flat_arphabet_pronunciation+).
+  line = line.chomp
   original_line = line.clone
+  parts = line.split
+  return line if parts.length <= 1
 
-  # this one comes first because it splits ER into two phonemes
-  # curry [K AH1 R IY0] / hurry [HH ER1 IY0]
-  line.gsub!("ER0 R", "AH0 R") # avoid R R
-  line.gsub!("ER1 R", "AH1 R") 
-  line.gsub!("ER2 R", "AH2 R")
-  line.gsub!("ER0", "AH0 R")
-  line.gsub!("ER1", "AH1 R")
-  line.gsub!("ER2", "AH2 R")
-  
-  # ear [IY R] / beer [B IH R]
-  line.gsub!("IH0 R", "IY0 R")
-  line.gsub!("IH1 R", "IY1 R")
-  line.gsub!("IH2 R", "IY2 R")
-  
-  # faring [F EH1 R IY0 NG] / glaring [G L EH1 R IH0 NG]
-  line.gsub!("IH0 NG", "IY0 NG")
-  line.gsub!("IH1 NG", "IY1 NG")
-  line.gsub!("IH2 NG", "IY2 NG")
-
-  # poor [P UW1 R] / tour [T UH1 R]
-  line.gsub!("UW0 R", "UH0 R")
-  line.gsub!("UW1 R", "UH1 R")
-  line.gsub!("UW2 R", "UH2 R")
-
-  #         caught [K AA1 T] / fought [F AO1 T]
-  #         bong [B AA1 NG] / song [S AO1 NG]
-  # but NOT bar [B AA1 R] / score [S K AO1 R], so we leave it alone if it's followed by R
-  # If we had reliable data to distinguish 'cot' from 'caught', this would be in imperfect rhymes. But since caught and fought need to rhyme, we're forced to conflate them globally.
-  line = gsub_unless_followed_by_r(line, " AO0", " AA0")
-  line = gsub_unless_followed_by_r(line, " AO1", " AA1")
-  line = gsub_unless_followed_by_r(line, " AO2", " AA2")
-
-  # we could conflate this but whatever, I don't think it would make anything rhyme with 'endure'
-  # line.gsub!(" D Y UW", " D UW")
-  
-  line = dwim_schwas(line)
-  
-  line = conflate_imperfect_rhymes(line)
-  if(TRACE_WORD && line.include?(TRACE_WORD) && line != original_line)
-    puts "TRACE Dwimmed #{original_line} to #{line}"
+  word_token = parts.shift
+  pron = normalize_flat_arphabet_pronunciation(Pronunciation.new(parts))
+  line = "#{word_token} #{pron.phonemes.join(" ")}"
+  if TRACE_WORD && line.include?(TRACE_WORD) && line != original_line
+    puts "TRACE Preprocessed #{original_line} to #{line}"
   end
-  return line
+  line
 end
 
 def gsub_unless_followed_by_r(line, old, new)
@@ -170,47 +140,58 @@ def gsub_unless_followed_by_r(line, old, new)
   return line
 end
 
-def dwim_schwas(line)
-  # illicit [IH2 L IH1 S AH0 T] / solicit [S AH0 L IH1 S IH0 T]
-  # selfish [S EH1 L F IH0 SH] / shellfish [SH EH1 L F IH2 SH]
-  # conflate all unstressed schwa-ish syllables, unless they are followed by R or NG.
-  # mumble a little mumblier, please
-  old = 'IH0'
-  new = 'AH0'
-  original_line = line.clone
+# ARPAbet string normalizations historically run only on CMU lines; they also apply to Wikt/kaikki
+# IPA→ARPAbet output and Inflect-derived phoneme lists so rhyme buckets stay consistent.
+def apply_shared_arphabet_phoneme_string_normalizations(phoneme_space_string)
+  line = phoneme_space_string.dup
 
-  # (line =~ "1" || line =~ "2")
-  # Protect R and NG from the upcoming gsub.
-  # Also get (1) and (2) out of the way so they don't give false positives for primary/secondary stress detection.
-  line.gsub!(old + " R", "fubarduckR")
-  line.gsub!(old + " NG", "fubarduckNG")
-  line.gsub!(old + " SH", "fubarduckSH") # this is needed for selfish / shellfish
+  # this one comes first because it splits ER into two phonemes
+  # curry [K AH1 R IY0] / hurry [HH ER1 IY0]
+  line.gsub!("ER0 R", "AH0 R") # avoid R R
+  line.gsub!("ER1 R", "AH1 R")
+  line.gsub!("ER2 R", "AH2 R")
+  line.gsub!("ER0", "AH0 R")
+  line.gsub!("ER1", "AH1 R")
+  line.gsub!("ER2", "AH2 R")
 
-  line.gsub!(old, new)
+  # ear [IY R] / beer [B IH R]
+  line.gsub!("IH0 R", "IY0 R")
+  line.gsub!("IH1 R", "IY1 R")
+  line.gsub!("IH2 R", "IY2 R")
 
-  if line != original_line
-    line.gsub!("(1)", "{a}")
-    line.gsub!("(2)", "{b}")
-    
-    if(!line.include?("1") && !line.include?("2")) # if there is no primary or secondary stress in this pronunciation
-      line = original_line
-      puts "Protected \"#{line}\" from having its schwas dwimmed"
-    else
-#      puts "Dwimmed schwas: #{original_line} -> #{line}"
-      # put R and NG and (1) and (2) back the way they were
-      line.gsub!("fubarduckR", old + " R")
-      line.gsub!("fubarduckNG", old + " NG")
-      line.gsub!("fubarduckSH", old + " SH")
-      line.gsub!("{a}", "(1)")
-      line.gsub!("{b}", "(2)")
-    end
-  end
-  return line
+  # faring [F EH1 R IY0 NG] / glaring [G L EH1 R IH0 NG]
+  line.gsub!("IH0 NG", "IY0 NG")
+  line.gsub!("IH1 NG", "IY1 NG")
+  line.gsub!("IH2 NG", "IY2 NG")
+
+  # poor [P UW1 R] / tour [T UH1 R]
+  line.gsub!("UW0 R", "UH0 R")
+  line.gsub!("UW1 R", "UH1 R")
+  line.gsub!("UW2 R", "UH2 R")
+
+  # caught [K AA1 T] / fought [F AO1 T]; not before R (bar / score)
+  line = gsub_unless_followed_by_r(line, " AO0", " AA0")
+  line = gsub_unless_followed_by_r(line, " AO1", " AA1")
+  line = gsub_unless_followed_by_r(line, " AO2", " AA2")
+
+  line
 end
 
-def conflate_imperfect_rhymes(line)
+# Flat ARPAbet pronunciation (no syllable dots): same pipeline as CMU phoneme tail after the headword.
+def normalize_flat_arphabet_pronunciation(pron)
+  return pron if pron.nil? || pron.empty?
+  flat = pron.phonemes.reject { |p| p == "." }
+  return pron if flat.empty?
+
+  s = apply_shared_arphabet_phoneme_string_normalizations(flat.join(" "))
+  p = Pronunciation.new(s.split).with_dwimmed_schwas
+  s2 = conflate_imperfect_rhyme_phoneme_string(p.phonemes.join(" "))
+  Pronunciation.new(s2.split)
+end
+
+def conflate_imperfect_rhyme_phoneme_string(phoneme_space_string)
   # @todo allow this to be toggleable at runtime instead of dictionary-building time
-  
+  line = phoneme_space_string.dup
   line.gsub!(/ L S$/, ' L T S') # false / malts, else / melts. Sure I guess? Otherwise 'false' and 'else' won't rhyme with anything at all.
   line.gsub!(/ M T$/, ' M P T') # dreamt / tempt
   line.gsub!(/ N D Z$/, ' N Z') # tons [T AH1 N Z] / funds [F AH1 N D Z]
@@ -222,7 +203,7 @@ def conflate_imperfect_rhymes(line)
   line.gsub!(/ ZH IY0 NG$/, ' JH IY0 NG') # massaging / dodging
   line.gsub!(/ ZH AH0 R$/, ' JH AH0 R') # massager / dodger
   line.gsub!(/ ZH AH0 R Z$/, ' JH AH0 R Z') # massagers / dodgers
-  return line
+  line
 end
 
 def load_cmudict()
@@ -256,7 +237,7 @@ def load_cmudict()
         end
         if word_ok
           sylpron = pron.syllabify
-          hash[word].push(sylpron)
+          push_pronunciation_unless_duplicate!(hash[word], sylpron)
           if(word == TRACE_WORD)
             puts "TRACE Loaded #{word} as #{sylpron}"
           end
@@ -606,6 +587,7 @@ def add_frequency_info(cmudict, subtlex_hash, wordfreq_hash, wiktionary_words)
   common_words.each do |word|
     next if hash.key?(word)
     hash[word] = [99, []]
+    puts "  Added #{word} to the dictionary with frequency 99"
     common_extra += 1
   end
   puts "#{common_extra} extra words added from common_words.txt" if common_extra > 0
@@ -676,7 +658,117 @@ def add_frequency_info(cmudict, subtlex_hash, wordfreq_hash, wiktionary_words)
   end
   puts "#{inherited} inflected forms inherited frequency from base words" if inherited > 0
 
-  puts "#{count + extra + common_extra + floor_applied + hyp_floor + inherited} total entries with frequency data"
+  # Phase 9: suffix inheritance from common_words.txt (Inflect spelling patterns).
+  # Phase 8 only fills entries with frequency 0; listed headwords still leave plurals / -ing, etc.
+  # in the rare bins (1–4). Match forward (listed + suffix = word) or reverse (word + suffix = listed,
+  # e.g. regionalize… ← regionalized). No wordfreq / WN verb guards here — the list is authoritative.
+  cw_sorted = common_words.uniq.sort_by { |b| -b.length }
+  cw_inherited = 0
+  # Multiple rounds: e.g. regionalized → regionalize → regionalizing in one build.
+  loop do
+    round = 0
+    hash.each do |word, entry|
+      next if entry[0] > 4
+      next if rare_words.include?(word)
+      cw_sorted.each do |listed|
+        next if listed == word
+        forward = Inflect.inflection_of_base?(listed, word)
+        reverse = !forward && Inflect.inflection_of_base?(word, listed)
+        next unless forward || reverse
+        listed_freq = hash.key?(listed) ? hash[listed][0] : 0
+        donor = listed_freq > 4 ? listed_freq : 99
+        entry[0] = donor
+        round += 1
+        cw_inherited += 1
+        break
+      end
+    end
+    break if round == 0
+  end
+  puts "#{cw_inherited} forms inherited frequency from common_words.txt bases" if cw_inherited > 0
+
+  # Phase 10: morphological extensions from common_words.txt headwords only (Inflect matcher).
+  # Unlike an “any freq>4 lemma” scan, this avoids promoting foxed/gooses/bruisers from ordinary
+  # common nouns and avoids hyphenated blast (topsy-turvy → topsy-turvys).
+  # OOV rows: list headwords are authoritative (no SUBTLEX/Wikt gate). Existing keys may be raised.
+  # -ing from a base requires a WordNet verb lemma (same FP-4 guard as Phase 8).
+  morph_inherited = 0
+  loop do
+    round = 0
+    # Snapshot keys so new OOV entries do not disturb this pass; multi-round picks them up as donors.
+    hash.keys.each do |base|
+      bent = hash[base]
+      next unless bent && bent[0] > 4
+      next unless common_words.include?(base)
+      next if stop_word?(base)
+      next if rare_words.include?(base)
+      next if base.include?("-")
+      donor = bent[0] > 4 ? bent[0] : 99
+      Inflect.each_derivable_form(base) do |w|
+        next if w == base
+        next if w.include?("-")
+        next if rare_words.include?(w)
+        next unless Inflect.inflection_of_base?(base, w)
+        next if w.end_with?("ing") && !wn_base_has_verb?(base)
+        wf = wordfreq_hash[w] || 0
+        next if wf >= WORDFREQ_COMMON_ZIPF
+        if hash.key?(w)
+          next if hash[w][0] > 4
+          hash[w][0] = donor
+        else
+          hash[w] = [donor, []]
+        end
+        round += 1
+        morph_inherited += 1
+      end
+    end
+    break if round == 0
+  end
+  puts "#{morph_inherited} morphological extensions inherited from freq>4 bases" if morph_inherited > 0
+
+  # Phase 11: non-list bases with strong SUBTLEX dialogue use may promote attested inflections.
+  # Tighter than old “any freq>4”: no hyphen, min length, strong FREQlow; plural :s only updates
+  # existing keys when WordNet gives no verb lemma on the base (blocks gooses-style verbal plurals).
+  morph_corpus = 0
+  loop do
+    round = 0
+    hash.keys.each do |base|
+      next if common_words.include?(base)
+      next if base.include?("-")
+      bent = hash[base]
+      next unless bent && bent[0] > 4
+      next if stop_word?(base) || rare_words.include?(base)
+      next if base.bytesize < 5
+      next unless (subtlex_hash[base] || 0) >= MORPH_CORPUS_SUBTLEX_MIN
+      donor = bent[0] > 4 ? bent[0] : 99
+      Inflect.each_derivable_form(base) do |w|
+        next if w == base || w.include?("-") || rare_words.include?(w)
+        next unless Inflect.inflection_of_base?(base, w)
+        sk = Inflect.send(:match_suffix_kind, base, w)
+        next unless sk
+        next if w.end_with?("ing") && !wn_base_has_verb?(base)
+        wf = wordfreq_hash[w] || 0
+        next if wf >= WORDFREQ_COMMON_ZIPF
+        if sk == :s
+          next unless hash.key?(w)
+          next if wn_base_has_verb?(base)
+          next if hash[w][0] > 4
+          hash[w][0] = donor
+        elsif hash.key?(w)
+          next if hash[w][0] > 4
+          hash[w][0] = donor
+        else
+          hash[w] = [donor, []]
+        end
+        round += 1
+        morph_corpus += 1
+      end
+    end
+    break if round == 0
+  end
+  puts "#{morph_corpus} morphological extensions from strong-corpus bases (not in common_words list)" if morph_corpus > 0
+
+  puts "#{count + extra + common_extra + floor_applied + hyp_floor + inherited + cw_inherited + morph_inherited + morph_corpus} total entries with frequency data"
   return hash
 end
 
@@ -702,7 +794,9 @@ def merge_wiktionary!(cmudict, wiktionary)
       word_ok
     end
     next if valid_prons.empty?
-    cmudict[word] = valid_prons.map(&:syllabify)
+    cmudict[word] = dedupe_pronunciations(
+      valid_prons.map { |p| normalize_flat_arphabet_pronunciation(p).syllabify }
+    )
     added += 1
   end
   puts "Merged #{added} new words from Wiktionary into pronunciation dict"
@@ -723,7 +817,7 @@ def merge_inflected_forms!(cmudict, forms_map)
       next if derived.nil? || derived.empty?
       next unless derived.phonemes.any?(&:vowel?)
 
-      syllabified = derived.syllabify
+      syllabified = normalize_flat_arphabet_pronunciation(derived).syllabify
       unless WHITELIST.include?(inflected_word)
         next unless final_consonant_cluster_ok?(syllabified.final_consonant_cluster_array)
       end

@@ -24,6 +24,36 @@ class Pronunciation
   def empty?
     phonemes.empty?
   end
+
+  # Conflate unstressed IH0 with AH0 (CMU/Wikt/Inflect policy): illicit/solicit, yeeted/defeated.
+  # Skips IH0 before R, NG, or SH (beer, selfish/shellfish). If a change would remove all
+  # primary/secondary stress from the pronunciation, returns +self+ unchanged.
+  def with_dwimmed_schwas
+    return self if empty?
+    out = @phonemes.dup
+    protected_next = %w[R NG SH]
+    changed = false
+    i = 0
+    while i < out.length
+      if out[i] == "IH0"
+        j = i + 1
+        j += 1 while j < out.length && out[j] == "."
+        next_bare = (j < out.length) ? out[j].tr("0-2", "") : nil
+        unless next_bare && protected_next.include?(next_bare)
+          out[i] = "AH0"
+          changed = true
+        end
+      end
+      i += 1
+    end
+    return self unless changed
+    has_primary_or_secondary = out.any? { |p| !p.syllable_boundary? && (p.include?("1") || p.include?("2")) }
+    unless has_primary_or_secondary
+      puts "Protected \"#{to_s}\" from having its schwas dwimmed"
+      return self
+    end
+    self.class.new(out)
+  end
   
   def rhyme_signature_array
     # The rhyme signature is everything including and after the final most stressed vowel,

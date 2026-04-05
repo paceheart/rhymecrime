@@ -67,3 +67,9 @@ disease / expertise / fees
 
 also "cc's"
 
+## Do better with preferred forms
+cataloging / catalogging
+gramaphone / gramophone
+old-fashioned / oldfashioned
+pompom / pom-pom
+shant / shan't

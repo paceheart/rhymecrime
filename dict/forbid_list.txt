@@ -420,3 +420,5 @@ in's
 ok
 vs
 yoyo
+gramaphone
+homosapiens

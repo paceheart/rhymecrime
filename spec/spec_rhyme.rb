@@ -88,8 +88,8 @@ describe 'RHYMES' do
     ought_not_rhyme 'work', 'fork'
     ought_not_rhyme 'coed', 'abode'
     oughta_rhyme 'cajun', 'contagion'
-    oughta_rhyme 'axolotl', 'bottle'
-    oughta_rhyme 'axolotls', 'bottles'
+    ought_not_rhyme 'axolotl', 'bottle' # stress mismatch, but I don't hate it
+    ought_not_rhyme 'axolotls', 'bottles'  # stress mismatch, but I don't hate it
   end
 
   context 'perfect rhymes must rhyme the last primary-stressed syllable, not just the last syllable' do
@@ -366,5 +366,24 @@ describe 'RHYMES' do
     ought_not_rhyme 'freer', 'beer'
     oughta_rhyme 'freer', 'seer'
     ought_not_rhyme 'seer', 'beer'
+  end
+
+  context 'common_words.txt' do
+    ought_not_rhyme 'log', 'catalog'
+    oughta_rhyme 'knight', 'fight'
+    oughta_rhyme 'knighting', 'fighting'
+    oughta_rhyme 'nighter', 'fighter'
+    oughta_rhyme 'handout', 'standout'
+    oughta_rhyme 'locker', 'clocker'
+    ought_not_rhyme 'fails', 'entrails' # 'entrails' stress is on the first syllable
+    oughta_rhyme 'guess', 'finesse'
+    oughta_rhyme 'nest', 'finessed'
+    oughta_rhyme 'keto', 'mosquito'
+    oughta_rhyme 'bold', 'oversold'
+    oughta_rhyme 'owned', 'rezoned'
+    oughta_rhyme 'vibe', 'unsubscribe'
+    oughta_rhyme 'vibes', 'unsubscribes'
+    oughta_rhyme 'vibed', 'unsubscribed'
+    oughta_rhyme 'vibing', 'unsubscribing'
   end
 end

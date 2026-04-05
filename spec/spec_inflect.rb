@@ -11,6 +11,20 @@ def inflects(base_phonemes, base_word, inflected_word, expected)
 end
 
 describe 'Inflect' do
+  context 'inflection_of_base? (spelling suffix, for frequency inheritance)' do
+    it 'recognizes list-headword plurals and -ing' do
+      expect(Inflect.inflection_of_base?('waterbed', 'waterbeds')).to eq(true)
+      expect(Inflect.inflection_of_base?('upsize', 'upsizing')).to eq(true)
+      expect(Inflect.inflection_of_base?('cul-de-sac', 'cul-de-sacs')).to eq(true)
+      expect(Inflect.inflection_of_base?('waterbed', 'water')).to eq(false)
+    end
+
+    it 'recognizes -ize / -ized (reverse: stem is morphological base of listed form)' do
+      expect(Inflect.inflection_of_base?('regionalize', 'regionalized')).to eq(true)
+      expect(Inflect.inflection_of_base?('sensationalize', 'sensationalized')).to eq(true)
+    end
+  end
+
   context 'plural -s (voiceless final -> S)' do
     inflects "K AE1 T", "cat", "cats", "K AE1 T S"
     inflects "S T AA1 P", "stop", "stops", "S T AA1 P S"
