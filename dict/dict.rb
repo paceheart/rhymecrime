@@ -52,7 +52,7 @@ SUBTLEX_OVERRIDE_PROPER_MIN = 12
 # and above iron Fe appearing as dialogue junk (~17).
 SUBTLEX_SINGLE_PROPER_OVERRIDE_MIN = 28
 SUBTLEX_SINGLE_PROPER_OVERRIDE_MAX = 40
-# Phase 5.5: skip weak Zipf for 4-letter tokens with no WordNet entry (surname spam ~2.3) but keep neologisms ≥ this (yeet ~2.51).
+# Phase 6: skip weak Zipf for 4-letter tokens with no WordNet entry (surname spam ~2.3) but keep neologisms ≥ this (yeet ~2.51).
 WIKT_FLOOR_4L_WEAK_ZIPF_BELOW = 2.5
 RHYME_SIGNATURE_DICT_HEADER = "# RhymeCrime's Rhyme Signature Dictionary
 # https://github.com/paceheart/rhymecrime
@@ -392,6 +392,10 @@ def two_letter_alpha?(word)
   word.match?(/\A[a-z]{2}\z/)
 end
 
+def four_letter_alpha?(word)
+  word.match?(/\A[a-z]{4}\z/)
+end
+
 def wn_synset_count(word)
   lemmas = WordNet::Lemma.find_all(word)
   return 0 if lemmas.empty?
@@ -406,7 +410,7 @@ def wn_has_entry?(word)
   !WordNet::Lemma.find_all(word).empty?
 end
 
-# True if WordNet lists the base as a verb (any sense). Used to avoid Phase 6 giving
+# True if WordNet lists the base as a verb (any sense). Used to avoid Phase 8 giving
 # noun-only stems a bogus verbal -ing frequency (kitchening, crotching, jealousing).
 # Bases with no WordNet entry still return true so modern verbs (twerk) can inherit.
 def wn_base_has_verb?(base)
@@ -606,8 +610,8 @@ def add_frequency_info(cmudict, subtlex_hash, wordfreq_hash, wiktionary_words)
   end
   puts "#{common_extra} extra words added from common_words.txt" if common_extra > 0
 
-  # Phase 5.5: Wiktionary floor for modern words absent from all traditional corpora.
-  # Require Zipf >= RARE so sub-RARE bins do not receive the floor wholesale.
+  # Phase 6: Wiktionary floor for modern words absent from all traditional corpora, e.g. throuple, yeet.
+  # Require Zipf >= RARE to avoid junk words
   floor_applied = 0
   hash.each do |word, entry|
     next if entry[0] > 4
@@ -619,22 +623,21 @@ def add_frequency_info(cmudict, subtlex_hash, wordfreq_hash, wiktionary_words)
     next if wn_has_entry?(word)
     # Four-letter Wiktionary junk: Zipf in [RARE, 2.5) with no WN/SUBTLEX — surnames (~stam);
     # at/above 2.5 keep the floor for neologisms (yeet).
-    next if word.match?(/\A[a-z]{4}\z/) && zipf >= WORDFREQ_RARE_ZIPF && zipf < WIKT_FLOOR_4L_WEAK_ZIPF_BELOW
+    next if four_letter_alpha?(word) && zipf >= WORDFREQ_RARE_ZIPF && zipf < WIKT_FLOOR_4L_WEAK_ZIPF_BELOW
     next if short_initialism_shape?(word) && subtlex_hash[word] <= 0
     # 2-4 letter strings with strong wordfreq but no lexical anchor: skip floor so
-    # IMAX/DVD-style tokens stay rare; Zipf < 3 keeps yeet-style floor eligibility.
+    # IMAX/DVD-style tokens stay rare; Zipf < 3 keeps yeet
     next if acronym_shape_wordfreq_only?(word) && subtlex_hash[word] <= 0 && !wn_has_entry?(word) && zipf >= WORDFREQ_COMMON_ZIPF
     entry[0] = 5
     floor_applied += 1
   end
   puts "#{floor_applied} words received Wiktionary existence floor" if floor_applied > 0
 
-  # Phase 5.5b: Hyphenated word existence floor.
+  # Phase 7: Hyphenated word existence floor.
   # SUBTLEX and wordfreq tokenize on hyphens, so hyphenated words systematically score 0.
-  # Grant floor when the compound is attested (Wiktionary headword OR WordNet MWE) and
-  # the final segment (the "head word") is not independently useful for rhyming:
-  # no WordNet lemma, and raw SUBTLEX < 12.
-  # Skip inflected forms of hyphenated bases — those are handled by Phase 6 (or blocked).
+  # Grant floor when the compound is attested (Wiktionary headword or WordNet MWE) and
+  # the final segment is not independently useful for rhyming: no WordNet lemma, and raw SUBTLEX < 12.
+  # Skip inflected forms of hyphenated bases — those are handled by Phase 8 (or blocked).
   hyp_floor = 0
   hash.each do |word, entry|
     next if entry[0] > 4
@@ -650,7 +653,7 @@ def add_frequency_info(cmudict, subtlex_hash, wordfreq_hash, wiktionary_words)
   end
   puts "#{hyp_floor} hyphenated words received existence floor" if hyp_floor > 0
 
-  # Phase 6: frequency inheritance for inflected forms.
+  # Phase 8: frequency inheritance for inflected forms.
   # Inherit from any common base word. Skip only when wordfreq shows the inflection itself
   # as independently common (Zipf >= COMMON); a mere corpus key with low Zipf still inherits
   # (yeeted, twerks) so slang bases propagate.
