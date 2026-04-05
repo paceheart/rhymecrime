@@ -59,12 +59,17 @@ SUBTLEX_SINGLE_PROPER_OVERRIDE_MIN = 28
 SUBTLEX_SINGLE_PROPER_OVERRIDE_MAX = 40
 # Phase 11: minimum raw SUBTLEX FREQlow on a base before it may promote non-list inflections.
 MORPH_CORPUS_SUBTLEX_MIN = 40
+# Plural :s only: allow WN noun-only bases below the corpus floor when still attested in subtitles
+# (e.g. gramophone SUBTLEX 15 → gramophones).
+MORPH_LEXICAL_NOUN_PLURAL_SUBTLEX_MIN = 10
 # Phase 6: skip weak Zipf for 4-letter tokens with no WordNet entry (surname spam ~2.3) but keep neologisms ≥ this (yeet ~2.51).
 WIKT_FLOOR_4L_WEAK_ZIPF_BELOW = 2.5
 RHYME_SIGNATURE_DICT_HEADER = "# RhymeCrime's Rhyme Signature Dictionary
 # https://github.com/paceheart/rhymecrime
 #
-# Each line is of the form:
+# Built by dict_lib.rb (CLI: dict/dict.rb).
+#
+# Each line is of the form:glass
 #
 # RHYME_SIGNATURE  WORD1 WORD2 WORD3 ...
 #
@@ -81,6 +86,8 @@ RHYME_SIGNATURE_DICT_HEADER = "# RhymeCrime's Rhyme Signature Dictionary
 
 WORD_DICT_HEADER = "# RhymeCrime's word info dictionary
 # https://github.com/paceheart/rhymecrime
+#
+# Built by dict_lib.rb (CLI: dict/dict.rb).
 #
 # Each line is of the form:
 #
@@ -732,8 +739,9 @@ def add_frequency_info(cmudict, subtlex_hash, wordfreq_hash, wiktionary_words)
   puts "#{morph_inherited} morphological extensions inherited from freq>4 bases" if morph_inherited > 0
 
   # Phase 11: non-list bases with strong SUBTLEX dialogue use may promote attested inflections.
-  # Tighter than old “any freq>4”: no hyphen, min length, strong FREQlow; plural :s only updates
-  # existing keys when WordNet gives no verb lemma on the base (blocks gooses-style verbal plurals).
+  # Tighter than old “any freq>4”: no hyphen, min length; plural :s can also use a lower SUBTLEX
+  # floor when WordNet has the base as noun-only (gramophone → gramophones); blocks gooses-style
+  # verbal plurals via wn_base_has_verb?. Non-plural suffixes still require MORPH_CORPUS_SUBTLEX_MIN.
   morph_corpus = 0
   loop do
     round = 0
@@ -744,7 +752,11 @@ def add_frequency_info(cmudict, subtlex_hash, wordfreq_hash, wiktionary_words)
       next unless bent && bent[0] > 4
       next if stop_word?(base) || rare_words.include?(base)
       next if base.bytesize < 5
-      next unless (subtlex_hash[base] || 0) >= MORPH_CORPUS_SUBTLEX_MIN
+      sub_raw = subtlex_hash[base] || 0
+      corpus_ok = sub_raw >= MORPH_CORPUS_SUBTLEX_MIN
+      lexical_plural_ok = wn_has_entry?(base) && !wn_base_has_verb?(base) &&
+        sub_raw >= MORPH_LEXICAL_NOUN_PLURAL_SUBTLEX_MIN
+      next unless corpus_ok || lexical_plural_ok
       donor = bent[0] > 4 ? bent[0] : 99
       Inflect.each_derivable_form(base) do |w|
         next if w == base || w.include?("-") || rare_words.include?(w)
@@ -758,12 +770,17 @@ def add_frequency_info(cmudict, subtlex_hash, wordfreq_hash, wiktionary_words)
           next unless hash.key?(w)
           next if wn_base_has_verb?(base)
           next if hash[w][0] > 4
+          next unless corpus_ok || lexical_plural_ok
           hash[w][0] = donor
-        elsif hash.key?(w)
-          next if hash[w][0] > 4
-          hash[w][0] = donor
+        elsif corpus_ok
+          if hash.key?(w)
+            next if hash[w][0] > 4
+            hash[w][0] = donor
+          else
+            hash[w] = [donor, []]
+          end
         else
-          hash[w] = [donor, []]
+          next
         end
         round += 1
         morph_corpus += 1

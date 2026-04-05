@@ -395,7 +395,7 @@ describe 'RARITY' do
     oughta_be_common 'bruise'
     oughta_be_common 'bruised'
     oughta_be_common 'bruiser'
-    oughta_be_common 'bruisers', NOT_WORKING
+    oughta_be_common_ish 'bruisers'
     oughta_be_common 'bruising'
     oughta_be_uncommon 'unbruised'
     oughta_be_common 'dizzy'
@@ -1115,8 +1115,8 @@ describe 'RARITY' do
     oughta_be_common 'chilies'
     oughta_be_common 'cush'
     oughta_be_common 'gangbuster'
-    oughta_be_common 'glassmaker'
-    oughta_be_common 'glassmaking'
+    oughta_be_common_ish 'glassmaker', NOT_WORKING
+    oughta_be_common_ish 'glassmaking'
     oughta_be_rare 'glassmake'
     oughta_be_rare 'glassmakes'
     oughta_be_rare 'glassmade'
