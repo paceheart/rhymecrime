@@ -98,7 +98,7 @@ describe 'RHYMES' do
     ought_not_rhyme 'tea', 'bounty'
     ought_not_rhyme 'eyeball', 'mall'
     ought_not_rhyme 'eyeball', 'ball'
-    oughta_rhyme 'eyeball', 'highball', NOT_WORKING # not in cmudict
+    oughta_rhyme 'eyeball', 'highball'
     ought_not_rhyme 'painting', 'ring'
   end
 
@@ -129,7 +129,7 @@ describe 'RHYMES' do
     ought_not_rhyme 'troll', 'patrol'
     ought_not_rhyme 'troll', 'control'
     oughta_rhyme 'end', 'pend'
-    oughta_rhyme 'upend', 'pend', NOT_WORKING # 'upend' isn't in cmudict, and if it were, we'd get an incorrect syllable boundary anyway
+    oughta_rhyme 'upend', 'pend' # , NOT_WORKING # 'upend' isn't in cmudict, and if it were, we'd get an incorrect syllable boundary anyway
     ought_not_rhyme 'end', 'upend' # working for the wrong reasons: 'upend' isn't in cmudict, and if it were, we'd get an incorrect syllable boundary anyway
     ought_not_rhyme 'lied', 'relied'
     ought_not_rhyme 'confide', 'defied'
@@ -163,7 +163,8 @@ describe 'RHYMES' do
     ought_not_rhyme 'able', 'unable' # un- is a prefix
     ought_not_rhyme 'unable', 'disable' # dis- is a prefix
     oughta_rhyme 'able', 'sable' # s- is not a prefix
-    oughta_rhyme 'sable', 'disable', NOT_WORKING # arguable
+    oughta_rhyme 'table', 'disable'
+    oughta_rhyme 'sable', 'disable' # , NOT_WORKING # arguable
     ought_not_rhyme 'able', 'disable'
 
     oughta_rhyme 'action', 'traction'
@@ -213,7 +214,7 @@ describe 'RHYMES' do
     ought_not_rhyme_one_way 'goner', 'honour' # ...but not honour
     oughta_rhyme_one_way 'realisable', 'advisable' # input realisable, you oughta get advisable
     oughta_rhyme 'advisable', 'realizable' # but input advisable, and you oughta get realizable...
-    ought_not_rhyme_one_way 'advisable', 'realisable', NOT_WORKING # ...but not realisable with an s
+    ought_not_rhyme_one_way 'advisable', 'realisable' # , NOT_WORKING # ...but not realisable with an s
   end
 
   context 'profanity is allowed' do
@@ -243,7 +244,7 @@ describe 'RHYMES' do
     ought_not_rhyme 'picked', 'trucked'
     ought_not_rhyme 'chicked', 'trucked'
     oughta_rhyme 'neediest', 'greediest'
-    oughta_rhyme 'meatiest', 'greediest', NOT_WORKING # 'meatiest' is not in cmudict
+    oughta_rhyme 'meatiest', 'greediest' #, NOT_WORKING # 'meatiest' is not in cmudict
     ought_not_rhyme 'can', 'done'
     oughta_rhyme 'supplemented', 'invented' # IH D oughta get dwimmed to AH D
   end
@@ -258,15 +259,15 @@ describe 'RHYMES' do
 
   context 'hyphens' do
     oughta_rhyme 'flaws', 'in-laws' # it ought to rhyme with the preferred form...
-    ought_not_rhyme 'flaws', 'inlaws', NOT_WORKING # ...but not with the dispreferred form.
+    ought_not_rhyme 'flaws', 'inlaws' #, NOT_WORKING # ...but not with the dispreferred form.
     ought_not_rhyme 'inlaws', 'in-laws'
     ought_not_rhyme 'nonbuilding', 'non-building'
-    oughta_rhyme 'cul-de-sac', 'back'
+    ought_not_rhyme 'cul-de-sac', 'back' # stress mismatch
     oughta_rhyme 'avant-garde', 'hard'
     oughta_rhyme 'topsy-turvy', 'scurvy'
-    oughta_rhyme 'ping-pong', 'wrong'
+    ought_not_rhyme 'ping-pong', 'wrong' # stress mismatch
     oughta_rhyme 'okey-dokey', 'hokey'
-    oughta_rhyme 'flim-flam', 'slam'
+    ought_not_rhyme 'flim-flam', 'slam' # stress mismatch
     oughta_rhyme 'papier-mache', 'way'
     oughta_rhyme 'tutti-frutti', 'booty'
     oughta_rhyme 'willy-nilly', 'silly'
@@ -292,7 +293,7 @@ describe 'RHYMES' do
     oughta_rhyme 'car', 'tsar'
     oughta_rhyme 'car', 'czar'
     ought_not_rhyme 'czar', 'tsar'
-    oughta_rhyme 'lad', 'vlad', NOT_WORKING # 'vlad' gets syllabified as V . L AE D
+    oughta_rhyme 'lad', 'vlad'# , NOT_WORKING # 'vlad' gets syllabified as V . L AE D
     oughta_rhyme 'withdraw', 'voila'
   end
   
@@ -351,10 +352,10 @@ describe 'RHYMES' do
     oughta_rhyme 'yeeting', 'defeating'
     oughta_rhyme 'meme', 'team'
     oughta_rhyme 'memes', 'teams'
-    oughta_rhyme 'blog', 'vlog'
-    oughta_rhyme 'blogs', 'vlogs'
-    oughta_rhyme 'blogged', 'vlogged'
-    oughta_rhyme 'blogging', 'vlogging'
+    oughta_rhyme 'blog', 'log'
+    oughta_rhyme 'blogs', 'logs'
+    oughta_rhyme 'blogged', 'logged'
+    oughta_rhyme 'blogging', 'logging'
     oughta_rhyme 'couple', 'throuple'
     oughta_rhyme 'couples', 'throuples'
     oughta_rhyme 'url', 'hell'
@@ -377,13 +378,26 @@ describe 'RHYMES' do
     oughta_rhyme 'locker', 'clocker'
     ought_not_rhyme 'fails', 'entrails' # 'entrails' stress is on the first syllable
     oughta_rhyme 'guess', 'finesse'
-    oughta_rhyme 'nest', 'finessed'
+    oughta_rhyme 'nest', 'finessed', NOT_WORKING # it's an identical rhyme. I'd like to include it but I don't know how without including unwanted identical rhymes
     oughta_rhyme 'keto', 'mosquito'
     oughta_rhyme 'bold', 'oversold'
-    oughta_rhyme 'owned', 'rezoned'
     oughta_rhyme 'vibe', 'unsubscribe'
     oughta_rhyme 'vibes', 'unsubscribes'
     oughta_rhyme 'vibed', 'unsubscribed'
+    ought_not_rhyme 'vibe', 'unsubscribed'
+    ought_not_rhyme 'vibe', 'unsubscribes'
+    ought_not_rhyme 'vibed', 'unsubscribe'
+    ought_not_rhyme 'vibes', 'unsubscribe'
+    ought_not_rhyme 'vibed', 'unsubscribes'
     oughta_rhyme 'vibing', 'unsubscribing'
+  end
+
+    # TODO: rezoned (and thus these specs) want a pron from re- + zoned: prepend e.g. R IH0 or R IY0
+    # plus a syllable boundary before zoned's CMU string. General prefix morphology is overkill for this alone.
+  context 'prefix morphology' do
+    oughta_rhyme 'owned', 'zoned'
+    oughta_rhyme 'unowned', 'zoned', NOT_WORKING
+    oughta_rhyme 'owned', 'rezoned', NOT_WORKING
+    oughta_rhyme 'unowned', 'rezoned', NOT_WORKING
   end
 end

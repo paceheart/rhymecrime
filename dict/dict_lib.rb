@@ -441,6 +441,24 @@ def build_rhyme_signature_dict(cmudict)
   return rdict
 end
 
+# Word_dict gains pronunciations from frequency phases (e.g. morph promotion) that never appear in
+# cmudict; runtime rhyme lookup uses rdict, so those words must be indexed here too.
+def merge_word_dict_pronunciations_into_rdict!(rdict, word_dict)
+  word_dict.each do |word, (_freq, prons)|
+    next if prons.empty?
+    prons.each do |pron|
+      rsig = pron.rhyme_signature
+      next if rsig.empty?
+      (rdict[rsig] ||= []) << word
+    end
+  end
+  rdict.each do |rsig, words|
+    rdict[rsig] = words.sort.uniq
+  end
+  rdict.reject! { |_rsig, words| words.length <= 1 }
+  rdict
+end
+
 def filter_cmudict(cmudict, rdict)
   # filter out words that differ only in apostrophes, and pronunciations with no rhymes
   filtered_cmudict = Hash.new
@@ -716,6 +734,7 @@ def add_frequency_info(cmudict, subtlex_hash, wordfreq_hash, wiktionary_words)
       next if rare_words.include?(base)
       next if base.include?("-")
       donor = bent[0] > 4 ? bent[0] : 99
+      base_prons = bent[1]
       Inflect.each_derivable_form(base) do |w|
         next if w == base
         next if w.include?("-")
@@ -727,8 +746,12 @@ def add_frequency_info(cmudict, subtlex_hash, wordfreq_hash, wiktionary_words)
         if hash.key?(w)
           next if hash[w][0] > 4
           hash[w][0] = donor
+          if hash[w][1].empty?
+            promo = morph_derived_prons_for_promotion(base_prons, base, w)
+            hash[w][1] = promo unless promo.empty?
+          end
         else
-          hash[w] = [donor, []]
+          hash[w] = [donor, morph_derived_prons_for_promotion(base_prons, base, w)]
         end
         round += 1
         morph_inherited += 1
@@ -758,6 +781,7 @@ def add_frequency_info(cmudict, subtlex_hash, wordfreq_hash, wiktionary_words)
         sub_raw >= MORPH_LEXICAL_NOUN_PLURAL_SUBTLEX_MIN
       next unless corpus_ok || lexical_plural_ok
       donor = bent[0] > 4 ? bent[0] : 99
+      base_prons = bent[1]
       Inflect.each_derivable_form(base) do |w|
         next if w == base || w.include?("-") || rare_words.include?(w)
         next unless Inflect.inflection_of_base?(base, w)
@@ -772,12 +796,20 @@ def add_frequency_info(cmudict, subtlex_hash, wordfreq_hash, wiktionary_words)
           next if hash[w][0] > 4
           next unless corpus_ok || lexical_plural_ok
           hash[w][0] = donor
+          if hash[w][1].empty?
+            promo = morph_derived_prons_for_promotion(base_prons, base, w)
+            hash[w][1] = promo unless promo.empty?
+          end
         elsif corpus_ok
           if hash.key?(w)
             next if hash[w][0] > 4
             hash[w][0] = donor
+            if hash[w][1].empty?
+              promo = morph_derived_prons_for_promotion(base_prons, base, w)
+              hash[w][1] = promo unless promo.empty?
+            end
           else
-            hash[w] = [donor, []]
+            hash[w] = [donor, morph_derived_prons_for_promotion(base_prons, base, w)]
           end
         else
           next
@@ -824,6 +856,25 @@ def merge_wiktionary!(cmudict, wiktionary)
   puts "Merged #{added} new words from Wiktionary into pronunciation dict"
 end
 
+# Syllabified pronunciation for +inflected_word+ from +base_word+'s first CMU pron, or nil.
+# Same final-cluster whitelist gate as merge_inflected_forms! (Phase 10/11 morph promotion).
+def morph_derived_syllabified_pronunciation(base_pron, base_word, inflected_word)
+  derived = Inflect.derive(base_pron, base_word, inflected_word)
+  return nil if derived.nil? || derived.empty?
+  return nil unless derived.phonemes.any?(&:vowel?)
+  syllabified = normalize_flat_arphabet_pronunciation(derived).syllabify
+  unless WHITELIST.include?(inflected_word)
+    return nil unless final_consonant_cluster_ok?(syllabified.final_consonant_cluster_array)
+  end
+  syllabified
+end
+
+def morph_derived_prons_for_promotion(base_prons, base_word, inflected_word)
+  return [] if base_prons.nil? || base_prons.empty?
+  syll = morph_derived_syllabified_pronunciation(base_prons.first, base_word, inflected_word)
+  syll ? [syll] : []
+end
+
 def merge_inflected_forms!(cmudict, forms_map)
   added = 0
   forms_map.each do |base_word, form_pairs|
@@ -835,14 +886,8 @@ def merge_inflected_forms!(cmudict, forms_map)
       next if cmudict.key?(inflected_word)
       next if ignore_cmudict_word?(inflected_word, cmudict)
 
-      derived = Inflect.derive(base_pron, base_word, inflected_word)
-      next if derived.nil? || derived.empty?
-      next unless derived.phonemes.any?(&:vowel?)
-
-      syllabified = normalize_flat_arphabet_pronunciation(derived).syllabify
-      unless WHITELIST.include?(inflected_word)
-        next unless final_consonant_cluster_ok?(syllabified.final_consonant_cluster_array)
-      end
+      syllabified = morph_derived_syllabified_pronunciation(base_pron, base_word, inflected_word)
+      next if syllabified.nil?
 
       cmudict[inflected_word] = [syllabified]
       added += 1
@@ -874,9 +919,10 @@ def rebuild_rhymecrime_dictionaries()
   end
   delete_explicitly_forbidden_keys_from_hash(cmudict)
   rdict = build_rhyme_signature_dict(cmudict)
-  save_string_hash(rdict, generated_dict_path_under_dict_dir(RHYME_SIGNATURE_DICT_FILENAME), RHYME_SIGNATURE_DICT_HEADER)
   subtlex_hash = load_subtlex
   wordfreq_hash = load_wordfreq
   word_dict = build_word_dict(cmudict, rdict, subtlex_hash, wordfreq_hash, wiktionary_words)
+  merge_word_dict_pronunciations_into_rdict!(rdict, word_dict)
+  save_string_hash(rdict, generated_dict_path_under_dict_dir(RHYME_SIGNATURE_DICT_FILENAME), RHYME_SIGNATURE_DICT_HEADER)
   save_word_dict(word_dict)
 end

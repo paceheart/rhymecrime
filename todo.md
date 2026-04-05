@@ -71,5 +71,6 @@ also "cc's"
 cataloging / catalogging
 gramaphone / gramophone
 old-fashioned / oldfashioned
+in-laws / inlaws
 pompom / pom-pom
 shant / shan't
