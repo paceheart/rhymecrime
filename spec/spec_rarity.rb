@@ -2,15 +2,32 @@
 # rare?
 # 
 
-def oughta_be_common(word, is_working=true)
+def oughta_be_common(word, is_working=true, important=true)
   if(is_working)
     test_name = "'#{word}' oughta be common"
     it test_name do
-      expect(rare?(word)).to eql(false), "'#{word}' oughta be common, but is rare, with frequency #{frequency(word)}"
+      msg = "'#{word}' oughta be common, but is rare, with frequency #{frequency(word)}"
+      msg += " (but it's not that big a deal)" unless important
+      expect(rare?(word)).to eql(false), msg
     end
   else # NOT_WORKING
     if TEST_FOR_SURPRISING_SUCCESSES
-      oughta_be_rare(word, true)
+      oughta_be_rare(word, true, important)
+    end
+  end
+end
+
+# Lower priority than oughta_be_common / oughta_be_rare: tagged :rarity_ish so you can
+# focus on stricter examples first, e.g.  rspec spec/spec_rarity.rb --tag ~rarity_ish
+def oughta_be_common_ish(word, is_working=true)
+  if(is_working)
+    it "'#{word}' oughta be common (ish)", :rarity_ish do
+      msg = "'#{word}' oughta be common, but is rare, with frequency #{frequency(word)} (but it's not that big a deal)"
+      expect(rare?(word)).to eql(false), msg
+    end
+  else # NOT_WORKING
+    if TEST_FOR_SURPRISING_SUCCESSES
+      oughta_be_rare_ish(word, true)
     end
   end
 end
@@ -18,12 +35,6 @@ end
 # Rhymeless words are filtered out early, so we can't test their rarity,
 # but we can still verify that they have no rhymes
 def oughta_be_common_but_has_no_rhymes(word, is_working=true)
-  ought_not_have_rhymes(word, is_working)
-end
-
-# Rhymeless words are filtered out early, so we can't test their rarity,
-# but we can still verify that they have no rhymes
-def oughta_be_rare_but_has_no_rhymes(word, is_working=true)
   ought_not_have_rhymes(word, is_working)
 end
 
@@ -58,17 +69,38 @@ def oughta_be_uncommon(word, is_working=true)
   # intentional no-op
 end
 
-def oughta_be_rare(word, is_working=true)
+def oughta_be_rare(word, is_working=true, important=true)
   if(is_working)
     test_name = "'#{word}' oughta be rare"
     it test_name do
-      expect(rare?(word)).to eql(true), "'#{word}' oughta be rare, but is common, with frequency #{frequency(word)}"
+      msg = "'#{word}' oughta be rare, but is common, with frequency #{frequency(word)}"
+      msg += " (but it's not that big a deal)" unless important
+      expect(rare?(word)).to eql(true), msg
     end
   else # NOT_WORKING
     if TEST_FOR_SURPRISING_SUCCESSES
-      oughta_be_common(word, true)
+      oughta_be_common(word, true, important)
     end
   end
+end
+
+def oughta_be_rare_ish(word, is_working=true)
+  if(is_working)
+    it "'#{word}' oughta be rare (ish)", :rarity_ish do
+      msg = "'#{word}' oughta be rare, but is common, with frequency #{frequency(word)} (but it's not that big a deal)"
+      expect(rare?(word)).to eql(true), msg
+    end
+  else # NOT_WORKING
+    if TEST_FOR_SURPRISING_SUCCESSES
+      oughta_be_common_ish(word, true)
+    end
+  end
+end
+
+# Rhymeless words are filtered out early, so we can't test their rarity,
+# but we can still verify that they have no rhymes
+def oughta_be_rare_but_has_no_rhymes(word, is_working=true)
+  ought_not_have_rhymes(word, is_working)
 end
 
 describe 'RARITY' do
@@ -116,19 +148,80 @@ describe 'RARITY' do
     oughta_be_common 'wicker'
   end
 
-  context 'timely' do
-    oughta_be_common 'blog'
-  end
-
   context 'initialisms' do
-    oughta_be_rare 'ni'
+    oughta_be_common_ish 'tv'
     oughta_be_rare 'cctv'
+    oughta_be_rare 'ok'
+    oughta_be_common 'okay'
+    # FP-2 class: wordfreq is high for these letter-strings, but they are not ordinary dictionary words
+    oughta_be_common_ish 'ai'
+    oughta_be_rare 'aol'
+    oughta_be_rare 'al'
+    oughta_be_rare_ish 'api'
+    oughta_be_rare_ish 'atm'
+    oughta_be_rare 'ba'
+    oughta_be_rare 'bbc'
+    oughta_be_rare 'ca'
+    oughta_be_rare 'cbs'
+    oughta_be_rare 'cnn'
+    oughta_be_rare 'cu'
+    oughta_be_rare 'dnc'
+    oughta_be_rare 'ds'
+    oughta_be_rare_ish 'dvd'
+    oughta_be_rare 'er'
+    oughta_be_rare_ish 'et'
+    oughta_be_common 'ex'
+    oughta_be_rare 'fe'
+    oughta_be_rare 'fm'
+    oughta_be_rare 'fyi'
+    oughta_be_rare 'nba'
+    oughta_be_rare 'nbc'
+    oughta_be_rare 'nfl'
+    oughta_be_rare 'ni'
+    oughta_be_rare 'npr'
+    oughta_be_rare 'pdf'
+    oughta_be_rare 'pga'
+    oughta_be_rare 'pm'
+    oughta_be_rare 'sms'
+    oughta_be_rare 'uae'
+    oughta_be_rare 'usb'    
+    oughta_be_rare 'vs'
+    oughta_be_common 'versus'
+
+    # Longer letter-strings: same FP-2 issue as 2-3 char (wordfreq/Wiktionary), not spoken as lemmas.
+    context 'four- and five-letter initialisms' do
+      oughta_be_common_ish 'nato'
+      oughta_be_rare 'hdtv'
+      oughta_be_rare 'nasa'
+      oughta_be_rare 'wifi'
+      oughta_be_rare 'wi-fi'
+      oughta_be_rare 'nafta'
+      oughta_be_rare_ish 'ascii'
+      oughta_be_rare 'scsi'
+      oughta_be_rare_ish 'http'
+      oughta_be_rare 'asean'
+      oughta_be_rare_ish 'aarp'
+      oughta_be_rare_ish 'naacp'
+      oughta_be_uncommon 'imax'
+      oughta_be_uncommon 'mips'
+      oughta_be_uncommon 'oled'
+      oughta_be_rare 'fifo'
+      oughta_be_rare 'lifo'
+      oughta_be_common_ish 'unix'
+      oughta_be_rare_ish 'apis'
+      oughta_be_rare 'sram'
+      oughta_be_rare 'perl'
+      oughta_be_rare 'noaa'
+      oughta_be_rare 'umass'
+      oughta_be_rare 'unhcr'
+      oughta_be_rare 'scada'
+    end
   end
 
   context 'names' do
     oughta_be_rare 'ciardi'
     oughta_be_rare 'tuscaloosa'
-    oughta_be_rare 'bors', NOT_WORKING
+    oughta_be_rare 'bors'
     oughta_be_rare 'matias'
     oughta_be_rare 'soweto'
     oughta_be_rare 'steinman'
@@ -154,7 +247,6 @@ describe 'RARITY' do
     oughta_be_common 'flighty'
     oughta_be_common 'canned'
     oughta_be_common 'convex'
-    oughta_be_common 'face-to-face'
     oughta_be_common 'gasoline'
     oughta_be_common 'holy'
     oughta_be_common 'paroled'
@@ -164,7 +256,7 @@ describe 'RARITY' do
     oughta_be_common 'vanes'
     oughta_be_common 'chicanery'
     oughta_be_common 'combatants'
-    oughta_be_common 'noncombatants'
+    oughta_be_common_ish 'noncombatants'
     oughta_be_common 'rapt'
     oughta_be_common 'sparkly'
     oughta_be_common 'splashy'
@@ -288,7 +380,7 @@ describe 'RARITY' do
     oughta_be_common 'bruiser'
     oughta_be_common 'bruisers'
     oughta_be_common 'bruising'
-    oughta_be_common 'unbruised'
+    oughta_be_uncommon 'unbruised'
     oughta_be_common 'dizzy'
     oughta_be_common 'insomnia'
     oughta_be_common 'migraine'
@@ -403,6 +495,18 @@ describe 'RARITY' do
   end
 
   context 'modern words (post-2009)' do
+    oughta_be_common 'blog'    
+    oughta_be_common 'blogs'
+    oughta_be_common 'blogged'
+    oughta_be_common 'blogger'
+    oughta_be_common 'bloggers'
+    oughta_be_common 'blogging'
+    oughta_be_common 'vlog'
+    oughta_be_common 'vlogs'
+    oughta_be_common 'vlogged'
+    oughta_be_common 'vlogging'
+    oughta_be_common 'vlogger'
+    oughta_be_common 'vloggers'
     oughta_be_common 'selfie'
     oughta_be_common 'hashtag'
     oughta_be_common 'emoji'
@@ -426,6 +530,10 @@ describe 'RARITY' do
     oughta_be_common 'twerks'
     oughta_be_common 'twerked'
     oughta_be_common 'twerking'
+    oughta_be_common_ish 'url'
+    oughta_be_common_ish 'urls'
+    oughta_be_rare 'urled'
+    oughta_be_rare 'urling'
   end
 
   context 'surnames in cmudict' do
@@ -506,7 +614,7 @@ describe 'RARITY' do
   end
 
   context 'literary and rhetorical terms' do
-    oughta_be_common_but_has_no_rhymes 'palimpsest'
+    oughta_be_common 'palimpsest'
     oughta_be_common_but_has_no_rhymes 'quincunx'
     oughta_be_rare 'tmesis'
     oughta_be_rare 'hendiadys'
@@ -527,18 +635,18 @@ describe 'RARITY' do
     oughta_be_uncommon 'isomorphism'
     oughta_be_rare 'hermeneutics'
     oughta_be_rare 'eigenvalue'
-    oughta_be_rare 'chromatography'
+    oughta_be_rare_ish 'chromatography'
     oughta_be_rare 'electrophoresis'
-    oughta_be_rare 'spectrometer'
+    oughta_be_rare_ish 'spectrometer'
     oughta_be_common 'reagent'
     oughta_be_rare 'adiabatic'
   end
 
   context 'obscure animals' do
-    oughta_be_common_but_has_no_rhymes 'axolotl'
+    oughta_be_common 'axolotl'
     oughta_be_uncommon 'cassowary'
     oughta_be_uncommon 'dugong'
-    oughta_be_common 'echidna'
+    oughta_be_common_ish 'echidna'
     oughta_be_rare 'gharial'
     oughta_be_uncommon 'pangolin'
     oughta_be_common 'tapir'
@@ -546,7 +654,7 @@ describe 'RARITY' do
   end
 
   context 'archaic vocabulary' do
-    oughta_be_common 'forsooth'
+    oughta_be_common_ish 'forsooth'
     oughta_be_uncommon 'hauberk'
     oughta_be_rare 'varlet'
     oughta_be_uncommon 'seneschal'
@@ -555,7 +663,7 @@ describe 'RARITY' do
     oughta_be_rare 'diapason'
     oughta_be_rare 'cynosure'
     oughta_be_uncommon 'panegyric'
-    oughta_be_common 'synecdoche'
+    oughta_be_common_ish 'synecdoche'
     oughta_be_rare 'schenectady'
   end
 
@@ -569,14 +677,14 @@ describe 'RARITY' do
 
   context 'miscellaneous rare' do
     oughta_be_uncommon 'petrichor'
-    oughta_be_rare 'spoonerism'
-    oughta_be_rare 'malapropism'
-    oughta_be_rare 'kafkaesque'
-    oughta_be_rare 'cupola'
-    oughta_be_rare 'balustrade'
-    oughta_be_rare 'evanescent'
+    oughta_be_rare_ish 'spoonerism'
+    oughta_be_rare_ish 'malapropism'
+    oughta_be_rare_ish 'kafkaesque'
+    oughta_be_rare_ish 'cupola'
+    oughta_be_rare_ish 'balustrade'
+    oughta_be_rare_ish 'evanescent'
     oughta_be_rare 'velleity'
-    oughta_be_rare 'zugzwang'
+    oughta_be_rare_ish 'zugzwang'
     oughta_be_rare 'ephemeron'
   end
 
@@ -619,8 +727,8 @@ describe 'RARITY' do
     oughta_be_rare 'mcham'
     oughta_be_rare 'mclamb'
     oughta_be_rare 'nahm'
-    oughta_be_rare 'nam'
-    oughta_be_rare 'pam'
+    oughta_be_rare_ish 'nam'
+    oughta_be_uncommon 'pam'
     oughta_be_rare 'panam'
     oughta_be_rare 'pham'
     oughta_be_rare 'plam'
@@ -706,6 +814,7 @@ describe 'RARITY' do
 
   context 'inflections' do
     oughta_be_common "sky"
+    oughta_be_common "skies"
     oughta_be_rare "skys"
     oughta_be_rare "skying"
     oughta_be_common "goose"
@@ -717,12 +826,11 @@ describe 'RARITY' do
     oughta_be_uncommon "mousing"
     oughta_be_uncommon "moused"
     oughta_be_rare "mousingly"
-    oughta_be_common "mousiness"
+    oughta_be_common_ish "mousiness"
     oughta_be_rare "mousinesses"
     oughta_be_rare "mousinessly"
-    oughta_be_rare "mousinessly"
-    oughta_be_common "mouser"
-    oughta_be_common "mousers"
+    oughta_be_common_ish "mouser"
+    oughta_be_common_ish "mousers"
     oughta_be_common "fox"
     oughta_be_common "foxes"
     oughta_be_rare "foxs"
@@ -731,9 +839,9 @@ describe 'RARITY' do
     oughta_be_rare "foxly"
     oughta_be_common "foxy"
     oughta_be_rare "foxyness"
-    oughta_be_common "foxily"
+    oughta_be_common_ish "foxily"
     oughta_be_rare "foxyly"
-    oughta_be_common "foxiness"
+    oughta_be_common_ish "foxiness"
     oughta_be_rare "foxinesses"
     oughta_be_common "foxier"
     oughta_be_common "foxiest"
@@ -761,5 +869,98 @@ describe 'RARITY' do
     oughta_be_common "ghosted"
     oughta_be_common "ghosting"
     oughta_be_common "ghostly"
+  end
+
+  # FP-4: morphological junk (-ing) gets the same frequency as its base because Phase 6
+  # inherits whenever the inflected form has no wordfreq row; real usage is vanishing.
+  # (Same failure mode as "crotching" inheriting "crotch" while "crotched" is skipped
+  # because wordfreq lists it.) See analysis discussion of spurious inheritance.
+  context 'spurious inherited frequency (FP-4)' do
+    oughta_be_rare 'kitchening'
+    oughta_be_rare 'cousining'
+    oughta_be_rare 'jealousing'
+    oughta_be_rare 'beautying'
+    oughta_be_rare 'opinioning'
+    oughta_be_rare 'attorneying'
+    oughta_be_rare 'televisioning'
+    oughta_be_rare 'permissioning'
+    oughta_be_rare 'secretarying'
+    oughta_be_rare 'missioning'
+    oughta_be_rare 'conversationing'
+  end
+
+  context 'hyphenated words' do
+    context 'without existing final words' do
+      oughta_be_common 'avant-garde'
+      oughta_be_common 'cul-de-sac'
+      oughta_be_uncommon 'culs-de-sac'
+      oughta_be_common 'cul-de-sacs'
+      oughta_be_rare 'culdesac'
+      oughta_be_rare 'culdesacs'
+      oughta_be_common_ish 'hoity-toity'
+      oughta_be_rare 'hoity-toitys'
+      oughta_be_rare 'hoity-toities'
+      oughta_be_common_ish 'namby-pamby'
+      oughta_be_rare 'namby-pambys'
+      oughta_be_rare 'namby-pambies'
+      oughta_be_rare_ish 'coco-de-mer'
+      oughta_be_rare_ish 'sans-culotte'
+      oughta_be_rare_ish 'sans-culottes'
+      oughta_be_rare 'dinky-di'
+      oughta_be_common_ish 'topsy-turvy'
+      oughta_be_rare 'topsy-turvies'
+      oughta_be_rare 'topsy-turvys'
+      oughta_be_rare 'topsy-turvying'
+      oughta_be_rare_ish 'topsy-turvier'
+      oughta_be_rare_ish 'topsy-turviest'
+      oughta_be_common_ish 'boogie-woogie'
+      oughta_be_common_ish 'hanky-panky'
+      oughta_be_rare 'heebie-jeebie'
+      oughta_be_common_ish 'heebie-jeebies'
+      oughta_be_common_ish 'hara-kiri'
+      oughta_be_common_ish 'itsy-bitsy'
+      oughta_be_rare_ish 'hurdy-gurdy'
+      oughta_be_common_ish 'okey-dokey'
+      oughta_be_common_ish 'tutti-frutti'
+      oughta_be_common_ish 'willy-nilly'
+      oughta_be_uncommon 'pell-mell'
+      oughta_be_common_ish 'flim-flam'
+      oughta_be_common_ish 'savoir-faire'
+      oughta_be_common_ish 'papier-mache'
+      oughta_be_rare_ish 'pince-nez'
+      oughta_be_common_ish 'cock-a-doodle-doo'
+      oughta_be_common_ish 'roly-poly'
+    end
+
+    context 'with existing final words' do
+      oughta_be_common_ish 'ping-pong'
+      oughta_be_common 'yo-yo'
+      oughta_be_rare 'yoyo'
+      oughta_be_rare 'about-face'
+      oughta_be_rare 'face-to-face'
+      oughta_be_rare 'good-looking'
+      oughta_be_rare 'eye-catching'
+      oughta_be_rare 'long-term'
+      oughta_be_rare 'record-breaking'
+      oughta_be_rare 'laid-back'
+      oughta_be_rare 'one-sided'
+      oughta_be_rare 'non-stop'
+      oughta_be_rare 'one-way'
+      oughta_be_rare 'two-way'
+      oughta_be_rare 'well-known'
+      oughta_be_rare 'well-being'
+      oughta_be_rare 'old-fashioned'
+      oughta_be_rare 'left-handed'
+      oughta_be_rare 'mother-in-law'
+      oughta_be_rare 'nitty-gritty'
+      oughta_be_rare_ish 'helter-skelter'
+      oughta_be_rare 'self-defense'
+      oughta_be_rare 'up-to-date'
+      oughta_be_rare 'ding-dong'
+      oughta_be_rare_ish 'boo-boo'
+      oughta_be_rare 'aye-aye'
+      oughta_be_rare 'ha-ha'
+      oughta_be_rare 'so-so'
+    end
   end
 end

@@ -18,6 +18,9 @@ require_relative '../crime'
 TEST_FOR_SURPRISING_SUCCESSES = true
 NOT_WORKING = false # don't edit this one
 
+# Rarity specs tagged :rarity_ish (oughta_be_*_ish) are lower priority. To run only stricter
+# examples:  rspec spec/spec_rarity.rb --tag ~rarity_ish
+
 RSpec.configure do |config|
   # rspec-expectations config goes here. You can use an alternate
   # assertion/expectation library such as wrong or the stdlib/minitest

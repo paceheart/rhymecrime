@@ -88,6 +88,8 @@ describe 'RHYMES' do
     ought_not_rhyme 'work', 'fork'
     ought_not_rhyme 'coed', 'abode'
     oughta_rhyme 'cajun', 'contagion'
+    oughta_rhyme 'axolotl', 'bottle'
+    oughta_rhyme 'axolotls', 'bottles'
   end
 
   context 'perfect rhymes must rhyme the last primary-stressed syllable, not just the last syllable' do
@@ -229,6 +231,9 @@ describe 'RHYMES' do
 
   context 'initialisms' do
     ought_not_rhyme 'eye', 'ni'
+    oughta_rhyme 'nato', 'tomato'
+    oughta_rhyme 'tv', 'fee'
+    oughta_rhyme 'high', 'ai'
   end
 
   context 'schwas' do
@@ -256,6 +261,18 @@ describe 'RHYMES' do
     ought_not_rhyme 'flaws', 'inlaws', NOT_WORKING # ...but not with the dispreferred form.
     ought_not_rhyme 'inlaws', 'in-laws'
     ought_not_rhyme 'nonbuilding', 'non-building'
+    oughta_rhyme 'cul-de-sac', 'back'
+    oughta_rhyme 'avant-garde', 'hard'
+    oughta_rhyme 'topsy-turvy', 'scurvy'
+    oughta_rhyme 'ping-pong', 'wrong'
+    oughta_rhyme 'okey-dokey', 'hokey'
+    oughta_rhyme 'flim-flam', 'slam'
+    oughta_rhyme 'papier-mache', 'way'
+    oughta_rhyme 'tutti-frutti', 'booty'
+    oughta_rhyme 'willy-nilly', 'silly'
+    oughta_rhyme 'roly-poly', 'holy'
+    ought_not_rhyme 'roly-poly', 'poly'
+    oughta_rhyme 'hara-kiri', 'weary'
   end
   
   context 'Limerick Heist' do
@@ -340,6 +357,9 @@ describe 'RHYMES' do
     oughta_rhyme 'blogging', 'vlogging'
     oughta_rhyme 'couple', 'throuple'
     oughta_rhyme 'couples', 'throuples'
+    oughta_rhyme 'url', 'hell'
+    oughta_rhyme 'urls', 'smells'
+    ought_not_rhyme 'url', 'curl'
   end
 
   context '-er' do

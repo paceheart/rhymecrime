@@ -258,6 +258,10 @@ describe 'SET_RELATED' do
   context 'football' do
     set_related_oughta_contain 'football', 'yeet', 'incomplete'
   end
+
+  context 'exploration' do
+    set_related_oughta_contain 'exploration', 'cul-de-sac', 'backtrack'
+  end
   
   context 'prefix' do
     set_related_ought_not_contain 'carbon', 'cycling', 'recycling' # ought to filter out identical rhymes
@@ -401,6 +405,9 @@ describe 'PAIR_RELATED' do
     pair_related_oughta_contain 'gay', 'food', 'trans', 'flans'
   end
 
+  context 'fashion music' do
+    pair_related_oughta_contain 'avant-garde', 'music', 'hard', 'bard'
+  end
 end
 
 #
