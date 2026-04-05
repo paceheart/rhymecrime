@@ -23,6 +23,3 @@ bis
 subacute
 fide
 ane
-ok
-vs
-yoyo
