@@ -116,3 +116,7 @@ standout
 standouts
 tipoff
 even
+yo-yo
+avant-garde
+cul-de-sac
+cul-de-sacs
