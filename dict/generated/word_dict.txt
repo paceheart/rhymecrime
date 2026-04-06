@@ -22085,6 +22085,7 @@ dataproducts',0,D EY1 . D AH0 . P R AA2 . D AH0 K T S
 datas,0,D EY1 . D AH0 Z|D AE1 . D AH0 Z
 date,17,D EY1 T
 dated,13,D EY1 . D AH0 D
+datek,0,D AE1 . D EH0 K
 dateline,4,D EY1 T . L AY2 N
 datelines,0,D EY1 T . L AY2 N Z
 dates,5,D EY1 T S
@@ -100202,7 +100203,16 @@ vizcaino,0,V IY0 Z . K AA0 . IY1 . N OW0
 vizcarra,0,V IY0 Z . K AA1 . R AH0
 vizcaya,0,V AH0 Z . K AY1 . AH0
 vizzini,0,V IY0 T . S IY1 . N IY0
-vlad,0,V . L AE1 D
+vlach,0,V L AE1 CH
+vlad,0,V L AE1 D
+vlad's,0,V L AE1 D Z
+vladeck,0,V L AE1 . D EH0 K
+vlahakis,0,V L AH2 . HH AA1 . K AH0 S
+vlasak,0,V L AA1 . S AH0 K
+vlasic,0,V L AE1 . Z AH0 K
+vlcek,0,V L EH1 . S AH0 K
+vliet,0,V L IY1 T
+vlok,0,V L AA1 K
 vo,4,V OW1
 vobis,4,V OW1 . B AH0 S
 vocabulary,11,V OW0 . K AE1 . B Y AH0 . L EH2 . R IY0
@@ -109768,7 +109778,7 @@ undecillion,0,AH2 N . D AH0 . S IH1 . L IY0 . AH0 N
 caliphate,5,
 chador,0,CH AA1 . D AH0 R|CH AA1 . D AH0|CH AE1 . D AH0 R
 du'a',0,D UW1 . AH0
-vlog,5,
+vlog,5,V L AA1 G
 faqir,4,F AH0 . K IH1 . AH0
 fakir,6,F AH0 . K IY1 R|F AH0 . K IH1 . AH0 R|F AA0 . K IY1 R|F EY1 . K AH0 R
 mendicant,5,
@@ -116389,7 +116399,7 @@ snath,0,S N AE1 TH
 subunit,5,S AH0 . B Y UW1 . N AH0 T
 hedera,0,HH EH1 . D AH0 . R AH0
 sextuple,0,S EH0 K . S T AH1 . P AH0 L
-vlei,0,F L EY1
+vlei,0,V L EY1|F L EY1
 braising,4,B R EY1 . Z IY0 NG
 zawn,0,Z AA1 N
 cruciate,5,K R UW1 . SH IY0 . EY0 T
@@ -130537,6 +130547,7 @@ oxi,0,AA1 K . S IY0
 phylaxis,0,F AH0 . L AE1 K . S AH0 S
 spaza,0,S P AA1 . Z AH0
 agnogenic,0,AE0 G . N AH0 . JH EH1 . N AH0 K
+vly,0,V L AY1
 sommelière,0,S AA2 . M AH0 L . Y EH1 R
 verkramp,0,F AH0 . K R AH1 M P
 oligophrenia,0,AA2 . L AH0 . G OW0 . F R IY1 . N AH0 . AH0|AA2 . L AH0 . G OW0 . F R EH1 . N IY0 . AH0|AA2 . L AH0 . G AH0 . F R IY1 . N IY0 . AH0
@@ -155306,9 +155317,9 @@ kevlars,5,K EH1 V . L AH0 R Z
 chadors,0,CH AA1 . D AH0 R Z
 du'a's,0,D UW1 . AH0 Z
 emirs,8,AH0 . M IY1 R Z
-vlogs,5,
-vlogging,5,
-vlogged,5,
+vlogs,5,V L AA1 G Z
+vlogging,5,V L AA1 . G IY0 NG
+vlogged,5,V L AA1 G D
 faqirs,0,F AH0 . K IH1 . AH0 Z
 fakirs,4,F AH0 . K IY1 R Z
 mendicants,4,
@@ -166315,7 +166326,7 @@ subunits,4,S AH0 . B Y UW1 . N AH0 T S
 sextuples,0,S EH0 K . S T AH1 . P AH0 L Z
 sextupling,0,S EH0 K . S T AH1 . P AH0 . L IY0 NG
 sextupled,0,S EH0 K . S T AH1 . P AH0 L D
-vleis,0,F L EY1 Z
+vleis,0,V L EY1 Z
 zawns,0,Z AA1 N Z
 cruciates,5,
 cruciated,5,
@@ -170741,6 +170752,7 @@ smushing,0,S M AH1 . SH IY0 NG
 smushed,0,S M AH1 SH T
 ballooners,0,B AH0 . L UW1 . N AH0 R Z
 balts,0,B AA1 L T S
+vlachs,0,V L AE1 . CH AH0 Z
 huemuls,0,W EY0 . M UW1 L Z
 anthologizers,0,AE0 N . TH AA1 . L AH0 . JH AY0 . Z AH0 Z
 burqinis,0,B AH0 R . K IY1 . N IY0 Z
@@ -177880,6 +177892,7 @@ curonians,0,K UH0 . R OW1 . N IY0 . AH0 N Z
 throwies,0,TH R OW1 . IY0 Z
 cumans,0,K UW1 . M AH0 N Z
 spazas,0,S P AA1 . Z AH0 Z
+vlies,0,V L AY1 Z
 sommelières,0,S AA2 . M AH0 L . Y EH1 R Z
 oligophrenias,0,AA2 . L AH0 . G OW0 . F R IY1 . N AH0 . AH0 Z
 chouriços,0,SH AH0 . R IY1 . S AH0 Z

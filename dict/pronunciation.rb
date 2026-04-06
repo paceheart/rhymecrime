@@ -216,7 +216,9 @@ class Pronunciation
     this_initial_consonant_cluster = Array.new
     candidate_initial_consonant_cluster = Array.new
     foundThisSyllablesVowel = false
-    @phonemes.reverse.each { |phoneme|
+    rev = @phonemes.reverse
+    rev_last = rev.length - 1
+    rev.each_with_index { |phoneme, rev_idx|
       if !foundThisSyllablesVowel
         this_syllable.unshift(phoneme) # just allow any syllable-final consonant cluster
         if(phoneme.vowel?)
@@ -225,8 +227,10 @@ class Pronunciation
       else
         # gobble up as many syllable-initial consonants while still being a valid cluster
         candidate_initial_consonant_cluster = this_initial_consonant_cluster.unshift(phoneme)
+        cluster_str = candidate_initial_consonant_cluster.join(" ")
         if single_consonant?(candidate_initial_consonant_cluster) ||
-           ALL_INITIAL_CONSONANT_CLUSTERS.include?(candidate_initial_consonant_cluster.join(" "))
+           ALL_INITIAL_CONSONANT_CLUSTERS.include?(cluster_str) ||
+           (rev_idx == rev_last && WORD_INITIAL_CONSONANT_CLUSTERS.include?(cluster_str))
           this_syllable.unshift(phoneme) # PHONEME is legit as a syllable-initial consonant cluster
           this_initial_consonant_cluster = candidate_initial_consonant_cluster
         # puts "#{phoneme} is legit, now we have #{this_syllable} starting with #{this_initial_consonant_cluster}"

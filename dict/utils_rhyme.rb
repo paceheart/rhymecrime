@@ -229,6 +229,12 @@ ALL_INITIAL_CONSONANT_CLUSTERS = [
   'ZH W', # joie
 ] # ARPABET format. source: John Algeo, https://www.tandfonline.com/doi/pdf/10.1080/00437956.1978.11435661 + original work
 
+# Onset clusters legal only at the true start of a word (forward order). Not consulted for medial
+# syllabification, so e.g. L AY1 V L IY0 (lively) keeps V in the preceding coda instead of merging V+L.
+WORD_INITIAL_CONSONANT_CLUSTERS = [
+  'V L', # Vlad, Vladimir; Slavic Vl- names
+].freeze
+
 ALL_FINAL_CONSONANT_CLUSTERS = [
   'B D', # grabbed
   'B Z', # cubs

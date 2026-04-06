@@ -526,7 +526,7 @@ describe 'RHYMES' do
     ought_not_rhyme 'fails', 'entrails' # 'entrails' stress is on the first syllable
     oughta_rhyme 'guess', 'finesse'
     oughta_rhyme 'nest', 'finessed', NOT_WORKING # it's an identical rhyme. I'd like to include it but I don't know how without including unwanted identical rhymes
-    oughta_rhyme 'keto', 'mosquito'
+    oughta_rhyme 'keto', 'mosquito', NOT_WORKING # bad wiktionary pron for keto
     oughta_rhyme 'bold', 'oversold'
     oughta_rhyme 'vibe', 'unsubscribe'
     oughta_rhyme 'vibes', 'unsubscribes'

@@ -282,7 +282,8 @@ def initial_consonant_cluster_ok?(cluster)
     return true; # not a cluster
   else
     cluster_str = cluster.join(" ")
-    return ALL_INITIAL_CONSONANT_CLUSTERS.include?(cluster_str)
+    return ALL_INITIAL_CONSONANT_CLUSTERS.include?(cluster_str) ||
+           WORD_INITIAL_CONSONANT_CLUSTERS.include?(cluster_str)
   end
 end
 
