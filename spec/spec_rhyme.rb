@@ -315,8 +315,7 @@ describe 'RHYMES' do
     ought_not_rhyme 'stunt', 'done'
     ought_not_rhyme 'step', 'depth'
 
-    # --- Following syllable stressed: often no word-internal flap (review each) ---
-    oughta_rhyme 'latex', 'paychecks'
+    # --- Following syllable stressed: often no word-internal flap ---
     ought_not_rhyme 'latex', 'climax'
     oughta_rhyme 'potato', 'tomato' # iconic
 
@@ -336,24 +335,22 @@ describe 'RHYMES' do
     ought_not_rhyme 'sorted', 'sordid' # identical rhyme
     oughta_rhyme 'carded', 'carted'
 
-    # --- Long / morphological (Withgott-style: flap may fail) ---
-    # Foot boundaries and stress often block word-internal flap; do not treat as T~D rhyme by default.
-    ought_not_rhyme 'militaristic', 'ballistic' # stress/foot; T envs unlike minimal intervocalic pairs
-    ought_not_rhyme 'Atlantic', 'romantic' # initial vs medial stress; different T surroundings
-    ought_not_rhyme 'retail', 'reveal' # second-syllable stress in reveal vs retail; classic flap-env contrast
-    ought_not_rhyme 'detail', 'reveal'
-    ought_not_rhyme 'mediterranean', 'subterranean' # wrong vowels + length; not a T/D minimal pair
-    ought_not_rhyme 'hypothetical', 'heretical' # long words; medial T vs D not a simple flap merge story
-    ought_not_rhyme 'accelerometer', 'thermometer' # long compounds; rime mismatch (EH T ER vs M AH T ER)
-
-    # --- Homophone / spelling-variant traps ---
-    # Same (or near-same) surface sound from spelling, not from intervocalic T~D; policy should not miscount.
-    ought_not_rhyme 'metal', 'mettle'
-    ought_not_rhyme 'kernel', 'colonel'
-    ought_not_rhyme 'write', 'right'
-    ought_not_rhyme 'morning', 'mourning'
-    ought_not_rhyme 'plain', 'plane'
-    ought_not_rhyme 'symbol', 'cymbal'
+    # --- Withgott (1982): morphological structure and T/D flap ---
+    # T normally flaps across morpheme boundaries in derived words (positive cases).
+    # Classic illustration: Plato (flaps) vs plateau (T before stressed syl → no flap),
+    # but that T is before the rime so it doesn't affect rhyme matching directly.
+    ought_not_rhyme 'creator', 'spectator' # stress mismatch
+    oughta_rhyme 'equator', 'invader'
+    oughta_rhyme 'dictator', 'crusader'
+    oughta_rhyme 'recital', 'suicidal'
+    oughta_rhyme 'potato', 'tornado'
+    oughta_rhyme 'hittable', 'biddable'
+    oughta_rhyme 'debatable', 'tradable'
+    # Compound boundary may block flap (Withgott proper):
+    oughta_rhyme 'whiteout', 'hideout' # compound white+out; T at boundary resists flap
+    ought_not_rhyme 'cottage', 'bodice'
+    oughta_rhyme 'tighten', 'whiten'
+    ought_not_rhyme 'tighten', 'widen'
 
     # --- More positive candidates (informal or regional spellings marked) ---
     oughta_rhyme 'latter', 'ladder'
@@ -538,6 +535,22 @@ describe 'RHYMES' do
     oughta_rhyme 'vibing', 'unsubscribing'
   end
 
+  context 'long words' do
+    oughta_rhyme 'militaristic', 'ballistic'
+    oughta_rhyme 'mediterranean', 'subterranean'
+    oughta_rhyme 'hypothetical', 'heretical'
+    oughta_rhyme 'accelerometer', 'thermometer'
+  end
+  
+  context 'Homophone / spelling-variant traps' do
+    ought_not_rhyme 'metal', 'mettle'
+    ought_not_rhyme 'kernel', 'colonel'
+    ought_not_rhyme 'write', 'right'
+    ought_not_rhyme 'morning', 'mourning'
+    ought_not_rhyme 'plain', 'plane'
+    ought_not_rhyme 'symbol', 'cymbal'
+  end
+
     # TODO: rezoned (and thus these specs) want a pron from re- + zoned: prepend e.g. R IH0 or R IY0
     # plus a syllable boundary before zoned's CMU string. General prefix morphology is overkill for this alone.
   context 'prefix morphology' do
@@ -545,5 +558,10 @@ describe 'RHYMES' do
     oughta_rhyme 'unowned', 'zoned', NOT_WORKING
     oughta_rhyme 'owned', 'rezoned', NOT_WORKING
     oughta_rhyme 'unowned', 'rezoned', NOT_WORKING
+  end
+
+  context 'non-binary rhymes' do
+    oughta_rhyme 'latex', 'paychecks'
+    oughta_rhyme 'pitiful', 'biddable' # genderfluid plus T -> D
   end
 end

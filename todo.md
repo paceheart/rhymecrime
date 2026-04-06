@@ -74,3 +74,11 @@ old-fashioned / oldfashioned
 in-laws / inlaws
 pompom / pom-pom
 shant / shan't
+
+mosaic rhymes, e.g. commander / understand her
+
+## Genderfluid rhymes
+
+Genderfluid rhyme: each syllable from the primary-stressed syllable onward has an exactly matching rime (nucleus + coda), checked syllable-by-syllable. Subsumes masculine, feminine, and dactylic rhyme regardless of syllable count.
+
+Non-binary rhyme: a genderfluid rhyme that is not a perfect rhyme. The individual syllable rimes all match, but the intervening onsets (consonant clusters between syllables) differ, so the overall contiguous rime does not match. Examples: latex / paychecks, pitiful / biddable.
