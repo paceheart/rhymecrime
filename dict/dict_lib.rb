@@ -492,6 +492,87 @@ def apply_lexical_pos_layer_a!(pos_map)
   nil
 end
 
+# CMU headwords missing from Kaikki still get coarse POS from WordNet (Layer C seed).
+def wn_seed_pos_map_for_cmudict_gaps!(pos_map, cmudict)
+  cmudict.each_key do |w|
+    next unless wn_has_entry?(w)
+    next if pos_map.key?(w) && !pos_map[w].nil? && !pos_map[w].empty?
+    pos_map[w] = wordnet_lexical_pos_set(w)
+  end
+  nil
+end
+
+# Max Wordfreq Zipf among Inflect :ed / :ing surfaces derived from +base+.
+def max_inflect_ed_ing_zipf(base, wordfreq_hash)
+  max_z = 0.0
+  Inflect.each_derivable_form(base) do |w|
+    inflection_suffix_kind = Inflect.send(:match_suffix_kind, base, w)
+    next unless inflection_suffix_kind == :ed || inflection_suffix_kind == :ing
+    z = (wordfreq_hash[w] || 0).to_f
+    max_z = z if z > max_z
+  end
+  max_z
+end
+
+# Max Zipf among plural :s surfaces Inflect derives from +base+ (boxes, foxes, …).
+def max_inflect_plural_zipf(base, wordfreq_hash)
+  max_z = 0.0
+  Inflect.each_derivable_form(base) do |w|
+    inflection_suffix_kind = Inflect.send(:match_suffix_kind, base, w)
+    next unless inflection_suffix_kind == :s
+    z = (wordfreq_hash[w] || 0).to_f
+    max_z = z if z > max_z
+  end
+  max_z
+end
+
+# Layer B: prune marginal WordNet POS using Wordfreq on inflected surfaces (experiment).
+# Homographs like +downtown+ (WN noun+adj+adv, no Kaikki row) are deferred to Layer C — not handled here.
+def apply_lexical_pos_layer_b!(pos_map, wordfreq_hash)
+  pos_map.each do |word, set|
+    next if set.nil? || set.empty?
+    s = set.dup
+
+    # Marginal verb: keep noun/adj lemmas when synthetic verbal inflections never reach RARE Zipf.
+    # Only for WordNet lemmas — OOV slang (*yeet*) keeps Kaikki’s verb so -ed/-ing can inherit.
+    if wn_has_entry?(word) && s.include?("verb") && s.size > 1 && (s.include?("noun") || s.include?("adj"))
+      if max_inflect_ed_ing_zipf(word, wordfreq_hash) < WORDFREQ_RARE_ZIPF
+        s.delete("verb")
+      end
+    end
+
+    # free: WN gives noun/adj/adv/verb; keep open-class adj+verb only.
+    if s.size >= 4 && s.include?("adj") && s.include?("verb") && s.include?("noun") && s.include?("adv")
+      s.delete("noun")
+      s.delete("adv")
+    end
+
+    # Adj + noun: drop noun when a real plural surface exists in Wordfreq but stays below RARE
+    # (central, impromptu, …). If every Inflect plural is absent (zipf 0), keep noun — e.g. magenta.
+    # WordNet lemmas only — OOV terms like *accelerant* keep noun for real plurals (*accelerants*).
+    if wn_has_entry?(word) && s.include?("adj") && s.include?("noun") && s.size >= 2
+      pzip = max_inflect_plural_zipf(word, wordfreq_hash)
+      if pzip.positive? && pzip < WORDFREQ_RARE_ZIPF
+        s.delete("noun")
+      end
+    end
+
+    # Noun + verb (no adj): drop noun when ed/ing is common but the bare +s+ token is still low Zipf
+    # (gobble: gobbles). Skip high-+s+ lemmas (dances, jogs) where -s is productive 3sg, not a weak plural.
+    if s.include?("noun") && s.include?("verb") && !s.include?("adj") && s.size == 2
+      vzip = max_inflect_ed_ing_zipf(word, wordfreq_hash)
+      szip = (wordfreq_hash[word + "s"] || 0).to_f
+      s_ceiling = WORDFREQ_RARE_ZIPF + 0.25
+      if vzip >= WORDFREQ_RARE_ZIPF && szip.positive? && szip < vzip * 0.9 && szip < s_ceiling
+        s.delete("noun")
+      end
+    end
+
+    pos_map[word] = s
+  end
+  nil
+end
+
 def morph_part_of_speech_tags(pos_map, base)
   s = pos_map[base]
   return [] if s.nil? || s.empty?
@@ -505,14 +586,41 @@ def wiktionary_surface_form_attested?(forms_map, base, inflected)
   pairs.any? { |form, b| form == inflected && b == base }
 end
 
+# True if Kaikki lists any surface for +base+ whose Inflect suffix kind matches +suffix_kind+ (:ed, :ing, …).
+# Spelling variants (e.g. cataloging vs catalogging) share the same kind, so a listed participle
+# attests Inflect’s preferred -ing spelling for WN verb lemmas.
+def wiktionary_derivation_suffix_attested?(forms_map, base, suffix_kind)
+  return false if suffix_kind.nil?
+  pairs = forms_map[base]
+  return false if pairs.nil? || pairs.empty?
+  pairs.any? do |form, b|
+    next false unless b == base
+    Inflect.send(:match_suffix_kind, base, form) == suffix_kind
+  end
+end
+
+# True if some Inflect-derived surface for +base+ with suffix +suffix_kind+ reaches RARE Zipf in Wordfreq.
+# Backs productive WN verbs when Kaikki omits participle rows (*catalog* / *cataloging* → *catalogging*).
+def corpus_inflection_suffix_zipf_attested?(wordfreq_hash, base, suffix_kind)
+  return false if suffix_kind.nil? || wordfreq_hash.nil?
+  Inflect.each_derivable_form(base) do |w|
+    next if w == base
+    next unless Inflect.inflection_of_base?(base, w)
+    next unless Inflect.send(:match_suffix_kind, base, w) == suffix_kind
+    z = (wordfreq_hash[w] || 0).to_f
+    return true if z >= WORDFREQ_RARE_ZIPF
+  end
+  false
+end
+
 # -ed/-ing: Kaikki +verb+ when present; cross-check WordNet so noun-only lemmas do not inherit
 # verbal junk (FP-4). When both Kaikki and WordNet agree the base is a verb, require a Kaikki
 # surface row. If Kaikki also lists +adj+ on the lemma, require Wordfreq Zipf on the inflected
 # surface so lexicon rows for marginal verbs (e.g. *taboo*) do not promote rare *tabooed* when
 # corpus use is negligible. OOV bases (no WordNet entry) keep the legacy open policy.
-def morph_base_allows_verb_forms?(base, inflected, pos_map, forms_map, zipf_inf)
-  sk = Inflect.send(:match_suffix_kind, base, inflected)
-  return true unless sk == :ed || sk == :ing
+def morph_base_allows_verb_forms?(base, inflected, pos_map, forms_map, zipf_inf, wordfreq_hash = nil)
+  inflection_suffix_kind = Inflect.send(:match_suffix_kind, base, inflected)
+  return true unless inflection_suffix_kind == :ed || inflection_suffix_kind == :ing
 
   tags = morph_part_of_speech_tags(pos_map, base)
   wn_in = wn_has_entry?(base)
@@ -522,7 +630,9 @@ def morph_base_allows_verb_forms?(base, inflected, pos_map, forms_map, zipf_inf)
     return false unless tags.include?("verb")
     return false if wn_in && !wn_v
     if wn_in && wn_v
-      return false unless wiktionary_surface_form_attested?(forms_map, base, inflected)
+      kaikki_ok = wiktionary_derivation_suffix_attested?(forms_map, base, inflection_suffix_kind)
+      corpus_ok = corpus_inflection_suffix_zipf_attested?(wordfreq_hash, base, inflection_suffix_kind)
+      return false unless kaikki_ok || corpus_ok
       return zipf_inf >= WORDFREQ_RARE_ZIPF if tags.include?("adj")
       return true
     end
@@ -546,8 +656,8 @@ end
 # rules. Silent-e stem+*er* (*service*→*servicer*) is allowed when the base is verbal and the
 # derived form has independent Zipf (blocks *oranger*-style junk while keeping attested agents).
 def morph_base_allows_comparative_er_est?(base, w, pos_map, base_first_pron, forms_map, zipf_w)
-  sk = Inflect.send(:match_suffix_kind, base, w)
-  return true unless sk == :er || sk == :est
+  inflection_suffix_kind = Inflect.send(:match_suffix_kind, base, w)
+  return true unless inflection_suffix_kind == :er || inflection_suffix_kind == :est
 
   bl = base.bytesize
   if base.end_with?("y") && bl >= 2
@@ -557,7 +667,7 @@ def morph_base_allows_comparative_er_est?(base, w, pos_map, base_first_pron, for
     return false
   end
 
-  if sk == :er && silent_e_stem_plus_er?(base, w)
+  if inflection_suffix_kind == :er && silent_e_stem_plus_er?(base, w)
     tags = morph_part_of_speech_tags(pos_map, base)
     zip_ok = zipf_w >= WORDFREQ_RARE_ZIPF
     verbal_nouny = if tags.any?
@@ -577,10 +687,16 @@ def morph_base_allows_comparative_er_est?(base, w, pos_map, base_first_pron, for
   vc = pronunciation_vowel_phoneme_count(base_first_pron)
   attested = wiktionary_surface_form_attested?(forms_map, base, w)
   if tags.any?
-    return true if vc <= 1
-    attested
+    # Without a pronunciation we cannot count vowels; do not treat as monosyllable (avoids *impromptuer*
+    # slipping through when the base has frequency but no surviving ARPABET row).
+    return true if base_first_pron && !base_first_pron.empty? && vc <= 1
+    return false unless attested
+    # Attested comparatives from adjective-only (or non-verb) lemmas still need corpus support on
+    # the surface itself; otherwise *impromptuer* inherits *impromptu*’s frequency (FP).
+    return zipf_w >= WORDFREQ_RARE_ZIPF unless tags.include?("verb")
+    true
   else
-    return true if vc <= 2
+    return true if base_first_pron && !base_first_pron.empty? && vc <= 2
     attested
   end
 end
@@ -591,6 +707,8 @@ end
 def morph_base_allows_plural_s?(base, pos_map, forms_map, plural_word)
   tags = morph_part_of_speech_tags(pos_map, base)
   if tags.any?
+    # Verb-only lemmas: treat trailing -s as 3sg (*twerks*), not a noun plural (*gooses* is noun+verb).
+    return true if tags.include?("verb") && !tags.include?("noun")
     return false unless tags.include?("noun")
     return false if wn_has_entry?(base) && !wn_base_has_noun?(base)
     if tags.include?("adj")
@@ -871,11 +989,11 @@ def add_frequency_info(cmudict, subtlex_hash, wordfreq_hash, wiktionary_words, p
     next unless base_freq > 4
     wf_inf = wordfreq_hash[inflected]
     next if wf_inf && wf_inf >= WORDFREQ_COMMON_ZIPF
-    sk8 = Inflect.send(:match_suffix_kind, base, inflected)
-    next if sk8 == :s && !morph_base_allows_plural_s?(base, pos_map, forms_map, inflected)
+    inflection_suffix_kind = Inflect.send(:match_suffix_kind, base, inflected)
+    next if inflection_suffix_kind == :s && !morph_base_allows_plural_s?(base, pos_map, forms_map, inflected)
     zf_w = wordfreq_hash[inflected] || 0
-    next if (sk8 == :ed || sk8 == :ing) && !morph_base_allows_verb_forms?(base, inflected, pos_map, forms_map, zf_w)
-    if sk8 == :er || sk8 == :est
+    next if (inflection_suffix_kind == :ed || inflection_suffix_kind == :ing) && !morph_base_allows_verb_forms?(base, inflected, pos_map, forms_map, zf_w, wordfreq_hash)
+    if inflection_suffix_kind == :er || inflection_suffix_kind == :est
       base_p0 = hash[base]&.dig(1)&.first
       next unless morph_base_allows_comparative_er_est?(base, inflected, pos_map, base_p0, forms_map, zf_w)
     end
@@ -936,11 +1054,11 @@ def add_frequency_info(cmudict, subtlex_hash, wordfreq_hash, wiktionary_words, p
         next if w.include?("-")
         next if rare_words.include?(w)
         next unless Inflect.inflection_of_base?(base, w)
-        sk10 = Inflect.send(:match_suffix_kind, base, w)
+        inflection_suffix_kind = Inflect.send(:match_suffix_kind, base, w)
         wf = wordfreq_hash[w] || 0
-        next if sk10 == :s && !morph_base_allows_plural_s?(base, pos_map, forms_map, w)
-        next if (sk10 == :ed || sk10 == :ing) && !morph_base_allows_verb_forms?(base, w, pos_map, forms_map, wf)
-        if sk10 == :er || sk10 == :est
+        next if inflection_suffix_kind == :s && !morph_base_allows_plural_s?(base, pos_map, forms_map, w)
+        next if (inflection_suffix_kind == :ed || inflection_suffix_kind == :ing) && !morph_base_allows_verb_forms?(base, w, pos_map, forms_map, wf, wordfreq_hash)
+        if inflection_suffix_kind == :er || inflection_suffix_kind == :est
           next unless morph_base_allows_comparative_er_est?(base, w, pos_map, base_prons&.first, forms_map, wf)
         end
         next if wf >= WORDFREQ_COMMON_ZIPF
@@ -986,16 +1104,16 @@ def add_frequency_info(cmudict, subtlex_hash, wordfreq_hash, wiktionary_words, p
       Inflect.each_derivable_form(base) do |w|
         next if w == base || w.include?("-") || rare_words.include?(w)
         next unless Inflect.inflection_of_base?(base, w)
-        sk = Inflect.send(:match_suffix_kind, base, w)
-        next unless sk
+        inflection_suffix_kind = Inflect.send(:match_suffix_kind, base, w)
+        next unless inflection_suffix_kind
         wf = wordfreq_hash[w] || 0
-        next if sk == :s && !morph_base_allows_plural_s?(base, pos_map, forms_map, w)
-        next if (sk == :ed || sk == :ing) && !morph_base_allows_verb_forms?(base, w, pos_map, forms_map, wf)
-        if sk == :er || sk == :est
+        next if inflection_suffix_kind == :s && !morph_base_allows_plural_s?(base, pos_map, forms_map, w)
+        next if (inflection_suffix_kind == :ed || inflection_suffix_kind == :ing) && !morph_base_allows_verb_forms?(base, w, pos_map, forms_map, wf, wordfreq_hash)
+        if inflection_suffix_kind == :er || inflection_suffix_kind == :est
           next unless morph_base_allows_comparative_er_est?(base, w, pos_map, base_prons&.first, forms_map, wf)
         end
         next if wf >= WORDFREQ_COMMON_ZIPF
-        if sk == :s
+        if inflection_suffix_kind == :s
           next unless hash.key?(w)
           next if wn_base_has_verb?(base)
           next if hash[w][0] > 4
@@ -1174,13 +1292,15 @@ $inflection_base_words = {}
 
 def rebuild_rhymecrime_dictionaries()
   cmudict = load_cmudict
+  wordfreq_hash = load_wordfreq
   wiktionary_prons, forms_map, pos_map = load_wiktionary
   apply_lexical_pos_layer_a!(pos_map)
+  wn_seed_pos_map_for_cmudict_gaps!(pos_map, cmudict)
+  apply_lexical_pos_layer_b!(pos_map, wordfreq_hash)
   save_part_of_speech_map(pos_map)
   merge_wiktionary!(cmudict, wiktionary_prons)
   merge_inflected_forms!(cmudict, forms_map)
   subtlex_hash = load_subtlex
-  wordfreq_hash = load_wordfreq
   promote_us_to_al_pronunciations!(cmudict, subtlex_hash.keys.to_a + wordfreq_hash.keys.to_a)
   # Track which words are inflected forms for frequency inheritance
   forms_map.each do |base_word, form_pairs|

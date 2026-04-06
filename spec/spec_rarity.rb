@@ -853,7 +853,7 @@ describe 'RARITY' do
     oughta_be_common "foxes"
     oughta_be_rare "foxs"
     oughta_be_rare "foxed"
-    oughta_be_rare "foxing", NOT_WORKING
+    oughta_be_rare "foxing"
     oughta_be_rare "foxly"
     oughta_be_common "foxy"
     oughta_be_rare "foxyness"
@@ -869,7 +869,7 @@ describe 'RARITY' do
     oughta_be_common "crotch"
     oughta_be_common "crotches"
     oughta_be_rare "crotchs"
-    oughta_be_rare "crotched", NOT_WORKING
+    oughta_be_rare "crotched"
     oughta_be_rare "crotching"
     oughta_be_common "tulip"
     oughta_be_common "tulips"
@@ -935,6 +935,9 @@ describe 'RARITY' do
     oughta_be_common 'happier'
     oughta_be_rare 'happyest'
     oughta_be_common 'happiest'
+    oughta_be_common 'ant'
+    oughta_be_common 'ants'
+    oughta_be_rare 'anting'
   end
 
   # FP-4: morphological junk (-ing) gets the same frequency as its base because Phase 8
