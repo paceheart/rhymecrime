@@ -5,7 +5,7 @@ require "fileutils"
 # Rhyming utilities for RhymeCrime
 # Used both in preprocessing and at runtime
 
-RHYME_SIGNATURE_DICT_FILENAME = "rhyme_signature_dict.txt"
+RIME_DICT_FILENAME = "rime_dict.txt"
 WORD_DICT_FILENAME = "word_dict.txt"
 
 # Outputs of dict/dict_lib.rb (via dict.rb); not hand-edited. Paths are relative to the dict/
@@ -536,7 +536,7 @@ def save_word_dict(word_dict)
 end
 
 #
-# rhyme signature
+# rime (ARPABET key for rhyme lookup; see Pronunciation#rime)
 #
 
 def single_consonant?(phoneme_cluster)

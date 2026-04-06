@@ -78,21 +78,19 @@ illicit [IH2 L IH1 S AH0 T] solicit [S AH0 L IH1 S IH0 T]
 conflate all unstressed schwa-ish syllables, unless they are followed by R or NG.  
 mumble a little mumblier, please  
 
-#### Step 1.5: Get the word's rhyme signature
+#### Step 1.5: Get the word's rime
 
-The rhyme signature is everything including and after the final most stressed vowel,
-which is indicated in cmudict by a "1".
-
-Some words don't have a 1, so we settle for the final secondarily-stressed vowel,
-or failing that, the last vowel.
+The **rime** (linguistics) is the material that matches for English end-rhyme. Here it is implemented as everything including and after the **head vowel of the prosodic head** (final primary-stressed vowel in CMUDICT, marked `"1"`; else secondary `"2"`; else the last vowel `"0"`). That spans any trailing unstressed syllables (e.g. feminine rhymes), not only one syllable's nucleus+coda.
 
 input: [IH0 N S IH1 ZH AH0 N] # the pronunciation of 'incision'  
-output:        [IH  ZH AH  N] # the pronunciation of '-ision' with stress markers removed  
+output:        [IH  ZH AH  N] # stress digits removed  
 
 We remove the stress markers so that we can rhyme 'furs' [F ER1 Z] with 'yours(2)' [Y ER0 Z]
-They will both have the rhyme signature [ER Z].
+They will both have the rime [ER Z].
 
-#### Step 2: Given the rhyme signature, look up all words that rhyme with it (including itself)
+The underscore-joined ARPABET string is the hash key in `dict/generated/rime_dict.txt`.
+
+#### Step 2: Given the rime, look up all words that rhyme with it (including itself)
 
 #### Step 2.5: Filter out bad rhymes, like the word itself and subwords (e.g. important rhyming with unimportant)
 
@@ -128,7 +126,7 @@ When you enter a single word, RhymeCrime displays rhymes for that word (separati
 Compute the set of all words semantically related to INPUT_REL1, call it RELATEDS1.  
 For each word REL1 in RELATEDS1,  
   Get all rhymes RHYME1 of REL1.  
-  If R is in RELATEDS1, compute R's rhyme signature RSIG and put RHYME1 in the bucket labeled RSIG.  
+  If R is in RELATEDS1, compute R's rime and put RHYME1 in the bucket labeled by that rime.  
 Return all buckets with two or more words in them.  
 
 When you enter two words, RhymeCrime first displays rhymes for WORD1 that are semantically related to WORD2,  

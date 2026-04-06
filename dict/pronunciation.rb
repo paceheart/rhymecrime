@@ -55,9 +55,12 @@ class Pronunciation
     self.class.new(out)
   end
   
-  def rhyme_signature_array
-    # The rhyme signature is everything including and after the final most stressed vowel,
-    # which is indicated in cmudict by a "1".
+  def rime_array
+    # "Rime" in linguistics is the matching material for English end-rhymes.
+    # Usually it applies to a syllable, and means the vowel and anything after it.
+    # In RhymeCrime, we want perfect rhymes, so we use 'rime' to mean the linguistic rime of
+    # the primary-stressed syllable, and _everything_ after that, including following syllables.
+    # In CMUdict, the primary-stressed vowel is indicated by a "1".
     # Some words don't have a 1, so we settle for the final secondarily-stressed vowel,
     # or failing that, the last vowel.
     #
@@ -65,21 +68,21 @@ class Pronunciation
     # output:        [IH  ZH AH  N] # the pronunciation of '-ision' with stress markers removed
     #
     # We remove the stress markers so that we can rhyme 'furs' [F ER1 Z] with 'yours(2)' [Y ER0 Z]
-    # They will both have the rhyme signature [ER Z].
+    # They will both have the rime [ER Z].
     if(empty?)
       [ ]
     else
-      rhyme_signature_array_with_stress("1") || rhyme_signature_array_with_stress("2") || rhyme_signature_array_with_stress("0") or raise RuntimeError, "Pronunciation with no vowels: #{self}"
+      rime_array_with_stress("1") || rime_array_with_stress("2") || rime_array_with_stress("0") or raise RuntimeError, "Pronunciation with no vowels: #{self}"
     end
   end
 
-  def rhyme_signature_array_with_stress(stress)
-    rsig = Array.new
+  def rime_array_with_stress(stress)
+    rime = Array.new
     @phonemes.reverse.each { |phoneme|
       unless(phoneme.syllable_boundary?)
-        rsig.unshift(phoneme.tr("0-2", "")) # we need to remove the numbers
+        rime.unshift(phoneme.tr("0-2", "")) # we need to remove the numbers
         if(phoneme.include?(stress))
-          return rsig # we found the phoneme with stress STRESS, we can stop now
+          return rime # we found the phoneme with stress STRESS, we can stop now
         end
       end
     }
@@ -88,12 +91,12 @@ class Pronunciation
 
   def initial_consonant_cluster_array
     # everything strictly before the first vowel
-    rsig = Array.new
+    cluster = Array.new
     @phonemes.each { |phoneme|
       if phoneme.vowel?
-        return rsig
+        return cluster
       else
-        rsig.push(phoneme)
+        cluster.push(phoneme)
       end
     }
     return [ ]
@@ -101,24 +104,24 @@ class Pronunciation
 
   def final_consonant_cluster_array
     # everything strictly after the last vowel
-    rsig = Array.new
+    cluster = Array.new
     @phonemes.reverse.each { |phoneme|
       if phoneme.vowel?
-        return rsig
+        return cluster
       else
-        rsig.unshift(phoneme)
+        cluster.unshift(phoneme)
       end
     }
     return [ ]
   end
 
-  def rhyme_signature
-    # this makes for a better hash key
-    rhyme_signature_array.join("_")
+  def rime
+    # Underscore-joined ARPABET; hash key into the rime dictionary.
+    rime_array.join("_")
   end
 
   def rhyme_syllables_array
-    # This is like rhyme_signature_array but includes the whole rhyming syllable; it doesn't chop off the preceding consonants.
+    # Like rime_array but spans the whole stressed syllable (keeps syllable-initial consonants).
     if(empty?)
       [ ]
     else
@@ -127,11 +130,11 @@ class Pronunciation
   end
 
   def rhyme_syllables_array_with_stress(stress)
-    rsig = Array.new
+    parts = Array.new
     foundTheRhymingSyllable = false
     @phonemes.reverse.each { |phoneme|
       unless phoneme.syllable_boundary?
-        rsig.unshift(phoneme.tr("0-2", "")) # we need to remove the numbers
+        parts.unshift(phoneme.tr("0-2", "")) # we need to remove the numbers
       end
       if(!foundTheRhymingSyllable)
         if(phoneme.include?(stress))
@@ -139,12 +142,12 @@ class Pronunciation
         end
       else
         if(phoneme.syllable_boundary?)
-          return rsig
+          return parts
         end
       end
     }
     if foundTheRhymingSyllable # we got all the way to the beginning of the word without a syllable break
-      return rsig
+      return parts
     end
     return nil
   end

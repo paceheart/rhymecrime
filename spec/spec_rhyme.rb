@@ -307,7 +307,7 @@ describe 'RHYMES' do
     oughta_rhyme 'kitten', 'mitten'
     ought_not_rhyme 'button', 'bun' # glottal / nasal; not a perfect -uddle rhyme
 
-    # --- Initial / cluster: no intervocalic flap ---
+    # --- word-initial T vs D: still rhymes if rime matches
     oughta_rhyme 'train', 'drain'
     oughta_rhyme 'try', 'dry'
     oughta_rhyme 'tame', 'dame'
@@ -337,8 +337,23 @@ describe 'RHYMES' do
     oughta_rhyme 'carded', 'carted'
 
     # --- Long / morphological (Withgott-style: flap may fail) ---
+    # Foot boundaries and stress often block word-internal flap; do not treat as T~D rhyme by default.
+    ought_not_rhyme 'militaristic', 'ballistic' # stress/foot; T envs unlike minimal intervocalic pairs
+    ought_not_rhyme 'Atlantic', 'romantic' # initial vs medial stress; different T surroundings
+    ought_not_rhyme 'retail', 'reveal' # second-syllable stress in reveal vs retail; classic flap-env contrast
+    ought_not_rhyme 'detail', 'reveal'
+    ought_not_rhyme 'mediterranean', 'subterranean' # wrong vowels + length; not a T/D minimal pair
+    ought_not_rhyme 'hypothetical', 'heretical' # long words; medial T vs D not a simple flap merge story
+    ought_not_rhyme 'accelerometer', 'thermometer' # long compounds; rime mismatch (EH T ER vs M AH T ER)
 
     # --- Homophone / spelling-variant traps ---
+    # Same (or near-same) surface sound from spelling, not from intervocalic T~D; policy should not miscount.
+    ought_not_rhyme 'metal', 'mettle'
+    ought_not_rhyme 'kernel', 'colonel'
+    ought_not_rhyme 'write', 'right'
+    ought_not_rhyme 'morning', 'mourning'
+    ought_not_rhyme 'plain', 'plane'
+    ought_not_rhyme 'symbol', 'cymbal'
 
     # --- More positive candidates (informal or regional spellings marked) ---
     oughta_rhyme 'latter', 'ladder'
@@ -359,7 +374,7 @@ describe 'RHYMES' do
     oughta_rhyme 'party', 'tardy'
 
     # --- Liquids before T (flap often applies after R; L is dialectal) ---
-    oughta_rhyme 'faulty', 'salty' # T vs L cluster — different
+    oughta_rhyme 'faulty', 'salty'
     ought_not_rhyme 'filter', 'builder' # F IH1 L T ER vs B IH1 L D ER — ought_not
     ought_not_rhyme 'falter', 'alder' # F AO1 L T ER vs AO1 L D ER
     ought_not_rhyme 'falter', 'folder'

@@ -22,7 +22,7 @@ To help me write better limericks quicklier.
 
 * reduce dumb outputs
 ** fix close / enclose, bass / base by pushing down only_preferred to find_rhyming_words so it can have access to the pronunciation
-** filter out spelling variants from rhyme signature dict, e.g. UW_S_EH_F  yousef youssef yusef. But how to know whether it's a spelling variant or a homonym?
+** filter out spelling variants from rime dict, e.g. UW_S_EH_F  yousef youssef yusef. But how to know whether it's a spelling variant or a homonym?
 ** hyphens
 *** standardize "i r a" vs. "ira" and "san-jose" oughta be "san_jose" but "so-so" oughta stay "so-so"
 ** more scalable solution for British English, e.g. advisable / realisable

@@ -16,17 +16,17 @@ TRACE_WORD = nil
 #  KITTENS  K IH1 T AH0 N Z
 #  KITTERMAN  K IH1 T ER0 M AH0 N
 #
-# A word's "rhyme signature" 
-# RhymeCrime uses a two-step lookup process to avoid storing lots of redundant data. For exa e.g. all 500+ "-ation" rhymes as values for "elation", "consternation", etc.
+# A word's rime (see Pronunciation#rime / #rime_array in pronunciation.rb).
+# RhymeCrime uses a two-step lookup process to avoid storing lots of redundant data, e.g. all 500+ "-ation" rhymes as values for "elation", "consternation", etc.
 # Step 1: Given a word, use the CMU Pronouncing Data to get its pronunciation.
 # Step 1.1: Tweak the given pronunciation to deal with quirks of cmudict.
-# Step 1.5: Get the word's rhyme signature
-# Step 2: Given the rhyme signature, look up all words that rhyme with it (including itself)
+# Step 1.5: Get the word's rime (underscore-joined ARPABET key).
+# Step 2: Given the rime, look up all words that rhyme with it (including itself)
 # Step 2.5: Filter out bad rhymes, like the word itself and subwords (e.g. important rhyming with unimportant)
-# build_rhyme_signature_dict builds the dictionary used in Step 2.
+# build_rime_dict builds the dictionary used in Step 2.
 #
 # We could improve performance even more by assigning an arbitrary index 0..N
-# to each rhyme signature, having a list of those be the keys for Dict 1, and
+# to each rime, having a list of those be the keys for Dict 1, and
 # having Step 2 be an array lookup instead of a hash lookup.
 
 require 'rwordnet'
@@ -64,24 +64,23 @@ MORPH_CORPUS_SUBTLEX_MIN = 40
 MORPH_LEXICAL_NOUN_PLURAL_SUBTLEX_MIN = 10
 # Phase 6: skip weak Zipf for 4-letter tokens with no WordNet entry (surname spam ~2.3) but keep neologisms ≥ this (yeet ~2.51).
 WIKT_FLOOR_4L_WEAK_ZIPF_BELOW = 2.5
-RHYME_SIGNATURE_DICT_HEADER = "# RhymeCrime's Rhyme Signature Dictionary
+RIME_DICT_HEADER = "# RhymeCrime's rime dictionary
 # https://github.com/paceheart/rhymecrime
 #
 # Built by dict_lib.rb (CLI: dict/dict.rb).
 #
-# Each line is of the form:glass
+# Each line is of the form:
 #
-# RHYME_SIGNATURE  WORD1 WORD2 WORD3 ...
+# RIME  WORD1 WORD2 WORD3 ...
 #
-# where RHYME_SIGNATURE is an underscore-concatenated ARPABET encoding
-# of the syllables including and after the final most stressed vowel.
-# See rhyme_signature_array for details.
+# where RIME is an underscore-concatenated ARPABET encoding of phonemes
+# from the head vowel of the prosodic head through word end (see Pronunciation#rime_array).
 #
 # This data is automatically distilled from a forked version of the
 # CMU Pronouncing Dictionary, with some manual tweaks and some
 # programmatic preprocessing as described in dict_lib.rb.
 #
-# Singleton signatures are excluded.
+# Singleton rimes are excluded.
 #"
 
 WORD_DICT_HEADER = "# RhymeCrime's word info dictionary
@@ -416,27 +415,27 @@ end
 # put it all together
 #
 
-def build_rhyme_signature_dict(cmudict)
+def build_rime_dict(cmudict)
   rdict = Hash.new {|h,k| h[k] = [] } # hash of arrays, each element of which is a Pronunciation
   i = 0;
   for word, prons in cmudict
     for pron in prons
-      rsig = pron.rhyme_signature
-      rdict[rsig].push(word)
+      rime = pron.rime
+      rdict[rime].push(word)
     end
     i = i + 1;
   end
   # sort, and remove duplicate words
-  for rsig, words in rdict
+  for rime, words in rdict
     new_words = words.sort.uniq
     if(new_words.nil?)
-      rdict.delete(rsig)
+      rdict.delete(rime)
     else
-      rdict[rsig] = new_words
+      rdict[rime] = new_words
     end
   end
-  print "Identified #{rdict.length} unique rhyme signatures, "
-  rdict = rdict.reject!{|rsig, words| words.length <= 1 }
+  print "Identified #{rdict.length} unique rimes, "
+  rdict = rdict.reject!{|rime, words| words.length <= 1 }
   puts "#{rdict.length} of which are nonempty"
   return rdict
 end
@@ -447,15 +446,15 @@ def merge_word_dict_pronunciations_into_rdict!(rdict, word_dict)
   word_dict.each do |word, (_freq, prons)|
     next if prons.empty?
     prons.each do |pron|
-      rsig = pron.rhyme_signature
-      next if rsig.empty?
-      (rdict[rsig] ||= []) << word
+      rime = pron.rime
+      next if rime.empty?
+      (rdict[rime] ||= []) << word
     end
   end
-  rdict.each do |rsig, words|
-    rdict[rsig] = words.sort.uniq
+  rdict.each do |rime, words|
+    rdict[rime] = words.sort.uniq
   end
-  rdict.reject! { |_rsig, words| words.length <= 1 }
+  rdict.reject! { |_rime, words| words.length <= 1 }
   rdict
 end
 
@@ -471,12 +470,12 @@ def filter_cmudict(cmudict, rdict)
     end
     for pron in prons
       total += 1
-      rsig = pron.rhyme_signature
-      if(!rdict[rsig].empty?)
+      rime = pron.rime
+      if(!rdict[rime].empty?)
         proncount += 1
         filtered_cmudict[word].push(pron)
         if(word == TRACE_WORD)
-          puts "TRACE #{pron} passed filters because it rhymes with #{rdict[rsig]}"
+          puts "TRACE #{pron} passed filters because it rhymes with #{rdict[rime]}"
         end
       end
     end
@@ -918,11 +917,11 @@ def rebuild_rhymecrime_dictionaries()
     end
   end
   delete_explicitly_forbidden_keys_from_hash(cmudict)
-  rdict = build_rhyme_signature_dict(cmudict)
+  rdict = build_rime_dict(cmudict)
   subtlex_hash = load_subtlex
   wordfreq_hash = load_wordfreq
   word_dict = build_word_dict(cmudict, rdict, subtlex_hash, wordfreq_hash, wiktionary_words)
   merge_word_dict_pronunciations_into_rdict!(rdict, word_dict)
-  save_string_hash(rdict, generated_dict_path_under_dict_dir(RHYME_SIGNATURE_DICT_FILENAME), RHYME_SIGNATURE_DICT_HEADER)
+  save_string_hash(rdict, generated_dict_path_under_dict_dir(RIME_DICT_FILENAME), RIME_DICT_HEADER)
   save_word_dict(word_dict)
 end

@@ -65,11 +65,11 @@ def debug_info(word)
     result << pron.rhyme_syllables_string
 
     if prons.length == 1
-      result << " rsig="
+      result << " rime="
     else
-      result << " rsig#{i}="
+      result << " rime#{i}="
     end
-    result << pron.rhyme_signature
+    result << pron.rime
   end
   return result
 end
@@ -94,18 +94,17 @@ def needed_for_testing?(word)
   WORDS_NEEDED_FOR_TESTING.include?(word)
 end  
 
-$rdict = nil # rhyme signature -> words hash
+$rdict = nil # rime (underscore ARPABET key) -> words hash
 def rdict
-  # rhyme_signature => [rhyming_word1 rhyming_word2 ...]
-  # where rhyme_signature = "syllable1 syllable2 ..."
+  # rime => [rhyming_word1 rhyming_word2 ...]
   if $rdict.nil?
-    $rdict = load_rhyme_signature_dict_as_hash
+    $rdict = load_rime_dict_as_hash
   end
   $rdict
 end
 
-def load_rhyme_signature_dict_as_hash()
-  load_string_hash(generated_dict_path(RHYME_SIGNATURE_DICT_FILENAME)) or die "First run dict/dict.rb (from dict/) to generate dictionary caches"
+def load_rime_dict_as_hash()
+  load_string_hash(generated_dict_path(RIME_DICT_FILENAME)) or die "First run dict/dict.rb (from dict/) to generate dictionary caches"
 end
 
 def pronunciations(word)
@@ -126,8 +125,8 @@ def frequency(word)
   end
 end  
 
-def rdict_lookup(rsig)
-  rdict[rsig] || [ ]
+def rdict_lookup(rime)
+  rdict[rime] || [ ]
 end
 
 def find_preferred_rhyming_words(word)
@@ -192,7 +191,7 @@ end
 
 def find_rhyming_words(word, identical_ok=true)
   # merges multiple pronunciations of WORD
-  # use our compiled rhyme signature dictionary
+  # use our compiled rime dictionary
   rhyming_words = Array.new
   unless(explicitly_forbidden?(word))
     for form in all_forms(word) # to increase the likelihood of a hit, try all spelling variants
@@ -239,11 +238,11 @@ def all_identical_rhymes?(words)
 end
 
 def find_rhyming_words_for_pronunciation(pron, identical_ok=true)
-  # use our compiled rhyme signature dictionary
+  # use our compiled rime dictionary
   results = Array.new
-  rsig = pron.rhyme_signature
+  rime = pron.rime
   rsyllables = pron.rhyme_syllables_array
-  rdict_lookup(rsig).each { |rhyme|
+  rdict_lookup(rime).each { |rhyme|
     unless(!identical_ok && identical_rhyme?(rhyme, rsyllables))
       results.push(rhyme)
     else
@@ -256,8 +255,8 @@ end
 def has_rhyming_word?(word)
   unless(explicitly_forbidden?(word))
     for pron in pronunciations(word)
-      rsig = pron.rhyme_signature
-      if(! rdict_lookup(rsig).empty?)
+      rime = pron.rime
+      if(! rdict_lookup(rime).empty?)
         return true
       end
     end
@@ -326,19 +325,19 @@ def really_find_rhyming_tuples(input_rel1)
   # Compute the set of all words semantically related to INPUT_REL1, call it RELATEDS1.
   # For each word REL1 in RELATEDS1,
   #   Get all rhymes RHYME1 of REL1.
-  #   If R is in RELATEDS1, compute R's rhyme signature RSIG and put RHYME1 in the bucket labeled RSIG.
+  #   If R is in RELATEDS1, compute R's rime and put RHYME1 in the bucket labeled by that rime.
   # Return all buckets with two or more words in them.
   related_rhymes = Hash.new {|h,k| h[k] = [] } # hash of arrays
   unless(explicitly_forbidden?(input_rel1))
     relateds1 = find_related_words(input_rel1, true)
     relateds1.each { |rel1|
       for rel1pron in pronunciations(rel1)
-        rsig = rel1pron.rhyme_signature
-        debug "Rhymes for #{rel1} [#{rsig}] #{debug_info(rel1)}:"
+        rime = rel1pron.rime
+        debug "Rhymes for #{rel1} [#{rime}] #{debug_info(rel1)}:"
         find_rhyming_words_for_pronunciation(rel1pron, true).each { |rhyme1|
           if(relateds1.include? rhyme1) # we only care about relateds of input_rel1
             rhyme1 = preferred_form(rhyme1) # push 'honor' instead of 'honour'. This will ensure we don't push both.
-            related_rhymes[rsig].push(rhyme1)
+            related_rhymes[rime].push(rhyme1)
             debug " #{rhyme1} #{debug_info(rhyme1)}"
           end
         }
@@ -346,7 +345,7 @@ def really_find_rhyming_tuples(input_rel1)
     }
   end
   tuples = [ ]
-  related_rhymes.each { |rsig, relrhymes|
+  related_rhymes.each { |rime, relrhymes|
     relrhymes.sort!.uniq!
     if(relrhymes.length > 1 && !all_identical_rhymes?(relrhymes))
       tuples.push(relrhymes.sort!)
