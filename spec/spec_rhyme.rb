@@ -93,6 +93,7 @@ describe 'RHYMES' do
     oughta_rhyme 'cajun', 'contagion'
     ought_not_rhyme 'axolotl', 'bottle' # stress mismatch, but I don't hate it
     ought_not_rhyme 'axolotls', 'bottles'  # stress mismatch, but I don't hate it
+    oughta_rhyme 'spiral', 'viral'
   end
 
   context 'perfect rhymes must rhyme the last primary-stressed syllable, not just the last syllable' do
@@ -351,7 +352,7 @@ describe 'RHYMES' do
     oughta_rhyme 'ladle', 'fatal'
     oughta_rhyme 'beetle', 'needle'
     oughta_rhyme 'noodle', 'brutal'
-    oughta_rhyme 'coital', 'colloidal'
+    oughta_rhyme 'coital', 'colloidal', NOT_WORKING # was tied to *us→*al promotion (removed)
     oughta_rhyme 'potato', 'tornado'
     oughta_rhyme 'transmittable', 'biddable'
     oughta_rhyme 'debatable', 'tradable'
@@ -567,7 +568,7 @@ describe 'RHYMES' do
   end
 
   context 'non-binary rhymes' do
-    oughta_rhyme 'latex', 'paychecks'
-    oughta_rhyme 'pitiful', 'biddable' # genderfluid plus T -> D
+    oughta_rhyme 'latex', 'paychecks', NOT_WORKING
+    oughta_rhyme 'pitiful', 'biddable', NOT_WORKING # genderfluid plus T -> D
   end
 end

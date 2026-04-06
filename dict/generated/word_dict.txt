@@ -3403,7 +3403,7 @@ antithetical,5,AE2 N . T AH0 . TH EH1 . D AH0 . K AH0 L
 antitoxin,8,AE2 N T IY0 . T AA1 K S AH0 N
 antitoxins,8,AE2 N T IY0 . T AA1 K S AH0 N Z
 antitrust,7,AE2 N T AY0 . T R AH1 S T
-antiviral,4,AE2 N T IY0 . V AY1 R AH0 L
+antiviral,4,
 antiwar,8,AE2 N T AY0 . W AO1 R|AE2 N T IY0 . W AO1 R
 antkowiak,0,AH0 N T . K AW1 . IY0 . AE0 K
 antle,0,AE1 N . T AH0 L
@@ -37795,7 +37795,6 @@ goniometer,0,G OW2 . N IY0 . AA1 . M AH0 . D AH0 R
 gonium,0,G OW1 . N IY0 . AH0 M
 gonna,5,G AA1 . N AH0
 gonnella,0,G OW0 . N EH1 . L AH0
-gonococcal,0,G AA2 . N AH0 . K AA1 . K AH0 L
 gonorrhea,9,G AA2 . N AH0 . R IY1 . AH0
 gonsalez,0,G OW0 N . S AA1 . L EH0 Z
 gonsalves,0,G OW0 N . S AA1 L . V EH0 S
@@ -112949,7 +112948,7 @@ lead-in,0,L IY1 . D AH0 N
 dastard,0,D AE1 . S T AH0 R D
 shend,0,SH EH1 N D
 parasiticide,0,P AE2 . R AH0 . S IH1 . D AH0 . S AY0 D
-amical,0,AE1 . M AH0 . K AH0 L
+amical,0,AH0 . M IY1 . K AH0 L
 shofar,4,SH OW1 . F AH0 R
 miscreate,0,M AH0 . S K R AH0 . EY1 T
 democratise,0,D AH0 . M AA1 . K R AH0 . D AY0 Z
@@ -119173,7 +119172,7 @@ epiboly,0,AH0 . P IH1 . B AH0 . L IY0
 markovian,0,M AA0 R . K OW1 . V IY0 . AH0 N
 remobilization,0,R IY2 . M OW0 . B AH0 . L AH0 . Z EY1 . SH AH0 N
 palinspastic,0,P AE0 . L AH0 N . S P AE1 . S T AH0 K
-detrital,0,D IY0 . T R AY1 . D AH0 L
+detrital,0,D AH0 . T R AY1 . D AH0 L
 superchondritic,0,S UW0 . P AH0 R . K AA0 N . D R IH1 . D AH0 K
 aphanitic,0,AE2 . F AH0 . N IH1 . D AH0 K
 didacticism,4,
@@ -124620,7 +124619,6 @@ decomposability,0,D IY0 . K AH0 M . P AH2 . UH0 . Z AH0 . B IH1 . L AH0 . D IY0
 deconfining,0,D IY0 . K AH0 N F AY1 N IY0 NG
 dilepton,0,D AY0 . L EH1 P . T AA0 N
 isotonicity,0,AY2 . S AH0 . UH0 . T AH0 . N IH1 . S AH0 . D IY0
-magnetohydrodynamical,0,M AE0 G . N IY2 . D AH0 . HH AY2 . D R AH0 . D AY0 . N AE1 . M AH0 . K AH0 L
 judgmatically,0,JH AH0 JH . M AE1 . D AH0 . K L IY0
 syncranterian,0,S IY0 NG . K R AE0 N . T IY1 . R IY0 . AH0 N
 bulgar,4,B AH1 L . G AH0 R
@@ -126404,7 +126402,7 @@ evp,0,IY0 . V IY0 . P IY1
 qef,0,K W EH1 F|K Y UW0 . IY0 . EH1 F
 poustie,0,P UW1 . S T IY0|P AW1 . S T IY0
 autorecognition,0,AO2 . D OW0 . R EH0 . K AH0 G . N IH1 . SH AH0 N
-coital,6,
+coital,6,K OY1 . D AH0 L
 extracoital,0,EH2 K . S T R AH0 . K OY1 . D AH0 L
 forthdraw,0,F AO0 R TH . D R AA1
 sufganiyah,0,S UW2 F . G AA0 . N IY0 . Y AA1

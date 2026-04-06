@@ -887,7 +887,7 @@ describe 'RARITY' do
     oughta_be_common "ghosted"
     oughta_be_common "ghosting"
     oughta_be_common "ghostly"
-    oughta_be_rare "campal" # don't overapply the coitus -> coital rule
+    oughta_be_rare "campal" # spurious *al* from *campus* if *us→*al-style rules ever return
     oughta_be_rare 'mochaed'
     oughta_be_rare 'mochaer'
     oughta_be_rare 'mochaest'

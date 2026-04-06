@@ -1227,67 +1227,6 @@ def merge_inflected_forms!(cmudict, forms_map)
   puts "Generated #{added} inflected-form pronunciations"
 end
 
-# Suffixes on +stem+us+ for *us → *al promotion (Latin/medical morphology). Not every *us word: we
-# exclude coincidences like campus/campal by requiring +campus+ only when +stem_us+ != "campus"
-# (e.g. hippocampus → hippocampal).
-US_TO_AL_STEM_US_SUFFIXES = %w[
-  itus
-  atus
-  icus
-  virus
-  coccus
-  iscus
-].freeze
-
-def stem_us_eligible_for_us_to_al_promotion?(stem_us)
-  return true if US_TO_AL_STEM_US_SUFFIXES.any? { |sfx| stem_us.end_with?(sfx) }
-  stem_us.end_with?("ampus") && stem_us != "campus"
-end
-
-# For lemmas like +coital+ attested in frequency data but missing from CMU/Kaikki: if +stem+us+ is
-# already pronounceable and the final segment is /s/, derive +stem+al+ by replacing that /s/ with /l/
-# (coitus → coital). Only runs for +al+ spellings that appear in +attested_words+ (SUBTLEX/wordfreq)
-# and when +stem_us+ matches +US_TO_AL_STEM_US_SUFFIXES+ (or compound *ampus except campus).
-def promote_us_to_al_pronunciations!(cmudict, attested_words)
-  added = 0
-  seen = Set.new
-  Array(attested_words).each do |raw|
-    w = raw.to_s.downcase.strip
-    next if w.empty? || seen.include?(w)
-    seen.add(w)
-    next unless w.end_with?("al")
-    stem_al = w.sub(/al\z/, "")
-    stem_us = stem_al + "us"
-    next unless stem_us_eligible_for_us_to_al_promotion?(stem_us)
-    next if cmudict.key?(w)
-    base_prons = cmudict[stem_us]
-    next if base_prons.nil? || base_prons.empty?
-
-    derived = []
-    base_prons.each do |syl_pron|
-      flat = syl_pron.phonemes.reject { |p| p == "." }
-      next if flat.empty?
-      last = flat.last
-      next unless last.tr("0-2", "") == "S"
-      new_flat = flat[0..-2] + ["L"]
-      p = Pronunciation.new(new_flat)
-      norm = normalize_flat_arphabet_pronunciation(p).syllabify
-      next unless norm.phonemes.any?(&:vowel?)
-      unless WHITELIST.include?(w)
-        next unless final_consonant_cluster_ok?(norm.final_consonant_cluster_array)
-        next unless initial_consonant_cluster_ok?(norm.initial_consonant_cluster_array)
-      end
-      derived << norm
-    end
-    derived = dedupe_pronunciations(derived)
-    next if derived.empty?
-
-    cmudict[w] = derived
-    added += 1
-  end
-  puts "Promoted #{added} *us→*al pronunciations for attested *al lemmas" if added.positive?
-end
-
 $inflection_base_words = {}
 
 def rebuild_rhymecrime_dictionaries()
@@ -1301,7 +1240,6 @@ def rebuild_rhymecrime_dictionaries()
   merge_wiktionary!(cmudict, wiktionary_prons)
   merge_inflected_forms!(cmudict, forms_map)
   subtlex_hash = load_subtlex
-  promote_us_to_al_pronunciations!(cmudict, subtlex_hash.keys.to_a + wordfreq_hash.keys.to_a)
   # Track which words are inflected forms for frequency inheritance
   forms_map.each do |base_word, form_pairs|
     form_pairs.each do |inflected_word, base|
