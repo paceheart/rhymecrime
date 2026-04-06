@@ -54,7 +54,28 @@ class Pronunciation
     end
     self.class.new(out)
   end
-  
+
+  # GA intervocalic flapping: singleton T between a sonorant (vowel / R) and an
+  # unstressed vowel merges with D. Pre-nasal T (kitten, tighten) is excluded
+  # because it surfaces as a glottal stop, not a flap.
+  def with_flapped_t
+    return self if empty?
+    out = @phonemes.dup
+    changed = false
+    out.each_with_index do |phoneme, i|
+      next unless phoneme == "T"
+      prev = (i > 0) ? out[i - 1] : nil
+      next unless prev && (prev.vowel? || prev == "R")
+      nxt = (i < out.length - 1) ? out[i + 1] : nil
+      next unless nxt && nxt.vowel? && (nxt.include?("0") || nxt.include?("2"))
+      after_nxt = (i < out.length - 2) ? out[i + 2] : nil
+      next if after_nxt == "N"
+      out[i] = "D"
+      changed = true
+    end
+    changed ? self.class.new(out) : self
+  end
+
   def rime_array
     # "Rime" in linguistics is the matching material for English end-rhymes.
     # Usually it applies to a syllable, and means the vowel and anything after it.
@@ -72,8 +93,28 @@ class Pronunciation
     if(empty?)
       [ ]
     else
-      rime_array_with_stress("1") || rime_array_with_stress("2") || rime_array_with_stress("0") or raise RuntimeError, "Pronunciation with no vowels: #{self}"
+      raw = rime_array_with_stress("1") || rime_array_with_stress("2") || rime_array_with_stress("0") or raise RuntimeError, "Pronunciation with no vowels: #{self}"
+      flap_t_in_rime(raw)
     end
+  end
+
+  ARPABET_VOWELS = %w[AA AE AH AO AW AY EH EY IH IY OW OY UH UW].to_set
+
+  # T→D in the rime only (stress already stripped). AY+T+AH always merges here
+  # so recital/suicidal share a bucket; +with_flapped_t+ may still keep lexical T for rsyll.
+  def flap_t_in_rime(rime)
+    out = rime.dup
+    out.each_with_index do |phoneme, i|
+      next unless phoneme == "T"
+      prev = (i > 0) ? out[i - 1] : nil
+      next unless prev && (ARPABET_VOWELS.include?(prev) || prev == "R")
+      nxt = (i < out.length - 1) ? out[i + 1] : nil
+      next unless nxt && ARPABET_VOWELS.include?(nxt)
+      after_nxt = (i < out.length - 2) ? out[i + 2] : nil
+      next if after_nxt == "N"
+      out[i] = "D"
+    end
+    out
   end
 
   def rime_array_with_stress(stress)
@@ -118,6 +159,19 @@ class Pronunciation
   def rime
     # Underscore-joined ARPABET; hash key into the rime dictionary.
     rime_array.join("_")
+  end
+
+  # Consonants immediately before the primary-stressed vowel (same syllable); stress digits stripped.
+  def primary_stressed_syllable_onset_bases
+    ph = @phonemes
+    i = ph.index { |p| !p.syllable_boundary? && p.vowel? && p.include?("1") }
+    return [] if i.nil?
+    onset = []
+    (i - 1).downto(0) do |j|
+      break if ph[j].syllable_boundary?
+      onset.unshift(ph[j].tr("0-2", "")) unless ph[j].vowel?
+    end
+    onset
   end
 
   def rhyme_syllables_array

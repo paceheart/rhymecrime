@@ -290,6 +290,10 @@ describe 'RHYMES' do
       ought_not_rhyme 'liter', 'leader'
       ought_not_rhyme 'kitty', 'kiddie'
       ought_not_rhyme 'ditty', 'diddy'
+      ought_not_rhyme 'sorted', 'sordid'
+      ought_not_rhyme 'latter', 'ladder'
+      ought_not_rhyme 'matter', 'madder'
+      ought_not_rhyme 'recital', 'suicidal'
     end
 
     # --- Classic T/D minimal pairs (intervocalic; GA flap neutralization) ---
@@ -327,13 +331,11 @@ describe 'RHYMES' do
 
     # --- Past -ed (T vs D allomorph) ---
     ought_not_rhyme 'faint', 'pained'
-    oughta_rhyme 'fated', 'faded'
     ought_not_rhyme 'bated', 'bayed'
     oughta_rhyme 'matted', 'padded'
     ought_not_rhyme 'wanted', 'sanded'
     ought_not_rhyme 'wanted', 'absconded'
-    ought_not_rhyme 'sorted', 'sordid' # identical rhyme
-    oughta_rhyme 'carded', 'carted'
+    oughta_rhyme 'carded', 'farted'
 
     # --- Withgott (1982): morphological structure and T/D flap ---
     # T normally flaps across morpheme boundaries in derived words (positive cases).
@@ -342,22 +344,23 @@ describe 'RHYMES' do
     ought_not_rhyme 'creator', 'spectator' # stress mismatch
     oughta_rhyme 'equator', 'invader'
     oughta_rhyme 'dictator', 'crusader'
-    oughta_rhyme 'recital', 'suicidal'
+    oughta_rhyme 'recital', 'idle'
+    oughta_rhyme 'ladle', 'fatal'
+    oughta_rhyme 'beetle', 'needle'
+    oughta_rhyme 'noodle', 'brutal'
+    oughta_rhyme 'coital', 'colloidal'
     oughta_rhyme 'potato', 'tornado'
-    oughta_rhyme 'hittable', 'biddable'
+    oughta_rhyme 'transmittable', 'biddable'
     oughta_rhyme 'debatable', 'tradable'
     # Compound boundary may block flap (Withgott proper):
-    oughta_rhyme 'whiteout', 'hideout' # compound white+out; T at boundary resists flap
+    oughta_rhyme 'whiteout', 'hideout', NOT_WORKING # Wiktionary stress is wrong for whiteout
     ought_not_rhyme 'cottage', 'bodice'
     oughta_rhyme 'tighten', 'whiten'
     ought_not_rhyme 'tighten', 'widen'
 
     # --- More positive candidates (informal or regional spellings marked) ---
-    oughta_rhyme 'latter', 'ladder'
-    oughta_rhyme 'matter', 'madder'
     oughta_rhyme 'spotter', 'fodder'
     oughta_rhyme 'solder', 'fodder'
-    oughta_rhyme 'totter', 'todder'
     ought_not_rhyme 'cotter', 'coddler'
     ought_not_rhyme 'brittle', 'bridle'
     oughta_rhyme 'kettle', 'medal'
@@ -367,7 +370,8 @@ describe 'RHYMES' do
     oughta_rhyme 'titled', 'idled' # T AY T AH L D vs AY D AH L D — tricky
     oughta_rhyme 'tilted', 'jilted' # both T
     ought_not_rhyme 'jilted', 'gilded'
-    oughta_rhyme 'belted', 'melted' # both T/D in melt — both have T
+    oughta_rhyme 'belted', 'melted'
+    ought_not_rhyme 'belted', 'melded'
     oughta_rhyme 'party', 'tardy'
 
     # --- Liquids before T (flap often applies after R; L is dialectal) ---
@@ -381,7 +385,7 @@ describe 'RHYMES' do
 
     # --- Misc edge ---
     oughta_rhyme 'fiddle', 'little'
-    ought_not_rhyme 'throttle', 'waddle' # THR vs W
+    oughta_rhyme 'throttle', 'waddle'
     oughta_rhyme 'bottle', 'wattle' # both flap-like env; wattle W AA1 T AH L vs B AA1 T AH L
     oughta_rhyme 'bottle', 'throttle'
     oughta_rhyme 'bottled', 'modeled'

@@ -887,6 +887,7 @@ describe 'RARITY' do
     oughta_be_common "ghosted"
     oughta_be_common "ghosting"
     oughta_be_common "ghostly"
+    oughta_be_rare "campal" # don't overapply the coitus -> coital rule
   end
 
   # FP-4: morphological junk (-ing) gets the same frequency as its base because Phase 8

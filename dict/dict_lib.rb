@@ -197,7 +197,7 @@ def normalize_flat_arphabet_pronunciation(pron)
   s = apply_shared_arphabet_phoneme_string_normalizations(flat.join(" "))
   p = Pronunciation.new(s.split).with_dwimmed_schwas
   s2 = conflate_imperfect_rhyme_phoneme_string(p.phonemes.join(" "))
-  Pronunciation.new(s2.split)
+  Pronunciation.new(s2.split).with_flapped_t
 end
 
 def conflate_imperfect_rhyme_phoneme_string(phoneme_space_string)
@@ -895,6 +895,67 @@ def merge_inflected_forms!(cmudict, forms_map)
   puts "Generated #{added} inflected-form pronunciations"
 end
 
+# Suffixes on +stem+us+ for *us → *al promotion (Latin/medical morphology). Not every *us word: we
+# exclude coincidences like campus/campal by requiring +campus+ only when +stem_us+ != "campus"
+# (e.g. hippocampus → hippocampal).
+US_TO_AL_STEM_US_SUFFIXES = %w[
+  itus
+  atus
+  icus
+  virus
+  coccus
+  iscus
+].freeze
+
+def stem_us_eligible_for_us_to_al_promotion?(stem_us)
+  return true if US_TO_AL_STEM_US_SUFFIXES.any? { |sfx| stem_us.end_with?(sfx) }
+  stem_us.end_with?("ampus") && stem_us != "campus"
+end
+
+# For lemmas like +coital+ attested in frequency data but missing from CMU/Kaikki: if +stem+us+ is
+# already pronounceable and the final segment is /s/, derive +stem+al+ by replacing that /s/ with /l/
+# (coitus → coital). Only runs for +al+ spellings that appear in +attested_words+ (SUBTLEX/wordfreq)
+# and when +stem_us+ matches +US_TO_AL_STEM_US_SUFFIXES+ (or compound *ampus except campus).
+def promote_us_to_al_pronunciations!(cmudict, attested_words)
+  added = 0
+  seen = Set.new
+  Array(attested_words).each do |raw|
+    w = raw.to_s.downcase.strip
+    next if w.empty? || seen.include?(w)
+    seen.add(w)
+    next unless w.end_with?("al")
+    stem_al = w.sub(/al\z/, "")
+    stem_us = stem_al + "us"
+    next unless stem_us_eligible_for_us_to_al_promotion?(stem_us)
+    next if cmudict.key?(w)
+    base_prons = cmudict[stem_us]
+    next if base_prons.nil? || base_prons.empty?
+
+    derived = []
+    base_prons.each do |syl_pron|
+      flat = syl_pron.phonemes.reject { |p| p == "." }
+      next if flat.empty?
+      last = flat.last
+      next unless last.tr("0-2", "") == "S"
+      new_flat = flat[0..-2] + ["L"]
+      p = Pronunciation.new(new_flat)
+      norm = normalize_flat_arphabet_pronunciation(p).syllabify
+      next unless norm.phonemes.any?(&:vowel?)
+      unless WHITELIST.include?(w)
+        next unless final_consonant_cluster_ok?(norm.final_consonant_cluster_array)
+        next unless initial_consonant_cluster_ok?(norm.initial_consonant_cluster_array)
+      end
+      derived << norm
+    end
+    derived = dedupe_pronunciations(derived)
+    next if derived.empty?
+
+    cmudict[w] = derived
+    added += 1
+  end
+  puts "Promoted #{added} *us→*al pronunciations for attested *al lemmas" if added.positive?
+end
+
 $inflection_base_words = {}
 
 def rebuild_rhymecrime_dictionaries()
@@ -902,6 +963,9 @@ def rebuild_rhymecrime_dictionaries()
   wiktionary_prons, forms_map = load_wiktionary
   merge_wiktionary!(cmudict, wiktionary_prons)
   merge_inflected_forms!(cmudict, forms_map)
+  subtlex_hash = load_subtlex
+  wordfreq_hash = load_wordfreq
+  promote_us_to_al_pronunciations!(cmudict, subtlex_hash.keys.to_a + wordfreq_hash.keys.to_a)
   # Track which words are inflected forms for frequency inheritance
   forms_map.each do |base_word, form_pairs|
     form_pairs.each do |inflected_word, base|
@@ -918,8 +982,6 @@ def rebuild_rhymecrime_dictionaries()
   end
   delete_explicitly_forbidden_keys_from_hash(cmudict)
   rdict = build_rime_dict(cmudict)
-  subtlex_hash = load_subtlex
-  wordfreq_hash = load_wordfreq
   word_dict = build_word_dict(cmudict, rdict, subtlex_hash, wordfreq_hash, wiktionary_words)
   merge_word_dict_pronunciations_into_rdict!(rdict, word_dict)
   save_string_hash(rdict, generated_dict_path_under_dict_dir(RIME_DICT_FILENAME), RIME_DICT_HEADER)

@@ -243,10 +243,11 @@ def find_rhyming_words_for_pronunciation(pron, identical_ok=true)
   rime = pron.rime
   rsyllables = pron.rhyme_syllables_array
   rdict_lookup(rime).each { |rhyme|
-    unless(!identical_ok && identical_rhyme?(rhyme, rsyllables))
-      results.push(rhyme)
-    else
+    cand_prons = pronunciations(rhyme)
+    if(!identical_ok && identical_rhyme?(rhyme, rsyllables))
       debug "Filtered out identical rhyme: #{pron} / #{rhyme} (#{debug_info(rhyme)})"
+    else
+      results.push(rhyme)
     end
   }
   return results || [ ]
