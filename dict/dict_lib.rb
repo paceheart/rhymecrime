@@ -200,6 +200,34 @@ def normalize_flat_arphabet_pronunciation(pron)
   Pronunciation.new(s2.split).with_flapped_t
 end
 
+# Flat phoneme lists for +stem+ (each stored pronunciation, dots stripped).
+def flat_pron_sequences_for_word(flat_by_word, stem)
+  (flat_by_word[stem] || []).map { |p| p.phonemes.reject { |ph| ph == "." } }
+end
+
+# If +word+ starts with a +COMMON_PREFIXES+ string and the stem exists in +flat_by_word+ with a
+# flat pronunciation equal to the tail of +word+'s phones, insert one syllable boundary between
+# prefix and stem. MOP alone often merges the last consonant of the prefix into the stem syllable
+# (e.g. AH0 P EH1 N D → ə|ˈpend instead of ʌp|ˈɛnd). Do not call +syllabify+ on the merged string
+# (avoids re-splitting and double dots). If no prefix+stem tail match, fall back to +syllabify+.
+def syllabify_with_common_prefix_split(word, normalized_flat_pron, flat_by_word)
+  flat = normalized_flat_pron.phonemes.reject { |ph| ph == "." }
+  COMMON_PREFIXES.sort_by(&:length).reverse.each do |prefix|
+    next if word.length <= prefix.length
+    next unless word.start_with?(prefix)
+    stem = word[prefix.length..-1]
+    next if stem.length < 2
+    flat_pron_sequences_for_word(flat_by_word, stem).each do |stem_flat|
+      next if stem_flat.empty? || flat.length <= stem_flat.length
+      next unless flat[-stem_flat.length..-1] == stem_flat
+      prefix_flat = flat[0...-stem_flat.length]
+      next if prefix_flat.empty?
+      return Pronunciation.new(prefix_flat + ["."] + stem_flat)
+    end
+  end
+  normalized_flat_pron.syllabify
+end
+
 def conflate_imperfect_rhyme_phoneme_string(phoneme_space_string)
   # @todo allow this to be toggleable at runtime instead of dictionary-building time
   line = phoneme_space_string.dup
@@ -247,10 +275,9 @@ def load_cmudict()
           end
         end
         if word_ok
-          sylpron = pron.syllabify
-          push_pronunciation_unless_duplicate!(hash[word], sylpron)
+          push_pronunciation_unless_duplicate!(hash[word], pron)
           if(word == TRACE_WORD)
-            puts "TRACE Loaded #{word} as #{sylpron}"
+            puts "TRACE Loaded #{word} flat as #{pron}"
           end
         end
       else
@@ -269,7 +296,13 @@ def load_cmudict()
     end
   end
   puts "Filtered out #{hash.length - newhash.length} redundant apostrophe words"
-  newhash
+  syllabified = Hash.new { |h, k| h[k] = [] }
+  for word, flat_prons in newhash
+    syllabified[word] = dedupe_pronunciations(
+      flat_prons.map { |p| syllabify_with_common_prefix_split(word, p, newhash) }
+    )
+  end
+  syllabified
 end
 
 def ignore_cmudict_word?(word, cmudict)
@@ -849,7 +882,7 @@ def merge_wiktionary!(cmudict, wiktionary)
     end
     next if valid_prons.empty?
     cmudict[word] = dedupe_pronunciations(
-      valid_prons.map { |p| normalize_flat_arphabet_pronunciation(p).syllabify }
+      valid_prons.map { |p| syllabify_with_common_prefix_split(word, normalize_flat_arphabet_pronunciation(p), cmudict) }
     )
     added += 1
   end

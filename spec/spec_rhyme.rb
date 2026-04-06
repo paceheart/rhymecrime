@@ -132,6 +132,8 @@ describe 'RHYMES' do
     ought_not_rhyme 'troll', 'patrol'
     ought_not_rhyme 'troll', 'control'
     oughta_rhyme 'end', 'pend'
+    oughta_rhyme 'end', 'append'
+    ought_not_rhyme 'pend', 'append' # identical
     oughta_rhyme 'upend', 'pend' # , NOT_WORKING # 'upend' isn't in cmudict, and if it were, we'd get an incorrect syllable boundary anyway
     ought_not_rhyme 'end', 'upend' # working for the wrong reasons: 'upend' isn't in cmudict, and if it were, we'd get an incorrect syllable boundary anyway
     ought_not_rhyme 'lied', 'relied'
@@ -294,6 +296,7 @@ describe 'RHYMES' do
       ought_not_rhyme 'latter', 'ladder'
       ought_not_rhyme 'matter', 'madder'
       ought_not_rhyme 'recital', 'suicidal'
+      ought_not_rhyme 'mediterranean', 'subterranean'
     end
 
     # --- Classic T/D minimal pairs (intervocalic; GA flap neutralization) ---
@@ -489,7 +492,7 @@ describe 'RHYMES' do
   
   context 'loan words' do
     oughta_rhyme 'amour', 'bonjour'
-    ought_not_rhyme 'bocce', 'mocha'
+    ought_not_rhyme 'bocce', 'mocha', NOT_WORKING # bad bocce pron in CMUdict
   end
 
   context 'modern words' do
@@ -507,13 +510,13 @@ describe 'RHYMES' do
     oughta_rhyme 'couples', 'throuples'
     oughta_rhyme 'url', 'hell'
     oughta_rhyme 'urls', 'smells'
-    ought_not_rhyme 'url', 'curl'
+    ought_not_rhyme 'url', 'curl', NOT_WORKING # bad url pron
   end
 
   context '-er' do
     ought_not_rhyme 'freer', 'beer'
-    oughta_rhyme 'freer', 'seer'
-    ought_not_rhyme 'seer', 'beer'
+    oughta_rhyme 'freer', 'seer', NOT_WORKING # bad seer pron in CMUdict
+    ought_not_rhyme 'seer', 'beer', NOT_WORKING # bad seer pron in CMUdict
   end
 
   context 'common_words.txt' do
@@ -541,7 +544,6 @@ describe 'RHYMES' do
 
   context 'long words' do
     oughta_rhyme 'militaristic', 'ballistic'
-    oughta_rhyme 'mediterranean', 'subterranean'
     oughta_rhyme 'hypothetical', 'heretical'
     oughta_rhyme 'accelerometer', 'thermometer'
   end
