@@ -1,12 +1,14 @@
 #!/usr/bin/env ruby
 
 require "fileutils"
+require "json"
 
 # Rhyming utilities for RhymeCrime
 # Used both in preprocessing and at runtime
 
 RIME_DICT_FILENAME = "rime_dict.txt"
 WORD_DICT_FILENAME = "word_dict.txt"
+PART_OF_SPEECH_FILENAME = "part_of_speech.json"
 
 # Outputs of dict/dict_lib.rb (via dict.rb); not hand-edited. Paths are relative to the dict/
 # directory when the build runs with cwd = dict/; loaders use paths from the repository root.
@@ -539,6 +541,14 @@ def save_word_dict(word_dict)
     f.puts
   end
   f.close
+end
+
+def save_part_of_speech_map(pos_map)
+  ensure_generated_dict_dir!
+  path = generated_dict_path_under_dict_dir(PART_OF_SPEECH_FILENAME)
+  # word => sorted list of Kaikki-style POS strings (noun, verb, adj, …) after Layer A ∩ WordNet.
+  obj = pos_map.keys.sort.to_h { |w| [w, pos_map[w].to_a.sort] }
+  File.write(path, JSON.generate(obj), encoding: "UTF-8")
 end
 
 #

@@ -27,18 +27,20 @@ INFLECTION_TAGS = {
 }
 
 # Load kaikki.org filtered JSONL.
-# Returns [pron_hash, forms_map]
+# Returns [pron_hash, forms_map, pos_map]
 #   pron_hash: { word => [Pronunciation, ...] }  (same format as load_cmudict)
 #   forms_map: { base_word => [[inflected_form, base_word], ...] }
+#   pos_map: { word => Set<String> } union of Kaikki "pos" per lemma (Layer A ∩ WordNet in dict_lib)
 def load_wiktionary
   path = File.join(File.dirname(__FILE__), WIKTIONARY_FILENAME)
   unless File.exist?(path)
     puts "Wiktionary data not found at #{path}; skipping."
-    return [{}, {}]
+    return [{}, {}, {}]
   end
 
   pron_hash = Hash.new { |h, k| h[k] = [] }
   forms_map = Hash.new { |h, k| h[k] = [] }
+  pos_map = {}
   total = 0; converted = 0; skipped = 0
 
   Zlib::GzipReader.open(path, encoding: 'UTF-8') do |gz|
@@ -50,6 +52,8 @@ def load_wiktionary
 
       pos = obj["pos"].to_s
       next if pos == "name"
+
+      (pos_map[word] ||= Set.new).add(pos) unless pos.empty?
 
       sounds = obj["sounds"]
       next if sounds.nil? || sounds.empty?
@@ -84,7 +88,7 @@ def load_wiktionary
 
   puts "Wiktionary: #{total} entries with pronunciation, #{converted} converted, #{skipped} skipped"
   puts "Wiktionary: #{pron_hash.size} unique words, #{forms_map.size} words with inflected forms"
-  [pron_hash, forms_map]
+  [pron_hash, forms_map, pos_map]
 end
 
 def pick_ga_sounds(sounds)

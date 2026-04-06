@@ -445,6 +445,162 @@ def wn_base_has_verb?(base)
   lemmas.any? { |l| l.pos == "v" }
 end
 
+def wn_base_has_adjective?(base)
+  lemmas = WordNet::Lemma.find_all(base)
+  return true if lemmas.empty?
+  lemmas.any? { |l| l.pos == "a" }
+end
+
+def wn_base_has_noun?(base)
+  lemmas = WordNet::Lemma.find_all(base)
+  return true if lemmas.empty?
+  lemmas.any? { |l| l.pos == "n" }
+end
+
+# WordNet lemma +pos+ codes → strings stored with Kaikki data (part_of_speech.json).
+WN_POS_TO_LEXICAL_POS = {
+  "n" => "noun",
+  "v" => "verb",
+  "a" => "adj",
+  "s" => "adj", # satellite adjective
+  "r" => "adv",
+}.freeze
+
+# Kaikki-style POS tags WordNet lists for this spelling (coarse noun / verb / adj / adv).
+def wordnet_lexical_pos_set(word)
+  lemmas = WordNet::Lemma.find_all(word)
+  return Set.new if lemmas.empty?
+  out = Set.new
+  lemmas.each do |lem|
+    mapped = WN_POS_TO_LEXICAL_POS[lem.pos]
+    out.add(mapped) if mapped
+  end
+  out
+end
+
+# Layer A: intersect Kaikki’s POS union with WordNet’s coarse POS for the same surface form.
+# Words with no WordNet lemmas keep the full Kaikki set (OOV / neologisms). Morph phases use the
+# same +pos_map+ after this pass.
+def apply_lexical_pos_layer_a!(pos_map)
+  pos_map.each do |word, kaikki_set|
+    next if kaikki_set.nil? || kaikki_set.empty?
+    next unless wn_has_entry?(word)
+    wn_set = wordnet_lexical_pos_set(word)
+    next if wn_set.empty?
+    pos_map[word] = kaikki_set & wn_set
+  end
+  nil
+end
+
+def morph_part_of_speech_tags(pos_map, base)
+  s = pos_map[base]
+  return [] if s.nil? || s.empty?
+  s.to_a
+end
+
+# Kaikki listed this exact surface as an inflected form of +base+ (+collect_inflected_forms+).
+def wiktionary_surface_form_attested?(forms_map, base, inflected)
+  pairs = forms_map[base]
+  return false if pairs.nil? || pairs.empty?
+  pairs.any? { |form, b| form == inflected && b == base }
+end
+
+# -ed/-ing: Kaikki +verb+ when present; cross-check WordNet so noun-only lemmas do not inherit
+# verbal junk (FP-4). When both Kaikki and WordNet agree the base is a verb, require a Kaikki
+# surface row. If Kaikki also lists +adj+ on the lemma, require Wordfreq Zipf on the inflected
+# surface so lexicon rows for marginal verbs (e.g. *taboo*) do not promote rare *tabooed* when
+# corpus use is negligible. OOV bases (no WordNet entry) keep the legacy open policy.
+def morph_base_allows_verb_forms?(base, inflected, pos_map, forms_map, zipf_inf)
+  sk = Inflect.send(:match_suffix_kind, base, inflected)
+  return true unless sk == :ed || sk == :ing
+
+  tags = morph_part_of_speech_tags(pos_map, base)
+  wn_in = wn_has_entry?(base)
+  wn_v = wn_base_has_verb?(base)
+
+  if tags.any?
+    return false unless tags.include?("verb")
+    return false if wn_in && !wn_v
+    if wn_in && wn_v
+      return false unless wiktionary_surface_form_attested?(forms_map, base, inflected)
+      return zipf_inf >= WORDFREQ_RARE_ZIPF if tags.include?("adj")
+      return true
+    end
+    return true
+  end
+  wn_v
+end
+
+def pronunciation_vowel_phoneme_count(pron)
+  return 0 if pron.nil? || pron.empty?
+  pron.phonemes.count { |ph| !ph.syllable_boundary? && ph.vowel? }
+end
+
+def silent_e_stem_plus_er?(base, w)
+  bl = base.bytesize
+  return false unless base.end_with?("e") && bl >= 2 && !base.end_with?("ee")
+  w == base.byteslice(0, bl - 1) + "er"
+end
+
+# Blocks *happyer; allows *happier. Non-+y+: adjective (Kaikki or WN) with phonological / attestation
+# rules. Silent-e stem+*er* (*service*→*servicer*) is allowed when the base is verbal and the
+# derived form has independent Zipf (blocks *oranger*-style junk while keeping attested agents).
+def morph_base_allows_comparative_er_est?(base, w, pos_map, base_first_pron, forms_map, zipf_w)
+  sk = Inflect.send(:match_suffix_kind, base, w)
+  return true unless sk == :er || sk == :est
+
+  bl = base.bytesize
+  if base.end_with?("y") && bl >= 2
+    stem = base.byteslice(0, bl - 1)
+    return false if w == base + "er" || w == base + "est"
+    return true if w == stem + "ier" || w == stem + "iest"
+    return false
+  end
+
+  if sk == :er && silent_e_stem_plus_er?(base, w)
+    tags = morph_part_of_speech_tags(pos_map, base)
+    zip_ok = zipf_w >= WORDFREQ_RARE_ZIPF
+    verbal_nouny = if tags.any?
+      tags.include?("verb") && tags.include?("noun")
+    else
+      wn_base_has_verb?(base) && wn_base_has_noun?(base)
+    end
+    if verbal_nouny && (!tags.any? || !tags.include?("adj") || zip_ok)
+      return true if zip_ok || wiktionary_surface_form_attested?(forms_map, base, w)
+    end
+  end
+
+  tags = morph_part_of_speech_tags(pos_map, base)
+  adj_ok = tags.any? ? tags.include?("adj") : wn_base_has_adjective?(base)
+  return false unless adj_ok
+
+  vc = pronunciation_vowel_phoneme_count(base_first_pron)
+  attested = wiktionary_surface_form_attested?(forms_map, base, w)
+  if tags.any?
+    return true if vc <= 1
+    attested
+  else
+    return true if vc <= 2
+    attested
+  end
+end
+
+# Plural *:s*: Kaikki +noun+ when present; WordNet noun cross-check. When Kaikki lists both +adj+
+# and +noun+ on the same lemma, require a Kaikki form row for that plural (blocks *impromptus*
+# while keeping productive plurals for noun-only Kaikki rows like *gramophone*→*gramophones*).
+def morph_base_allows_plural_s?(base, pos_map, forms_map, plural_word)
+  tags = morph_part_of_speech_tags(pos_map, base)
+  if tags.any?
+    return false unless tags.include?("noun")
+    return false if wn_has_entry?(base) && !wn_base_has_noun?(base)
+    if tags.include?("adj")
+      return wiktionary_surface_form_attested?(forms_map, base, plural_word)
+    end
+    return true
+  end
+  true
+end
+
 #
 # put it all together
 #
@@ -602,7 +758,7 @@ def compute_frequency(word, subtlex_hash, wordfreq_hash)
   return freq
 end
 
-def add_frequency_info(cmudict, subtlex_hash, wordfreq_hash, wiktionary_words)
+def add_frequency_info(cmudict, subtlex_hash, wordfreq_hash, wiktionary_words, pos_map, forms_map)
   count = 0
   hash = Hash.new
   rare_words = IO.readlines(RARE_WORDS_FILENAME, chomp: true, encoding: 'UTF-8')
@@ -715,7 +871,14 @@ def add_frequency_info(cmudict, subtlex_hash, wordfreq_hash, wiktionary_words)
     next unless base_freq > 4
     wf_inf = wordfreq_hash[inflected]
     next if wf_inf && wf_inf >= WORDFREQ_COMMON_ZIPF
-    next if inflected.end_with?("ing") && !wn_base_has_verb?(base)
+    sk8 = Inflect.send(:match_suffix_kind, base, inflected)
+    next if sk8 == :s && !morph_base_allows_plural_s?(base, pos_map, forms_map, inflected)
+    zf_w = wordfreq_hash[inflected] || 0
+    next if (sk8 == :ed || sk8 == :ing) && !morph_base_allows_verb_forms?(base, inflected, pos_map, forms_map, zf_w)
+    if sk8 == :er || sk8 == :est
+      base_p0 = hash[base]&.dig(1)&.first
+      next unless morph_base_allows_comparative_er_est?(base, inflected, pos_map, base_p0, forms_map, zf_w)
+    end
     hash[inflected][0] = base_freq
     inherited += 1
   end
@@ -773,8 +936,13 @@ def add_frequency_info(cmudict, subtlex_hash, wordfreq_hash, wiktionary_words)
         next if w.include?("-")
         next if rare_words.include?(w)
         next unless Inflect.inflection_of_base?(base, w)
-        next if w.end_with?("ing") && !wn_base_has_verb?(base)
+        sk10 = Inflect.send(:match_suffix_kind, base, w)
         wf = wordfreq_hash[w] || 0
+        next if sk10 == :s && !morph_base_allows_plural_s?(base, pos_map, forms_map, w)
+        next if (sk10 == :ed || sk10 == :ing) && !morph_base_allows_verb_forms?(base, w, pos_map, forms_map, wf)
+        if sk10 == :er || sk10 == :est
+          next unless morph_base_allows_comparative_er_est?(base, w, pos_map, base_prons&.first, forms_map, wf)
+        end
         next if wf >= WORDFREQ_COMMON_ZIPF
         if hash.key?(w)
           next if hash[w][0] > 4
@@ -820,8 +988,12 @@ def add_frequency_info(cmudict, subtlex_hash, wordfreq_hash, wiktionary_words)
         next unless Inflect.inflection_of_base?(base, w)
         sk = Inflect.send(:match_suffix_kind, base, w)
         next unless sk
-        next if w.end_with?("ing") && !wn_base_has_verb?(base)
         wf = wordfreq_hash[w] || 0
+        next if sk == :s && !morph_base_allows_plural_s?(base, pos_map, forms_map, w)
+        next if (sk == :ed || sk == :ing) && !morph_base_allows_verb_forms?(base, w, pos_map, forms_map, wf)
+        if sk == :er || sk == :est
+          next unless morph_base_allows_comparative_er_est?(base, w, pos_map, base_prons&.first, forms_map, wf)
+        end
         next if wf >= WORDFREQ_COMMON_ZIPF
         if sk == :s
           next unless hash.key?(w)
@@ -855,13 +1027,21 @@ def add_frequency_info(cmudict, subtlex_hash, wordfreq_hash, wiktionary_words)
   end
   puts "#{morph_corpus} morphological extensions from strong-corpus bases (not in common_words list)" if morph_corpus > 0
 
+  forbidden_scrub = 0
+  hash.keys.each do |word|
+    next unless explicitly_forbidden?(word)
+    hash.delete(word)
+    forbidden_scrub += 1
+  end
+  puts "#{forbidden_scrub} explicitly forbidden surface forms removed after frequency phases" if forbidden_scrub > 0
+
   puts "#{count + extra + common_extra + floor_applied + hyp_floor + inherited + cw_inherited + morph_inherited + morph_corpus} total entries with frequency data"
   return hash
 end
 
-def build_word_dict(cmudict, rdict, subtlex_hash, wordfreq_hash, wiktionary_words)
+def build_word_dict(cmudict, rdict, subtlex_hash, wordfreq_hash, wiktionary_words, pos_map, forms_map)
   cmudict = filter_cmudict(cmudict, rdict)
-  word_dict = add_frequency_info(cmudict, subtlex_hash, wordfreq_hash, wiktionary_words)
+  word_dict = add_frequency_info(cmudict, subtlex_hash, wordfreq_hash, wiktionary_words, pos_map, forms_map)
   return filter_word_dict(word_dict)
 end
 
@@ -994,7 +1174,9 @@ $inflection_base_words = {}
 
 def rebuild_rhymecrime_dictionaries()
   cmudict = load_cmudict
-  wiktionary_prons, forms_map = load_wiktionary
+  wiktionary_prons, forms_map, pos_map = load_wiktionary
+  apply_lexical_pos_layer_a!(pos_map)
+  save_part_of_speech_map(pos_map)
   merge_wiktionary!(cmudict, wiktionary_prons)
   merge_inflected_forms!(cmudict, forms_map)
   subtlex_hash = load_subtlex
@@ -1016,7 +1198,7 @@ def rebuild_rhymecrime_dictionaries()
   end
   delete_explicitly_forbidden_keys_from_hash(cmudict)
   rdict = build_rime_dict(cmudict)
-  word_dict = build_word_dict(cmudict, rdict, subtlex_hash, wordfreq_hash, wiktionary_words)
+  word_dict = build_word_dict(cmudict, rdict, subtlex_hash, wordfreq_hash, wiktionary_words, pos_map, forms_map)
   merge_word_dict_pronunciations_into_rdict!(rdict, word_dict)
   save_string_hash(rdict, generated_dict_path_under_dict_dir(RIME_DICT_FILENAME), RIME_DICT_HEADER)
   save_word_dict(word_dict)

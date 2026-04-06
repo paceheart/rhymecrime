@@ -123,7 +123,27 @@ def frequency(word)
   else
     return 0
   end
-end  
+end
+
+# Sorted list of RhymeCrime part-of-speech tags for +word+ (Kaikki +pos+ union, then lexical
+# Kaikki POS intersected with WordNet coarse POS when WN has the lemma; see apply_lexical_pos_layer_a!
+# in dict/dict_lib.rb. Empty if unknown or before dict/generated/part_of_speech.json exists.
+$part_of_speech_by_word = nil
+def part_of_speech_tags(word)
+  w = word.to_s.downcase.strip
+  return [] if w.empty?
+  if $part_of_speech_by_word.nil?
+    path = generated_dict_path(PART_OF_SPEECH_FILENAME)
+    $part_of_speech_by_word =
+      if File.exist?(path)
+        JSON.parse(File.read(path, encoding: "UTF-8"))
+      else
+        {}
+      end
+  end
+  tags = $part_of_speech_by_word[w]
+  tags.is_a?(Array) ? tags : []
+end
 
 def rdict_lookup(rime)
   rdict[rime] || [ ]
