@@ -1,6 +1,10 @@
 # Spelling variants list
 # Only add words that are the same in both meaning and pronunciation.
 # Format: preferred_form alternate_form1 alternate_form2 ...
+# Do not use '-' in this file. Hyphenated spellings (in-laws/inlaws, non-stick/nonstick, …) merge
+# using dict/generated/hyphen_variant_map.json (rebuilt by dict/dict.rb; see utils_rhyme.rb).
+# US/UK -ize/-ise (and -yze/-yse, -ization/-isation, -izer/-iser, …) are derived in utils_rhyme.rb;
+# do not list them here.
 acknowledgment acknowledgement
 adaptor adapter
 advisor adviser
@@ -11,25 +15,16 @@ ambience ambiance
 amok amuck
 analog analogue
 analogs analogues
-analyze analyse
-analyzed analysed
-analyzes analyses
-analyzing analysing
 anemia anaemia
 anemic anaemic
 anesthesia anaesthesia
 annex annexe
-apologize apologise
 appall appal
 armor armour
 armored armoured
 armoring armouring
 armors armours
 artifact artefact
-authorize authorise
-authorized authorised
-authorizes authorises
-authorizing authorising
 axe ax
 bank banque
 behavior behaviour
@@ -52,12 +47,6 @@ cipher cypher
 ciphered cyphered
 ciphering cyphering
 ciphers cyphers
-civilize civilise
-colonization colonisation
-colonize colonise
-colonized colonised
-colonizes colonises
-colonizing colonising
 color colour
 colored coloured
 coloring colouring
@@ -68,8 +57,6 @@ counselor counsellor
 cozy cosy
 curb kerb
 curbs kerbs
-cutthroat cut-throat
-cutthroats cut-throats
 defense defence
 defenses defences
 dialog dialogue
@@ -83,9 +70,6 @@ doughnuts donuts
 doughnut donut
 draft draught
 drafts draughts
-emphasize emphasise
-emphasized emphasised
-emphasizes emphasises
 enclose inclose
 encyclopedia encyclopaedia
 endeavor endeavour
@@ -98,7 +82,6 @@ eon aeon
 equaling equalling
 esophagus oesophagus
 estrogen oestrogen
-eulogize eulogise
 favor favour
 favored favoured
 favoring favouring
@@ -123,10 +106,6 @@ fueling fuelling
 fulfill fulfil
 fulfills fulfils
 furor furore
-generalize generalise
-generalized generalised
-generalizes generalises
-generalizing generalising
 glamour glamor
 glycerin glycerine
 goddamn goddam
@@ -136,11 +115,6 @@ harbor harbour
 harbored harboured
 harboring harbouring
 harbors harbours
-harmonization harmonisation
-harmonize harmonise
-harmonized harmonised
-harmonizes harmonises
-harmonizing harmonising
 hematology haematology
 heme haem
 hemophilia haemophilia
@@ -156,11 +130,6 @@ humored humoured
 humoring humouring
 humors humours
 impostor imposter
-industrialization industrialisation
-industrialize industrialise
-industrialized industrialised
-industrializes industrialises
-industrializing industrialising
 ingrain engrain
 inquire enquire
 inquired enquired
@@ -168,9 +137,6 @@ inquires enquires
 inquiring enquiring
 installment instalment
 installments instalments
-italicize italicise
-italicized italicised
-italicizes italicises
 jail gaol
 jails gaols
 jewelry jewellery
@@ -198,7 +164,6 @@ liter litre
 liters litres
 lodgement lodgment
 lodgements lodgments
-makeover make-over
 maneuver manoeuvre
 maneuvered manoeuvred
 maneuvers manoeuvres
@@ -209,12 +174,6 @@ meters metres
 mike mic
 mister mr
 modeling modelling
-moisturize moisturise
-moisturized moisturised
-moisturizer moisturiser
-moisturizers moisturisers
-moisturizes moisturises
-moisturizing moisturising
 mold mould
 molds moulds
 mollusk mollusc
@@ -233,7 +192,6 @@ mustached moustached
 mustaches moustaches
 neighbor neighbour
 neighbors neighbours
-non-stick nonstick
 ocher ochre
 odor odour
 odors odours
@@ -242,20 +200,10 @@ offenses offences
 omelet omelette
 omelets omelettes
 opossum possum
-organize organise
-organizes organises
-organized organised
-organizing organising
-organization organisation
-organizations organisations
 ortholog orthologue
 orthopedic orthopaedic
 orthopedics orthopaedics
 pajamas pyjamas
-paralyze paralyse
-paralyzed paralysed
-paralyzes paralyses
-paralyzing paralysing
 parlor parlour
 parlors parlours
 pedagog pedagogue
@@ -268,7 +216,6 @@ pics pix
 pixilated pixillated
 plow plough
 plows ploughs
-pom-pom pompon
 practice practise
 practiced practised
 practices practises
@@ -280,13 +227,6 @@ programs programmes
 quarreled quarrelled
 quarreling quarrelling
 racket racquet
-realization realisation
-realize realise
-realized realised
-realizes realises
-recognize recognise
-recognized recognised
-recognizing recognising
 rigor rigour
 rigors rigours
 routing routeing
@@ -307,7 +247,6 @@ smoky smokey
 specter spectre
 story storey
 sulfur sulphur
-t-shirt tee_shirt
 theater theatre
 till 'til til
 tire tyre
@@ -320,7 +259,6 @@ traveler traveller
 traveling travelling
 tumor tumour
 tumors tumours
-urbanization urbanisation
 valor valour
 valorout valourous
 vendor vender

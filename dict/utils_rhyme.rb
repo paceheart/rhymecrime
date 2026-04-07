@@ -2,6 +2,8 @@
 
 require "fileutils"
 require "json"
+require "set"
+require_relative "phoneme.rb"
 
 # Rhyming utilities for RhymeCrime
 # Used both in preprocessing and at runtime
@@ -9,6 +11,8 @@ require "json"
 RIME_DICT_FILENAME = "rime_dict.txt"
 WORD_DICT_FILENAME = "word_dict.txt"
 PART_OF_SPEECH_FILENAME = "part_of_speech.json"
+# Multi-spelling hyphen folds (in-laws/inlaws, …); built in dict.rb, loaded at runtime.
+HYPHEN_VARIANT_MAP_FILENAME = "hyphen_variant_map.json"
 
 # Outputs of dict/dict_lib.rb (via dict.rb); not hand-edited. Paths are relative to the dict/
 # directory when the build runs with cwd = dict/; loaders use paths from the repository root.
@@ -75,38 +79,288 @@ end
 #
 
 $variants = nil
+
+# Cleared when spelling-variant file is reloaded or word_dict is re-read.
+def clear_spelling_variant_hyphen_caches!
+  @hyphen_multi_fold = nil
+end
+
 def variants()
   # hash: word -> [preferred_form alternate_form1 alternate_form2 ...]
   if $variants.nil?
+    clear_spelling_variant_hyphen_caches!
     $variants = load_variants
   end
   return $variants
 end
 
-def preferred_form(word)
-  forms = variants[word]
-  if(forms)
-    debug "The preferred form of '#{word}' is '#{forms[0]}'" unless forms[0] == word
-    return forms[0]
-  else
-    return word
+# US/UK -ize ↔ -ise (and -yze ↔ -yse) morphology: generate UK (s) from US (z) only.
+# UK spellings map back to US as preferred only when that US headword exists in +$word_dict+
+# (e.g. compromise has no valid *compromize*, so it is left alone—no blocklist needed).
+US_UK_YZE_SUFFIXES = [
+  ["yzing", "ysing"],
+  ["yzes", "yses"],
+  ["yzed", "ysed"],
+  ["yze", "yse"],
+].freeze
+
+US_UK_IZE_SUFFIXES = [
+  ["ization", "isation"],
+  ["izations", "isations"],
+  ["izable", "isable"],
+  ["izer", "iser"],
+  ["izers", "isers"],
+  ["izing", "ising"],
+  ["izes", "ises"],
+  ["ized", "ised"],
+  ["ize", "ise"],
+].freeze
+
+# Real -ize words that are not US verb morphology (avoid analyze→analyse style false path for "size", etc.).
+US_UK_IZE_ZONLY_EXCEPTIONS = %w[size seize capsize prize maize].freeze
+
+def word_dict_includes_headword?(w)
+  defined?($word_dict) && $word_dict.is_a?(Hash) && !$word_dict.empty? && $word_dict.key?(w)
+end
+
+# Returns UK spelling for a US (z) headword, or nil if not applicable.
+def us_to_uk_ize_spelling(us_word)
+  w = us_word.to_s
+  return nil if w.empty?
+  US_UK_YZE_SUFFIXES.each do |us_s, uk_s|
+    next unless w.end_with?(us_s)
+    return w[0...-us_s.length] + uk_s
   end
+  return nil if US_UK_IZE_ZONLY_EXCEPTIONS.include?(w)
+  US_UK_IZE_SUFFIXES.each do |us_s, uk_s|
+    next unless w.end_with?(us_s)
+    stem = w[0...-us_s.length]
+    # Not *-isable (UK is "sizeable" with e, not "sisable").
+    return "sizeable" if us_s == "izable" && stem == "siz"
+    return stem + uk_s
+  end
+  nil
+end
+
+# Inverse of us_to_uk_ize_spelling (for matching a UK surface form); does not validate English.
+def uk_to_us_ize_spelling(uk_word)
+  w = uk_word.to_s
+  return nil if w.empty?
+  return "sizable" if w == "sizeable" # TODO: load this from spelling_variants.txt instead of hardcoding it
+  US_UK_YZE_SUFFIXES.each do |us_s, uk_s|
+    next unless w.end_with?(uk_s)
+    return w[0...-uk_s.length] + us_s
+  end
+  US_UK_IZE_SUFFIXES.each do |us_s, uk_s|
+    next unless w.end_with?(uk_s)
+    return w[0...-us_s.length] + us_s
+  end
+  nil
+end
+
+# [us_form, uk_form] with US first; nil if not an -ize/-ise pair we handle.
+def us_uk_ize_pair(word)
+  w = word.to_s
+  return nil if w.empty?
+  uk = us_to_uk_ize_spelling(w)
+  if uk && uk != w
+    return [w, uk]
+  end
+  us = uk_to_us_ize_spelling(w)
+  if us && us != w && word_dict_includes_headword?(us) && us_to_uk_ize_spelling(us) == w
+    return [us, w]
+  end
+  nil
+end
+
+def ize_ise_variant_forms(word)
+  pair = us_uk_ize_pair(word)
+  return nil unless pair
+  u, k = pair
+  k == u ? [u] : [u, k]
+end
+
+# Fold for grouping hyphen-insensitive spellings (in-laws ↔ inlaws).
+def spelling_variant_hyphen_fold(w)
+  w.to_s.downcase.delete("-")
+end
+
+# Only folds with 2+ distinct surface forms (tiny hash vs. one entry per word).
+VALID_HYPHEN_LEXEME_RE = /\A[[:alpha:]][[:alnum:]_'-]*\z/.freeze
+NON_HYPHEN_PREF_RE = /\Anon-[[:alnum:]]/i.freeze
+
+# First segment of phrasal-style hyphen compounds (in-laws, on-site, hand-out). Longest token first in the regex.
+HYPHEN_COMPOUND_LEADING_PARTICLES = %w[down in off on out up].freeze
+PARTICLE_HYPHEN_PREF_RE = Regexp.new(
+  "\\A(?:#{HYPHEN_COMPOUND_LEADING_PARTICLES.sort_by { |t| [-t.length, t] }.join('|')})-[[:alpha:]]",
+  Regexp::IGNORECASE
+).freeze
+
+# e.g. okey-dokey / low-key over okeydokey / lowkey when both are in the same hyphen fold.
+REDUP_STYLE_SINGLE_HYPHEN_RE = /\A[[:alpha:]]{2,}-[[:alpha:]]{2,}\z/.freeze
+# Second-segment matches here → prefer solid spelling (handout not hand-out). Omits +on+ (no common *-on tail).
+HYPHEN_COMPOUND_TRAILING_PARTICLES_SOLID_PREF =
+  (HYPHEN_COMPOUND_LEADING_PARTICLES - %w[on]).freeze
+
+def hyphen_redup_prefers_hyphenated_form?(f)
+  return false unless REDUP_STYLE_SINGLE_HYPHEN_RE.match?(f)
+  _left, right = f.split("-", 2)
+  !HYPHEN_COMPOUND_TRAILING_PARTICLES_SOLID_PREF.include?(right.downcase)
+end
+
+def ingest_word_into_hyphen_fold_buckets!(buckets, w)
+  return if w.nil? || w.empty?
+  return unless w.match?(VALID_HYPHEN_LEXEME_RE)
+  fold = w.downcase.delete("-")
+  (buckets[fold] ||= Set.new) << w
+end
+
+# Build { fold => [form, ...] } only where multiple spellings share a fold.
+# +explicit_word_keys+: enumerable of headwords (e.g. word_dict.keys) when building during dict.rb;
+# otherwise uses +$word_dict+ or scans word_dict.txt (fallback when JSON cache is missing).
+def build_hyphen_multi_fold_map(explicit_word_keys = nil)
+  buckets = {}
+  load_variants_raw.each do |line|
+    next unless line =~ /\A[[:alpha:]]/
+    line.split.each { |w| ingest_word_into_hyphen_fold_buckets!(buckets, w) }
+  end
+  if explicit_word_keys
+    explicit_word_keys.each { |w| ingest_word_into_hyphen_fold_buckets!(buckets, w) }
+  elsif defined?($word_dict) && $word_dict.is_a?(Hash) && !$word_dict.empty?
+    $word_dict.each_key { |w| ingest_word_into_hyphen_fold_buckets!(buckets, w) }
+  else
+    path = generated_dict_path(WORD_DICT_FILENAME)
+    if File.exist?(path)
+      IO.foreach(path, encoding: "UTF-8") do |line|
+        next if line =~ /\A;/ || line =~ /\A#/
+        tok = line.split(",", 2).first
+        next if tok.nil? || tok.empty?
+        ingest_word_into_hyphen_fold_buckets!(buckets, tok.desanitize)
+      end
+    end
+  end
+  out = {}
+  buckets.each do |fold, set|
+    next if set.size < 2
+    out[fold] = set.to_a.freeze
+  end
+  out.freeze
+end
+
+def save_hyphen_variant_map!(word_keys)
+  map = build_hyphen_multi_fold_map(word_keys)
+  in_dict = word_keys.to_set
+  map = map.reject { |_fold, forms| forms.none? { |w| in_dict.include?(w) } }
+  ensure_generated_dict_dir!
+  path = generated_dict_path_under_dict_dir(HYPHEN_VARIANT_MAP_FILENAME)
+  sorted = {}
+  map.keys.sort.each { |k| sorted[k] = map[k].sort }
+  File.write(path, "#{JSON.generate(sorted)}\n", encoding: "UTF-8")
+  puts "Wrote #{sorted.size} hyphen-variant folds to #{HYPHEN_VARIANT_MAP_FILENAME}"
+end
+
+def load_hyphen_multi_fold_map_from_disk
+  path = generated_dict_path(HYPHEN_VARIANT_MAP_FILENAME)
+  return nil unless File.exist?(path)
+  raw = JSON.parse(File.read(path, encoding: "UTF-8"))
+  out = {}
+  raw.each do |fold, arr|
+    out[fold] = arr.freeze
+  end
+  out.freeze
+rescue JSON::ParserError, SystemCallError
+  nil
+end
+
+def hyphen_multi_fold_map
+  @hyphen_multi_fold ||= (load_hyphen_multi_fold_map_from_disk || build_hyphen_multi_fold_map)
+end
+
+def preferred_among_hyphen_equivalents(forms)
+  n = forms.length
+  return forms[0] if n <= 1
+  nons = []
+  i = 0
+  while i < n
+    f = forms[i]
+    nons << f if NON_HYPHEN_PREF_RE.match?(f)
+    i += 1
+  end
+  return nons.min if nons.any?
+  parts = []
+  i = 0
+  while i < n
+    f = forms[i]
+    parts << f if PARTICLE_HYPHEN_PREF_RE.match?(f)
+    i += 1
+  end
+  return parts.min if parts.any?
+  redups = []
+  i = 0
+  while i < n
+    f = forms[i]
+    redups << f if hyphen_redup_prefers_hyphenated_form?(f)
+    i += 1
+  end
+  return redups.min if redups.any?
+  forms.min_by { |f| [f.count("-"), f.downcase] }
+end
+
+def preferred_form(word)
+  vf = variants[word]
+  if vf
+    debug "The preferred form of '#{word}' is '#{vf[0]}'" unless vf[0] == word
+    return vf[0]
+  end
+  iz = us_uk_ize_pair(word)
+  if iz
+    return iz[0]
+  end
+  forms = hyphen_multi_fold_map[spelling_variant_hyphen_fold(word)]
+  return word if forms.nil? || forms.length < 2
+  preferred_among_hyphen_equivalents(forms)
 end
 
 def all_forms(word)
-  forms = variants[word]
-  if(forms)
-    return forms
-  else
-    return [word]
+  vf = variants[word]
+  forms = hyphen_multi_fold_map[spelling_variant_hyphen_fold(word)]
+  forms = nil if forms.nil? || forms.length < 2
+  iz = ize_ise_variant_forms(word)
+  if vf
+    unless forms
+      if iz
+        merged = vf.dup
+        iz.each { |x| merged << x unless merged.include?(x) }
+        return merged.uniq
+      end
+      return vf
+    end
+    merged = vf.dup
+    iz&.each { |x| merged << x unless merged.include?(x) }
+    forms.each { |x| merged << x unless merged.include?(x) }
+    return merged.uniq
   end
+  if iz
+    unless forms
+      return iz
+    end
+    merged = iz.dup
+    forms.each { |x| merged << x unless merged.include?(x) }
+    return merged.uniq
+  end
+  if forms
+    pref = preferred_among_hyphen_equivalents(forms)
+    rest = forms.reject { |w| w == pref }.sort
+    return [pref] + rest
+  end
+  [word]
 end
 
 def load_variants_raw
   if(File.exist?("spelling_variants.txt"))
      return IO.readlines("spelling_variants.txt", chomp: true, encoding: 'UTF-8')
   else
-    return IO.readlines("dict/spelling_variants.txt", chomp: true, encoding: 'UTF-8')
+     return IO.readlines("dict/spelling_variants.txt", chomp: true, encoding: 'UTF-8')
   end
 end
 
@@ -121,11 +375,13 @@ def load_variants
       end
     end
   end
-  return hash
+  hash
 end
 
 #
-# prefixes
+# prefixes (crime.rb prefix_words; dict_lib syllabification). Order: longer before shorter where one
+# contains another (+inter+ before +in+). Overlaps +HYPHEN_COMPOUND_LEADING_PARTICLES+ only on +in+,
+# +out+, +up+ — those serve different rules; do not merge arrays without checking both call sites.
 #
 
 COMMON_PREFIXES = [
@@ -515,6 +771,7 @@ def load_word_dict()
       word_dict[word] = word_info
     end
   }
+  clear_spelling_variant_hyphen_caches!
   word_dict
 end
 

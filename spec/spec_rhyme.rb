@@ -409,8 +409,9 @@ describe 'RHYMES' do
   end
 
   context 'hyphens' do
-    oughta_rhyme 'flaws', 'in-laws' # it ought to rhyme with the preferred form...
-    ought_not_rhyme 'flaws', 'inlaws' #, NOT_WORKING # ...but not with the dispreferred form.
+    could_go_either_way 'flaws', 'in-laws' # probably stress mismatch
+    could_go_either_way 'flaws', 'inlaws' # probably stress mismatch
+    ought_not_rhyme_one_way 'flaws', 'inlaws'
     ought_not_rhyme 'inlaws', 'in-laws'
     ought_not_rhyme 'nonbuilding', 'non-building'
     ought_not_rhyme 'cul-de-sac', 'back' # stress mismatch
@@ -418,6 +419,8 @@ describe 'RHYMES' do
     oughta_rhyme 'topsy-turvy', 'scurvy'
     ought_not_rhyme 'ping-pong', 'wrong' # stress mismatch
     oughta_rhyme 'okey-dokey', 'hokey'
+    oughta_rhyme_one_way 'okeydokey', 'hokey'
+    ought_not_rhyme_one_way 'hokey', 'okeydokey'
     ought_not_rhyme 'flim-flam', 'slam' # stress mismatch
     oughta_rhyme 'papier-mache', 'way'
     oughta_rhyme 'tutti-frutti', 'booty'
