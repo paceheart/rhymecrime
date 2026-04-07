@@ -173,8 +173,113 @@ def us_uk_ize_pair(word)
   nil
 end
 
-def ize_ise_variant_forms(word)
-  pair = us_uk_ize_pair(word)
+# US/UK -or ↔ -our (behavior/behaviour, color/colour, …). Longest suffix first; both spellings
+# must exist in +$word_dict+ (avoids tor/tour, for/four, contour, …).
+US_UK_OR_SUFFIXES = [
+  ["iors", "iours"],
+  ["ior", "iour"],
+  ["orites", "ourites"],
+  ["oring", "ouring"],
+  ["ored", "oured"],
+  ["ors", "ours"],
+  ["orite", "ourite"],
+  ["orous", "ourous"],
+  ["or", "our"],
+].freeze
+
+US_UK_OR_MIN_WORD_LENGTH = 5
+
+def us_to_uk_or_spelling(us_word)
+  w = us_word.to_s
+  return nil if w.length < US_UK_OR_MIN_WORD_LENGTH
+  US_UK_OR_SUFFIXES.sort_by { |us_s, _uk| [-us_s.length, us_s] }.each do |us_s, uk_s|
+    next unless w.end_with?(us_s)
+    return w[0...-us_s.length] + uk_s
+  end
+  nil
+end
+
+def uk_to_us_or_spelling(uk_word)
+  w = uk_word.to_s
+  return nil if w.length < US_UK_OR_MIN_WORD_LENGTH
+  US_UK_OR_SUFFIXES.sort_by { |_us, uk_s| [-uk_s.length, uk_s] }.each do |us_s, uk_s|
+    next unless w.end_with?(uk_s)
+    return w[0...-uk_s.length] + us_s
+  end
+  nil
+end
+
+def us_uk_or_pair(word)
+  w = word.to_s
+  return nil if w.length < US_UK_OR_MIN_WORD_LENGTH
+  uk = us_to_uk_or_spelling(w)
+  if uk && uk != w && uk.length >= US_UK_OR_MIN_WORD_LENGTH && word_dict_includes_headword?(w) && word_dict_includes_headword?(uk) && uk_to_us_or_spelling(uk) == w
+    return [w, uk]
+  end
+  us = uk_to_us_or_spelling(w)
+  if us && us != w && us.length >= US_UK_OR_MIN_WORD_LENGTH && word_dict_includes_headword?(w) && word_dict_includes_headword?(us) && us_to_uk_or_spelling(us) == w
+    return [us, w]
+  end
+  nil
+end
+
+# US/UK -er ↔ -re (center/centre, fiber/fibre, …). Longest suffix first; both spellings in +$word_dict+;
+# stem before the matched suffix must end in a consonant and have length ≥ 3 (avoids acre/acer, etc.).
+US_UK_ER_RE_SUFFIXES = [
+  ["ering", "ring"],
+  ["ered", "red"],
+  ["ers", "res"],
+  ["er", "re"],
+].freeze
+
+US_UK_ER_RE_MIN_WORD_LENGTH = 5
+
+def us_to_uk_er_re_spelling(us_word)
+  w = us_word.to_s
+  return nil if w.length < US_UK_ER_RE_MIN_WORD_LENGTH
+  US_UK_ER_RE_SUFFIXES.sort_by { |us_s, _uk| [-us_s.length, us_s] }.each do |us_s, uk_s|
+    next unless w.end_with?(us_s)
+    stem = w[0...-us_s.length]
+    next unless stem.match?(/[bcdfghjklmnpqrstvwxyz]\z/i)
+    next if stem.length < 3
+    return stem + uk_s
+  end
+  nil
+end
+
+def uk_to_us_er_re_spelling(uk_word)
+  w = uk_word.to_s
+  return nil if w.length < US_UK_ER_RE_MIN_WORD_LENGTH
+  US_UK_ER_RE_SUFFIXES.sort_by { |_us, uk_s| [-uk_s.length, uk_s] }.each do |us_s, uk_s|
+    next unless w.end_with?(uk_s)
+    stem = w[0...-uk_s.length]
+    next unless stem.match?(/[bcdfghjklmnpqrstvwxyz]\z/i)
+    next if stem.length < 3
+    return stem + us_s
+  end
+  nil
+end
+
+def us_uk_er_re_pair(word)
+  w = word.to_s
+  return nil if w.length < US_UK_ER_RE_MIN_WORD_LENGTH
+  uk = us_to_uk_er_re_spelling(w)
+  if uk && uk != w && uk.length >= US_UK_ER_RE_MIN_WORD_LENGTH && word_dict_includes_headword?(w) && word_dict_includes_headword?(uk) && uk_to_us_er_re_spelling(uk) == w
+    return [w, uk]
+  end
+  us = uk_to_us_er_re_spelling(w)
+  if us && us != w && us.length >= US_UK_ER_RE_MIN_WORD_LENGTH && word_dict_includes_headword?(w) && word_dict_includes_headword?(us) && us_to_uk_er_re_spelling(us) == w
+    return [us, w]
+  end
+  nil
+end
+
+def us_uk_morphology_pair(word)
+  us_uk_ize_pair(word) || us_uk_or_pair(word) || us_uk_er_re_pair(word)
+end
+
+def us_uk_morphology_variant_forms(word)
+  pair = us_uk_morphology_pair(word)
   return nil unless pair
   u, k = pair
   k == u ? [u] : [u, k]
@@ -312,9 +417,9 @@ def preferred_form(word)
     debug "The preferred form of '#{word}' is '#{vf[0]}'" unless vf[0] == word
     return vf[0]
   end
-  iz = us_uk_ize_pair(word)
-  if iz
-    return iz[0]
+  morph = us_uk_morphology_pair(word)
+  if morph
+    return morph[0]
   end
   forms = hyphen_multi_fold_map[spelling_variant_hyphen_fold(word)]
   return word if forms.nil? || forms.length < 2
@@ -325,26 +430,26 @@ def all_forms(word)
   vf = variants[word]
   forms = hyphen_multi_fold_map[spelling_variant_hyphen_fold(word)]
   forms = nil if forms.nil? || forms.length < 2
-  iz = ize_ise_variant_forms(word)
+  morph = us_uk_morphology_variant_forms(word)
   if vf
     unless forms
-      if iz
+      if morph
         merged = vf.dup
-        iz.each { |x| merged << x unless merged.include?(x) }
+        morph.each { |x| merged << x unless merged.include?(x) }
         return merged.uniq
       end
       return vf
     end
     merged = vf.dup
-    iz&.each { |x| merged << x unless merged.include?(x) }
+    morph&.each { |x| merged << x unless merged.include?(x) }
     forms.each { |x| merged << x unless merged.include?(x) }
     return merged.uniq
   end
-  if iz
+  if morph
     unless forms
-      return iz
+      return morph
     end
-    merged = iz.dup
+    merged = morph.dup
     forms.each { |x| merged << x unless merged.include?(x) }
     return merged.uniq
   end

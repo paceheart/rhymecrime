@@ -433,6 +433,8 @@ describe 'RHYMES' do
   context 'Limerick Heist' do
     oughta_rhyme 'heist', 'sliced'
     oughta_rhyme 'heist', 'iced'
+    oughta_rhyme 'mum', 'chum'
+    oughta_rhyme 'mom', 'bomb'
   end
 
   context 'consonant clusters' do
@@ -569,7 +571,7 @@ describe 'RHYMES' do
     oughta_rhyme 'owned', 'rezoned', NOT_WORKING
     oughta_rhyme 'unowned', 'rezoned', NOT_WORKING
   end
-
+  
   context 'non-binary rhymes' do
     oughta_rhyme 'latex', 'paychecks', NOT_WORKING
     oughta_rhyme 'pitiful', 'biddable', NOT_WORKING # genderfluid plus T -> D

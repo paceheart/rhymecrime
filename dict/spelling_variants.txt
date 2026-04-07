@@ -1,10 +1,12 @@
 # Spelling variants list
+#
 # Only add words that are the same in both meaning and pronunciation.
 # Format: preferred_form alternate_form1 alternate_form2 ...
-# Do not use '-' in this file. Hyphenated spellings (in-laws/inlaws, non-stick/nonstick, …) merge
-# using dict/generated/hyphen_variant_map.json (rebuilt by dict/dict.rb; see utils_rhyme.rb).
-# US/UK -ize/-ise (and -yze/-yse, -ization/-isation, -izer/-iser, …) are derived in utils_rhyme.rb;
-# do not list them here.
+# Do not use '-' in this file. Hyphenated spellings (in-laws/inlaws, etc) are auto-merged.
+# Also, the following US/UK spelling differences are handled automatically:
+#  -ize/-ise (and -yze/-yse, -ization/-isation, -izer/-iser, etc.
+#  -or/-our (color/colour, behavior/behaviour, favorite/favourite, etc.
+#  -er/-re (center/centre, fiber/fibre, caliber/calibre, etc.)
 acknowledgment acknowledgement
 adaptor adapter
 advisor adviser
@@ -20,24 +22,14 @@ anemic anaemic
 anesthesia anaesthesia
 annex annexe
 appall appal
-armor armour
-armored armoured
-armoring armouring
-armors armours
 artifact artefact
 axe ax
 bank banque
-behavior behaviour
-behaviors behaviours
 bologna baloney
-caliber calibre
 canceled cancelled
 canceling cancelling
 carburetor carburettor
 carburetors carburettors
-center centre
-centered centred
-centers centres
 cesium caesium
 check cheque
 checker chequer
@@ -47,10 +39,6 @@ cipher cypher
 ciphered cyphered
 ciphering cyphering
 ciphers cyphers
-color colour
-colored coloured
-coloring colouring
-colors colours
 connection connexion
 connections connexions
 counselor counsellor
@@ -72,8 +60,6 @@ draft draught
 drafts draughts
 enclose inclose
 encyclopedia encyclopaedia
-endeavor endeavour
-endeavors endeavours
 enology oenology
 enroll enrol
 enrollment enrolment
@@ -82,53 +68,28 @@ eon aeon
 equaling equalling
 esophagus oesophagus
 estrogen oestrogen
-favor favour
-favored favoured
-favoring favouring
-favorite favourite
-favorites favourites
-favors favours
 feces faeces
 fetal foetal
 fetid foetid
 fetus foetus
 fetuses foetuses
-fiber fibre
-fibers fibres
 flaky flakey
-flavor flavour
-flavored flavoured
-flavoring flavouring
-flavors flavours
 flutist flautist
 flutists flautists
 fueling fuelling
 fulfill fulfil
 fulfills fulfils
 furor furore
-glamour glamor
 glycerin glycerine
 goddamn goddam
 gray grey
 gynecology gynaecology
-harbor harbour
-harbored harboured
-harboring harbouring
-harbors harbours
 hematology haematology
 heme haem
 hemophilia haemophilia
 heroes heros
 homolog homologue
 homologs homologues
-honor honour
-honored honoured
-honoring honouring
-honors honours
-humor humour
-humored humoured
-humoring humouring
-humors humours
 impostor imposter
 ingrain engrain
 inquire enquire
@@ -144,12 +105,6 @@ jeweler jeweller
 jewelers jewellers
 judgment judgement
 judgments judgements
-kilometer kilometre
-kilometers kilometres
-labor labour
-labored laboured
-laboring labouring
-labors labours
 lambaste lambast
 lasagna lasagne
 leukemia leukaemia
@@ -160,17 +115,12 @@ licensing licencing
 licorice liquorice
 likable likeable
 linchpin lynchpin
-liter litre
-liters litres
 lodgement lodgment
 lodgements lodgments
 maneuver manoeuvre
 maneuvered manoeuvred
 maneuvers manoeuvres
 marvelous marvellous
-meager meagre
-meter metre
-meters metres
 mike mic
 mister mr
 modeling modelling
@@ -182,21 +132,15 @@ molt moult
 molted moulted
 molting moulting
 molts moults
-mom mum
-moms mums
 monolog monologue
 monologs monologues
 movable moveable
 mustache moustache
 mustached moustached
 mustaches moustaches
-neighbor neighbour
-neighbors neighbours
-ocher ochre
-odor odour
-odors odours
 offense offence
 offenses offences
+okay ok
 omelet omelette
 omelets omelettes
 opossum possum
@@ -204,8 +148,6 @@ ortholog orthologue
 orthopedic orthopaedic
 orthopedics orthopaedics
 pajamas pyjamas
-parlor parlour
-parlors parlours
 pedagog pedagogue
 pedagogs pedagogues
 pediatric paediatric
@@ -227,16 +169,8 @@ programs programmes
 quarreled quarrelled
 quarreling quarrelling
 racket racquet
-rigor rigour
-rigors rigours
 routing routeing
-rumor rumour
-rumors rumours
-saber sabre
-sabers sabres
 savanna savannah
-savior saviour
-saviors saviours
 savory savoury
 signaled signalled
 signaling signalling
@@ -244,10 +178,8 @@ skeptic sceptic
 skeptics sceptics
 skillful skilful
 smoky smokey
-specter spectre
 story storey
 sulfur sulphur
-theater theatre
 till 'til til
 tire tyre
 tires tyres
@@ -257,18 +189,12 @@ tranquility tranquillity
 traveled travelled
 traveler traveller
 traveling travelling
-tumor tumour
-tumors tumours
-valor valour
-valorout valourous
 vendor vender
 vendors venders
+versus vs
 vial phial
 vice vyce
 vices vyces
-vigor vigour
-vigorous vigourous
-vigors vigours
 whiskey whisky
 willful wilful
 wintry wintery
