@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-# Export wordfreq Zipf scores to wordfreq.tsv (word<TAB>zipf), one row per token.
+# Export wordfreq Zipf scores to a TSV (word<TAB>zipf), one row per token.
 # Uses the full language wordlist (iter_wordlist); no row cap.
 # Requires: pip install wordfreq
-# Run from this directory: python3 export_wordfreq_tsv.py
+# Default output: dict/generated/wordfreq.tsv (same path dict_lib.rb loads).
 
 import argparse
 import sys
@@ -11,13 +11,14 @@ from pathlib import Path
 
 def main() -> None:
     here = Path(__file__).resolve().parent
+    default_tsv = here.parent / "generated" / "wordfreq.tsv"
     parser = argparse.ArgumentParser(description="Write wordfreq zipf TSV for dict_lib.rb / analysis.")
     parser.add_argument(
         "-o",
         "--output",
         type=Path,
-        default=here / "wordfreq.tsv",
-        help="Output path (default: ./wordfreq.tsv next to this script)",
+        default=default_tsv,
+        help=f"Output path (default: {default_tsv})",
     )
     parser.add_argument("-l", "--lang", default="en", help="wordfreq language code (default: en)")
     args = parser.parse_args()

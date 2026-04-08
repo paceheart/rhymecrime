@@ -46,7 +46,7 @@ WordNet::DB.path = "WordNet3.1/"
 SUBTLEX_FILENAME = "subtlex/SUBTLEXus.tsv"
 SUBTLEX_PRESENCE_BONUS = 4
 
-WORDFREQ_FILENAME = "wordfreq/wordfreq.tsv"
+WORDFREQ_FILENAME = "generated/wordfreq.tsv"
 WORDFREQ_COMMON_ZIPF = 3.0
 WORDFREQ_RARE_ZIPF = 2.0
 # SUBTLEX FREQlow this high means sustained lowercase dialogue use — used with weak_lemma_anchor

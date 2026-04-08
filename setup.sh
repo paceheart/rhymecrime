@@ -51,3 +51,8 @@ curl -fL "https://kaikki.org/dictionary/English/kaikki.org-dictionary-English.js
     end
   ' | gzip > dict/wiktionary/kaikki-english-filtered.jsonl.gz
 
+# Wordfreq Zipf export (generated artifact for dict/dict.rb; dict/generated/ is gitignored)
+python3 -m pip install --user wordfreq
+mkdir -p dict/generated
+python3 dict/wordfreq/export_wordfreq_tsv.py
+

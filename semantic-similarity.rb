@@ -12,7 +12,6 @@
 #   5. ConceptNet 2-hop paths (currently disabled; toggleable via $TWOHOP_ENABLED)
 #
 
-require_relative 'Cosine'
 require 'json'
 require 'msgpack'
 require 'rwordnet'
@@ -28,10 +27,6 @@ NUMBERBATCH_VEC_FILE  = 'numberbatch-vectors.msgpack'
 NUMBERBATCH_VEC_DICT_FILE = 'dict/generated/numberbatch_vectors.msgpack'
 USF_ASSOCIATIONS_FILE = 'usf-associations.json'
 USF_ASSOCIATIONS_DICT_FILE = 'dict/generated/usf_associations.json'
-
-# Legacy embedding files (kept for backward compat; Numberbatch supersedes)
-EMBED_VEC_FILE = 'wiki-news-subword-220k.vec'
-EMBED_DICT_FILE = 'embed-dict-subword.msgpack'
 
 SIMILAR_MAX = 500
 
@@ -330,62 +325,6 @@ def morphy_directional_sense_cosines(word1, word2)
   [d1, d2]
 end
 
-# --- Legacy embed dict (wiki-news-subword) ---
-
-$embed_dict = nil
-def embed_dict
-  if $embed_dict.nil?
-    begin
-      $embed_dict = load_embed_dict
-    rescue
-      $embed_dict = {}
-    end
-  end
-  $embed_dict
-end
-
-def load_embed_dict
-  puts "loading embed dict"
-  MessagePack.unpack(File.binread(EMBED_DICT_FILE))
-end
-
-def save_embed_dict
-  File.binwrite(EMBED_DICT_FILE, $embed_dict.to_msgpack)
-  $embed_dict
-end
-
-def embed_dict_add(word, embedding)
-  embed_dict[word] = embedding
-end
-
-def compute_embed_dict
-  $embed_dict = {}
-  is_first_line = true
-  print("Loading #{EMBED_VEC_FILE}")
-  i = 0
-  IO.readlines(EMBED_VEC_FILE, chomp: true, encoding: 'UTF-8').each do |line|
-    i += 1
-    print "." if i % 1000 == 0
-    if is_first_line
-      is_first_line = false
-    else
-      tokens = line.rstrip.split(' ')
-      word, *embedding = *tokens
-      embed_dict_add(word, embedding.map(&:to_f)) if word_dict.key?(word)
-    end
-  end
-  print(" loaded #{$embed_dict.length} semantic vectors.\n")
-end
-
-def compute_and_save_embed_dict
-  compute_embed_dict
-  save_embed_dict
-end
-
-def get_embedding(word)
-  embed_dict[word]
-end
-
 # --- Main scoring ---
 
 def similarity_threshold
@@ -439,16 +378,6 @@ def similarity(word1, word2)
 
   # Score in centiles (threshold 9 = cosine 0.09)
   (cos * 100).round + edge_bonus
-end
-
-def cosine_similarity(word1, word2)
-  vec1 = get_embedding(word1)
-  vec2 = get_embedding(word2)
-  if vec1.nil? || vec2.nil?
-    0
-  else
-    Cosine.new(vec1, vec2).calculate_similarity.round(2)
-  end
 end
 
 def print_similarity(word1, word2)

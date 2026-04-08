@@ -694,14 +694,3 @@ def rhymes?(word1, word2, identical_ok=true)
   # Does word1 rhyme with word2?
   find_rhyming_words(word1, identical_ok).include?(word2)
 end
-
-# for testing
-def print_some_embed_dict_words
-  i = 0
-  for word, vec in embed_dict do
-    i += 1
-    if i % 1000 == 0
-      puts word
-    end
-  end
-end

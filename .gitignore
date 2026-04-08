@@ -1,8 +1,3 @@
-embed-dict.msgpack
-embed-dict-1.msgpack
-embed-dict-2.msgpack
-embed-dict-3.msgpack
-embed-dict-subword.msgpack
 hugging-face-access-token.txt
 semantic-similarity - HuggingFace Copy.rb
 *.*~
@@ -13,7 +8,6 @@ dict/wiktionary/*.jsonl.gz
 dict/wiktionary/*.jsonl
 dict/subtlex/*.tsv
 dict/subtlex/*.json
-dict/wordfreq/*.tsv
 dict/generated/*
 # Topical relatedness source data (large; regenerated during dict build)
 conceptnet-edges.json
