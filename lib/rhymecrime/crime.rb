@@ -26,6 +26,7 @@ require_relative 'dict/utils_rhyme'
 require_relative 'dict/phoneme.rb'
 require_relative 'dict/pronunciation.rb'
 require_relative "related"
+require "memery"
 
 #
 # utilities
@@ -316,13 +317,25 @@ end
 # Thematic relatedness
 #
 
-def find_related_words(word, include_self, include_rhymeless=true)
-  words = []
-  unless explicitly_forbidden?(word)
-    words = RelatedWords.find_thematically_related_words(word, include_self, include_rhymeless)
-    words = filter_out_dispreferred_words(words, word)
+module Rhymecrime
+  module FindRelatedWordsMemo
+    class << self
+      include Memery
+
+      memoize def find_related_words(word, include_self, include_rhymeless = true)
+        words = []
+        unless explicitly_forbidden?(word)
+          words = RelatedWords.find_thematically_related_words(word, include_self, include_rhymeless)
+          words = filter_out_dispreferred_words(words, word)
+        end
+        words
+      end
+    end
   end
-  return words
+end
+
+def find_related_words(word, include_self, include_rhymeless = true)
+  Rhymecrime::FindRelatedWordsMemo.find_related_words(word, include_self, include_rhymeless)
 end
 
 def find_related_rhymes(rhyme, rel)

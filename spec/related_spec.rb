@@ -33,30 +33,32 @@ end
 def related_words_ought_not_include(word1, word2, is_working=true)
   if(is_working)
     test_name = "'Words related to #{word1}' ought not include '#{word2}'"
-    related_words = find_related_words(word1, false)
     it test_name do
+      related_words = find_related_words(word1, false)
       expect(related_words.include?(word2)).to eql(false), "Words related to '#{word1}' ought not include '#{word2}', but they do: #{related_words}"
     end
   else # NOT_WORKING
     if TEST_FOR_SURPRISING_SUCCESSES
-      expect(related_words.include?(word2)).to eql(true), "Words related to '#{word1}' oughta include '#{word2}', but they do not: #{related_words}"
+      it "'Words related to #{word1}' (surprising) ought include '#{word2}'" do
+        related_words = find_related_words(word1, false)
+        expect(related_words.include?(word2)).to eql(true), "Words related to '#{word1}' oughta include '#{word2}', but they do not: #{related_words}"
+      end
     end
   end
 end
 
 describe 'RELATED' do
   
+  load_and_define_relatedness_test_cases
+
   context 'reflexivity' do
     related_words_ought_not_include 'death', 'death'
   end
 
   context 'slurs are forbidden' do
     related_words_ought_not_include 'gypsy', 'romanian'
-    related_words_ought_not_include 'romanian', 'gypsy'
     related_words_ought_not_include 'gypsies', 'romanian'
+    related_words_ought_not_include 'romanian', 'gypsy'
     related_words_ought_not_include 'romanian', 'gypsies'
   end
-
-  load_and_define_relatedness_test_cases
-
 end
