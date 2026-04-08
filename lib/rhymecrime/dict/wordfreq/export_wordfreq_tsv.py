@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # Export wordfreq Zipf scores to a TSV (word<TAB>zipf), one row per token.
 # Uses the full language wordlist (iter_wordlist); no row cap.
-# Requires: pip install wordfreq
-# Default output: <repo>/generated/wordfreq.tsv (same path dict_lib.rb loads).
+# Requires: same interpreter as python3, e.g.  python3 -m pip install -r requirements.txt
+# Default output: <repo>/generated/wordfreq.tsv (same path dict.rb loads).
 
 import argparse
 import sys
@@ -11,9 +11,10 @@ from pathlib import Path
 
 def main() -> None:
     here = Path(__file__).resolve().parent
-    repo_root = here.parent.parent
+    # wordfreq/ -> dict/ -> rhymecrime/ -> lib/ -> repo root
+    repo_root = here.parent.parent.parent.parent
     default_tsv = repo_root / "generated" / "wordfreq.tsv"
-    parser = argparse.ArgumentParser(description="Write wordfreq zipf TSV for dict_lib.rb / analysis.")
+    parser = argparse.ArgumentParser(description="Write wordfreq zipf TSV for dict.rb / analysis.")
     parser.add_argument(
         "-o",
         "--output",
@@ -26,7 +27,16 @@ def main() -> None:
     try:
         import wordfreq
     except ImportError:
-        print("Missing package. Install with: pip install wordfreq", file=sys.stderr)
+        exe = sys.executable
+        req = here / "requirements.txt"
+        print(
+            "Missing package 'wordfreq' for this Python:\n"
+            f"  {exe}\n"
+            "Install with the same interpreter (not plain `pip` if you use pyenv/asdf):\n"
+            f"  {exe} -m pip install -r {req}\n"
+            f"or:  {exe} -m pip install wordfreq",
+            file=sys.stderr,
+        )
         sys.exit(1)
 
     args.output.parent.mkdir(parents=True, exist_ok=True)

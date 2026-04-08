@@ -10,7 +10,7 @@ DEBUG_MODE = false
 # Front end for RhymeCrime.
 #
 
-require_relative 'crime'
+require_relative "crime"
 
 def cgi_puts(string)
   if(OUTPUT_FORMAT == 'cgi')
@@ -30,7 +30,7 @@ def parse_cgi_input
 end
 
 def print_html_header(word1, word2, title="RhymeCrime", handler="rhyme.rb")
-  head = IO.read("html/header.html", encoding: 'UTF-8');
+  head = IO.read(File.join(REPO_ROOT, "assets", "header.html"), encoding: "UTF-8")
 
   # tweak the title of the webpage to include the submitted word(s)
   clarifier = ""
@@ -128,7 +128,7 @@ def print_output(output, input_word1, output_type)
 end
 
 def print_html_footer
-  cgi_puts IO.read("html/footer.html", encoding: 'UTF-8');
+  cgi_puts IO.read(File.join(REPO_ROOT, "assets", "footer.html"), encoding: "UTF-8")
 end
 
 # RhymeCrime
@@ -201,7 +201,7 @@ def compute_and_print_similar_html
   # CGI Input: word1, word2 (optional)
   # Output: A bunch of stuff
   word1, word2 = parse_cgi_input
-  print_html_header(word1, word2, title="Semantic Similarity", handler="dev/similar.rb")
+  print_html_header(word1, word2, title="Semantic Similarity", handler="similar.rb")
   compute_and_print_html_similar_middle(word1, word2)
   print_html_footer
 end

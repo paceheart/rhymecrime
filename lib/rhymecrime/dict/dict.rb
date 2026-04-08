@@ -1,11 +1,14 @@
+#!/usr/bin/env ruby
 # encoding: utf-8
 #
-# RhymeCrime dictionary compiler: CMU + Wiktionary/kaikki + frequency phases → ../generated/*.
-# Loaded by dict.rb (CLI). Run dict.rb with cwd = dict/; corpus inputs live under ../corpora/.
-# Defines rebuild_rhymecrime_dictionaries (no side effects on require).
+# RhymeCrime dictionary compiler (CLI): CMU + Wiktionary/kaikki + frequency phases → <repo>/generated/*.
+# Prefer: ./bin/dict-build from the repo root (loads this file with cwd = this directory, then runs rebuild).
 #
+# Corpus inputs live under <repo>/corpora/. Defines rebuild_rhymecrime_dictionaries; invoked by bin/dict-build.
+
 # Change this to a string to display detailed output for a particular word
 TRACE_WORD = nil
+DICT_BUILD_VERBOSE = false
 
 # Preprocess the cmudict data into a format that's efficient for looking up rhyming words.
 # Reads from CMUDICT_FILENAME; writes generated caches under <repo>/generated/ (see utils_rhyme).
@@ -37,7 +40,6 @@ require_relative 'pronunciation.rb'
 require_relative 'wiktionary'
 require_relative 'inflect'
 
-REPO_ROOT = File.expand_path("..", __dir__)
 CORPORA_ROOT = File.join(REPO_ROOT, "corpora")
 
 CMUDICT_FILENAME = File.join(CORPORA_ROOT, "cmudict", "cmudict-0.7c.txt")
@@ -69,7 +71,7 @@ WIKT_FLOOR_4L_WEAK_ZIPF_BELOW = 2.5
 RIME_DICT_HEADER = "# RhymeCrime's rime dictionary
 # https://github.com/paceheart/rhymecrime
 #
-# Built by dict_lib.rb (CLI: dict/dict.rb).
+# Built by dict.rb (invoked via bin/dict-build).
 #
 # Each line is of the form:
 #
@@ -80,7 +82,7 @@ RIME_DICT_HEADER = "# RhymeCrime's rime dictionary
 #
 # This data is automatically distilled from a forked version of the
 # CMU Pronouncing Dictionary, with some manual tweaks and some
-# programmatic preprocessing as described in dict_lib.rb.
+# programmatic preprocessing as described in dict.rb.
 #
 # Singleton rimes are excluded.
 #"
@@ -88,7 +90,7 @@ RIME_DICT_HEADER = "# RhymeCrime's rime dictionary
 WORD_DICT_HEADER = "# RhymeCrime's word info dictionary
 # https://github.com/paceheart/rhymecrime
 #
-# Built by dict_lib.rb (CLI: dict/dict.rb).
+# Built by dict.rb (invoked via bin/dict-build).
 #
 # Each line is of the form:
 #
@@ -304,10 +306,10 @@ def load_cmudict()
           end
         end
       else
-        puts "Ignoring word: #{word}"
+        puts "Ignoring word: #{word}" if word == TRACE_WORD
       end
     else
-      puts "Ignoring cmudict line: #{line}"
+      puts "Ignoring cmudict line: #{line}" if DICT_BUILD_VERBOSE
     end
   }
   puts "Loaded #{hash.length} words from cmudict"
@@ -1179,7 +1181,7 @@ def add_frequency_info(cmudict, subtlex_hash, wordfreq_hash, wiktionary_words, p
   hyp_head = delete_headwords_starting_with_hyphen!(hash)
   puts "#{hyp_head} headwords starting with '-' removed after frequency phases" if hyp_head > 0
   hyp_tail = delete_headwords_ending_in_hyphen!(hash)
-  puts "#{hyp_tail} headwords ending in '-' removed after frequency phases" if hyp_tail > 0
+  puts "#{hyp_tail} headwords ending with '-' removed after frequency phases" if hyp_tail > 0
 
   puts "#{count + extra + common_extra + floor_applied + hyp_floor + inherited + cw_inherited + morph_inherited + morph_corpus} total entries with frequency data"
   return hash
@@ -1286,7 +1288,7 @@ def rebuild_rhymecrime_dictionaries()
   hyp_cmudict_start = delete_headwords_starting_with_hyphen!(cmudict)
   puts "Removed #{hyp_cmudict_start} cmudict headwords starting with '-'" if hyp_cmudict_start > 0
   hyp_cmudict = delete_headwords_ending_in_hyphen!(cmudict)
-  puts "Removed #{hyp_cmudict} cmudict headwords ending in '-'" if hyp_cmudict > 0
+  puts "Removed #{hyp_cmudict} cmudict headwords ending with '-'" if hyp_cmudict > 0
   rdict = build_rime_dict(cmudict)
   word_dict = build_word_dict(cmudict, rdict, subtlex_hash, wordfreq_hash, wiktionary_words, pos_map, forms_map)
   merge_word_dict_pronunciations_into_rdict!(rdict, word_dict)

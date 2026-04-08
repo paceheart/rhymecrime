@@ -1,8 +1,3 @@
 #!/usr/bin/env ruby
-
-#
-# front end for RhymeCrime
-#
-
-require_relative 'frontend'
-compute_and_print_html
+# Thin wrapper for deployments that expect rhyme.rb at the repo root (e.g. CGI).
+load File.expand_path("bin/rhyme.rb", __dir__)

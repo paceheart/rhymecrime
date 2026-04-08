@@ -13,13 +13,14 @@
 # it.
 #
 # See http://rubydoc.info/gems/rspec-core/RSpec/Core/Configuration
-require_relative '../crime'
+$LOAD_PATH.unshift File.expand_path("../lib", __dir__)
+require "rhymecrime/crime"
 
 TEST_FOR_SURPRISING_SUCCESSES = true
 NOT_WORKING = false # don't edit this one
 
 # Rarity specs tagged :rarity_ish (oughta_be_*_ish) are lower priority. To run only stricter
-# examples:  rspec spec/spec_rarity.rb --tag ~rarity_ish
+# examples:  rspec spec/rarity_spec.rb --tag ~rarity_ish
 
 RSpec.configure do |config|
   # rspec-expectations config goes here. You can use an alternate

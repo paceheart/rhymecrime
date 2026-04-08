@@ -24,8 +24,8 @@ sudo chmod 2775 /var/www
 find /var/www -type d -exec sudo chmod 2775 {} \;
 find /var/www -type f -exec sudo chmod 0664 {} \;
 cd /var/www/html/
-ln -s ../cgi-bin/html/crimestyle.css
-ln -s ../cgi-bin/html/crimestyle-wide.css
+ln -s ../cgi-bin/assets/crimestyle.css
+ln -s ../cgi-bin/assets/crimestyle-wide.css
 
 # not sure this is necessary:
 cd /var/www/cgi-bin/
@@ -51,8 +51,9 @@ curl -fL "https://kaikki.org/dictionary/English/kaikki.org-dictionary-English.js
     end
   ' | gzip > corpora/wiktionary/kaikki-english-filtered.jsonl.gz
 
-# Wordfreq Zipf export → generated/wordfreq.tsv (gitignored; used by dict/dict.rb)
-python3 -m pip install --user wordfreq
+# Wordfreq Zipf export → generated/wordfreq.tsv (gitignored; used by dict.rb / dict-build)
+# Use `python3 -m pip` so wordfreq installs for the same interpreter as `python3` (asdf/pyenv).
+python3 -m pip install --user -r lib/rhymecrime/dict/wordfreq/requirements.txt
 mkdir -p generated
-python3 dict/wordfreq/export_wordfreq_tsv.py
+python3 lib/rhymecrime/dict/wordfreq/export_wordfreq_tsv.py
 

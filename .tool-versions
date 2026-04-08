@@ -1,0 +1,2 @@
+# Pin for asdf; adjust to a python version you have installed (`asdf list python`).
+python 3.13.5t

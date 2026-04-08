@@ -22,7 +22,7 @@ def oughta_be_common(word, is_working=true, important=true)
 end
 
 # Lower priority than oughta_be_common / oughta_be_rare: tagged :rarity_ish so you can
-# focus on stricter examples first, e.g.  rspec spec/spec_rarity.rb --tag ~rarity_ish
+# focus on stricter examples first, e.g.  rspec spec/rarity_spec.rb --tag ~rarity_ish
 def oughta_be_common_ish(word, is_working=true)
   if(is_working)
     it "'#{word}' oughta be common (ish)", :rarity_ish do

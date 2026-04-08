@@ -1,0 +1,17 @@
+#!/usr/bin/env ruby
+# encoding: utf-8
+#
+# Rebuild RhymeCrime caches under <repo>/generated/.
+# Loads lib/rhymecrime/dict/dict.rb with cwd = that directory (relative list files), then runs rebuild.
+#
+#   ./bin/dict-build
+#
+
+repo = File.expand_path("..", __dir__)
+dict_dir = File.join(repo, "lib", "rhymecrime", "dict")
+$LOAD_PATH.unshift File.join(repo, "lib")
+
+Dir.chdir(dict_dir) do
+  load File.join(dict_dir, "dict.rb")
+  rebuild_rhymecrime_dictionaries
+end

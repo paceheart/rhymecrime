@@ -49,7 +49,9 @@ class Pronunciation
     return self unless changed
     has_primary_or_secondary = out.any? { |p| !p.syllable_boundary? && (p.include?("1") || p.include?("2")) }
     unless has_primary_or_secondary
-      puts "Protected \"#{to_s}\" from having its schwas dwimmed"
+      if DICT_BUILD_VERBOSE
+        puts "Protected \"#{to_s}\" from having its schwas dwimmed"
+      end
       return self
     end
     self.class.new(out)

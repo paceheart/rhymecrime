@@ -9,9 +9,6 @@ corpora/wiktionary/*.jsonl
 corpora/subtlex/*.tsv
 corpora/subtlex/*.json
 generated/
-# Topical relatedness source data (large; regenerated during dict build)
-conceptnet-edges.json
-numberbatch-vectors.msgpack
-experiments/conceptnet-assertions-5.7.0.csv.gz
-experiments/numberbatch-en-19.08.txt
-experiments/exp3_conceptnet_api_cache.json
+# Topical relatedness source data (large; inputs for dict build)
+corpora/conceptnet/conceptnet-assertions-5.7.0.csv.gz
+corpora/numberbatch/numberbatch-en-19.08.txt

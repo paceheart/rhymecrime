@@ -1,5 +1,5 @@
 require 'csv'
-require_relative '../pace_utils'
+require "rhymecrime/pace_utils"
 
 def zerone_string_to_boolean(str)
   str = str.strip

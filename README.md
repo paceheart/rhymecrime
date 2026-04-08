@@ -12,21 +12,25 @@ Find semantically related rhymes
 
 ## Repository layout
 
-Data and build artifacts are split so **sources** stay under `corpora/` and **regenerable caches** under `generated/` at the repo root. Ruby code resolves paths via `REPO_ROOT` / `GENERATED_DIR` in `dict/utils_rhyme.rb`, so loading works even when the process cwd is not the repository root (e.g. CGI).
+Data and build artifacts are split so **sources** stay under `corpora/` and **regenerable caches** under `generated/` at the repo root. Ruby code resolves paths via `REPO_ROOT` / `GENERATED_DIR` in `lib/rhymecrime/dict/utils_rhyme.rb`, so loading works even when the process cwd is not the repository root (e.g. CGI).
 
 | Location | Role |
 |----------|------|
+| **`lib/`** | On the load path. `lib/rhymecrime.rb` defines `Rhymecrime::ROOT`; application code lives under **`lib/rhymecrime/`** (`crime.rb`, `semantic-similarity.rb`, `frontend.rb`, helpers, and the **`dict/`** subtree). Use `require "rhymecrime/..."` from `bin/` and specs (after unshifting `lib/`). |
+| **`bin/`** | **Executables**: `rhyme.rb`, `similar.rb`, `debug.rb`, `anneal.rb`, `dict-build` (dictionary rebuild). Each prepends `lib/` to `$LOAD_PATH` as needed. |
+| **`assets/`** | Static fragments and CSS for the CGI UI (`header.html`, `footer.html`, `*.css`). Loaded via `File.join(REPO_ROOT, "assets", ...)`. |
 | **`corpora/`** | Upstream or hand-maintained **inputs** (versioned when license/size allow). |
 | **`corpora/cmudict/`** | CMU Pronouncing Dictionary (tweaked 0.7c text + license/readme). |
 | **`corpora/wordnet/3.1/`** | WordNet 3.1 lexicon (same internal layout as the standard distribution: inner `dict/`, `LICENSE`, …). |
-| **`corpora/usf/`** | USF free-association norms (raw `Cue_Target_Pairs.*` shards). Compiled JSON used at runtime is produced into `generated/`. |
+| **`corpora/usf/`** | USF free-association norms (raw `Cue_Target_Pairs.*` shards). Runtime graph: `generated/usf_associations.json` (you build from the raw shards; not produced by `dict-build` today). |
 | **`corpora/wiktionary/`** | Kaikki / Wiktextract English JSONL (often large; **gitignored** — fetch with `setup.sh` or equivalent). |
 | **`corpora/subtlex/`** | SUBTLEX-US frequency TSV (often **gitignored**). |
-| **`generated/`** | **Outputs** of `dict/dict.rb` and related steps: `word_dict.txt`, `rime_dict.txt`, `part_of_speech.json`, `hyphen_variant_map.json`, `wordfreq.tsv`, optional ConceptNet / Numberbatch / USF association JSON, etc. Entire directory is **gitignored**; clone → run `setup.sh` (wordfreq, Kaikki, …) then `cd dict && ruby dict.rb`. |
-| **`dict/`** | Compiler (`dict.rb`, `dict_lib.rb`), pronunciation / inflection / Wiktionary loaders, curated lists (`common_words.txt`, `rare_words.txt`, `forbid_list.txt`, …), and `dict/wordfreq/export_wordfreq_tsv.py`. |
-| **Repo root `*.rb`** | CGI and library entrypoints (`crime.rb`, `semantic-similarity.rb`, `rhyme.rb`, …). |
+| **`corpora/conceptnet/`** | Optional **ConceptNet** assertions gzip (`conceptnet-assertions-5.7.0.csv.gz`) for semantic edge weights in `generated/conceptnet_edges.json` (large; **gitignored**). |
+| **`corpora/numberbatch/`** | Optional **Numberbatch** English vectors (`numberbatch-en-19.08.txt`) for `generated/numberbatch_vectors.msgpack` (large; **gitignored**). |
+| **`generated/`** | **Outputs** of `./bin/dict-build` (see `lib/rhymecrime/dict/dict.rb`): `word_dict.txt`, `rime_dict.txt`, `part_of_speech.json`, `hyphen_variant_map.json`, `wordfreq.tsv`, and when source corpora are present `conceptnet_edges.json`, `numberbatch_vectors.msgpack`. Semantic relatedness also reads `usf_associations.json` here if present. Entire directory is **gitignored**; clone → run `setup.sh` (wordfreq, Kaikki, …) then `./bin/dict-build`. |
+| **`lib/rhymecrime/dict/`** | Dictionary compiler (`dict.rb`), pronunciation / inflection / Wiktionary loaders, curated lists (`common_words.txt`, `rare_words.txt`, `forbid_list.txt`, …), and `dict/wordfreq/export_wordfreq_tsv.py`. |
+| **Repo root `rhyme.rb`, `similar.rb`, …** | Thin wrappers that `load` the matching script under `bin/` for deployments that expect those names at the repo root (e.g. CGI). |
 | **`spec/`** | RSpec examples and `related.csv` (semantic relatedness expectations). |
-| **`experiments/`** | Optional **source** dumps for rebuilding topical data (e.g. ConceptNet assertions gzip, Numberbatch `.txt`); gitignored filenames listed in `.gitignore`. |
 
 ## Command Line Usage
 
@@ -39,11 +43,10 @@ You can change OUTPUT_TYPE from 'cgi' to 'text' if you want to use it at the com
 * put everything into your cgi-bin directory
 * configure your webserver to allow Ruby scripts
 * cd /WHATEVER/cgi-bin/
-* chmod +x *.rb
-* cd dict
-* ./dict.rb
+* chmod +x *.rb bin/dict-build
+* ./bin/dict-build
 
-That runs the thin CLI wrapper, which loads `dict_lib.rb` and builds the internal dictionaries. Then you ought to be able to go to cgi-bin/rhyme.rb and it will bring up the web interface.
+That rebuilds caches under `generated/` (loads `lib/rhymecrime/dict/dict.rb` and runs the rebuild). Then open `rhyme.rb` (root wrapper or `bin/rhyme.rb`) to bring up the web interface. Symlink `assets/*.css` into your static docroot if needed (see `setup.sh`).
 
 ## Examples:
 
@@ -70,7 +73,7 @@ otter / slaughter
 
 ### Building the Rhyming Dictionary
 
-First, run `dict/dict.rb` offline (from the `dict/` directory) to compile the rhyming dictionary into `generated/` at the repository root. Corpus inputs (CMUdict, WordNet, Kaikki extract, SUBTLEX, etc.) live under `corpora/`.
+First, run `./bin/dict-build` from the repository root to compile the rhyming dictionary into `generated/`. Corpus inputs (CMUdict, WordNet, Kaikki extract, SUBTLEX, etc.) live under `corpora/`.
 It starts from cmudict, which has a bunch of lines like this:
 
   KITTEN  K IH1 T AH0 N  

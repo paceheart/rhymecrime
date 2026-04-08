@@ -21,16 +21,14 @@ require_relative 'dict/utils_rhyme'
 
 WordNet::DB.path = File.join(REPO_ROOT, "corpora", "wordnet", "3.1") unless defined?(WordNet::DB) && WordNet::DB.path
 
-CONCEPTNET_EDGES_FILE = File.join(REPO_ROOT, "conceptnet-edges.json")
-CONCEPTNET_EDGES_DICT_FILE = File.join(REPO_ROOT, "generated", "conceptnet_edges.json")
-NUMBERBATCH_VEC_FILE  = File.join(REPO_ROOT, "numberbatch-vectors.msgpack")
-NUMBERBATCH_VEC_DICT_FILE = File.join(REPO_ROOT, "generated", "numberbatch_vectors.msgpack")
-USF_ASSOCIATIONS_FILE = File.join(REPO_ROOT, "usf-associations.json")
-USF_ASSOCIATIONS_DICT_FILE = File.join(REPO_ROOT, "generated", "usf_associations.json")
+# Topical relatedness artifacts (same paths dict-build writes under generated/).
+CONCEPTNET_EDGES_PATH = generated_dict_path(CONCEPTNET_EDGES_FILENAME)
+NUMBERBATCH_VEC_PATH = generated_dict_path(NUMBERBATCH_VECTORS_FILENAME)
+USF_ASSOCIATIONS_PATH = generated_dict_path(USF_ASSOCIATIONS_FILENAME)
 
 SIMILAR_MAX = 500
 
-# --- Tunable parameters (optimized via anneal.rb / sweep experiments) ---
+# --- Tunable parameters (optimized via anneal.rb / parameter sweeps) ---
 
 $SIMILARITY_THRESHOLD = 10
 $CONCEPTNET_EDGE_BONUS = 7
@@ -50,8 +48,8 @@ $USF_MIN_BRIDGE_COS = 8
 $conceptnet_edges = nil
 def conceptnet_edges
   return $conceptnet_edges unless $conceptnet_edges.nil?
-  path = [CONCEPTNET_EDGES_FILE, CONCEPTNET_EDGES_DICT_FILE].find { |p| File.exist?(p) }
-  if path
+  path = CONCEPTNET_EDGES_PATH
+  if File.exist?(path)
     $conceptnet_edges = JSON.parse(File.read(path, encoding: "UTF-8"))
     puts "loaded #{$conceptnet_edges.size} ConceptNet edges from #{path}"
   else
@@ -100,8 +98,8 @@ end
 $usf_associations = nil
 def usf_associations
   return $usf_associations unless $usf_associations.nil?
-  path = [USF_ASSOCIATIONS_FILE, USF_ASSOCIATIONS_DICT_FILE].find { |p| File.exist?(p) }
-  if path
+  path = USF_ASSOCIATIONS_PATH
+  if File.exist?(path)
     $usf_associations = JSON.parse(File.read(path, encoding: "UTF-8"))
     puts "loaded #{$usf_associations.size} USF cues from #{path}"
   else
@@ -134,8 +132,8 @@ end
 $numberbatch = nil
 def numberbatch
   return $numberbatch unless $numberbatch.nil?
-  path = [NUMBERBATCH_VEC_FILE, NUMBERBATCH_VEC_DICT_FILE].find { |p| File.exist?(p) }
-  if path
+  path = NUMBERBATCH_VEC_PATH
+  if File.exist?(path)
     $numberbatch = MessagePack.unpack(File.binread(path))
     puts "loaded #{$numberbatch.size} Numberbatch vectors from #{path}"
   else

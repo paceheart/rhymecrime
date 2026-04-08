@@ -17,9 +17,11 @@ HYPHEN_VARIANT_MAP_FILENAME = "hyphen_variant_map.json"
 CONCEPTNET_EDGES_FILENAME = "conceptnet_edges.json"
 # Numberbatch word vectors pre-filtered to word_dict keys; built in dict.rb, loaded at runtime.
 NUMBERBATCH_VECTORS_FILENAME = "numberbatch_vectors.msgpack"
+# USF cue→target association strengths (FSG); place under generated/ for runtime (e.g. built from corpora/usf/).
+USF_ASSOCIATIONS_FILENAME = "usf_associations.json"
 
-# Outputs of dict/dict_lib.rb (via dict.rb); not hand-edited. Absolute paths under <repo>/generated/.
-REPO_ROOT = File.expand_path("..", __dir__)
+# Outputs of dict.rb (dictionary compiler); not hand-edited. Absolute paths under <repo>/generated/.
+REPO_ROOT = File.expand_path("../../..", __dir__)
 GENERATED_DIR = File.join(REPO_ROOT, "generated")
 
 def generated_dict_path(basename)
@@ -386,7 +388,7 @@ def save_hyphen_variant_map!(word_keys)
 end
 
 # --- ConceptNet edge map build ---
-# Source: conceptnet-assertions-5.7.0.csv.gz (CC-BY-SA 4.0)
+# Source: conceptnet-assertions-5.7.0.csv.gz (CC-BY-SA 4.0) under corpora/conceptnet/ or repo root.
 # Kept relations: RelatedTo, Synonym, IsA, HasA, PartOf, UsedFor, CapableOf, AtLocation,
 # Causes, HasProperty, HasSubevent, DerivedFrom, FormOf, SimilarTo, HasPrerequisite,
 # HasContext, MannerOf, ReceivesAction, HasFirstSubevent, HasLastSubevent, DefinedAs
@@ -401,10 +403,12 @@ CONCEPTNET_EN_NODE_RE = %r{\A/c/en/([a-z][a-z]*)\z}
 
 def save_conceptnet_edge_map!(word_keys)
   require 'zlib'
-  gz_path = [File.join(REPO_ROOT, "experiments", CONCEPTNET_ASSERTIONS_GZ),
-              File.join(REPO_ROOT, CONCEPTNET_ASSERTIONS_GZ)].find { |p| File.exist?(p) }
+  gz_path = [
+    File.join(REPO_ROOT, "corpora", "conceptnet", CONCEPTNET_ASSERTIONS_GZ),
+    File.join(REPO_ROOT, CONCEPTNET_ASSERTIONS_GZ),
+  ].find { |p| File.exist?(p) }
   unless gz_path
-    puts "Skipping ConceptNet edge map: #{CONCEPTNET_ASSERTIONS_GZ} not found (repo root or experiments/)"
+    puts "Skipping ConceptNet edge map: #{CONCEPTNET_ASSERTIONS_GZ} not found (try corpora/conceptnet/ or repo root)"
     return
   end
   dict_set = word_keys.to_set
@@ -440,14 +444,16 @@ def save_conceptnet_edge_map!(word_keys)
 end
 
 # --- Numberbatch vector build ---
-# Source: numberbatch-en-19.08.txt (CC-BY-SA 4.0, pre-normalized)
+# Source: numberbatch-en-19.08.txt (CC-BY-SA 4.0, pre-normalized) under corpora/numberbatch/ or repo root.
 NUMBERBATCH_TXT = "numberbatch-en-19.08.txt"
 
 def save_numberbatch_vectors!(word_keys)
-  txt_path = [File.join(REPO_ROOT, "experiments", NUMBERBATCH_TXT),
-              File.join(REPO_ROOT, NUMBERBATCH_TXT)].find { |p| File.exist?(p) }
+  txt_path = [
+    File.join(REPO_ROOT, "corpora", "numberbatch", NUMBERBATCH_TXT),
+    File.join(REPO_ROOT, NUMBERBATCH_TXT),
+  ].find { |p| File.exist?(p) }
   unless txt_path
-    puts "Skipping Numberbatch vectors: #{NUMBERBATCH_TXT} not found (repo root or experiments/)"
+    puts "Skipping Numberbatch vectors: #{NUMBERBATCH_TXT} not found (try corpora/numberbatch/ or repo root)"
     return
   end
   dict_set = word_keys.to_set
@@ -595,7 +601,7 @@ def load_variants
 end
 
 #
-# prefixes (crime.rb prefix_words; dict_lib syllabification). Order: longer before shorter where one
+# prefixes (crime.rb prefix_words; dict.rb syllabification). Order: longer before shorter where one
 # contains another (+inter+ before +in+). Overlaps +HYPHEN_COMPOUND_LEADING_PARTICLES+ only on +in+,
 # +out+, +up+ — those serve different rules; do not merge arrays without checking both call sites.
 #
@@ -968,7 +974,7 @@ end
 def load_word_dict()
   pathname = generated_dict_path(WORD_DICT_FILENAME)
   unless File.exist?(pathname)
-    die "First run dict/dict.rb from dict/ to populate #{GENERATED_DIR}/"
+    die "First run ./bin/dict-build to populate #{GENERATED_DIR}/"
   end
   word_dict = Hash.new
   IO.readlines(pathname, encoding: 'UTF-8').each{ |line|

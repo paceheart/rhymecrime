@@ -9,7 +9,7 @@ require_relative 'ipa_to_arpabet'
 require_relative 'pronunciation'
 
 # Kaikki extract (large; often gitignored) under corpora/wiktionary/.
-WIKTIONARY_DATA_PATH = File.expand_path("../corpora/wiktionary/kaikki-english-filtered.jsonl.gz", __dir__)
+WIKTIONARY_DATA_PATH = File.expand_path("../../../corpora/wiktionary/kaikki-english-filtered.jsonl.gz", __dir__)
 
 SKIP_FORM_TAGS = Set.new(%w[
   alternative obsolete dialectal nonstandard archaic
@@ -31,7 +31,7 @@ INFLECTION_TAGS = {
 # Returns [pron_hash, forms_map, pos_map]
 #   pron_hash: { word => [Pronunciation, ...] }  (same format as load_cmudict)
 #   forms_map: { base_word => [[inflected_form, base_word], ...] }
-#   pos_map: { word => Set<String> } union of Kaikki "pos" per lemma (Layer A ∩ WordNet in dict_lib)
+#   pos_map: { word => Set<String> } union of Kaikki "pos" per lemma (Layer A ∩ WordNet in dict.rb)
 def load_wiktionary
   path = WIKTIONARY_DATA_PATH
   unless File.exist?(path)

@@ -583,13 +583,13 @@ describe 'RHYMES' do
     oughta_rhyme 'symphony', 'timpani', NOT_WORKING
   end
 
-  context 'prereqs from spec_similar_rhymes: death' do
+  context 'prereqs from similar_rhymes_spec: death' do
     oughta_rhyme 'bled', 'dead'
     oughta_rhyme 'bled', 'dread'
     oughta_rhyme 'dead', 'dread'
   end
 
-  context 'prereqs from spec_similar_rhymes: pirate' do
+  context 'prereqs from similar_rhymes_spec: pirate' do
     oughta_rhyme 'bold', 'gold'
     oughta_rhyme 'buccaneer', 'commandeer'
     oughta_rhyme 'buccaneer', 'peer-to-peer'
@@ -608,7 +608,7 @@ describe 'RHYMES' do
     oughta_rhyme 'reef', 'thief'
   end
 
-  context 'prereqs from spec_similar_rhymes: halloween' do
+  context 'prereqs from similar_rhymes_spec: halloween' do
     ought_not_rhyme 'broom', 'costume' # imperfect: stress mismatch
     oughta_rhyme 'bat', 'cat'
     oughta_rhyme 'celebration', 'decoration'
@@ -618,7 +618,7 @@ describe 'RHYMES' do
     oughta_rhyme 'sheet', 'treat'
   end
 
-  context 'prereqs from spec_similar_rhymes: music' do
+  context 'prereqs from similar_rhymes_spec: music' do
     ought_not_rhyme 'arpeggio', 'show' # imperfect: stress mismatch
     ought_not_rhyme 'cello', 'solo' # imperfect: stress mismatch
     ought_not_rhyme 'concerto', 'solo' # imperfect: stress mismatch
@@ -666,7 +666,7 @@ describe 'RHYMES' do
     oughta_rhyme 'violins', 'winds'
   end
 
-  context 'prereqs from spec_similar_rhymes: water' do
+  context 'prereqs from similar_rhymes_spec: water' do
     oughta_rhyme 'flush', 'gush'
     oughta_rhyme 'drink', 'sink'
     oughta_rhyme 'pee', 'sea'
@@ -687,7 +687,7 @@ describe 'RHYMES' do
     oughta_rhyme 'dip', 'sip'
   end
 
-  context 'prereqs from spec_similar_rhymes: clumsy' do
+  context 'prereqs from similar_rhymes_spec: clumsy' do
     oughta_rhyme 'bumbling', 'fumbling'
     oughta_rhyme 'bumbling', 'stumbling'
     oughta_rhyme 'excuse', 'shoes'
@@ -695,12 +695,12 @@ describe 'RHYMES' do
     oughta_rhyme 'drop', 'flop'
   end
 
-  context 'prereqs from spec_similar_rhymes: invoke' do
+  context 'prereqs from similar_rhymes_spec: invoke' do
     oughta_rhyme 'dares', 'prayers'
     oughta_rhyme 'declare', 'prayer'
   end
 
-  context 'prereqs from spec_similar_rhymes: prayers' do
+  context 'prereqs from similar_rhymes_spec: prayers' do
     oughta_rhyme 'addressed', 'blessed'
     oughta_rhyme 'blessed', 'request'
     oughta_rhyme 'appeal', 'kneel'
@@ -716,7 +716,7 @@ describe 'RHYMES' do
     oughta_rhyme 'blessed', 'confessed'
   end
 
-  context 'prereqs from spec_similar_rhymes: carbon/bread/pasta' do
+  context 'prereqs from similar_rhymes_spec: carbon/bread/pasta' do
     oughta_rhyme 'sink', 'zinc'
     oughta_rhyme 'feast', 'yeast'
     oughta_rhyme 'champagne', 'grain'
@@ -729,7 +729,7 @@ describe 'RHYMES' do
     oughta_rhyme 'extract', 'react'
   end
 
-  context 'prereqs from spec_similar_rhymes: crime' do
+  context 'prereqs from similar_rhymes_spec: crime' do
     oughta_rhyme 'acquit', 'commit'
     oughta_rhyme 'acquitted', 'committed'
     oughta_rhyme 'arrest', 'confessed'
@@ -745,7 +745,7 @@ describe 'RHYMES' do
     oughta_rhyme 'nerd', 'word'
   end
 
-  context 'prereqs from spec_similar_rhymes: magic/medical/football/exploration' do
+  context 'prereqs from similar_rhymes_spec: magic/medical/football/exploration' do
     oughta_rhyme 'chants', 'trance'
     oughta_rhyme 'disease', 'expertise'
     oughta_rhyme 'ccs', 'fees'
@@ -753,7 +753,7 @@ describe 'RHYMES' do
     ought_not_rhyme 'backtrack', 'cul-de-sac' # imperfect: stress mismatch
   end
 
-  context 'prereqs from spec_similar_rhymes: pair_related' do
+  context 'prereqs from similar_rhymes_spec: pair_related' do
     oughta_rhyme 'fraud', 'god'
     oughta_rhyme 'exciting', 'writing'
     oughta_rhyme 'chewed', 'rude'
@@ -798,11 +798,11 @@ describe 'RHYMES' do
     oughta_rhyme 'cider', 'snyder'
   end
 
-  context 'prereqs from spec_similar_rhymes: related_rhymes' do
+  context 'prereqs from similar_rhymes_spec: related_rhymes' do
     oughta_rhyme 'please', 'siamese'
   end
 
-  context 'prereqs from spec_similar_rhymes: ought_not_rhyme (identical/prefix)' do
+  context 'prereqs from similar_rhymes_spec: ought_not_rhyme (identical/prefix)' do
     ought_not_rhyme 'atonal', 'tonal'
     oughta_rhyme 'composition', 'musician'
     oughta_rhyme 'compositions', 'musicians'
@@ -818,7 +818,7 @@ describe 'RHYMES' do
     ought_not_rhyme 'totalitarian', 'vegetarian'
   end
 
-  context 'prereqs from spec_similar_rhymes: ought_not_rhyme (homophones/spelling variants)' do
+  context 'prereqs from similar_rhymes_spec: ought_not_rhyme (homophones/spelling variants)' do
     ought_not_rhyme 'flour', 'flower'
     ought_not_rhyme 'realise', 'realize'
     ought_not_rhyme 'honor', 'honour'

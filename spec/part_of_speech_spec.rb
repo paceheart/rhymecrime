@@ -1,5 +1,5 @@
 # Desired lexical POS per lemma (see dict build / part_of_speech.json policy).
-# Requires generated/part_of_speech.json from: cd dict && ruby dict.rb
+# Requires generated/part_of_speech.json from: ./bin/dict-build
 #
 # Table: each row is the word, then POS abbreviations — noun, verb, adj, adv (output keys
 # match Kaikki strings stored in part_of_speech.json), with an optional final NOT_WORKING.
