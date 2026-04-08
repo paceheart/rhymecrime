@@ -230,16 +230,19 @@ def find_rhyming_words(word, identical_ok=true)
   return rhyming_words || [ ]
 end
 
-def identical_rhyme?(rhyme, target_rhyme_syllables_array)
+def identical_rhyme?(rhyme, target_rhyme_syllables_array, target_rime)
   # Used to filter out identical rhymes, where the entire final stressed syllable is identical to the one in RSIG.
   # e.g. if you input "leave", this will return "grieve" but not "believe", because the rhyming syllable
   # "L_IY_V" is identical.
+  # Only considers pronunciations that actually rhyme (share the target rime), so a non-rhyming
+  # alternate pronunciation (e.g. noun RE-cord vs verb re-CORD) can't give a false escape.
   for pron in pronunciations(rhyme)
+    next unless pron.rime == target_rime
     if pron.rhyme_syllables_array != target_rhyme_syllables_array
-      return false; # we found a pronunciation with a different rhyming syllable; this rhyme is perfect
+      return false
     end
   end
-  return true;
+  return true
 end
 
 def all_identical_rhymes?(words)
@@ -264,7 +267,7 @@ def find_rhyming_words_for_pronunciation(pron, identical_ok=true)
   rsyllables = pron.rhyme_syllables_array
   rdict_lookup(rime).each { |rhyme|
     cand_prons = pronunciations(rhyme)
-    if(!identical_ok && identical_rhyme?(rhyme, rsyllables))
+    if(!identical_ok && identical_rhyme?(rhyme, rsyllables, rime))
       debug "Filtered out identical rhyme: #{pron} / #{rhyme} (#{debug_info(rhyme)})"
     else
       results.push(rhyme)

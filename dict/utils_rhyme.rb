@@ -13,6 +13,10 @@ WORD_DICT_FILENAME = "word_dict.txt"
 PART_OF_SPEECH_FILENAME = "part_of_speech.json"
 # Multi-spelling hyphen folds (in-laws/inlaws, …); built in dict.rb, loaded at runtime.
 HYPHEN_VARIANT_MAP_FILENAME = "hyphen_variant_map.json"
+# ConceptNet-derived edge weights for topical relatedness; built in dict.rb, loaded at runtime.
+CONCEPTNET_EDGES_FILENAME = "conceptnet_edges.json"
+# Numberbatch word vectors pre-filtered to word_dict keys; built in dict.rb, loaded at runtime.
+NUMBERBATCH_VECTORS_FILENAME = "numberbatch_vectors.msgpack"
 
 # Outputs of dict/dict_lib.rb (via dict.rb); not hand-edited. Paths are relative to the dict/
 # directory when the build runs with cwd = dict/; loaders use paths from the repository root.
@@ -309,7 +313,8 @@ HYPHEN_COMPOUND_TRAILING_PARTICLES_SOLID_PREF =
 
 def hyphen_redup_prefers_hyphenated_form?(f)
   return false unless REDUP_STYLE_SINGLE_HYPHEN_RE.match?(f)
-  _left, right = f.split("-", 2)
+  left, right = f.split("-", 2)
+  return false if COMMON_PREFIXES.include?(left.downcase)
   !HYPHEN_COMPOUND_TRAILING_PARTICLES_SOLID_PREF.include?(right.downcase)
 end
 
@@ -362,6 +367,94 @@ def save_hyphen_variant_map!(word_keys)
   map.keys.sort.each { |k| sorted[k] = map[k].sort }
   File.write(path, "#{JSON.generate(sorted)}\n", encoding: "UTF-8")
   puts "Wrote #{sorted.size} hyphen-variant folds to #{HYPHEN_VARIANT_MAP_FILENAME}"
+end
+
+# --- ConceptNet edge map build ---
+# Source: conceptnet-assertions-5.7.0.csv.gz (CC-BY-SA 4.0)
+# Kept relations: RelatedTo, Synonym, IsA, HasA, PartOf, UsedFor, CapableOf, AtLocation,
+# Causes, HasProperty, HasSubevent, DerivedFrom, FormOf, SimilarTo, HasPrerequisite,
+# HasContext, MannerOf, ReceivesAction, HasFirstSubevent, HasLastSubevent, DefinedAs
+CONCEPTNET_ASSERTIONS_GZ = "conceptnet-assertions-5.7.0.csv.gz"
+CONCEPTNET_KEEP_RELATIONS = %w[
+  /r/RelatedTo /r/Synonym /r/IsA /r/HasA /r/PartOf /r/UsedFor /r/CapableOf
+  /r/AtLocation /r/Causes /r/HasProperty /r/HasSubevent /r/DerivedFrom /r/FormOf
+  /r/SimilarTo /r/HasPrerequisite /r/HasContext /r/MannerOf /r/ReceivesAction
+  /r/HasFirstSubevent /r/HasLastSubevent /r/DefinedAs
+].to_set.freeze
+CONCEPTNET_EN_NODE_RE = %r{\A/c/en/([a-z][a-z]*)\z}
+
+def save_conceptnet_edge_map!(word_keys)
+  require 'zlib'
+  gz_path = CONCEPTNET_ASSERTIONS_GZ
+  unless File.exist?(gz_path)
+    puts "Skipping ConceptNet edge map: #{gz_path} not found"
+    return
+  end
+  dict_set = word_keys.to_set
+  edges = {}
+  lines = 0
+  Zlib::GzipReader.open(gz_path, encoding: "UTF-8") do |gz|
+    gz.each_line do |line|
+      lines += 1
+      print "." if lines % 5_000_000 == 0
+      parts = line.chomp.split("\t")
+      next if parts.size < 5
+      relation = parts[1]
+      next unless CONCEPTNET_KEEP_RELATIONS.include?(relation)
+      m1 = CONCEPTNET_EN_NODE_RE.match(parts[2])
+      m2 = CONCEPTNET_EN_NODE_RE.match(parts[3])
+      next unless m1 && m2
+      w1, w2 = m1[1], m2[1]
+      next if w1 == w2
+      next unless dict_set.include?(w1) || dict_set.include?(w2)
+      weight = begin
+        JSON.parse(parts[4])["weight"] || 1.0
+      rescue
+        1.0
+      end
+      key = [w1, w2].sort.join("|")
+      edges[key] = weight if weight > (edges[key] || 0)
+    end
+  end
+  ensure_generated_dict_dir!
+  path = generated_dict_path_under_dict_dir(CONCEPTNET_EDGES_FILENAME)
+  File.write(path, JSON.generate(edges), encoding: "UTF-8")
+  puts "\nWrote #{edges.size} ConceptNet edges to #{CONCEPTNET_EDGES_FILENAME}"
+end
+
+# --- Numberbatch vector build ---
+# Source: numberbatch-en-19.08.txt (CC-BY-SA 4.0, pre-normalized)
+NUMBERBATCH_TXT = "numberbatch-en-19.08.txt"
+
+def save_numberbatch_vectors!(word_keys)
+  txt_path = NUMBERBATCH_TXT
+  unless File.exist?(txt_path)
+    puts "Skipping Numberbatch vectors: #{txt_path} not found"
+    return
+  end
+  dict_set = word_keys.to_set
+  vectors = {}
+  first = true
+  File.foreach(txt_path, encoding: "UTF-8") do |line|
+    if first
+      first = false
+      next
+    end
+    parts = line.rstrip.split(" ")
+    word = parts[0]
+    next unless word.match?(/\A[a-z]+\z/)
+    next unless dict_set.include?(word)
+    vec = parts[1..].map(&:to_f)
+    mag = Math.sqrt(vec.sum { |v| v * v })
+    next if mag == 0
+    vec.map! { |v| (v / mag).round(5) }
+    vectors[word] = vec
+  end
+  ensure_generated_dict_dir!
+  path = generated_dict_path_under_dict_dir(NUMBERBATCH_VECTORS_FILENAME)
+  File.binwrite(path, vectors.to_msgpack)
+  size_mb = File.size(path) / 1024.0 / 1024.0
+  puts "Wrote #{vectors.size} Numberbatch vectors to #{NUMBERBATCH_VECTORS_FILENAME} (#{size_mb.round(1)} MB)"
 end
 
 def load_hyphen_multi_fold_map_from_disk

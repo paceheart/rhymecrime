@@ -58,7 +58,7 @@ pirate,saber,1,
 pirate,scurvy,1,
 pirate,doubloons,1,
 pirate,pew,0,
-pirate,roc,0,
+pirate,roc,1,ish
 pirate,miko,0,
 pirate,mrs.,0,
 pirate,needlework,0,
@@ -148,7 +148,7 @@ cat,zucchini,0,
 cat,astronomy,0,
 cat,undertow,0,
 cat,tool,0,
-cat,duck,0,
+cat,duck,0,ish - cats and birds are loosely thematically related
 cat,rhombus,0,
 cat,fandango,0,
 cat,rancid,0,
@@ -271,8 +271,8 @@ star,astronomy,1,
 star,astronomer,1,
 star,astrophysics,1,
 star,duck,0,
-star,rhombus,0,
-star,fandango,0,
+star,rhombus,0,ish - both geometric shapes
+star,fandango,0,ish - fandango is a movie ticket app and star has the sense of movie star
 star,rancid,0,
 star,justice,0,
 star,melancholy,0,
@@ -327,7 +327,6 @@ music,instrumental,1,
 music,sings,1,
 music,strings,1,
 music,glissando,1,'glissando' is related to 'musical' so we just have to get from 'music' to 'musical'
-music,ritardando,1,
 music,viola,1,
 music,hemiola,1,
 music,overtone,1,
@@ -442,7 +441,7 @@ bread,justice,0,
 bread,melancholy,0,
 bread,frolic,0,
 bread,woe,0,
-bread,malice,1,there's a bible verse that makes these be related
+bread,malice,1,ish - there's a bible verse that makes these be related
 bread,sever,0,
 geometry,rhombus,1,
 geometry,quadrilateral,1,
@@ -542,3 +541,412 @@ medicine,disease,1
 medicine,expertise,1
 medicine,fees,1
 medicine,ccs,1
+music,key,1,polysemy: musical key vs door key
+music,scale,1,polysemy: musical scale vs fish scale
+music,staff,1,polysemy: musical staff vs employees
+music,bridge,1,polysemy: musical bridge vs structure
+music,movement,1,polysemy: symphony movement vs physical movement
+music,natural,1,ish - natural note vs nature
+music,march,1,march music / military march
+music,suite,0,ish - musical suite
+music,tempo,1,musical term
+music,pitch,1,polysemy: musical pitch vs throw
+music,chamber,1,chamber music
+music,measure,1,polysemy: musical measure vs measurement
+music,note,1,musical note
+music,dance,1,thematically associated
+music,silence,1,antonym / thematic contrast
+music,lyric,1,clearly related
+music,rhythm,1,clearly related
+music,melody,1,clearly related
+pirate,map,1,treasure map
+pirate,flag,1,Jolly Roger
+pirate,patch,1,eyepatch
+pirate,parrot,1,cultural association
+pirate,hook,1,Captain Hook
+pirate,anchor,1,ship's anchor
+pirate,cannon,1,ship's cannon
+pirate,island,1,pirate island
+pirate,barrel,1,rum barrel
+pirate,plunder,1,clearly related
+pirate,mast,1,ship part
+pirate,compass,1,nautical navigation
+pirate,mutiny,1,nautical
+pirate,bounty,1,bounty on pirates
+pirate,buried,1,buried treasure
+crime,witness,1,crime witness
+crime,evidence,1,crime evidence
+crime,motive,1,crime motive
+crime,alibi,1,legal term
+crime,suspect,1,crime suspect
+crime,detective,1,crime detection
+crime,scene,1,crime scene
+crime,punishment,1,crime and punishment
+crime,innocent,1,legal antonym
+crime,corrupt,1,thematically related
+crime,launder,1,money laundering
+crime,gang,1,organized crime
+medicine,prescription,1,medical term
+medicine,dosage,1,medical term
+medicine,symptom,1,medical term
+medicine,diagnosis,1,medical term
+medicine,surgery,1,medical procedure
+medicine,nurse,1,medical profession
+medicine,pill,1,form of medicine
+medicine,remedy,1,near-synonym
+medicine,stethoscope,1,medical instrument
+medicine,ward,1,ish - hospital ward polysemy
+geometry,parallel,1,geometric term
+geometry,perpendicular,1,geometric term
+geometry,symmetry,1,geometric property
+geometry,radius,1,geometric term
+geometry,arc,1,polysemy: geometric arc vs story arc
+geometry,plane,1,polysemy: geometric plane vs airplane
+geometry,degree,1,polysemy: geometric degree vs academic degree
+geometry,tangent,1,polysemy: geometric vs going off on a tangent
+star,north,1,North Star
+star,shooting,1,shooting star
+star,david,1,ish - Star of David
+star,wish,1,wish upon a star
+star,chart,1,star chart / astrology
+star,bright,1,stars are bright
+star,hollywood,1,Hollywood star
+star,gaze,1,stargazing
+person,place,0,ish
+person,character,1,polysemy: fictional character vs personality
+person,body,1,person's body
+person,stranger,1,ish - a stranger is a person
+light,feather,1,light as a feather
+light,dark,1,antonym pair
+light,bulb,1,light bulb
+light,candle,1,produces light
+bar,pub,1,synonym
+bar,chocolate,1,chocolate bar
+bar,exam,1,bar exam
+bar,stool,1,barstool
+bat,ball,1,sports pair
+bat,cave,1,bat cave
+bat,vampire,1,vampire bats
+bank,river,1,riverbank
+bank,money,1,money in the bank
+bank,vault,1,bank vault
+spring,water,1,spring water
+spring,coil,1,spring (coil)
+spring,bloom,1,spring (season)
+club,golf,1,golf club
+club,nightlife,1,nightclub
+crane,construction,1,construction crane
+crane,origami,1,paper crane
+apple,computer,1,ish - Apple brand cultural
+apple,pie,1,apple pie
+apple,seed,1,apple seed
+diamond,ring,1,diamond ring
+diamond,baseball,1,diamond (baseball field)
+diamond,card,1,suit of cards
+wave,ocean,1,ocean wave
+wave,goodbye,1,wave goodbye
+cell,phone,1,cell phone
+cell,prison,1,prison cell
+cell,biology,1,biology cell
+train,station,1,train station
+train,exercise,1,training
+fire,smoke,1,clearly associated
+fire,hydrant,1,fire hydrant
+fire,escape,1,fire escape
+wedding,veil,1,wedding veil
+wedding,bouquet,1,wedding bouquet
+school,chalk,1,school chalk
+school,bully,1,school bully
+winter,hibernate,1,seasonal association
+garden,weed,1,garden weed
+light,pirate,0,
+light,crime,0,
+light,geometry,0,
+light,pasta,0,
+light,prayer,0,
+light,surgery,0,
+light,penguin,0,
+light,mortgage,0,
+light,algebra,0,
+bar,geometry,0,
+bar,medicine,0,
+bar,pirate,1,ish
+bar,penguin,0,
+bar,algebra,1,ish - X bar in algebraic notation
+bar,microscope,0,
+bat,pirate,0,
+bat,geometry,0,
+bat,medicine,0,
+bat,recipe,0,
+bat,volcano,0,
+bat,telescope,0,
+bank,pirate,0,
+bank,geometry,0,
+bank,halloween,0,
+bank,algebra,0,
+bank,penguin,0,
+bank,telescope,0,
+spring,pirate,0,
+spring,crime,0,
+spring,geometry,0,
+spring,algebra,0,
+spring,microscope,0,
+club,pirate,0,
+club,geometry,0,
+club,medicine,0,
+club,algebra,0,
+club,penguin,1,Club Penguin
+crane,pirate,0,
+crane,crime,0,
+crane,medicine,0,
+crane,algebra,0,
+crane,penguin,0,
+apple,pirate,0,
+apple,crime,0,
+apple,geometry,0,
+apple,algebra,0,
+apple,penguin,0,
+apple,volcano,0,
+diamond,pirate,1,ish - pirates and gems/treasure
+diamond,crime,1,diamond heist
+diamond,medicine,0,
+diamond,penguin,0,
+diamond,algebra,0,
+wave,pirate,1,pirates and ocean waves
+wave,crime,1,crime wave
+wave,geometry,0,
+wave,algebra,0,
+wave,penguin,1,ish - penguins are water birds
+cell,pirate,0,
+cell,geometry,0,
+cell,halloween,0,
+cell,algebra,0,
+cell,penguin,0,
+train,pirate,0,
+train,geometry,0,
+train,halloween,0,
+train,algebra,0,
+train,penguin,0,
+fire,pirate,0,
+fire,geometry,0,
+fire,medicine,0,
+fire,algebra,0,
+fire,penguin,0,
+ice,penguin,1,
+wedding,pirate,0,
+wedding,crime,0,
+wedding,geometry,0,
+wedding,algebra,0,
+wedding,penguin,0,
+school,pirate,0,
+school,crime,1,ish - school crime
+school,halloween,0,ish - halloween is a school holiday
+school,algebra,1,
+school,penguin,0,
+garden,pirate,0,
+garden,crime,0,
+garden,geometry,0,
+garden,algebra,0,
+garden,penguin,0,
+winter,pirate,0,
+winter,crime,0,
+winter,geometry,0,
+winter,algebra,0,
+winter,penguin,1,ish - penguins live in cold
+music,penguin,0,
+music,algebra,1,ish - music is math
+music,volcano,0,
+music,mortgage,0,
+music,telescope,0,
+pirate,algebra,0,
+pirate,mortgage,0,
+pirate,microscope,0,
+pirate,penguin,0,
+pirate,volcano,0,
+crime,algebra,0,
+crime,penguin,0,
+crime,volcano,0,
+crime,telescope,0,
+crime,microscope,0,
+geometry,penguin,0,
+geometry,volcano,0,
+geometry,mortgage,0,
+star,algebra,0,
+star,penguin,0,
+star,volcano,0,
+star,mortgage,0,
+person,volcano,0,
+person,algebra,0,
+person,penguin,0,
+person,telescope,0,
+cat,algebra,0,
+cat,volcano,0,
+cat,mortgage,0,
+cat,penguin,0,ish - cats and birds are loosely thematically related
+cat,telescope,0,
+cat,fancy,1,
+hospital,ward,1,
+pirate,cornea,0,
+pirate,pupil,0,
+pirate,iris,0,
+pirate,hook,1,
+pirate,whip,1,ish - lash/whip/flogging association
+abbreviation,music,1,prereq: music/abbreviation+notation
+abomination,evil,1,prereq: food+evil/starvation+abomination
+addressed,prayers,1,prereq: prayers/addressed+blessed
+apocalypse,evil,1,prereq: food+evil/chips+apocalypse
+ashen,dark,1,prereq: food+dark/ration+ashen
+avant-garde,hard,1,prereq: avant-garde+music/hard+bard
+backtrack,exploration,1,prereq: exploration/cul-de-sac+backtrack
+bane,evil,1,prereq: food+evil/grain+bane
+bard,music,1,prereq: avant-garde+music/hard+bard
+bi,gay,1,prereq: gay+food/bi+pie
+black,dark,1,prereq: food+dark/snack+black
+bleak,dark,1,prereq: food+dark/leek+bleak
+blessed,heaven,1,prereq: crime+heaven/confessed+blessed
+blood,water,1,prereq: water/blood+flood
+bow,music,1,prereq: music/flow+bow
+bread,feast,1,prereq: bread/feast+yeast
+bread,food,1,prereq: food+evil/bread+undead
+broom,halloween,1,prereq: halloween/broom+costume
+buffet,food,1,prereq: food+dark/buffet+gray
+bumbling,clumsy,1,prereq: clumsy/bumbling+fumbling
+cake,food,1,prereq: food+evil/cake+rake
+carbon,ester,1,prereq: carbon/ester+sequester
+carbon,extract,1,prereq: carbon/extract+react
+carbon,react,1,prereq: carbon/extract+react
+carbon,sequester,1,prereq: carbon/ester+sequester
+carbon,sink,1,prereq: carbon/sink+zinc
+carbon,zinc,1,prereq: carbon/sink+zinc
+cats,siamese,1,prereq: please+cats -> siamese
+celebration,halloween,1,prereq: halloween/celebration+decoration
+chewed,food,1,prereq: food+evil/chewed+rude
+chips,food,1,prereq: food+evil/chips+apocalypse
+clam,pasta,1,prereq: pasta/clam+ham
+clumsy,drop,1,prereq: clumsy/drop+flop
+clumsy,excuse,1,prereq: clumsy/excuse+shoes
+clumsy,flop,1,prereq: clumsy/drop+flop
+clumsy,fumbling,1,prereq: clumsy/bumbling+fumbling
+clumsy,shoes,1,prereq: clumsy/excuse+shoes
+clumsy,stumbling,1,prereq: clumsy/bumbling+stumbling
+concerto,music,1,prereq: music/cello+concerto
+consume,food,1,prereq: food+dark/consume+gloom
+crab,food,1,prereq: food+dark/crab+drab
+crime,fraud,1,prereq: crime+heaven/fraud+god
+crumb,food,1,prereq: food+evil/crumb+scum
+crustacean,food,1,prereq: food+dark/crustacean+illumination
+cuisine,food,1,prereq: food+evil/cuisine+mean
+cul-de-sac,exploration,1,prereq: exploration/cul-de-sac+backtrack
+dares,invoke,1,prereq: invoke/dares+prayers
+dark,drab,1,prereq: food+dark/crab+drab
+dark,edgy,1,prereq: food+dark/veggie+edgy
+dark,gloom,1,prereq: food+dark/consume+gloom
+dark,gray,1,prereq: food+dark/buffet+gray
+dark,illumination,1,prereq: food+dark/crustacean+illumination
+dark,melancholic,1,prereq: food+dark/metabolic+melancholic
+dark,murky,1,prereq: food+dark/turkey+murky
+dark,unseen,1,prereq: food+dark/cuisine+unseen
+darth vader,evil,1,prereq: food+evil/seder+darth vader
+deceit,evil,1,prereq: food+evil/wheat+deceit
+declare,invoke,1,prereq: invoke/declare+prayer
+dessert,food,1,prereq: food+evil/dessert+hurt
+dinner,food,1,prereq: food+evil/dinner+sinner
+dish,pasta,1,prereq: pasta/dish+fish
+doom,evil,1,prereq: food+evil/mushroom+doom
+enjoys,music,1,prereq: music/enjoys+noise
+evil,greed,1,prereq: food+evil/feed+greed
+evil,hurt,1,prereq: food+evil/dessert+hurt
+evil,malign,1,prereq: food+evil/wine+malign
+evil,maligns,1,prereq: food+evil/heinz+maligns
+evil,mean,1,prereq: food+evil/cuisine+mean
+evil,pain,1,prereq: food+evil/grain+pain
+evil,rake,1,prereq: food+evil/cake+rake
+evil,rude,1,prereq: food+evil/chewed+rude
+evil,satanic,1,prereq: food+evil/organic+satanic
+evil,scum,1,prereq: food+evil/crumb+scum
+evil,sinner,1,prereq: food+evil/dinner+sinner
+evil,slavery,1,prereq: food+evil/savory+slavery
+evil,traitor,1,prereq: food+evil/waiter+traitor
+evil,undead,1,prereq: food+evil/bread+undead
+evil,undeserved,1,prereq: food+evil/served+undeserved
+evil,vice,1,prereq: food+evil/rice+vice
+evil,voldemort,1,prereq: food+evil/sachertorte+voldemort
+exciting,interactive,1,prereq: interactive+fiction/exciting+writing
+fandango,music,1,prereq: music/fandango+tango
+feast,prayers,1,prereq: prayers/feast+priest
+feasts,prayers,1,prereq: prayers/feasts+priests
+feed,food,1,prereq: food+evil/feed+greed
+fiction,writing,1,prereq: interactive+fiction/exciting+writing
+fish,pasta,1,prereq: pasta/dish+fish
+flan,food,1,prereq: gay+food/pan+flan
+flans,food,1,prereq: gay+food/trans+flans
+flood,water,1,prereq: water/blood+flood
+flow,music,1,prereq: music/flow+bow
+food,grain,1,prereq: food+evil/grain+pain
+food,heinz,1,prereq: food+evil/heinz+maligns
+food,hydration,1,prereq: food+dark/hydration+illumination
+food,leek,1,prereq: food+dark/leek+bleak
+food,metabolic,1,prereq: food+dark/metabolic+melancholic
+food,mushroom,1,prereq: food+evil/mushroom+doom
+food,organic,1,prereq: food+evil/organic+satanic
+food,pie,1,prereq: gay+food/bi+pie
+food,ration,1,prereq: food+dark/ration+ashen
+food,rice,1,prereq: food+evil/rice+vice
+food,sachertorte,1,prereq: food+evil/sachertorte+voldemort
+food,savory,1,prereq: food+evil/savory+slavery
+food,seder,1,prereq: food+evil/seder+darth vader
+food,served,1,prereq: food+evil/served+undeserved
+food,snack,1,prereq: food+dark/snack+black
+food,starvation,1,prereq: food+evil/starvation+abomination
+food,turkey,1,prereq: food+dark/turkey+murky
+food,veggie,1,prereq: food+dark/veggie+edgy
+food,waiter,1,prereq: food+evil/waiter+traitor
+food,wheat,1,prereq: food+evil/wheat+deceit
+food,wine,1,prereq: food+evil/wine+malign
+football,incomplete,1,prereq: football/yeet+incomplete
+football,yeet,1,prereq: football/yeet+incomplete
+fork,pasta,1,prereq: pasta/fork+pork
+french,pirate,1,prereq: pirate/french+wench
+gay,pan,1,prereq: gay+food/pan+flan
+gay,trans,1,prereq: gay+food/trans+flans
+god,heaven,1,prereq: crime+heaven/fraud+god
+halloween,sheet,1,prereq: halloween/sheet+treat
+halloween,treat,1,prereq: halloween/sheet+treat
+ham,pasta,1,prereq: pasta/clam+ham
+heal,prayers,1,prereq: prayers/heal+kneel
+humble,prayers,1,prereq: prayers/humble+mumble
+humidity,water,1,prereq: water/humidity+turbidity
+invoke,prayer,1,prereq: invoke/declare+prayer
+invoke,prayers,1,prereq: invoke/dares+prayers
+jew,prayers,1,prereq: prayers/jew+pew
+knee,prayers,1,prereq: prayers/knee+plea
+lady,sister,1,prereq: sinister+sister/shady+lady
+mumble,prayers,1,prereq: prayers/humble+mumble
+music,oboe,1,prereq: music/oboe+piano
+music,solo,1,prereq: music/cello+solo
+music,symphony,1,prereq: music/symphony+timpani
+music,timpani,1,prereq: music/symphony+timpani
+music,violin,1,prereq: music/mandolin+violin
+pasta,paste,1,prereq: pasta/paste+taste
+pasta,pork,1,prereq: pasta/fork+pork
+pasta,taste,1,prereq: pasta/paste+taste
+prayers,priests,1,prereq: prayers/feast+priest
+prayers,recites,1,prereq: prayers/recites+rites
+prayers,rites,1,prereq: prayers/recites+rites
+shady,sinister,1,prereq: sinister+sister/shady+lady
+sky,water,1,prereq: water/sky+supply
+slosh,water,1,prereq: water/slosh+wash
+sprayed,water,1,prereq: water/sprayed+wade
+supplied,water,1,prereq: water/supplied+tide
+turbidity,water,1,prereq: water/humidity+turbidity
+wash,water,1,prereq: water/slosh+wash
+crime,dog,0,prereq: crime ought_not dog+smog
+crime,smog,0,prereq: crime ought_not dog+smog
+crime,gas,0,ish prereq: crime ought_not gas+mass
+crime,mass,0,ish prereq: crime ought_not gas+mass
+crime,lake,0,prereq: crime ought_not lake+quake
+crime,quake,0,prereq: crime ought_not lake+quake
+crime,nerd,0,prereq: crime ought_not nerd+word
+crime,word,0,prereq: crime ought_not nerd+word
+halloween,snyder,0,prereq: halloween ought_not cider+snyder
+halloween,ira,0,prereq: halloween ought_not day+ira

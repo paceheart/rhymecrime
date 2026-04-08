@@ -47,38 +47,14 @@ To help me write better limericks quicklier.
 ** WordNet contains saffron and paroled. Why do we need lemma_en? We count a word as common if it has a frequency of 2 or more (@todo try upping this) according to lemma_en, or if it exists in WordNet at all. If we upped this to 2, 2/3 of the newly-rare words would be crap, but we would also lose 1/3 good words like chicanery, noncombatants, propagandize, and psilocybin. That's probably okay.
 ** separate names out
 
-## add these as test cases
-
-query / wary
-participate / anticipate (dregs)
-informant / torment (imperfect)
-
-magic
-
-good:
-chants / trance
-
-bad:
-disenchanted / enchanted
-
-medical
-
-disease / expertise / fees 
-
-also "cc's"
-
-## Do better with preferred forms
-cataloging / catalogging
-gramaphone / gramophone
-old-fashioned / oldfashioned
-in-laws / inlaws
-pompom / pom-pom
-shant / shan't
-
 mosaic rhymes, e.g. commander / understand her
+
+handle unicode in input, e.g. saute (with accent on e)
 
 ## Genderfluid rhymes
 
 Genderfluid rhyme: each syllable from the primary-stressed syllable onward has an exactly matching rime (nucleus + coda), checked syllable-by-syllable. Subsumes masculine, feminine, and dactylic rhyme regardless of syllable count.
 
 Non-binary rhyme: a genderfluid rhyme that is not a perfect rhyme. The individual syllable rimes all match, but the intervening onsets (consonant clusters between syllables) differ, so the overall contiguous rime does not match. Examples: latex / paychecks, pitiful / biddable.
+
+

@@ -12041,7 +12041,6 @@ buckle,12,B AH1 . K AH0 L
 buckled,9,B AH1 . K AH0 L D
 buckler,6,B AH1 . K AH0 . L AH0 R|B AH1 . K L AH0 R
 buckles,9,B AH1 . K AH0 L Z
-bucklin,0,B AH1 . K L AH0 N
 buckling,8,B AH1 . K L IY0 NG
 buckman,0,B AH1 K . M AH0 N
 bucknell,0,B AH2 K . N EH1 L
@@ -14821,7 +14820,7 @@ cazares,0,K AA0 . Z AA1 . R EH0 S
 cazier,0,K EY1 . Z IY0 . AH0 R
 cbc,0,S IY1 . B IY2 . S IY1
 cc,11,S IY1 . S IY1
-ccs,0,S IY1 . S IY1 . EH1 S
+ccs,0,S IY1 . S IY1 Z
 cctv,0,S IY1 . S IY2 . T IY1 . V IY2
 cd,8,S IY1 . D IY1
 cdc,0,S IY1 . D IY2 . S IY1
@@ -17072,7 +17071,6 @@ clonch,0,K L AA1 N CH
 clone,11,K L OW1 N
 cloned,5,K L OW1 N D
 clones,5,K L OW1 N Z
-clonidine,0,K L AA1 . N AH0 . D IY2 N
 cloning,10,K L OW1 . N IY0 NG
 cloninger,0,K L OW1 . N IY0 . NG AH0 R
 clonts,0,K L AA1 N T S
@@ -27059,7 +27057,6 @@ dubey,0,D AH1 . B IY0
 dubhi,0,D UW1 . B IY0
 dubicki,0,D AH0 . B IH1 T . S K IY0
 dubie,0,D AH1 . B IY0
-dubiel,0,D AH1 . B IY0 L
 dubilier,0,D UW2 . B AH0 . L IY1 R|D UW2 . B AH0 . L AY1 . AH0 R
 dubin,0,D UW1 . B AH0 N
 dubinin,0,D UW0 . B IH1 . N AH0 N
@@ -38758,7 +38755,7 @@ grillot,0,G R IH1 . L AH0 T
 grills,7,G R IH1 L Z
 grim,12,G R IH1 M
 grima,0,G R IY1 . M AH0
-grimace,7,G R IH1 . M AH0 S
+grimace,7,
 grimaced,4,G R IH1 . M AH0 S T
 grimaces,5,
 grimacing,5,
@@ -44659,7 +44656,6 @@ ilana's,0,IH2 . L AA1 . N AH0 Z
 ilardi,0,IH2 . L AA1 R . D IY0
 ilbo,0,IH1 L . B OW0
 ileana,0,IH2 . L IY0 . AE1 . N AH0
-ilene,0,IH1 . L IY0 N
 iler,0,AY1 . L AH0 R
 iles,0,AY1 L Z
 ileto,0,AY0 . L EY1 . D OW0
@@ -55709,7 +55705,6 @@ luper,0,L UW1 . P AH0 R
 lupfer,0,L AH1 P . F AH0 R
 lupi,0,L UW1 . P IY0
 lupica,0,L UW0 . P IY1 . K AH0
-lupien,0,L AH1 . P IY0 N
 lupin,4,L UW1 . P AH0 N
 lupinacci,0,L UW0 . P IY0 . N AA1 . CH IY0
 lupine,5,L UW1 . P AY2 N
@@ -60335,7 +60330,7 @@ methodological,5,M EH2 . TH AH0 . D AH0 . L AA1 . JH AH0 . K AH0 L
 methodologies,5,M EH2 . TH OW0 . D AA1 . L AH0 . JH IY0 Z
 methodology,9,M EH2 . TH AH0 . D AA1 . L AH0 . JH IY0
 methods,5,
-methotrexate,4,M EH2 . TH OW0 . T R EH1 K . S EY2 T
+methotrexate,4,
 methought,4,
 methyl,7,M EH1 . TH AH0 L
 methylene,6,M EH1 . TH AH0 . L IY2 N
@@ -60418,7 +60413,7 @@ mezera,0,M EY0 . Z EH1 . R AH0
 mezey,0,M EH1 . Z IY0
 mezhdumarodnom,0,M EH0 Z . D UW2 . M AH0 . R AA1 D . N AH0 M
 mezo,0,M EH1 . Z OW0
-mezuzah,4,M AH0 . Z UH1 . Z AH0
+mezuzah,4,
 mezvinsky,0,M EH2 Z . V IH1 N . S K IY0
 mezvinsky's,0,M EH2 Z . V IH1 N . S K IY0 Z
 mezzaluna,0,M EH2 . Z AH0 . L UW1 . N AH0|M EH2 T . S AH0 . L UW1 . N AH0
@@ -67425,7 +67420,6 @@ ortez,0,AO0 R . T EH1 Z
 orth,6,AO1 R TH
 ortho,6,
 orthoclase,4,
-orthodontia,0,AO2 R . TH AH0 . D AA1 N . CH IY0 . AH0
 orthodontic,6,AO2 R . TH AH0 . D AA1 N . T AH0 K
 orthodontics,5,AO2 R . TH AH0 . D AA1 N . T AH0 K S
 orthodontist,9,AO2 R . TH AH0 . D AA1 N . T AH0 S T
@@ -69838,7 +69832,7 @@ peeping,10,P IY1 . P IY0 NG
 peeples,0,P IY1 . P AH0 L Z
 peeps,5,P IY1 P S
 peer,10,P IY1 R
-peer-to-peer,0,P IY2 R . D OW0 . P IY1 R
+peer-to-peer,99,P IY2 R . D OW0 . P IY1 R
 peerage,0,P IY1 . R AH0 JH
 peered,7,P IY1 R D
 peering,8,P IY1 . R IY0 NG
@@ -70175,7 +70169,7 @@ percentages,5,P AH0 R . S EH1 . N AH0 . JH AH0 Z
 percentile,9,P AH0 R . S EH1 N . T AY2 L
 percentiles,5,P AH0 R . S EH1 N . T AY2 L Z
 percents,14,P AH0 R . S EH1 N T S
-percept,4,P AH1 R . S EH0 P T
+percept,4,
 perceptible,6,P AH0 R . S EH1 P . T AH0 . B AH0 L
 perception,11,P AH0 R . S EH1 P . SH AH0 N
 perceptions,5,P AH0 R . S EH1 P . SH AH0 N Z
@@ -76400,7 +76394,7 @@ reallocate,0,R IY0 . AE1 . L AH0 . K EY0 T
 reallocated,0,R IY2 . AE1 L AH0 K EY2 D AH0 D
 reallocating,0,R IY0 . AE1 L AH0 K EY2 D IY0 NG
 reallocation,6,R IY0 . AE2 L AH0 K EY1 SH AH0 N
-reallowance,99,R IY1 . AH0 L AW1 AH0 N T S
+reallowance,0,R IY1 . AH0 L AW1 AH0 N T S
 really,20,R IH1 . L IY0|R IY1 . L IY0
 realm,12,R EH1 L M
 realms,5,R EH1 L M Z
@@ -76592,8 +76586,8 @@ recantation,0,R EH2 . K AH0 N . T EY1 . SH AH0 N|R IY0 . K AE0 N . T EY1 . SH AH
 recanted,7,R IY0 . K AE1 N . T AH0 D
 recanting,4,R AH0 . K AE1 N . T IY0 NG
 recap,9,R IY1 . K AE2 P|R AH0 . K AE1 P
-recapitalization,99,R IY2 . K AE2 P AH0 D AH0 L AH0 Z EY1 SH AH0 N
-recapitalizations,99,R IY0 . K AE2 P AH0 D AH0 L AH0 Z EY1 SH AH0 N Z
+recapitalization,0,R IY2 . K AE2 P AH0 D AH0 L AH0 Z EY1 SH AH0 N
+recapitalizations,0,R IY0 . K AE2 P AH0 D AH0 L AH0 Z EY1 SH AH0 N Z
 recapitalize,4,R IY2 . K AE1 P AH0 D AH0 L AY2 Z
 recapitalized,0,R IY2 . K AE1 P AH0 D AH0 L AY2 Z D
 recapitalizing,0,R IY2 . K AE1 P AH0 D AH0 L AY2 Z IY0 NG
@@ -80614,7 +80608,6 @@ ruddle,0,R AH1 . D AH0 L
 ruddock,5,R AH1 . D AH0 K
 ruddy,9,R AH1 . D IY0
 rude,14,R UW1 D
-rudeen,0,R AH1 . D IY0 N
 rudel,0,R UW1 . D AH0 L
 rudell,0,R AH1 . D AH0 L
 rudelle,0,R AH0 . D EH1 L
@@ -84248,7 +84241,7 @@ sentiment,11,S EH1 N . T AH0 . M AH0 N T|S EH1 . N AH0 . M AH0 N T
 sentimental,12,S EH2 N . T AH0 . M EH1 N . T AH0 L|S EH2 . N AH0 . M EH1 N . T AH0 L|S EH2 N . T AH0 . M EH1 . N AH0 L|S EH2 . N AH0 . M EH1 . N AH0 L
 sentimentality,8,S EH2 N . T AH0 . M EH0 N . T AE1 . L AH0 . D IY0|S EH2 . N AH0 . M EH0 N . T AE1 . L AH0 . D IY0
 sentiments,5,S EH1 N . T AH0 . M AH0 N T S|S EH1 . N AH0 . M AH0 N T S
-sentinel,8,S EH1 N . T AH0 . N AH0 L
+sentinel,8,
 sentinels,7,
 sentman,0,S EH1 N T . M AH0 N
 sentras,0,S EH1 N . T R AH0 S
@@ -104922,7 +104915,6 @@ acaleph,0,AE2 . K AH0 . L AH1 R F
 acanth,0,AH0 . K AE1 N TH
 acanthaceous,0,AE2 K N . TH EY1 . SH AH0 S|AE2 . K AE0 N . TH EY1 . SH AH0 S
 acanthine,0,AH0 . K AE1 N . TH AH0 N|AH0 . K AE1 N . TH AY2 N
-acanthopterygian,0,AE2 . K AE0 N . TH AA2 P . T AH0 . R IH1 . JH IY0 N
 acarine,0,AE1 . K AH0 . R AY0 N|AE1 . K AH0 . R AH0 N
 acaroid,0,AE1 . K AH0 . R OY2 D
 acaulous,0,EY0 . K AA1 . L AH0 S
@@ -104983,7 +104975,6 @@ thanatos,0,TH AE1 . N AH0 . D AA2 S
 lethean,0,L IY0 . TH IY1 . AH0 N|L IY1 . TH IY0 . AH0 N
 quotidian,4,K W OW0 . T IH1 . D IY0 . AH0 N
 prolix,0,P R OW0 . L IH1 K S
--ity,5,AH1 . D IY0|D IY1|IH1 . D IY0
 comitology,0,K AA2 . M AH0 . T AA1 . L AH0 . JH IY0
 cataphora,0,K AE0 . D AH0 . F AO1 . R AH0|K AH0 . T AE1 . F AH0 . R AH0
 transfinite,0,T R AE0 N . S F AY1 . N AY0 T
@@ -105117,7 +105108,6 @@ familia,8,F AH0 . M IH1 . L AH0 . AH0
 sql,0,S IY1 . K W AH0 L
 pe,4,P IY2 . IY1|P EY1
 bap,6,B AE1 P
--able,0,EH1 . B AH0 L
 verts,4,V AH1 R T S
 pyramidic,0,P IY0 . R AH0 . M IH1 . D AH0 K
 chromosomal,6,K R OW2 . M AH0 . S OW1 . M AH0 L
@@ -105346,7 +105336,6 @@ acaudate,0,EY0 . K AA1 . D EY2 T
 acaulescent,0,AE2 . K AA0 . L EH1 . S AH0 N T
 ile,0,AY1 L
 peen,6,P IY1 N
--ably,0,AH1 . B L IY0
 kuzu,0,K UW1 . Z UW0
 pomme,4,P AA1 M
 handsel,4,HH AE1 N . S AH0 L
@@ -105523,7 +105512,6 @@ angelology,0,EY0 N . JH AH0 . L AA1 . L AH0 . JH IY0
 ea,0,IY1
 ele,0,EH1 . L IY0
 funkadelic,5,F AH2 NG . K AH0 . D EH1 . L AH0 K
--um,0,AH1 M
 kaj,0,K AA1 JH
 multi-million,0,M AH2 L . T IY0 . M IH1 L . Y AH0 N|M AH2 L . T AY0 . M IH1 L . Y AH0 N
 accusement,0,AH0 . K Y UW1 Z . M AH0 N T
@@ -105644,7 +105632,6 @@ sahrawi,0,S AH0 . R AA1 . W IY0
 qatari,0,K AH0 . T AA1 . R IY0
 surinamese,0,S UH2 . AH0 . R AH0 . N AH0 . M IY1 Z
 triskaidekaphobia,0,T R IH2 . S K AY0 . D EH0 . K AH0 . F AH1 . UH0 . B IY0 . AH0
--ian,5,IY1 . AH0 N|Y AH1 N
 tongan,0,T AA1 NG . G AH0 N
 boeotian,0,B IY0 . AH1 . UH0 . SH AH0 N
 euboean,0,Y UW0 . B IY1 . AH0 N
@@ -105904,8 +105891,6 @@ afeared,4,AH0 . F IH1 . AH0 D
 afore,8,AH0 . F OW1 R
 od,0,AA1 D|AO1 D|OW1 D|OW2 . D IY1
 olio,4,OW1 L . Y OW0
--est,0,IH1 S T
--er,0,AH1 R
 advert,8,AE0 D . V AH1 R T
 née,5,N EY1
 né,0,N EY1
@@ -106032,9 +106017,6 @@ sunstroke,8,
 oni,0,OW1 . N IY0
 whatchamacallit,4,
 inebriation,7,AH0 . N IY2 . B R IY0 . EY1 . SH AH0 N
--ish,0,IH1 SH
--eth,5,IH1 TH
--ology,0,AA1 . L AH0 . JH IY0
 ani,4,AA1 . N IY0|EY1 . N AY0
 quidditch,5,
 memoria,4,M AH0 . M AO1 . R IY0 . AH0
@@ -106048,8 +106030,6 @@ meef,0,M IY1 F
 souvlaki,4,S UW0 V . L AA1 . K IY0
 shawarma,5,SH AH0 . W AA1 R . M AH0
 inkwell,8,
--ly,0,L IY1
--ing,0,IY1 NG|IH1 N|AH1 N|IY1 N
 anticlockwise,4,AE2 N T AH0 . K L AA1 K W AY2 Z|AE2 N T IY0 . K L AA1 K W AY2 Z|AE2 N T AY2 . K L AA1 K W AY2 Z
 bruschetta,5,B R UW0 . S K EH1 . D AH0|B R UW0 . SH EH1 . D AH0
 noughties,5,N AA1 . D IY0 Z
@@ -106061,10 +106041,6 @@ oaken,4,AH1 . UH0 . K AH0 N
 dystopia,4,D AH0 . S T OW1 . P IY0 . AH0
 shakuhachi,0,SH AA0 . K UW0 . HH AA1 . CH IY0
 necrophilia,8,N EH0 . K R OW0 . F IH1 . L IY0 . AH0|N EH0 . K R OW0 . F IH1 L . Y AH0
--ese,0,IY1 Z
--ess,5,EH1 S|IH1 S|AH1 S
--ette,5,EH1 T
--ed,0,IH1 D|AH1 D
 fiancé,5,F IY0 . AA1 N . S EY0|F IY2 . AA0 N . S EY1
 shitload,10,
 enteric,0,EH0 N . T EH1 . R AH0 K
@@ -106151,7 +106127,6 @@ syncretic,0,S AH0 N . K R EH1 . D AH0 K
 bicameral,0,B AH0 . AH0 . K AE1 . M AH0 . R AH0 L
 genu,0,JH IY1 . N UW2|JH EH1 . N UW0
 nunchaku,4,N AH0 N . CH AA1 . K UW0
--or,0,AH1 R
 ut,9,UW1 T|AH1 T|UH1 T
 frat,11,F R AE1 T
 cynophobia,0,S AY2 . N AH0 . F OW1 . B IY0 . AH0
@@ -106402,7 +106377,6 @@ goddaughter,8,
 godchild,4,
 puisne,0,P Y UW1 . N IY0
 fem,6,F EH1 M
--a,0,AA1|AH1|EY1
 maths,6,M AE1 K S|M AE1 S
 quinte,0,K EH1 T
 derring-do,0,D EH2 . R IY0 NG . D UW1
@@ -106444,7 +106418,6 @@ chappy,6,CH AE1 . P IY0
 nappy,9,N AE1 . P IY0
 yappy,4,Y AE1 . P IY0
 sorbitol,4,
--ible,5,IH1 . B AH0 L|AH1 . B AH0 L
 kopje,0,K AH1 . UH0 . P IY0|K AA1 . P IY0
 polyphiloprogenitive,0,P AA2 . L AH0 . F AH0 . L AH0 . P R AH0 . JH EH1 . N AH0 . D AH0 V
 nowt,7,
@@ -106554,9 +106527,6 @@ verbose,6,V AH0 R . B OW1 S
 acidific,0,AE2 . S AH0 . D IH1 . F AH0 K
 acidimeter,0,AE2 . S AH0 . D IH1 . M AH0 . D AH0
 acidulous,0,AH0 . S IH1 . D Y UH0 . L AH0 S
--al,0,AH1 L|AE1 L
--ary,5,AH1 . R IY0|EH1 . R IY0
--id,0,IH1 D
 acknow,0,AH0 K . N OW1|AE0 K . N OW1
 demob,0,D IY0 . M AA1 B
 acock,0,AH0 . K AA1 K
@@ -106572,7 +106542,6 @@ screenshot,5,
 shite,10,SH AY1 T
 eff,8,EH1 F
 clusterfuck,5,
--s,0,IH1 Z|AH1 Z
 chimenea,0,CH AH0 . M AH0 . N EY1 . AH0
 martellato,0,M AA2 . D AH0 . L AA1 . D AH0 . UH0
 adagietto,0,AH0 . D AE2 . ZH IY0 . EH1 . D AH0 . UH0|AH0 . D AA2 . ZH IY0 . EH1 . D AH0 . UH0
@@ -106670,7 +106639,6 @@ sheather,0,SH IY1 . TH AH0 R
 genizah,0,G EH0 . N IY1 . Z AH0
 colic,8,K AA1 . L AH0 K
 camomile,5,
--less,0,L AH1 S|L IH1 S
 greeking,0,G R IY1 . K IY0 NG
 anglo-norman,0,AE2 NG . G L OW0 . N AO1 R . M AH0 N
 wootz,0,W UW1 T S
@@ -106698,7 +106666,6 @@ kolea,0,K OW0 . L EY1 . AH0
 necropsy,6,
 oophagy,0,AH0 . UH0 . AA1 . F AH0 . JH IY0
 cathexis,4,K AH0 . TH EH1 K . S AH0 S
--en,0,AH1 N
 diy,0,D IY2 . AY0 . W AY1
 aramaic,0,AE2 . R AH0 . M EY1 . AH0 K
 glabrous,0,G L EY1 . B R AH0 S
@@ -106805,7 +106772,6 @@ ranine,0,R EY1 . N AY2 N
 orotund,4,
 doofus,0,D UW1 . F AH0 S
 arvo,0,AA1 . V AH0 . UH0
--o,0,OW1
 aggro,4,AE1 . G R OW0
 fulfil,9,F UH0 L . F IH1 L|F AH0 . F IH1 L
 jobbie,0,JH AA1 . B IY0
@@ -107802,8 +107768,6 @@ ital,0,AY1 . D AH0 L
 capuchin,6,K AH0 . P UW1 . CH AH0 N|K AH0 . P Y UW1 . CH AH0 N
 monkeyshine,5,
 misoneism,0,M IH2 . S AH0 . N IY1 . AH0 . Z AH0 M|M AY2 . S AH0 . N IY1 . AH0 . Z AH0 M
--ward,0,W AH1 R D|W AO1 R D
--wards,0,W AH1 R D Z|W AO1 R D Z
 misoneist,0,M IH2 . S AH0 . N IY1 . AH0 S T|M AY2 . S AH0 . N IY1 . AH0 S T
 strumpet,4,S T R AH1 M . P AH0 T
 élan,5,EY0 . L AA1 N|EY0 . L AE1 N
@@ -108046,7 +108010,6 @@ ditzy,6,D IH1 T . S IY0
 apud,0,AE1 . P AH0 D
 caddie,7,K AE1 . D IY0
 tarn,5,T AA1 R N|T AH1 R N
--i,0,IY1
 egotistic,4,IY2 . G OW0 . T IH1 . S T AH0 K
 keelhaul,4,
 manikin,0,M AE1 . N AH0 . K AH0 N
@@ -108122,7 +108085,6 @@ organelle,0,AO2 R . G AH0 . N EH1 L
 termagant,4,
 anodyne,4,AE1 . N AH0 . D AY0 N
 paracetamol,5,
--plast,5,P L AE1 S T
 phagocytosis,0,F EY2 . G OW0 . S AY0 . T OW1 . S AH0 S
 univalent,0,Y UW2 . N AH0 . V EY1 . L AH0 N T|Y UW0 . N IH1 . V AH0 . L AH0 N T
 vac,6,V AE1 K
@@ -108241,7 +108203,6 @@ bargee,4,B AA1 . JH IY0
 fireplug,4,
 bathysphere,4,
 bunsen,4,B AH1 N . S AH0 N
-zoopsia,0,Z UW0 . AA1 P . S AH0 . AH0
 hendecasyllabic,0,HH EH0 N . D EH2 . K AH0 . S AH0 . L AE1 . B AH0 K
 funereal,4,F Y UW0 . N IH1 . AH0 . R AH0 . AH0 L
 frizz,5,F R IH1 Z
@@ -108273,11 +108234,6 @@ blessure,0,B L EH1 . SH AH0 R
 habitant,4,HH AE1 . B AH0 . T AH0 N T
 mycelium,0,M AY0 . S IY1 . L IY0 . AH0 M
 donnée,0,D AA1 . N EY0
--itude,5,T UW2 D
--ful,0,F UH1 L|F AH1 L
--kinesis,0,K AH0 . N IY1 . S AH0 S
--ship,0,SH IH1 P
--wise,0,W AY1 Z
 afk,0,EY2 . EH0 F . K EY1
 hamsa,5,
 armature,4,
@@ -108441,7 +108397,6 @@ betroth,4,B AH0 . T R OW1 DH
 bradawl,0,B R AE1 . D AA0 L
 teleradiology,0,T EH2 L IY0 . R EY2 D IY0 AA1 L AH0 JH IY0
 ovulate,6,
--mobile,0,M AH1 . B IY0 L
 prehensile,4,P R IY0 . HH EH1 N . S AH0 L
 hanky-panky,5,HH AE2 NG . K AH0 . P AE1 NG . K IY0
 dekko,0,D EH1 . K AH0 . UH0
@@ -108466,7 +108421,6 @@ affluenza,0,AE2 . F L UW0 . EH1 N . Z AH0
 zoophilia,4,
 wem,0,W EH1 M
 yippie,4,Y IH1 . P IY0|Y AH0 . P IY1
--ness,0,N AH1 S|N IH1 S|N EH1 S
 fada,0,F AA1 . D AH0
 italicize,0,AH0 . T AE1 . L AH0 . S AY0 Z
 xylitol,5,
@@ -108768,7 +108722,6 @@ oology,0,OW0 . AA1 . L AH0 . JH IY0
 sez,0,S EH1 Z
 e'er,0,EH1 . AH0 R
 cuckold,8,K AH1 . K AH0 L D
--ify,5,
 snood,4,S N UW1 D
 zacate,0,Z AH0 . K AA1 . D EY0
 prithee,4,P R IH1 . DH IY0
@@ -108945,8 +108898,6 @@ sonde,4,S AA1 N D
 sone,4,S OW1 N
 bigamist,4,B IH1 . G AH0 . M AH0 S T
 pasteurise,0,P AE1 S . CH AH0 . R AY0 Z
--hood,0,HH UH1 D
--son,0,S AH1 N
 glede,0,G L IY1 D
 formate,5,F AA0 . M EY1 T
 vas,8,V AE1 S|V AE1 Z
@@ -109019,7 +108970,6 @@ hella,5,HH EH1 . L AH0
 kludgy,0,K L AH1 . JH IY0|K L UW1 . JH IY0
 gunk,8,G AH1 NG K
 mastitis,0,M AE0 . S T AY1 . D AH0 S
--some,0,S AH1 M|S OW1 M
 ama,4,AA1 . M AH0
 couscous,8,K UW1 . S K UW0 S
 tyrannicide,0,T AY0 . R AE1 . N AH0 . S AY0 D
@@ -109050,7 +109000,6 @@ transfixion,0,T R AE0 N . S F IH1 K . SH AH0 N
 tranship,0,T R AE0 N Z . SH IH1 P
 kerching,0,K AH0 . CH IY1 NG
 mitochondrial,5,
--trophy,0,T R AH1 . F IY0
 quesadilla,7,K EY2 . S AH0 . D IY1 . AH0
 mung,7,M AH1 NG|M UW1 NG
 palpate,4,
@@ -109078,7 +109027,6 @@ italicise,0,AH0 . T AE1 . L AH0 . S AY0 Z
 nuu-chah-nulth,5,
 redox,0,R IY1 . D AA0 K S
 xenocide,0,Z EH1 . N AH0 . S AY0 D|Z IY1 . N AH0 . S AY0 D
--trix,5,T R IH1 K S
 dominatrix,8,D AA2 . M AH0 . N EY1 . T R AH0 K S
 pogonotrophy,0,P OW2 . G AH0 . N AA1 . T R AH0 . F IY0
 sild,0,S IH1 L D
@@ -109102,7 +109050,6 @@ soever,4,S OW0 . EH1 . V AH0 R
 persiflage,4,
 pertinacious,0,P AH0 R T . N EY1 . SH AH0 S
 plangent,0,P L AE1 N . JH AH0 N T
--free,0,F R IY1
 compere,6,
 sem,4,S EH1 M
 skint,7,S K IH1 N T
@@ -109184,7 +109131,6 @@ adhocracy,0,AE0 D . HH AA1 . K R AH0 . S IY0
 coxa,0,K AA1 K . S AH0
 hypotrichosis,0,HH AY2 . P AH0 . UH0 . T R AY0 . K AH1 . UH0 . S AH0 S
 peckish,8,
--phile,5,F AY1 L
 escargot,7,EH2 . S K AA0 R . G OW1
 performant,0,P AH0 R . F AO1 R . M AH0 N T
 aliasing,5,
@@ -109331,7 +109277,6 @@ fianchetto,4,F AH0 . AH0 N . CH EH1 . D AH0 . UH0|F AH0 . AH0 N . K EH1 . D AH0 
 bobèche,0,B OW0 . B EH1 SH
 ballonet,0,B AE0 . L AH0 . N EH1 T
 faun,8,F AA1 N
--ion,0,AY1 . AH0 N
 ferrule,0,F EH1 . R AH0 L
 subfusc,0,S AH0 B . F AH1 S K
 grommet,6,G R AA1 . M AH0 T
@@ -109848,7 +109793,6 @@ pretermit,0,P R IY2 . D AH0 R . M IH1 T
 ao,0,EY0 . AH1 . UH0
 mephitic,0,M EH2 . F IH1 . D AH0 K
 aedeagus,0,IY0 . D IY0 . EY1 . G AH0 S
--dan,5,D AE1 N
 embrasure,4,AH0 M . B R EY1 . ZH AH0
 gnawer,0,N AA1 . AH0 R
 triticale,0,T R IH2 . D AH0 . K EY1 . L IY0
@@ -109862,7 +109806,6 @@ uw,0,Y UW2 . D AH1 B
 pinna,0,P IH1 . N AH0
 machinate,0,M AE1 . K AH0 . N EY0 T|M AE1 . SH AH0 . N EY0 T
 ectoplasm,8,
--ation,5,EY1 . SH AH0 N
 artificer,0,AA0 R . D AH0 . F IH1 . S AH0 R
 mitosis,7,M AY0 . T OW1 . S AH0 S
 elevenses,4,AH0 . L EH1 . V AH0 N . Z AH0 Z
@@ -109897,7 +109840,6 @@ buz,0,B AH1 Z
 rakija,0,R AA1 . K IY0 . AH0
 nef,0,N EH1 F
 gravamen,4,G R AH0 . V EY1 . M AH0 N|G R AH0 . V EY1 . M AH0 . N AH0
--ton,0,T AH1 N
 bote,0,B OW1 T
 rasorial,0,R AH0 . S AO1 . R AH0 . AH0 L
 diarist,6,
@@ -110295,7 +110237,6 @@ kablooie,0,K AH0 . B L UW1 . IY0
 homologue,0,HH AA1 . M AH0 . L AA0 G|HH OW1 . M AH0 . L AA0 G
 orogeny,0,AA0 . R AA1 . JH AH0 . N IY0|AH0 . R AA1 . JH AH0 . N IY0
 glagolitic,0,G L AE2 . G AH0 . L IH1 . D AH0 K
--ome,5,OW2 M
 sejant,0,S IY1 . JH AH0 N T
 realia,0,R IY0 . EY1 . L AH0 . AH0
 musaceous,0,M Y UW0 . S EY1 . SH AH0 S
@@ -110532,7 +110473,6 @@ arteria,0,AA0 R . T IY1 . R IY0 . AH0
 aes,0,EY1 Z
 scop,0,SH AA1 P|SH OW1 P|S K AA1 P
 plonk,6,P L AA1 NG K
-oseltamivir,0,OW2 . S EH0 L . T AE1 . M AH0 . V IY2 R
 outro,5,
 nymphette,0,N AH0 M . F EH1 T
 nymphet,4,N AH0 M . F EH1 T
@@ -110769,8 +110709,6 @@ requital,0,R AH0 . K W AY1 . D AH0 L
 gibbet,5,JH IH1 . B AH0 T
 crimen,0,K R AY1 . M AH0 N
 scienter,0,S AY0 . EH1 N . T AH0 R
--gram,0,G R AE1 M
--ide,5,AY1 D
 hawser,4,HH AA1 . Z AH0 R
 sybarite,4,
 swale,0,S W EY1 L
@@ -110818,7 +110756,7 @@ decolorization,0,D IY0 . K AH2 . L AH0 . R AY0 . Z EY1 . SH AH0 N|D IY0 . K UH2 
 comfortability,0,K AH2 M . F AH0 R . D AH0 . B IH1 . L AH0 . D IY0
 dalek,5,D AA1 . L EH0 K
 passus,0,P AE1 . S AH0 S
-idem,0,IH1 . D EH0 M|AY1 . D EH0 M
+idem,0,AY1 . D EH0 M
 polytetrafluoroethylene,0,P AA2 . L IY0 . D EH0 . T R AH0 . F L AO2 . R OW0 . EH1 . TH AH0 . L IY0 N
 guillemot,0,G IH1 . L AH0 . M AA0 T
 witan,0,W IH1 . T AH0 N
@@ -111039,7 +110977,6 @@ toupe,0,T UW0 . P EY1|T UW1 P
 defrock,4,D IY0 . F R AA1 K
 dipsomania,4,D IH2 P . S AH0 . M EY1 . N AH0 . AH0
 occiput,4,
--oma,5,OW1 . M AH0
 maketh,5,M EY1 . K AH0 TH
 heedless,5,HH IY1 D . L AH0 S
 hosanna,7,HH OW0 . Z AE1 . N AH0|HH OW0 . Z AA1 . N AH0
@@ -111335,7 +111272,6 @@ th',0,DH AH1
 seignior,0,S IY1 N . Y AH0 R
 doublet,6,D AH1 . B L AH0 T
 halva,0,HH AA0 L . V AA1|K AA1 L . V AH0
--tide,0,T AY1 D
 tyro,0,T AY1 . R OW0
 midden,0,M IH1 . D AH0 N
 collop,0,K AA1 . L AH0 P
@@ -111406,7 +111342,7 @@ tridentine,0,T R AY0 . D EH1 N . T AY0 N|T R AH0 . D EH1 N . T AY0 N
 aecium,0,IY1 . S IY0 . AH0 M
 esurient,0,AH0 . S UH1 . R IY0 . AH0 N T
 cyclopaedia,0,S AY0 . K L AH0 . UH0 . P IY1 . D IY0 . AH0
-cyclophosphamide,5,S AY2 . K L OW0 . F AA1 . S F AH0 . M AY2 D
+cyclophosphamide,5,
 biopic,5,B AY0 . AA1 P AH0 K
 basidium,0,B AH0 . S IH1 . D AH0 . AH0 M
 steatopygous,0,S T IH2 . AH0 . D OW0 . P AY1 . G AH0 S
@@ -111458,7 +111394,6 @@ juvenilia,0,JH UW1 . V AH0 . N IY1 L . Y AH0
 cycloserine,0,S AY2 . K L AH0 . S EH1 . R IY2 N|S AY2 . K L AH0 . S IY1 . R IY2 N
 pococurante,0,P OW2 . K OW0 . K Y UH0 . R AA1 N . T IY0
 yowl,4,Y AW1 L
--metric,0,M EH1 . T R AH0 K
 caravansary,0,K EH2 . R AH0 . V AE1 N . S AH0 . R IY0
 bouffant,4,B UW0 . F AA1 N T
 versify,0,V AH1 R . S AH0 . F AY0
@@ -111524,7 +111459,6 @@ argillaceous,4,AA0 . JH AH0 . L EY1 . SH AH0 S
 assegai,4,
 atomy,0,AE1 . D AH0 . M IY0
 autochthon,0,AO0 . T AA1 K . TH AA2 N|AA0 . T AA1 K . TH AA2 N
--',5,Z IH1 Z|S IH1 Z|IH1 Z|AH1 Z
 backfisch,0,B AE1 K . F IH0 SH
 baff,0,B AE1 F
 batrachian,0,B AH0 . T R EY1 . K AH0 . AH0 N
@@ -111722,7 +111656,6 @@ gowk,0,G AW1 K
 goyal,5,G OY1 . AH0 L
 gralloch,0,G R AE1 . L AH0 K
 graminivorous,0,G R AE0 . M AH0 . N IH1 . V AH0 . R AH0 S
--vorous,5,V AH1 . R AH0 S
 gree,0,G R IY1
 gregale,0,G R EY0 . G AA1 . L EY0
 grig,0,G R IH1 G
@@ -111785,7 +111718,6 @@ lanterloo,0,L AE0 N . T AH0 . L UW1
 laodicean,0,L EY0 . AH0 . D AH0 . S IY1 . AH0 N
 larrup,0,L AE1 . R AH0 P
 latah,0,L AA1 . D AH0
--ate,0,AH1 T|EY1 T
 hippopotami,4,HH IH2 . P AH0 . P AA1 . D AH0 . M IY0
 latria,0,L AH0 . T R AY1 . AH0
 leiotrichous,0,L AH0 . AH0 . AA1 . T R AH0 . K AH0 S
@@ -111921,7 +111853,6 @@ abducing,0,AE0 B . D Y UW1 . S IY0 NG
 abduces,0,AE0 B . D UW1 . S AH1 S|AE0 B . D Y UW1 . S AH1 S|AH0 B . D UW1 . S AH1 S|AH0 B . D Y UW1 . S AH1 S
 ablute,0,AH0 . B L UW1 T
 giz,0,G IH1 Z
--ling,0,L IY1 NG
 doobie,5,D UW1 . B IY0
 unluckily,4,AH0 N . L AH1 K AH0 L IY0
 abreact,0,AE2 . B R IY0 . AE1 K T
@@ -111936,7 +111867,6 @@ trachyte,0,T R AE1 . K AH0 . AH0 T
 trackless,7,T R AE1 . K L AH0 S
 pulsate,4,
 varangian,0,V AH0 . R AE1 N . JH IY0 . AH0 N
-dextromethorphan,0,D EH2 K . S T R OW0 . M AH0 . TH AO1 R . F AE2 N
 raiment,7,R EY1 . M AH0 N T
 fisheye,5,
 achondroplastic,0,EY0 . K AA0 N . D R AH0 . P L AE1 . S T AH0 K
@@ -112067,7 +111997,6 @@ tatami,6,T AH0 . T AA1 . M IY0
 phyllo,4,F IY1 . L OW0|F AY1 . L OW0
 youngin,0,Y AH1 . NG AH0 N
 thiol,5,TH AY1 . AA2 L
--ol,0,AO1 L|AA1 L
 careworn,4,
 chicle,0,CH IH1 . K AH0 L|CH IH1 . K L IY0
 hubbies,9,HH AH1 . B IY0 Z
@@ -112162,7 +112091,6 @@ tympany,0,T IH1 M . P AH0 . N IY0
 tympanites,0,T IH2 M . P AH0 . N AY1 . D IY0 Z
 bacilli,4,B AH0 . S IH1 . L AY0
 atonic,4,EY0 . T AA1 . N AH0 K
--esque,5,EH1 S K
 biathlon,7,B AY0 . AE1 TH . L AA2 N
 tyrannous,4,
 fascicle,0,F AE1 . S AH0 . K AH0 L
@@ -112350,7 +112278,6 @@ spectrogram,4,
 oroblanco,0,AO2 . R OW0 . B L AA1 NG . K OW0
 preaspiration,0,P R IY2 . AE2 S P AH0 R EY1 SH AH0 N
 cenote,0,S EH0 . N OW1 . D EY0|S AH0 . N OW1 . D IY0
--ane,0,EY1 N
 penthos,0,P EH1 N . TH AA0 S
 peri,0,P IH1 . AH0 . R IY0
 peripeteia,0,P EH0 . R AH0 . P AH0 . T IY1 . AH0|P EH0 . R AH0 . P AH0 . T EY1 . AH0
@@ -112503,12 +112430,10 @@ burdock,0,B AH1 R . D AA0 K
 matronymic,0,M AE2 . T R AH0 . N IH1 . M AH0 K
 plaint,4,P L EY1 N T
 lazaretto,0,L AE2 . Z AH0 . R EH1 . D OW0|L AE2 . Z AH0 . R EH1 . D IY0
--chore,0,K OW1 R
 bdellium,0,D EH1 . L IY0 . AH0 M
 lunarian,0,L UW0 . N EH1 . R IY0 . AH0 N
 okina,0,OW0 . K IY1 . N AH0
 baetyl,0,B IY1 . D AH0 L
--aceous,5,EY1 . SH AH0 S
 sayonara,9,S AY2 . AH0 . N AA1 . R AH0
 celtuce,0,S EH1 L . T AH0 S
 mercurian,0,M AH0 R . K Y UH1 . R IY0 . AH0 N
@@ -112574,12 +112499,10 @@ chorister,4,K AO1 . R AH0 . S T AH0 R
 potto,4,P AA1 . D AH0 . UH0
 hypothec,0,HH AY0 . P AA1 . TH AH0 K
 musette,4,M Y UW0 . Z EH1 T
--phage,0,F EY1 JH
 yantra,0,Y AH1 N . T R AH0
 kirghiz,0,K IY0 R . G IY1 Z
 gelded,4,G EH1 L . D AH0 D
 athame,0,AA0 . TH AA1 . M EY0|AH0 . TH AA1 . M EY0
--phyte,5,F AY1 T
 sanatory,4,S AE1 . N AH0 . D AO2 . R IY0
 sandbank,5,S AE1 N D . B AE2 NG K
 sanitarium,10,S AE2 . N AH0 . T EH1 . AH0 . R IY0 . AH0 M
@@ -112607,11 +112530,7 @@ solarium,8,S AH0 . L EH1 . AH0 . R IY0 . AH0 M
 dur,0,D UH1 R|D AH1
 piscina,5,P AH0 . S IY1 . N AH0
 nen,0,N EH1 N
--ac,0,AE1 K
--age,0,IH1 JH|AH1 JH|EH1 JH|AA1 JH
 telestic,0,T EH0 . L EH1 . S T AH0 K
--ancy,5,AH1 N . S IY0
--ant,0,AH1 N T
 dreamboat,8,D R IY1 M . B OW2 T
 rsvp,5,AA2 . EH0 S . V IY0 . P IY1
 perfecto,7,
@@ -112627,9 +112546,7 @@ bullcrap,5,
 volant,0,V OW1 . L AH0 N T
 joyance,0,JH OY1 . AH0 N T S
 ornithophobia,0,AO2 R . N AH0 . TH AH0 . F OW1 . B IY0 . AH0
--biont,0,B AY1 . AA0 N T
 symbiont,8,S AH0 M . B AY1 . AA0 N T
--centric,0,S EH1 N . T R AH0 K
 twitchy,9,T W IH1 . CH IY0
 novitiate,7,
 bendable,0,B EH1 N . D AH0 . B AH0 L
@@ -112656,7 +112573,6 @@ calender,6,K AE1 . L AH0 N . D AH0 R
 barmaid,9,
 shish,9,SH IH1 SH
 annatto,0,AH0 . N AA1 . D OW0
--chory,5,K AO2 . R IY1
 kyrie,5,
 zek,0,Z EH1 K
 tacet,4,T AE1 . S AH0 T
@@ -112681,7 +112597,6 @@ lacertus,0,L AH0 . S AH1 R . D AH0 S
 crapola,0,K R AE0 . P OW1 . L AH0
 astaxanthin,0,AE0 . S T AH0 . Z AE1 N . TH AH0 N
 tramadol,5,T R AE1 . M AH0 . D AA2 L
--eer,5,IH1 . AH0
 labours,7,L EY1 . B AH0 R Z
 quintillionth,0,K W AH0 N . T IH1 . L IY0 . AH0 N TH
 sextillionth,0,S EH0 K . S T IH1 . L IY0 . AH0 N TH
@@ -112704,7 +112619,6 @@ lenience,4,L IY1 . N IY0 . AH0 N T S
 leprous,4,
 abulia,4,AH0 . B UW1 . L IY0 . AH0|AH0 . B UW1 L . Y AH0
 contiguity,0,K AA2 N . T AH0 G . Y UW1 . AH0 . D IY0
--fy,0,F AY1
 lady-in-waiting,0,L EY2 . D IY0 . AH0 N . W EY1 . D IY0 NG
 anthocyanin,0,AE2 N . TH OW0 . S AY1 . AH0 . N AH0 N|AE2 N . TH AH0 . S AY1 . AH0 . N AH0 N
 flavonoid,0,F L EY1 . V AH0 . N OY0 D
@@ -112909,7 +112823,6 @@ mocktail,0,M AA1 K . T EY0 L
 pendeloque,0,P EH2 N . D AH0 . L OW1 K
 telt,4,T EH1 L T|T EH1 L D
 tarka,0,T AA1 . K AH0
--el,0,AH1 L
 geal,0,JH IY1 L
 toise,0,T OY1 Z
 torchecul,0,T AA0 SH . K UW1 L
@@ -113073,7 +112986,6 @@ pangasinan,5,P AH0 NG . G AH0 . S AH0 . N AE1 N
 mastication,0,M AE0 . S T AH0 . K EY1 . SH AH0 N
 métier,0,M EY0 T . Y EY1
 chametz,4,HH AH0 . M EH1 T S|HH AH1 . M AH0 T S|HH AA1 . M AH0 T S
--ive,0,IH1 V
 maundy,0,M AA1 N . D IY0
 mullion,0,M AH1 . L IY0 . AH0 N
 metonymic,0,M EH2 . T AH0 . N IH1 . M AH0 K
@@ -113295,7 +113207,6 @@ curmur,0,K AH0 R . M AH1 R
 netball,6,
 vicenarian,0,V IH2 . S AH0 . N EH1 . AH0 . R IY0 . AH0 N
 thebaic,0,TH AH0 . B EY1 . AH0 K
--ence,5,AH1 N T S
 pesewa,0,P AH0 . S EY1 . W AH0
 introversion,0,AH0 N . T R AH0 . V AH1 R . ZH AH0 N|AH0 N . T R AH0 . V AH1 R . SH AH0 N|AH0 N . T R OW0 . V AH1 R . SH AH0 N
 distrait,0,D AH0 . S T R EY1
@@ -114704,7 +114615,6 @@ endocytosis,5,EH2 N . D AH0 . UH0 . S AY0 . T AH1 . UH0 . S AH0 S
 endodontics,0,EH2 N . D AH0 . UH0 . D AA1 N . T AH0 K S
 carotte,4,K AH0 . R AA1 T
 requin,0,R IY1 . K W AH0 N
--ent,5,AH1 N T
 squop,0,S K W AA1 P
 squidger,0,S K W IH1 . JH AH0
 argumentum,4,AA0 R G . Y UW0 . M EH1 N . T AH0 M
@@ -115891,7 +115801,6 @@ bemusing,0,B AH0 . M Y UW1 . Z IY0 NG
 pellage,0,P EH1 . L AH0 JH
 bagasse,0,B AH0 . G AE1 S
 gurges,0,G AH1 R . JH IY0 Z
--ino,5,IY1 . N OW0
 polyptoton,0,P AA2 . L AH0 P . T OW1 . T AA0 N
 fichu,0,F IH1 . SH UW0
 fishnet,7,
@@ -115992,7 +115901,6 @@ axenic,0,EY0 . Z EH1 . N AH0 K|EY0 . Z IY1 . N AH0 K
 embayed,0,AH0 M . B EY1 D
 scorse,0,S K AA1 S
 aureate,0,AO1 . R IY0 . AH0 T
--ification,5,AH0 . F AH0 . K EY1 . SH AH0 N
 lametta,0,L AH0 . M EH1 . D AH0
 soulfully,4,
 soulfulness,4,
@@ -116280,7 +116188,6 @@ grundies,5,G R AH1 N . D IY0 S
 aeolic,0,IY0 . AA1 . L AH0 K
 agentive,0,AH0 . JH EH1 N . T AH0 V
 railhead,4,R EY1 L . HH EH0 D
--poeia,5,P IY1 . AH0
 dissever,0,D AH0 . S EH1 V AH0 R
 sucky,5,S AH1 . K IY0
 scenarii,0,S EH0 . N AA1 . R IY0
@@ -116564,7 +116471,6 @@ morphism,0,M AO1 R . F AH0 . Z AH0 M
 remix,5,R IY0 . M IH1 K S
 confusopoly,0,K AH0 N . F Y UW2 . Z AA1 . P AH0 . L IY0
 dittography,0,D AH0 . T AA1 . G R AH0 . F IY0
--ic,0,IH1 K
 lustrious,0,L AH1 . S T R IY0 . AH0 S
 plushophilia,0,P L AH2 . SH AH0 . F IH1 . L IY0 . AH0
 toilette,6,T W AA0 . L EH1 T
@@ -116718,7 +116624,6 @@ worky,0,W AH1 R . K IY0
 soppy,7,S AA1 . P IY0
 abhorrers,0,AE0 B . HH AO1 . R AH0 R Z
 voluntaristic,0,V AA0 . L AH0 N . T AH0 . R IH1 . S T AH0 K
--ally,0,L IY1|AH1 . L IY0
 chocha,0,CH OW1 . CH AH0
 busking,4,B AH1 . S K IY0 NG
 randomity,0,R AE0 N . D AA1 . M AH0 . D IY0
@@ -116786,7 +116691,6 @@ kermes,0,K AH1 R . M IY0 Z
 sonority,0,S AH0 . N AA1 . R AH0 . D IY0|S AH0 . N AO1 . R AH0 . D IY0
 sunbed,5,
 pethidine,0,P EH1 . TH AH0 . D IY0 N
-meperidine,0,M AH0 . P EH1 . R AH0 . D IY2 N
 hedgerow,6,
 carabineer,0,K AE2 . R AH0 . B AH0 . N IY1 R|K EH2 . R AH0 . B AH0 . N IY1 R
 gci,0,JH IY2 . S IY2 . AY1
@@ -116813,7 +116717,6 @@ labrys,0,L AE1 . B R AH0 S|L EY1 . B R AH0 S
 sociocracy,0,S OW2 . S IY0 . AA1 . K R AH0 . S IY0|S OW2 . SH IY0 . AA1 . K R AH0 . S IY0
 whished,6,W IH1 SH T
 farouche,0,F AH0 . R UW1 SH
--meister,5,M AY1 . S T AH0 R
 brachysyllabic,0,B R AE2 . K IY0 . S AH0 . L AE1 . B AH0 K
 busyness,4,
 hexafluoroplatinate,0,HH EH2 K . S AH0 . F L AO0 . R AH0 . P L AE1 . T AH0 . N EY0 T|HH EH2 K . S AH0 . F L AO0 . R AH0 . P L AE1 . T AH0 . N AH0 T
@@ -117031,7 +116934,6 @@ ingenuously,4,
 disingenuously,0,D IH2 . S AH0 N . JH EH1 N . Y UW0 . AH0 . S L IY0
 ajog,4,AH0 . JH AA1 G
 hewed,4,HH Y UW1 D
--man,0,M AH1 N|M AE1 N
 annexure,0,AH0 . N EH1 K . SH AH0 R
 platitudinous,0,P L AE2 . D AH0 . T UW1 D . N AH0 S
 miffy,0,M IH1 . F IY0
@@ -117115,7 +117017,6 @@ boater,4,B OW1 . D AH0 R
 tetchy,4,T EH1 . CH IY0
 hanse,5,HH AE1 N T S|HH AE1 N . Z AH0
 neopentane,0,N IY2 . OW0 . P EH1 N . T EY0 N
--ical,5,IH1 . K AH0 L
 almightiness,4,
 peashooter,4,
 peristaltic,4,P EH2 . R AH0 . S T AA1 L . T AH0 K
@@ -117282,7 +117183,6 @@ peise,0,P EY1 Z|P IY1 Z
 melchizedek,5,
 teuton,0,T UW1 . T AH0 N|T UW1 . T AA0 N
 dearie,10,D IH1 . AH0 . R IY0|D IY1 . R IY0
--fu,0,F UW1
 mathlete,0,M AE1 TH . L IY0 T
 agritainment,0,AE2 . G R AH0 . T EY1 N . M AH0 N T
 interspecific,0,IH2 N T AH0 R . S P AH0 S IH1 F AH0 K
@@ -117441,7 +117341,6 @@ orchis,4,AO1 R . K AH0 S
 fleshpot,4,
 stim,5,S T IH1 M
 chrysolite,4,
--icity,5,IH1 . S AH0 . D IY0
 meanie,8,M IY1 . N IY0
 foreknow,0,F AO2 R . N OW1
 iliac,6,IH1 . L IY0 . AE0 K
@@ -117726,7 +117625,6 @@ peccavi,0,P EH0 . K AA1 . V IY0|P AH0 . K AA1 . V IY0
 foveation,0,F AH2 . UH0 . V IY0 . EY1 . SH AH0 N
 tracery,4,
 circumfix,0,S AH0 R . K AH0 M . F IH1 K S
--fix,0,F IH1 K S
 circumfixation,0,S AH2 . K AH0 M . F AH0 K . S EY1 . SH AH0 N
 heartbreaker,9,
 maniacally,7,
@@ -117829,7 +117727,6 @@ obsolesce,0,AA0 B . S AH0 . L EH1 S
 vastus,0,V AE1 . S T AH0 S
 obviation,0,AA2 B . V IY0 . EY1 . SH AH0 N
 amazonomachy,0,AE2 . M AH0 . Z AH0 . N AA1 . M AH0 . K IY0
--machy,5,M AH1 . K IY0
 enfleurage,6,AA2 . F L UH0 . R AA1 JH
 outcaste,0,AW1 T . K AE0 S T
 hazily,0,HH EY1 . Z AH0 . L IY0
@@ -117840,7 +117737,6 @@ pinecone,4,
 reverberatory,4,
 disinheritance,4,D IH2 . S AH0 N . HH EH1 . R AH0 . T AH0 N T S
 reattain,0,R IY0 . AH0 T EY1 N
-overthrowal,0,AH0 . UH0 . V AH0 . TH R AH1 . UH0 . AH0 L
 reconvert,0,R IY2 . K AH0 N V AH1 R T|R IY0 . K AA1 N V AH0 R T
 redeliver,0,R IY2 . D AH0 . L IH1 . V AH0
 redissolve,0,R IY2 . D AH0 Z AA1 L V
@@ -117981,13 +117877,11 @@ rhodian,0,R OW1 . D IY0 . AH0 N
 hyetal,0,HH AY1 . AH0 . D AH0 L
 intercrural,0,AH0 N . T AH0 R . K R UH1 . R AH0 L
 reticulation,4,R AH0 . D IH2 . K Y AH0 . L EY1 . SH AH0 N
--cha,0,CH AH1|CH AE1
 nelfinavir,0,N EH0 L . F IH1 . N AH0 . V IY2 R
 indinavir,0,AH0 N . D IH1 . N AH0 . V IY2 R
 lopinavir,0,L OW0 . P IH1 . N AH0 . V IY2 R
 housemate,6,
 theocentric,0,TH IY0 . AH0 . UH0 . S EH1 N . T R AH0 K
--osity,5,AA1 . S AH0 . D IY0
 xoxo,5,
 thousandfold,4,
 eulogise,0,Y UW1 . L AH0 . JH AY0 Z
@@ -118689,8 +118583,6 @@ malvasia,0,M AE2 L . V AH0 . S IY1 . AH0|M AE2 L . V AH0 . Z IY1 . AH0
 merogamy,0,M IY0 . R AA1 . G AH0 . M IY0
 cheesery,0,CH IY1 . Z AH0 . R IY0
 atomistic,0,AE2 . D AH0 . M IH1 . S T AH0 K
--self,0,S EH1 L F
--selves,0,S EH1 L V Z
 aponeurosis,0,AE2 . P AH0 . N UH0 . R OW1 . S AH0 S
 ha',0,HH EY1|HH AE1
 applicative,0,AH0 . P L IH1 . K AH0 . D AH0 V
@@ -118746,7 +118638,6 @@ risperidone,0,R AH0 . S P EH1 . R AH0 . D OW2 N
 fluphenazine,0,F L UW0 . F EH1 . N AH0 . Z IY0 N
 thioridazine,0,TH AY2 . AH0 . R IH1 . D AH0 . Z IY2 N
 fluconazole,0,F L UW0 . K AA1 . N AH0 . Z OW2 L
-aripiprazole,0,AE2 . R AH0 . P IH1 . P R AH0 . Z OW2 L
 chlorpromazine,4,
 teochew,0,T IY0 . OW1 . CH UW0
 squoze,6,S K W OW1 Z
@@ -118867,9 +118758,6 @@ desysop,0,D IY0 . S IH1 . S AA0 P
 peptidomimetic,0,P EH0 P . T AY2 . D OW0 . M AH0 . M EH1 . D AH0 K
 diazepam,7,D AY0 . AE1 . Z AH0 . P AE2 M
 onchocerciasis,0,AA0 NG . K AH0 . S AH0 R . K AY1 . AH0 . S AH0 S
--logue,5,L AA2 G
--logues,5,L AA1 G Z
--log,0,L AA2 G
 tidying,8,T AY1 . D IY0 . IY0 NG
 avengers,5,AH0 . V EH1 N . JH AH0 Z
 enorm,0,AH0 . N AA1 M
@@ -118884,7 +118772,6 @@ voe,0,V OW1
 vividity,0,V AH0 . V IH1 . D AH0 . D IY0
 vividities,0,V AH0 . V IH1 . D AH0 . D IY0 Z
 equalitarian,0,AH0 . K W AA1 . L AH0 . T EH1 . R IY0 . AH0 N
--most,0,M AH2 . UH1 S T
 vivifying,4,
 vivified,4,V IH1 . V AH0 . F AH0 . AH0 D
 bulling,0,B UH1 . L IY0 NG
@@ -119025,14 +118912,12 @@ detrital,0,D IY0 . T R AY1 . D AH0 L
 superchondritic,0,S UW0 . P AH0 R . K AA0 N . D R IH1 . D AH0 K
 aphanitic,0,AE2 . F AH0 . N IH1 . D AH0 K
 didacticism,4,
--phagy,5,F EY1 . JH IY0|F AH1 . JH IY0
 abdomina,11,AE0 B . D AA1 . M AH0 . N AH0
 abecedaria,0,EY2 . B IY0 . S IY2 . D AE1 . R IY0 . AH0
 abietes,0,AE2 . B AH0 . EY1 . D IY0 Z
 pandal,0,P AE1 N . D AH0 L
 mexica,0,M AH0 . SH IY1 . K AH0
 glottogenetic,0,G L AA2 . D OW0 . JH AH0 . N EH1 . D AH0 K
--ne,0,N IY1
 silyl,0,S AY1 . L AH0 L
 adenylate,0,AH0 . D EH1 . N AH0 . L EY0 T
 processivity,0,P R AA0 . S EH0 . S IH1 . V AH0 . D IY0
@@ -119172,7 +119057,6 @@ anteposition,0,AE0 N T AH0 . P AH0 Z IH1 SH AH0 N
 paraph,0,P EH1 . R AH0 F|P AH0 . R AE1 F
 veny,0,V EH1 . N IY0
 seizer,0,S IY1 . Z AH0 R
--terol,5,T AH1 . R AA2 L
 envie,0,AH0 N . V AY1|EH0 N . V AY1|AA0 N . V IY1
 sillion,0,S IH1 . L AH0 . AH0 N
 carnet,4,K AA1 . N EY0
@@ -119349,7 +119233,6 @@ bitterer,4,B IH1 . D AH0 . R AH0 R
 memoization,0,M EH2 . M OW0 . AY0 . Z EY1 . SH AH0 N
 smatchet,0,S M AE1 . CH AH0 T
 telicity,0,T IY0 . L IH1 . S AH0 . D IY0
--ery,5,AH1 . R IY0
 postalveolar,0,P OW2 S T . AE0 L V IY1 AH0 L AH0 R
 puter,5,P Y UW1 . D AH0 R
 pbgv,0,P IY2 . B IY0 . JH IY1 . V IY0
@@ -119450,7 +119333,6 @@ bocal,0,B OW1 . K AH0 L|B OW0 . K AE1 L
 handprint,9,
 tach,8,T AE1 K|T AE1 CH
 amped,5,AE1 M P T
--ii,0,AY1|IY1 . AY0|IY1
 faggy,4,F AE1 . G IY0
 naggy,4,N AE1 . G IY0
 slaggy,0,S L AE1 . G IY0
@@ -119505,7 +119387,6 @@ unfelt,4,AH0 N . F EH1 L T
 autocephaly,0,AO2 . D AH0 . S EH1 . F AH0 . L IY0
 gaji,0,G AA1 . JH IY0
 skift,0,S K IH1 F T
--'s,5,IH1 Z|AH1 Z
 corf,0,K AO1 R F
 preorgasmic,0,P R IY2 . AA0 . G AE1 Z . M AH0 K
 konak,0,K AH0 . UH0 . N AA1 K
@@ -119600,7 +119481,6 @@ cribble,0,K R IH1 . B AH0 L
 haroseth,0,HH AH0 . R AH1 . UH0 . S EH0 T
 when'd,0,W EH1 N D
 tarboosh,0,T AA0 R . B UW1 SH
--fer,5,F AH1 R
 polabian,0,P OW0 . L EY1 . B IY0 . AH0 N
 rebutter,0,R AH0 . B AH1 D AH0 R
 ropy,4,R AH1 . UH0 . P IY0
@@ -119773,7 +119653,6 @@ anergy,0,AE1 . N AH0 . JH IY0
 hemiola,0,HH EH0 . M IY0 . OW1 . L AH0|HH IY0 . M IY0 . OW1 . L AH0
 furzen,0,F AH1 R . Z AH0 N
 homotopic,0,HH OW0 M OW0 . T AA1 P AH0 K
--ry,5,R IY1
 cuprate,0,K Y UW1 . P R EY0 T
 hooping,4,HH UW1 . P IY0 NG
 clits,9,K L IH1 T S
@@ -119909,7 +119788,6 @@ morbus,0,M AO1 R . B AH0 S
 anomalistic,0,AH0 . N AA2 . M AH0 . L IH1 . S T AH0 K
 sniglet,0,S N IH1 . G L AH0 T
 palooza,0,P AH0 . L UW1 . Z AH0
--a-palooza,5,AH0 . P AH0 . L UW1 . Z AH0|AH0 . P AH0 . L UH1 . Z AH0
 responsorial,0,R IH2 . S P AA0 N . S AO1 . R IY0 . AH0 L
 rebec,0,R IY1 . B EH0 K
 omnilingual,0,AA0 M N AH0 . L IY1 NG G W AH0 L|AA0 M N AH0 . L IY1 NG G Y UW0 AH0 L
@@ -120017,7 +119895,6 @@ mucin,0,M Y UW1 . S AH0 N
 myelinating,0,M AY1 . AH0 . L AH0 . N EY0 . D IY0 NG
 chalcid,0,K AE1 L . S AH0 D
 telencephalon,0,T EH2 . L AH0 N . S EH1 . F AH0 . L AH0 N|T EH2 . L AH0 N . S EH1 . F AH0 . L AA0 N
--ridden,0,R IH1 . D AH0 N
 nefazodone,0,N AH0 . F AE1 . Z AH0 . D OW2 N
 venlafaxine,0,V EH2 N . L AH0 . F AE1 K . S IY2 N
 encephalography,4,EH0 N . S EH2 . F AH0 . L AA1 . G R AH0 . F IY0
@@ -120165,7 +120042,6 @@ carbamic,0,K AA0 R . B AE1 . M AH0 K
 chippings,9,CH IH1 . P IY0 NG Z
 niding,0,N AY1 . D IY0 NG
 levorphanol,0,L EH0 . V AO1 R . F AH0 . N AA2 L
-pentazocine,0,P EH0 N . T AE1 . Z AH0 . S IY0 N
 remifentanil,0,R EH2 . M AH0 . F EH1 N . T AH0 . N IH2 L
 difenoxin,0,D AY0 . F AH0 . N AA1 K . S AH0 N
 dihydromorphine,0,D AY0 . HH AY2 . D R AH0 . M AA1 . F IY0 N
@@ -120285,7 +120161,6 @@ indo-aryan,0,IH2 N . D OW0 . EH1 . R IY0 . AH0 N
 serotinal,0,S EH2 . R AH0 . T AY1 . N AH0 L
 ganymedes,0,G AE2 . N AH0 . M IY1 . D IY0 Z
 vocales,0,V OW0 . K EY1 . L IY2 Z
--zilla,5,Z IH1 . L AH0
 gasless,0,G AE1 . S L AH0 S
 glyme,0,G L AY1 M
 copedant,0,K AH0 . UH0 . P IY1 . D AH0 N T
@@ -120650,7 +120525,6 @@ uhlan,0,UW1 . L AH0 N
 woz,0,W AH1 Z
 anuran,4,AH0 . N UH1 . R AH0 N
 thalamic,0,TH AH0 . L AE1 . M AH0 K
--ville,0,V IH1 L
 suprachiasmatic,0,S UW2 . P R AH0 . K AH0 . AH0 . AH0 Z . M AE1 . D AH0 K
 biographize,0,B AY0 . AA1 . G R AH0 . F AY0 Z
 bebother,0,B AH0 . B AA1 . DH AH0 R
@@ -120837,7 +120711,6 @@ silts,8,S IH1 L T S
 skimps,8,S K IH1 M P S
 skimped,4,S K IH1 M P T
 rakhi,5,R AA1 . K IY0
-raloxifene,0,R AH0 . L AA1 K . S AH0 . F IY2 N
 wries,0,R AY1 Z
 wrying,0,R AY1 . IY0 NG
 writable,0,R AY1 . D AH0 . B AH0 L
@@ -121823,7 +121696,7 @@ pome,4,P AH1 . UH0 M
 panphiliac,0,P AE2 N . F IH1 . L IY0 . AE0 K
 chouse,0,CH AW1 S
 salep,0,S AE1 . L AH0 P
-dexamethasone,0,D EH2 K . S AH0 . M EH1 . TH AH0 . S OW2 N|D EH2 K . S AH0 . M EH1 . TH AH0 . Z OW2 N
+dexamethasone,0,D EH2 K . S AH0 . M EH1 . TH AH0 . S OW2 N
 farer,0,F EH1 . R AH0 R
 linhay,0,L IH1 . N IY0
 aesthetician,0,EH0 S . TH AH0 . T IH1 . SH AH0 N
@@ -121847,7 +121720,6 @@ ingressive,0,AH0 N . G R EH1 . S AH0 V
 illinoisan,0,IH2 . L AH0 . N OY1 . AH0 N|IH2 . L AH0 . N OY1 . Z AH0 N
 capoeirista,0,K AA0 . P AH0 . W EH0 . R IH1 . S T AH0|K AA0 . P W EH0 . R IH1 . S T AH0
 manicule,0,M AE1 . N AH0 . K Y UW0 L
-metronidazole,0,M EH2 . T R AH0 . N AY1 . D AH0 . Z OW2 L
 apothecarial,0,AH0 . P AA2 . TH AH0 . K EH1 . R IY0 . AH0 L
 domy,0,D OW1 . M IY0
 i'da,0,AY1 . D AH0
@@ -121978,7 +121850,6 @@ thinnish,0,TH IH1 . N IH0 SH
 sledger,0,S L EH1 . JH AH0
 unamused,0,AH0 N . AH0 M Y UW1 Z D
 sellable,4,S EH1 . L AH0 . B AH0 L
--rrhea,5,R IY1 . AH0
 cinquedea,0,CH IY2 NG . K W AH0 . D IY1 . AH0|CH IY2 NG . K W AH0 . D EY1 . AH0
 xyzzy,0,Z IH1 . Z IY0
 deglaze,0,D IY0 . G L EY1 Z
@@ -122052,7 +121923,6 @@ catalepsis,4,
 procatalepsis,0,P R AH2 . UH0 . K AE0 . D AH0 . L EH1 P . S AH0 S
 saccharoid,0,S AE1 . K AH0 . R OY2 D
 saccharoidal,0,S AE2 . K AH0 . R OY1 . D AH0 L
--mane,0,M EY1 N
 he'sn't,0,HH IY1 . Z AH0 N T
 divey,0,D AY1 . V IY0
 wahey,0,W AH0 . HH EY1
@@ -122159,7 +122029,6 @@ taino,0,T AY1 . N OW0|T AE0 . IY1 . N OW0
 hygrothermal,0,HH AY0 . G R OW0 . TH AH1 R . M AH0 L
 savonian,0,S AH0 . V OW1 . N IY0 . AH0 N
 isoflurane,0,AY2 . S AH0 . F L UH1 . R EY2 N
-isoproterenol,0,AY2 . S AH0 . P R OW0 . T EH1 . R AH0 . N AA2 L
 jacker,4,JH AE1 . K AH0
 statelet,0,S T EY1 T . L AH0 T
 empanada,4,EH0 M . P AH0 . N AA1 . D AH0
@@ -122367,8 +122236,6 @@ acanthamoeba,0,AH0 . K AE2 N . TH AH0 . M IY1 . B AH0
 pergamentaceous,0,P AH2 R . G AH0 . M AH0 N . T EY1 . SH AH0 S
 tapenade,0,T AE2 . P AH0 . N AA1 D|T AA2 . P AH0 . N AA1 D
 cardioverter,0,K AA2 . D IY0 . AH0 . UH0 . V AH1 R . D AH0
--micin,5,M AY1 . S AH0 N
--mycin,5,M AY1 . S AH0 N
 chal,6,CH AE1 L
 usabilities,5,Y UW2 . Z AH0 . B IH1 . L AH0 . D IY0 Z
 ungod,0,AH0 N . G AA1 D
@@ -122471,7 +122338,6 @@ exed,0,EH1 K S T
 ferryl,0,F EH1 . R AH0 L
 cooze,0,K UW1 Z
 disinhibit,0,D IH2 . S AH0 N . HH IH1 . B AH0 T
-diclofenac,0,D AY0 . K L OW1 . F AH0 . N AE2 K
 contentful,0,K AH0 N . T EH1 N T . F AH0 L
 cleantech,5,
 cotyle,0,K AA1 . D AH0 . L IY0
@@ -123185,7 +123051,7 @@ adless,0,AE1 D . L AH0 S
 whippily,0,W IH1 . P AH0 . L IY0
 co-in-law,0,K OW0 . IH1 N . L AA0
 baudelairean,0,B OW2 . D AH0 . L EH1 . R IY0 . AH0 N
-promnesia,0,P R AA0 M . N IY1 . ZH AH0|P R AA0 M . N IY1 . Z AH0 . AH0
+promnesia,0,P R AA0 M . N IY1 . ZH AH0
 whereases,6,W EH0 . AH0 . R AE1 . Z AH0 Z
 uint,0,Y UW1 . AH0 N T
 demineralize,0,D AH0 . M IH1 . N AH0 . R AH0 . L AY0 Z
@@ -123196,7 +123062,6 @@ refi,0,R IY1 . F AY0
 sertaconazole,0,S AH2 R . D AH0 . K AA1 . N AH0 . Z OW2 L
 pteranodon,4,
 flunoxaprofen,0,F L UW0 . N AA2 K . S AH0 . P R AH1 . UH0 . F AH0 N
-buspirone,0,B Y UW0 . S P AY1 . R OW2 N
 diphasic,0,D AY0 . F EY1 . Z AH0 K
 papula,0,P AE1 . P Y UH0 . L AH0
 azapirone,0,EY0 . Z AH0 . P AY1 . R AH0 . UH0 N
@@ -123578,7 +123443,6 @@ tabooing,0,T AH0 . B UW1 . IY0 NG
 kalonji,0,K AH0 . L AA1 N . JH IY0
 mixin,0,M IH1 K . S AH0 N
 enflurane,0,EH0 N . F L UH1 . R EY2 N
--mab,5,M AE1 B
 cuttlebone,4,
 hearie,0,HH IH1 . AH0 . R IY0
 areole,0,AE1 . R IY0 . OW0 L
@@ -123669,7 +123533,6 @@ iwis,0,AH0 . W IH1 S|IY1 . W IY0 Z
 immarcescible,0,AH0 . M AA0 . S EH1 . S AH0 . B AH0 L
 syndesmosis,0,S IH2 N . D EH0 Z . M OW1 . S AH0 S|S IH2 N . D EH0 . S M OW1 . S AH0 S
 enthesis,0,AH0 N . TH IY1 . S AH0 S
--cratic,5,K R AE1 . D AH0 K
 proceri,0,P R OW0 . S IY1 . R AY2
 ethmoidal,0,EH0 TH . M OY1 . D AH0 L
 methylenedioxymethamphetamine,0,M EH1 . TH AH0 . L IY0 N . D AY0 . AA1 K . S IY0 . M EH1 . TH AH0 M . F EH1 . D AH0 . M IY0 N
@@ -123726,8 +123589,6 @@ archæopteryges,0,AA2 . K IY0 . AA0 P . T EH1 . R AH0 . JH IY0 Z
 ivermectin,5,AY2 . V AH0 R . M EH1 K . T AH0 N
 fenbendazole,0,F EH0 N . B EH1 N . D AH0 . Z AH0 . UH0 L
 praziquantel,0,P R AE2 . Z AH0 . K W AE1 N . T EH0 L
-amoxapine,0,AH0 . M AA1 K . S AH0 . P IY2 N
-etizolam,0,AH0 . T IH1 . Z AH0 . L AE0 M
 triazolam,0,T R AY0 . AE1 . Z AH0 . L AE2 M
 byronian,0,B AY0 . R OW1 . N IY0 . AH0 N
 sproing,0,S P R OY1 NG
@@ -123915,7 +123776,6 @@ untuck,4,AH0 N . T AH1 K
 lispy,0,L IH1 . S P IY0
 pterygopalatine,0,T EH2 . R AH0 . G OW0 . P AE1 . L AH0 . T AY2 N
 zolimidine,0,Z AH0 . L IH1 . M AH0 . D IY0 N
-enprostil,0,EH0 N . P R AA1 . S T IH2 L
 dexlansoprazole,0,D EH2 K . S L AE2 N . S OW1 . P R AH0 . Z OW2 L
 rabeprazole,0,R AH0 . B EH1 . P R AH0 . Z OW2 L
 dinoprostone,0,D AY2 . N AH0 . P R AA1 . S T OW2 N
@@ -124046,7 +123906,6 @@ salic,0,S EY1 . L AH0 K|S AE1 . L AH0 K
 salique,0,S AH0 . L IY1 K|S AE0 . L IY1 K|S EY1 . L AH0 K
 salicetum,0,S AE0 . L AH0 . S IY1 . D AH0 M
 salicional,0,S AH0 . L IH1 SH . N AH0 L|S AH0 . L IH1 . SH AH0 . N AH0 L
--icam,5,
 kgalagadi,0,K AE2 . L AE0 . K AA1 . D IY0
 baric,0,B AE1 . R AH0 K|B EH1 . AH0 . R AH0 K
 ush,4,AH1 SH|Y UW1 JH
@@ -124093,7 +123952,6 @@ dissocial,0,D AH0 . S AH1 . UH0 . SH AH0 L
 gossoon,0,G AA0 . S UW1 N
 bawneen,0,B AA1 . N IY0 N
 fauxtography,0,F OW0 . T AA1 . G R AH0 . F IY0|F AH0 . UH0 . T AA1 . G R AH0 . F IY0
--etic,5,EH1 . D AH0 K
 ethosuximide,0,EH2 . TH OW0 . S AH1 K . S AH0 . M AY2 D
 beganst,0,B AH0 . G AE1 N S T
 kaama,0,K AA1 . M AH0
@@ -124300,7 +124158,6 @@ octangular,0,AA0 K . T AE1 NG G . Y AH0 . L AH0
 psychopathies,0,S AY0 . K AA1 . P AH0 . TH IY0 Z
 basidioma,0,B AH0 . S IH2 . D IY0 . AH1 . UH0 . M AH0
 zooptic,0,Z AH0 . UH0 . AA1 P . T AH0 K|Z UW0 . AA1 P . T AH0 K
-zoophagic,0,Z AH2 . UH0 . AH0 . F EY1 . JH AH0 K|Z UW2 . AH0 . F EY1 . JH AH0 K
 buccally,0,B AH1 . K AH0 . L IY0
 deconstructional,0,D IY0 . K AH0 N . S T R AH1 K . SH AH0 . N AH0 L
 minah,0,M AY1 . N AH0|M AH0 . N AE1
@@ -124495,7 +124352,6 @@ sobby,0,S AA1 . B IY0
 geophys,0,JH IY2 . AH0 . UH0 . F IH1 Z
 geophysically,0,JH IY2 . AH0 . UH0 . F IH1 . Z AH0 . K L IY0
 cavetto,0,K AH0 . V EH1 . D AH0 . UH0
--loquy,5,
 dementor,0,D AH0 . M EH1 N . T AH0
 dedisperse,0,D IY0 . D AH0 S P AH1 R S
 palingeneses,0,P AE2 . L AH0 N . JH EH1 . N AH0 . S IY0 Z
@@ -124537,7 +124393,6 @@ chuchotage,0,SH UW0 . SH OW0 . T AA1 JH
 timonian,0,T AY0 . M OW1 . N IY0 . AH0 N
 steaven,0,S T EH1 . V AH0 N
 lissencephaly,0,L IH2 . S EH0 N . S EH1 . F AH0 . L IY0
--ple,5,P AH1 L
 disanalogous,0,D AH0 . S AH0 . N AE1 . L AH0 . JH AH0 S|D AH0 S . AH0 N AE1 L AH0 G AH0 S
 awrath,0,AH0 . R AA1 TH
 weeaboo,0,W IY1 . AH0 . B UW0
@@ -124597,7 +124452,6 @@ oxacillin,4,AA2 K . S AH0 . S IH1 . L AH0 N
 autoredirection,0,AO2 . D AH0 . UH0 . R IY0 . D IY0 . R EH1 K . SH AH0 N
 oxytonic,0,AA2 K . S AH0 . T AA1 . N AH0 K
 consuetudinal,0,K AA2 N . S W AH0 . T UW1 . D AH0 . N AH0 L
--ylidene,5,
 equitability,0,EH2 . K W AH0 . D AH0 . B IH1 . L AH0 . D AH0
 dickings,5,D IH1 . K IY0 NG Z
 dimolecular,0,D AY0 . M AH0 . L EH1 . K Y AH0 . L AH0|D AY0 . M AH0 . L EH1 . K Y UH0 . L AH0
@@ -124644,7 +124498,6 @@ mimantean,0,M AH0 . M AE1 N . T IY0 . AH0 N
 ecumenopolitan,0,EH0 . K Y UW2 . M EH0 . N AH0 . UH0 . P AA1 . L AH0 . T AH0 N
 r-tard,5,
 appendant,0,AH0 . P EH1 N . D AH0 N T
--phoresis,5,F AH0 . R IY1 . S AH0 S
 bignum,0,B IH1 G . N AH0 M
 inæsthetic,0,AH0 . N AH0 S . TH EH1 . D AH0 K
 forworn,0,F AH0 . W AA1 N|F AA0 . W AA1 N
@@ -124719,7 +124572,6 @@ barbital,4,B AA1 R . B AH0 . D AA2 L
 chlordesmethyldiazepam,0,K L AA2 . D EH0 . S M EH2 . TH AH0 L . D AY0 . AE1 . Z AH0 . P AE0 M
 estazolam,0,EH0 . S T AE1 . Z AH0 . L AE2 M
 oxazepam,0,AA0 K . S AE1 . Z AH0 . P AE2 M
-clorazepate,0,K L AO0 . R AE1 . Z AH0 . P EY2 T
 dichloralphenazone,0,D AY0 . K L AO2 . R AE0 L . F EH1 . N AH0 . Z AH0 . UH0 N
 methylphenobarbital,0,M EH2 . TH AH0 L . F IY2 . N OW0 . B AA1 R . B AH0 . D AA2 L
 mephobarbital,0,M EH2 . F OW0 . B AA1 R . B AH0 . D AA2 L
@@ -125216,7 +125068,6 @@ mumpy,0,M AH1 M . P IY0
 aagh,0,AE1
 jawblock,0,JH AA1 . B L AA0 K
 taeniasis,0,T IY0 . N AY1 . AH0 . S AH0 S
--ae,5,AY1|EY1
 derivability,0,D IY0 . R AY2 . V AH0 . B IH1 . L AH0 . D IY0
 sheldonian,0,SH EH0 L . D AH1 . UH0 . N AH0 . AH0 N
 floriography,0,F L AA2 . R IY0 . AA1 . G R AH0 . F IY0
@@ -125888,7 +125739,6 @@ splendent,0,S P L EH1 N . D AH0 N T
 tralucent,0,T R AH0 . L UW1 . S AH0 N T
 dedolent,0,D EH1 . D AH0 . L AH0 N T
 devove,0,D AH0 . V AH1 . UH0 V
--eh,0,EH1|IY1
 forstand,0,F AH0 R . S T AE1 N D
 ight,5,
 conducent,0,K AH0 N . D Y UW1 . S AH0 N T|K AH0 N . D UW1 . S AH0 N T
@@ -126014,7 +125864,6 @@ pe̍h-ōe-jī,5,P EY0 . W EY0 . JH IY1
 nectareous,0,N EH0 K . T EH1 . R IY0 . AH0 S
 peristeronic,0,P AH0 . R IH1 . S T AH0 . R AA1 . N AH0 K
 larf,0,L AA1 F
--meal,0,M IY1 L
 wankle,0,W AE1 NG . K AH0 L
 peccable,0,P EH1 . K AH0 . B AH0 L
 ciron,0,S AY1 . R AH0 N
@@ -126066,7 +125915,6 @@ twihard,0,T W AY1 . HH AA2 R D
 mulattress,0,M Y UW0 . L AE1 . T R AH0 S
 yaku,0,Y AA1 . K UW0
 allice,0,AE1 . L AH0 S
--rel,5,R AH1 L
 awesometastic,0,AO0 S M . T AE1 . S T AH0 K
 conservationally,0,K AA0 N . S AH0 R . V EY1 . SH AH0 . N AH0 . L IY0|K AA0 N . S AH0 R . V EY1 SH . N AH0 . L IY0|K AA0 N . S AH0 R . V EY1 . SH AH0 N . L IY0
 undersecretarial,0,AH2 N D AH0 R . S EH2 K R AH0 T EH1 R IY0 AH0 L
@@ -126095,7 +125943,6 @@ earsh,0,AE1 SH
 convellent,0,K AH0 N . V EH1 . L AH0 N T
 mediatorial,0,M IY0 . D IY0 . AH0 . T AO1 . R IY0 . AH0 L
 dermoscopy,0,D AH2 R . M AA1 . S K AH0 . P IY0
--side,0,S AY1 D
 dejecta,0,D AH0 . JH EH1 K . T AH0|D IY0 . JH EH1 K . T AH0
 delibrate,0,D EH1 . L AH0 . B R EY0 T
 détraqué,0,D EY0 . T R AE1 . K EY0
@@ -126511,7 +126358,6 @@ oxfordian,0,AA0 K . S F AA1 . D AH0 . AH0 N
 inoculent,0,AH0 . N AA1 . K Y AH0 . L AH0 N T
 mald,0,M AA1 L D
 dithematic,0,D AY2 . TH AH0 . M AE1 . D AH0 K
--oecious,5,IY1 . SH AH0 S
 paroecious,0,P AH0 . R IY1 . SH AH0 S
 glamping,5,G L AE1 M . P IY0 NG
 trochlea,4,T R AA1 . K L IY0 . AH0
@@ -126659,7 +126505,6 @@ shwasted,0,SH W EY1 . S T AH0 D
 calamistrum,0,K AE0 . L AH0 . M IH1 . S T R AH0 M
 poo-bah,0,P UW1 . B AA0
 shass,0,SH AE1 S
--astic,5,AE1 . S T AH0 K
 euhemerization,0,Y UW0 . HH IY2 . M AH0 . R AH0 . Z EY1 . SH AH0 N
 awheel,0,AH0 . W IY1 L
 ephelis,0,AH0 . F IY1 . L AH0 S
@@ -126792,7 +126637,6 @@ hyetology,0,HH AY0 . AH0 . T AA1 . L AH0 . JH IY0
 moory,0,M UH1 . AH0 . R IY0|M AO1 . R IY0
 stonerific,0,S T OW2 . N AH0 . R IH1 . F AH0 K
 archaistic,0,AA0 . K EY0 . IH1 . S T AH0 K
--odontia,5,AH0 . D AA1 N . SH AH0|AH0 . D AA1 N . CH AH0|AH0 . D AA1 N . SH IY0 . AH0|AH0 . D AA1 N . CH IY0 . AH0
 unpickable,4,AH0 N . P IH1 K AH0 B AH0 L
 deconstructor,0,D IY0 . K AH0 N . S T R AH1 K . T AH0|D IY0 . K AH0 N . S T R UH1 K . T AH0
 snes,5,S N EH1 S|S N EH1 Z|EH2 . S EH0 . N IY0 . EH1 S
@@ -126841,7 +126685,6 @@ ximenean,0,HH AH0 . M EY1 . N IY0 . AH0 N|Z IH2 . M AH0 . N IY1 . AH0 N
 daltonian,0,D AA0 L . T AH1 . UH0 . N AH0 . AH0 N
 omnisciency,0,AA0 M . N IH1 . SH AH0 N . S IY0
 excusation,0,EH2 K . S K Y UW0 . Z EY1 . SH AH0 N
--icism,5,
 melodramata,9,
 lowth,0,L OW1 TH
 detractory,0,D AH0 . T R AE1 K . T AH0 . R IY0
@@ -127242,7 +127085,6 @@ euchlorine,0,Y UW0 . K L OW1 . R AH0 N
 excerption,0,AH0 K . S AH1 R P . SH AH0 N
 fadedly,0,F EY1 . D AH0 D . L IY0
 fissilingual,0,F AH0 . S AH0 . L IY1 NG . G W AH0 L
-fuscine,0,F AH1 . S IY0 N
 herbarian,0,AH0 R . B EH1 . R IY0 . AH0 N
 illuminary,0,AH0 . L UW1 . M AH0 . N EH0 . R IY0
 imband,0,AH0 M . B AE1 N D
@@ -127796,7 +127638,6 @@ coughy,0,K AA1 . F IY0
 maidstonian,0,M EY0 D . S T OW1 . N IY0 . AH0 N
 dermatography,0,D AH2 R . M AH0 . T AA1 . G R AH0 . F IY0
 reflexible,0,R AH0 . F L EH1 K S AH0 B AH0 L
--le,0,AH1 L
 tuchun,0,T UW0 . CH UH1 N
 areek,0,AH0 . R IY1 K
 bellona,5,B AH0 . L OW1 . N AH0
@@ -128811,7 +128652,6 @@ sphenopalatine,0,S F IY2 . N OW0 . P AE1 . L AH0 . T AY2 N
 apeak,0,AH0 . P IY1 K
 generification,0,JH AH0 . N EH2 . R AH0 . F AH0 . K EY1 . SH AH0 N
 teretial,0,T AH0 . R IY1 . SH IY0 . AH0 L|T AH0 . R IY1 . SH AH0 L
--ress,5,R IH1 S|R AH1 S
 effossion,0,AH0 . F AA1 . SH AH0 N
 lenify,0,L EH1 . N AH0 . F AY0
 unbit,0,AH0 N . B IH1 T
@@ -128858,7 +128698,6 @@ unbepissed,0,AH0 N . B AH0 . P IH1 S T
 mourne,5,M OW1 R N
 physa,0,F AY1 . S AH0
 wff,0,W IH1 F|W UH1 F|W AH1 F
--land,0,L AH1 N D|L IH1 N D|L AE1 N D
 gayby,0,G EY1 . B IY0
 gayboy,0,G EY1 . B OY2
 nable,4,
@@ -128991,7 +128830,6 @@ dissilition,0,D AH0 . S AH0 . L IH1 . SH AH0 N
 cany,4,K EY1 . N IY0
 dright,0,D R AY1 T
 drighten,0,D R AY1 . T AH0 N
--saurus,5,S AO1 . R AH0 S
 fakeaway,0,F EY1 . K AH0 . W EY0
 sharkish,0,SH AA1 R . K IH0 SH
 floordrobe,0,F L AO1 R . D R OW0 B
@@ -129360,7 +129198,6 @@ endophloeum,0,EH0 N . D OW0 . F L IY1 . AH0 M
 trochiscus,0,T R AH0 . K IH1 . S K AH0 S
 pedesis,0,P AH0 . D IY1 . S AH0 S
 huh-uh,0,HH AH1 . AH0
--sies,5,Z IY1 Z|S IY1 Z
 newth,0,N UW1 TH
 impaste,0,AH0 M . P EY1 S T
 flathe,0,F L EY1 DH
@@ -129432,7 +129269,6 @@ concubinarian,0,K AA2 N . K Y UH0 . B AH0 . N EH1 . AH0 . R IY0 . AH0 N|K AA2 N 
 contignation,0,K AA0 N . T AH0 G . N EY1 . SH AH0 N
 protension,0,P R AH0 . T EH1 N SH AH0 N|P R OW0 . T EH1 N SH AH0 N
 purree,0,P UH1 . R IY0|P AH1 . R IY0
-dabigatran,0,D AE2 . B AH0 . G AE1 . T R AE2 N
 femifascist,0,F EH2 . M AH0 . F AE1 . SH AH0 S T
 dedupe,0,D IY0 . D UW1 P
 gurgeons,0,G AH1 R . JH AH0 N Z
@@ -129526,7 +129362,6 @@ tweeple,0,T W IY1 . P AH0 L
 bewelter,0,B AH0 . W EH1 L . T AH0 R
 overboldness,0,AH0 . UH0 . V AH0 . B AH1 . UH0 L D . N AH0 S
 turgescence,0,T AH0 R . JH EH1 . S AH0 N T S
--verse,0,V AH1 R S
 argoletier,0,AA2 . G AH0 . L AH0 . T IH1 . AH0
 pontific,0,P AA0 N . T IH1 . F AH0 K
 shahdom,0,SH AA1 . D AH0 M
@@ -129684,7 +129519,6 @@ zoaeas,0,Z OW0 . IY1 . AH0 Z
 mithraeum,0,M AH0 . TH R IY1 . AH0 M
 merdog,0,M AH1 R . D AA2 G
 scoubidou,0,S K UW2 . B IY0 . D UW1
--rrhaphy,5,R AH1 . F AH0|R AH1 . F IY0
 tyrsenian,0,T AH0 R . S IY1 . N IY0 . AH0 N
 yakisoba,0,Y AA2 . K IY0 . S OW1 . B AH0
 aftonian,0,AE0 F . T OW1 . N IY0 . AH0 N
@@ -129933,7 +129767,6 @@ omnivory,0,AA0 M . N IH1 . V AH0 . R IY0
 abatic,0,AH0 . B AE1 . D AH0 K
 pseudorabies,0,S UW2 . D OW0 . R EY1 . B IY2 Z
 alogliptin,0,AE2 . L AH0 . G L IH1 P . T AH0 N
-anakinra,0,AE2 . N AH0 . K IH1 N . R AH0
 apricitabine,0,AE2 . P R AH0 . S AY1 . D AH0 . B IY2 N
 trainiac,0,T R EY1 . N IY0 . AE2 K
 kollel,0,K OW0 . L EH1 L
@@ -130060,7 +129893,6 @@ ablephary,0,AE0 . B L EH1 . F AH0 . R IY2
 tazarotene,0,T AH0 . Z AE1 . R AH0 . T IY2 N
 tesaglitazar,0,T EH2 . S AH0 . G L IH1 . D AH0 . Z AA2 R
 tetrabenazine,0,T EH2 . T R AH0 . B EH1 . N AH0 . Z IY2 N
-tirofiban,0,T AY2 . R OW0 . F AY1 . B AE2 N
 tropisetron,0,T R OW0 . P IH1 . S AH0 . T R AA2 N
 tolimidone,0,T AH0 . L IH1 . M AH0 . D OW2 N
 abob,0,AH0 . B AA1 B
@@ -130074,7 +129906,6 @@ caturday,0,K AE1 . D AH0 R . D EY0|K AE1 . D AH0 R . D IY0
 swarve,0,S W AA1 V
 abounder,0,AH0 . B AW1 N . D AH0 R
 edonentan,0,EH2 . D AH0 . N EH1 N . T AE0 N
-diloxanide,0,D AY0 . L AA1 K . S AH0 . N AY2 D
 abozzi,0,AH0 . B AA1 T . S OW0
 genista,0,JH EH0 . N IH1 . S T AH0
 icpalli,0,IY0 K . P AE1 . L IY0
@@ -130285,7 +130116,7 @@ alexin,0,AH0 . L EH1 K . S AH0 N
 acalyptrate,0,EY2 . K AH0 . L IH1 P . T R EY0 T|EY2 . K AE1 . L AH0 P . T R EY0 T
 scepsis,0,S K EH1 P . S AH0 S
 analgetic,0,AE2 N L . JH EH1 . D AH0 K
-anodontia,0,AE2 . N AH0 . D AA1 N . SH IY0 . AH0|AE2 . N AH0 . D AA1 N . SH AH0
+anodontia,0,AE2 . N AH0 . D AA1 N . SH AH0
 apocrisiarius,0,AE2 . P AH0 . K R IH2 . Z IY0 . EH1 . R IY0 . AH0 S
 priapi,0,P R AY0 . EY1 . P IY0
 aspergilloma,0,AE2 . S P AH0 R . JH AH0 . L OW1 . M AH0
@@ -130402,7 +130233,6 @@ ammoed,0,AE1 . M OW0 D
 sosh,0,S OW1 SH
 provings,5,P R UW1 . V IY0 NG Z
 weely,0,W IY1 . L IY0
--oon,5,UW1 N
 caudron,0,K AA1 . D R AH0 N
 scatt,0,S K AE1 T
 korban,0,K AA1 . B AH0 N
@@ -130500,7 +130330,6 @@ ajingle,0,AH0 . JH IY1 NG . G AH0 L
 ajangle,0,AH0 . JH AE1 NG . G AH0 L
 superbolide,0,S UW0 P AH0 R . B OW1 L AY0 D|S UW0 P AH0 R . B OW1 L AH0 D
 snarktastic,0,S N AA0 K . T AE1 . S T AH0 K
--morphy,5,M AA1 . F IY0
 historiometric,0,HH AH0 . S T AA2 . R AH0 . AH0 . M EH1 . T R AH0 K
 historiometry,0,HH AH0 . S T AA2 . R IY0 . AA1 . M AH0 . T R IY0
 pynchonian,0,P AH0 N . CH OW1 . N IY0 . AH0 N
@@ -130513,7 +130342,6 @@ anapaest,0,AE1 . N AH0 . P IY0 S T|AE1 . N AH0 . P EH0 S T
 blueth,0,B L UW1 TH
 pewing,0,P Y UW1 . IY0 NG
 reptonian,0,R EH0 P . T OW1 . N IY0 . AH0 N
--geddon,5,G EH1 . D AH0 N
 k/s,0,K EY0 . EH1 S
 symblepharon,0,S AH0 M . B L EH1 . F AH0 . R AA0 N
 anuretic,0,AE2 N . Y AH0 . R EH1 . D AH0 K
@@ -130662,7 +130490,6 @@ jianzhi,0,JH IY0 . AE0 N . JH IY1
 terribad,0,T EH1 . R AH0 . B AE2 D
 leeroy,5,L IY1 . R OY2
 reoperate,0,R IY0 . AA1 P AH0 R EY2 T
--lect,5,L EH1 K T
 globaloney,0,G L OW2 . B AH0 . L OW1 . N IY0
 boober,0,B UW1 . B AH0 R
 jillick,0,JH IH1 . L AH0 K
@@ -130684,7 +130511,6 @@ skirty,0,S K AH1 R . D IY0
 olinguito,0,OW0 . L IY0 NG . G IY1 . D OW0
 burkean,0,B AH1 R . K IY0 . AH0 N
 stanked,9,S T AE1 NG K T|S T EY1 NG K T
--opsia,5,AA1 P . S AH0 . AH0
 varronian,0,V AE0 . R OW1 . N IY0 . AH0 N
 jenkinsonian,0,JH EH2 NG . K AH0 N . S OW1 . N IY0 . AH0 N
 jangada,0,ZH AH0 NG . G AA1 . D AH0|JH AH0 NG . G AA1 . D AH0
@@ -130733,7 +130559,6 @@ dacryocystorhinostomy,0,D AE2 . K R IY0 . OW0 . S IH2 . S T OW0 . R AY0 . N AA1 
 figged,0,F IH1 G D
 variac,0,V EH1 . AH0 . R IY0 . AE2 K
 fujoshi,0,F UW0 . JH OW1 . SH IY0
--sion,0,ZH AH1 N
 bruz,0,B R AH1 Z
 braddonian,0,B R AE0 D . D OW1 . N IY0 . AH0 N
 kringle,5,K R IY1 NG . G AH0 L
@@ -130802,7 +130627,6 @@ coetzeean,0,K UW0 T . S EY1 . AH0 N
 dianic,0,D AY0 . AE1 . N AH0 K
 renanthera,0,R EH0 . N AE1 N . TH AH0 . R AH0
 cercarial,0,S AH0 R . K EH1 . R IY0 . AH0 L
-summate,0,S AH1 . M EY0 T
 eudaimonia,0,Y UW2 . D AH0 . M AH1 . UH0 . N AH0 . AH0
 zomb,0,Z AA1 M
 complainings,0,K AH0 M . P L EY1 N IY0 NG Z
@@ -130907,7 +130731,6 @@ yowzers,0,Y AW1 . Z AH0 R Z
 lycophobia,0,L AY2 . K AH0 . F AH1 . UH0 . B AH0 . AH0
 alpargata,0,AE2 L . P AH0 R . G AA1 . D AH0
 beakish,0,B IY1 . K IH0 SH
--fication,5,F AH0 . K EY1 . SH AH0 N
 cudgerie,0,K AE1 . JH AH0 . R IY0|K AH1 . JH AH0 . R IY0
 stonkered,4,
 hesperides,0,HH EH0 . S P EH1 . R AH0 . D IY0 Z
@@ -131022,7 +130845,6 @@ cottonian,0,K AA0 . T OW1 . N IY0 . AH0 N
 parao,4,P AE1 . D AW0
 diaphoneme,0,D AY2 . AH0 . F OW1 . N IY0 M
 philanthropreneur,0,F AH0 . L AE2 N . TH R AH0 . P R AH0 . N AH1 R|F AH0 . L AE2 N . TH R AH0 . P R AH0 . N UH1 . AH0 R
--trices,5,T R IH1 . S IY0 Z
 conchae,0,K AA1 NG . K IY2|K AA1 NG . K AY2
 adjectivization,0,AE2 . JH EH0 K . T AH0 . V AY0 . Z EY1 . SH AH0 N
 caballerial,0,K AE2 . B AH0 . L EH1 . R IY0 . AH0 L
@@ -131210,7 +131032,6 @@ bindy,0,B IH1 N . D IY0
 pasteli,0,P AE0 . S T EH1 . L IY0
 pupper,5,P AH1 . P AH0 R
 proofings,7,P R UW1 . F IY0 NG Z
--pathic,5,P AE1 . TH AH0 K
 quasit,0,K W AA1 . S AH0 T
 beisa,0,B EY1 . Z AH0
 segol,0,S EY0 . G OW1 L|S EH0 . G OW1 L
@@ -131237,7 +131058,6 @@ shart,0,SH AA1 R T
 vegs,8,V EH1 . JH AH0 Z
 chrysopoeian,0,K R AH0 . S AH0 . P IY1 . AH0 N
 brunneous,4,
--stat,0,S T AE1 T
 adonides,6,AH0 . D AA1 . N AH0 . D IY0 Z
 ninjette,0,N AH0 N . JH EH1 T
 cholangiopancreatography,0,K AH0 . L AE2 N . JH AH0 . AH0 . UH0 . P AE2 NG . K R AH0 . AH0 . T AA1 . G R AH0 . F IY0
@@ -131554,7 +131374,6 @@ rubaiyat,0,R UW1 . B IY0 . AA2 T|R UW1 . B AY2 . AA2 T
 ruba'iyat,0,R UW1 . B IY0 . AA2 T|R UW1 . B AY2 . AA2 T
 tonology,0,T AH0 . N AA1 . L AH0 . JH IY0
 tonologically,0,T AH2 . UH0 . N AH0 . L AA1 . JH AH0 . K L IY0
--oyl,5,AH1 . UH0 . AH0 L
 appraisings,0,AH0 . P R EY1 . Z IY0 NG Z
 heles,0,HH IY1 L Z
 heled,0,HH IY1 L D
@@ -131639,8 +131458,6 @@ gork,0,G AO1 R K
 shi'i,0,SH IY1 . IY0
 worra,0,W AA1 . D AH0
 salateen,0,S AH0 . L AA0 . T IY1 N|S AE0 . L AH0 . T IY1 N
--ses,5,S IY1 Z|S IH1 Z
--oses,5,AH1 . UH0 . S IY0 Z
 ʾiḍāfa,0,AH0 . D AA1 . F AH0
 britpick,0,B R IH1 T . P AH0 K
 asperger,5,
@@ -131716,7 +131533,6 @@ thyrohyoidei,0,TH AY2 . R OW0 . HH AY0 . OY1 . D IY0 . AY2
 criminalistic,0,K R IH2 . M AH0 . N AH0 . L IH1 . S T AH0 K
 apocrisarius,0,AE2 . P AH0 . K R AH0 . S EH1 . R IY0 . AH0 S
 ceratophyte,0,S EH1 . R AH0 . D AH0 . UH0 . F AY0 T
--phytes,5,F AY1 T S
 gacha,5,G AA1 . CH AH0
 twattery,0,T W AE1 . D AH0 . R IY0
 heaty,0,HH IY1 . D IY0
@@ -132070,7 +131886,6 @@ conicity,0,K OW0 . N IH1 . S AH0 . D IY0
 copyrighter,0,K AA1 . P IY0 . R AY2 . D AH0 R
 croupily,0,K R UW1 . P AH0 . L IY0
 cybersynagogue,0,S AY2 . B AH0 R . S IH1 . N AH0 . G AA2 G
-fondaparinux,0,F AA2 N . D AH0 . P EH1 . R AH0 . N AH2 K S
 glinide,0,G L AY1 . N AY2 D
 guzheng,0,G UW0 . JH AH1 NG
 tapetal,0,T AE1 . P AH0 . D AH0 L
@@ -132170,7 +131985,6 @@ noctambulant,0,N AA0 K . T AE1 M . B Y AH0 . L AH0 N T
 methylenetetrahydrofolatereductase,0,M EH2 . TH AH0 . L IY0 N . T EH2 . T R AH0 . HH AY2 . D R AH0 . F OW2 . L EY0 . T R AH0 . D AH1 K . T EY0 Z
 psyker,0,S AY1 . K AH0 R
 blasély,0,B L AA2 . Z EY1 . L IY0
--olol,5,AH1 . L AA2 L
 uaf,0,Y UW2 . EY0 . EH1 F
 j-lo,0,JH EY1 . L OW0
 nephronophthisis,0,N EH2 . F R OW0 . N AH0 F . TH AY1 . S AH0 S
@@ -132570,7 +132384,7 @@ mezedes,0,M AH0 . Z EY1 . D EY0 Z
 syntheticity,0,S AH0 N . TH AH0 . T IH1 . S AH0 . D IY0
 who'da,0,HH UW1 . D AH0
 coinstantiation,0,K OW2 . AH0 N . S T AE2 N . SH IY0 . EY1 . SH AH0 N
-girleen,0,G AH0 R . L IY1 N|G AH1 . L IY0 N|G AH0 . L IY1 N
+girleen,0,G AH0 R . L IY1 N|G AH0 . L IY1 N
 mythopœic,0,M AH0 . TH AH0 . P IY1 . AH0 K
 archisynagogue,0,AA2 R . K AH0 . S IH1 . N AH0 . G AA2 G
 scrungy,0,S K R AH1 N . JH IY0
@@ -132602,7 +132416,6 @@ nabby,0,N AE1 . B IY0
 gigundo,0,JH AY0 . G AH1 N . D AH0 . UH0
 nzer,0,EH2 N . Z EH1 . D AH0
 chalant,0,SH AH0 . L AA1 N T
--sal,5,S AE1 L
 dems,0,D EH1 M Z
 huntingtonian,0,HH AH2 N . T IY0 NG . T OW1 . N IY0 . AH0 N
 night-biter,0,N AY0 T . B AY1 . D AH0 R
@@ -133163,7 +132976,6 @@ aphantasia,0,EY2 . F AE2 N . T EY1 . Z IY0 . AH0|EY2 . F AE2 N . T EY1 . ZH AH0
 chochem,0,K AA1 . K AH0 M|K AA0 . K AA1 M
 hemorrhagiparous,0,HH EH0 . M AH0 . R AH0 . JH IH1 . P AH0 . R AH0 S
 cli-fi,0,K L AY1 . F AY0
--chezia,5,K IY1 . Z AH0 . AH0
 fo'c's'les,0,F OW1 K . S AH0 L Z
 fo'c'sles,0,F OW1 K . S AH0 L Z
 cleanth,0,K L EH1 N TH
@@ -133319,7 +133131,6 @@ sirtaki,0,S AH0 R . T AA1 . K IY0
 autoconcurrency,0,AO2 D OW0 . K AH0 NG K AH1 R AH0 N S IY0|AA2 D OW0 . K AH0 NG K AH1 R AH0 N S IY0
 imbongi,0,AH0 M . B AA1 NG . G IY0
 pronumeral,0,P R AH0 . UH0 N . Y UW1 . M AH0 . R AH0 L
-alkaloses,0,AE0 L . K AH0 . L AH1 . UH0 . S IY0 Z
 gynesexuality,0,G AY2 . N AH0 . S EH0 K . SH UW0 . AE1 . L AH0 . D IY0
 coc,0,K AA1 K
 femalia,0,F IY2 . M EY1 . L IY0 . AH0|F AH2 . M EY1 . L IY0 . AH0
@@ -133400,7 +133211,6 @@ trumpster,0,T R AH1 M P . S T AH0 R
 baphometic,0,B AE2 . F AH0 . M EH1 . D AH0 K
 heckin',0,HH EH1 . K AH0 N
 rhapontic,0,R AH0 . P AA1 N . T AH0 K
--ein,5,IY1 . AH0 N
 paktor,0,P AA1 . T AA1
 pulse-pounding,0,P AH1 L . S P AW1 N . D IY0 NG
 dumnonian,0,D AH0 M . N OW1 . N IY0 . AH0 N
@@ -133780,7 +133590,6 @@ glottogonic,0,G L AA2 . D AH0 . G AA1 . N AH0 K
 illabial,0,AH0 . L EY1 . B IY0 . AH0 L
 slivery,0,S L IH1 . V AH0 . R IY0
 glitazar,0,G L IH1 . D AH0 . Z AA2 R
--poo,0,P UW1
 intergermarial,0,IH2 N . T AH0 R . JH AH0 R . M EH1 . R IY0 . AH0 L
 scintillescent,0,S IH2 N . T AH0 . L EH1 . S AH0 N T
 civey,0,S IH1 . V IY0
@@ -133839,20 +133648,6 @@ ophiacanthid,0,OW2 . F IY0 . AH0 . K AE1 N . TH AH0 D
 agak-agak,5,AA1 . G AA0 . AA2 . G AA0
 barcade,0,B AA0 R . K EY1 D
 perniones,0,P AH2 R . N IY0 . OW1 . N IY0 Z
--vir,5,V IY2 R
--vudine,5,V Y AH1 . D IY2 N
--azepam,5,AE1 . Z AH0 . P AE2 M
--azolam,5,AE1 . Z AH0 . L AE2 M
--azosin,5,EY1 . Z AH0 . S AH0 N
--afil,5,AH1 . F AH0 L
--rubicin,5,R UW1 . B AH0 . S AH0 N
--cillin,5,S IH1 . L AH0 N
--cycline,5,S AY1 . K L IY0 N
--dipine,5,D AH1 . P IY2 N
--prazole,5,P R AH1 . Z OW2 L
--fenac,5,
--floxacin,5,F L AA1 K . S AH0 . S AH0 N
--gliptin,5,G L IH1 P . T AH0 N
 hitchiness,0,HH IH1 . CH IY0 . N AH0 S
 hitchy,0,HH IH1 . CH IY0
 bujj,0,B UH1 JH
@@ -134177,10 +133972,8 @@ hieronymic,0,HH AY1 . AH0 . R AH0 . N IH1 . M AH0 K
 gadge,0,G AE1 JH
 gastraeum,0,G AE0 . S T R IY1 . AH0 M
 berestology,0,B EH2 . R AH0 . S T AA1 . L AH0 . JH IY0
-rerock,0,R IY1 . R AA0 K
 cimelia,0,S AH0 . M IY1 . L AH0 . AH0
 tridem,0,T R AY1 . D AH0 M
--toin,5,T OW1 . AH0 N
 noguer,0,N OW1 . G AH0 R
 oicho-kabu,5,
 terfy,0,T AH1 R . F IY0
@@ -134253,7 +134046,6 @@ xerosol,0,Z EH1 . R AH0 . S AA2 L
 beccs,0,B EH1 K S
 oecist,0,IY1 . S AH0 S T|IY1 . K AH0 S T
 sossos,0,S AA1 . S AH0 S
--phagic,5,F EY1 . JH AH0 K
 vanillar,0,V AH0 . N IH1 . L AH0
 tcler,0,T IH1 . K L AH0 R|T IH1 . K AH0 . L AH0 R
 rosco,5,R AA1 . S K AH0 . UH0
@@ -134515,7 +134307,6 @@ trumplican,0,T R AH1 M . P L AH0 . K AH0 N
 bofa,0,B OW1 . F AH0
 cantrail,0,K AE0 N . T R EY1 L
 gf,0,JH IY2 . EH1 F
--orium,5,AO1 . R AH0 . AH0 M
 tyebble,0,CH EH1 . B AH0 L
 binimetinib,0,B AH0 . N AH0 . M EH1 . T AH0 . N AH0 B
 funishment,0,F AH1 . N IH0 . SH M AH0 N T
@@ -134588,7 +134379,6 @@ sqround,0,S K R AW1 N D
 close-coupled,0,K L AH0 . UH0 . S K AH1 . P AH0 L D
 puttage,0,P UH1 . D AH0 JH
 pocasset,0,P AH0 . K AA1 . S AH0 T
--pagus,5,
 xenogender,0,Z IY2 . N OW0 . JH EH1 N . D AH0 R
 proletaire,0,P R OW2 . L AH0 . T EH1
 poptimist,0,P AA1 P . T AH0 . M AH0 S T
@@ -134640,16 +134430,8 @@ misascertainment,0,M IH2 . S AE0 . S AH0 R . T EY1 N . M AH0 N T
 mussurana,0,M UH0 . S UH0 . R AA1 . N AH0
 besague,0,B EH1 . S AH0 G . Y UW0
 besagew,0,B EH1 . S AH0 G . Y UW0
--nicline,5,N AH1 . K L AH0 N
 freedumb,0,F R IY1 . D AH0 M
--flurane,5,F L UH1 . R EY2 N
 antimicrofilarial,0,AE2 N T IY0 . M AY2 K R OW0 F AH0 L EH1 R IY0 AH0 L
--renone,5,
--vaptan,5,V AE1 P . T AH0 N
--bradine,5,B R AH1 . D IY0 N
--ritide,5,
--sartan,5,S AA1 R . T AE2 N|S AA1 R . T AH0 N
--gliflozin,5,G L AH0 . F L OW1 . Z AH0 N
 furiosant,0,F Y UH2 . R IY0 . OW1 . S AH0 N T
 furcocercarial,0,F AH2 R . K AH0 . S AH2 R . K EH1 . R IY0 . AH0 L
 macrofilaria,0,M AE2 K R OW0 . F AH0 L EH1 R IY0 AH0
@@ -134657,50 +134439,14 @@ macrofilarial,0,M AE2 . K R OW0 . F AH0 . L EH1 . R IY0 . AH0 L
 spellsword,0,S P EH1 L . S AO2 R D
 cancellarian,0,K AE2 N . S AH0 . L EH1 . R IY0 . AH0 N
 filicology,0,F AH0 . L AH0 . K AA1 . L AH0 . JH IY0
--arone,5,AH1 . R OW2 N
--alol,5,AH1 . L AA2 L
--ilide,5,AH1 . L AY2 D
--tiazem,5,
 apparatûs,0,AE0 . P AH0 . R AE1 . D UW0 S|AE0 . P AH0 . R EY1 . D UW0 S
 psychoscience,0,S AY0 . K AH2 . UH0 . S AY1 . AH0 N T S
 snowdonian,0,S N OW0 . D OW1 . N IY0 . AH0 N
--thiazide,0,TH AY1 . AH0 . Z AY2 D
 big-headedness,5,B AH0 G . HH EH1 . D AH0 D . N AH0 S
--tizide,5,
--poride,5,P AH1 . R AY0 D
--nidipine,5,
--grel,5,G R EH1 L
--onidine,5,AA1 . N AH0 . D IY2 N
--serpine,5,S AH1 R . P IY2 N
--dralazine,5,D R AE1 . L AH0 . Z IY0 N
--dil,5,D IH1 L
--pamil,5,P AH1 . M AH0 L
--pril,5,P R IH1 L
--prilat,5,P R IH1 . L AH0 T
--kiren,5,K AH1 . R AH0 N|K AY1 . R AH0 N
--prost,5,P R AA1 S T
 rhathymia,0,R EY0 . TH AY1 . M IY0 . AH0
--profen,5,P R OW1 . F AH0 N|P R AH1 . F AH0 N
--metacin,5,M EH1 . D AH0 . S AH0 N
--clofenac,5,K L OW1 . F AH0 . N AE2 K
--zolac,5,
--coxib,5,K AA1 K . S AH0 B
--trexate,5,T R EH1 K . S EY0 T
--umab,5,Y AH1 . M AE2 B|AH1 . M AE2 B
--quine,0,K W IH1 N
--salazine,5,S AE1 . L AH0 . Z IY0 N
--nercept,5,N AH1 R . S EH2 P T
--lukast,5,L UW1 . K AE0 S T
--icase,5,
 magats,0,M AE1 . G AH0 T S
 magat,0,M AE1 . G AH0 T
 bidenomics,0,B AY2 . D AH0 . N AA1 . M AH0 K S
--semide,5,
--rinone,5,R IH1 . N OW2 N
--dopa,0,D OW1 . P AH0
--golide,5,G AH1 . L AY0 D
--imibe,5,
--fibrate,5,F AY1 . B R EY0 T
 lazaretti,0,L AE2 . Z AH0 . R EH1 . D IY0
 montagist,0,M AA0 N . T AA0 . ZH IY1 S T
 gostan,0,G OW2 . S T AE1 N
@@ -134708,203 +134454,66 @@ auncle,0,AA1 NG . K AH0 L
 minyans,4,M AH0 . N AY1 . AH0 N Z
 thiobutabarbital,0,TH AY2 . OW0 . B Y UW2 . D AH0 . B AA1 R . B AH0 . D AA2 L
 secbutabarbital,0,S EH0 K . B Y UW2 . D AH0 . B AA1 R . B AH0 . D AA2 L
--dilol,5,
--parin,5,P AH1 . R AH0 N|P EH1 . R AH0 N
--parinux,5,P EH1 . R AH0 . N AH0 K S
--arol,5,AH1 . R AA2 L
--irudin,5,IY0 . R UW1 . D AH0 N
--gatran,5,G AE1 . T R AE0 N
--fiban,5,F AY1 . B AE0 N
--teplase,5,
--zumab,5,Z AH1 . M AE2 B
 congregationalistic,0,K AA2 NG . G R AH0 . G EY2 . SH AH0 . N AH0 . L IH1 . S T AH0 K
 champoy,0,CH AH0 M . P OW1 . AH0
--tidine,5,T IH1 . D IY0 N
 nonneuter,0,N AA0 N . N UW1 D AH0 R
 fih,0,F IH1
--peridol,5,P EH1 . R AH0 . D AA2 L
--peridone,5,P EH1 . R AH0 . D OW2 N
--mantadine,5,M AE1 N . T AH0 . D IY0 N
--tadine,5,T AH1 . D IY0 N
--giline,5,JH IH1 . L IY0 N
--perone,5,P AH1 . R OW2 N
--apine,5,AH1 . P IY0 N
 aeaean,0,IY0 . IY1 . AH0 N
 creeklet,0,K R IY1 . K L AH0 T
 redebug,0,R IY2 . D IY0 B AH1 G
--pine,0,P IY1 N
--zepine,5,Z AH1 . P IY0 N
--oxepin,5,AA1 K . S AH0 . P IY2 N
--tepine,5,T AH1 . P IY0 N
 barff,0,B AA1 R F
--piprazole,5,P IH1 . P R AH0 . Z OW2 L
--pramine,5,
--oxetine,5,AA1 K . S AH0 . T IY2 N
--traline,5,T R AH1 . L IY0 N
--steine,5,
--nakinra,5,N AH0 . K IH1 N . R AH0
--kinra,5,K IH1 N . R AH0
--trakinra,5,T R AH0 . K IH1 N . R AH0
 mosuo,0,M AH0 . UH0 . S W AH1 . UH0
 surreptition,0,S AH0 . R EH2 P . T IH1 . SH AH0 N|S AH2 . R AH0 P . T IH1 . SH AH0 N
 pancake-maker,0,P AE1 N . K EY0 K
 tetrylammonium,0,T EH2 . T R AH0 . L AH0 . M OW1 . N IY0 . AH0 M
--curonium,5,K Y AH0 . R OW1 . N IY0 . AH0 M
--curium,0,K Y UH1 . R IY0 . AH0 M
--clidinium,5,K L AH0 . D IH1 . N IY0 . AH0 M
--verine,5,V AH1 . R AH0 N
--dyl,5,D IH1 L
--bamate,5,B AH1 . M EY0 T
--trigine,5,T R IH1 . JH IY0 N
--clidine,5,K L IH1 . D IY0 N
 block-book,0,B L AA2 K . B UH1 K
--azenil,5,
--carnil,5,K AA1 R . N AH0 L
--quinil,5,K W IH1 . N AH0 L
 retrumplican,0,R AH0 . T R AH1 M P L AH0 K AH0 N
--orphan,0,AO1 R . F AE2 N
--orphine,5,AO1 R . F IY2 N
--orphone,5,
--opamine,5,
--frine,5,F R IH1 N
 drawal,0,D R AA1 . AH0 L
--salazide,5,
--salan,5,
--drine,5,D R IH1 N|D R IY2 N
--prenaline,5,P R EH1 . N AH0 . L AH0 N
--terenol,5,T AH0 . R IY1 . N AA2 L|T EH1 . R AH0 . N AA2 L
--buterol,5,B Y UW1 . D AH0 . R AA2 L
--stigmine,5,S T IH1 G . M IY0 N
--crine,5,K R IY1 N
 hooman,5,HH UW1 . M AH0 N
 trobairitz,0,T R OW2 . B AH0 . R IH1 T S
--izine,5,
 haiya,0,HH AY2 . Y AE1
--azam,5,
--tizolam,5,T IH1 . Z AH0 . L AE2 M
--azepate,5,AE1 . Z AH0 . P EY2 T
--plon,5,P L AA2 N
--pidem,5,P IH1 . D EH0 M
--spirone,5,S P AY1 . R OW2 N
--adol,5,
--azocine,5,AE1 . Z AH0 . S IY2 N
 cocash,0,K AH0 . K AE1 SH
--fentanil,5,F EH1 N . T AH0 . N AH0 L
 nojito,0,N AH0 . UH0 . HH IY1 . D AH0 . UH0
 scif,0,S K IH1 F
--eridine,5,EH1 . R AH0 . D IY2 N
--ethidine,5,EH1 . TH AH0 . D IY0 N
--setron,5,
 bismillah,5,B IH2 . S M AH0 . L AA1|B AH0 . S M IH1 . L AH0
--nab,0,N AE1 B|N AH1 B
--thiouracil,0,TH AY2 . OW0 . Y UH1 . R AH0 . S IH2 L
 metronomize,0,M AH0 . T R AA1 . N AH0 . M AY0 Z
 amidotrizoate,0,AE2 . M AH0 . D OW0 . T R AY2 . Z OW1 . EY2 T
--glutide,5,G L UW1 . D AY0 D
--motide,5,
--reotide,5,
 isatuximab,0,AY2 . S AH0 . T AH1 K . S AH0 . M AE0 B
 cedazuridine,0,S IY2 . D AH0 . Z UH1 . AH0 . R AH0 . D IY0 N
 pralsetinib,0,P R AE0 L . S EH1 . T AH0 . N AH0 B
 atoltivimab,0,AE2 . D AA0 L . T IH1 . V AH0 . M AE0 B
 maftivimab,0,M AE0 F . T IH1 . V AH0 . M AE0 B
 odesivimab,0,AH2 . UH0 . D AH0 . S IH1 . V AH0 . M AE0 B
--arotene,5,EH1 . R AH0 . T IY2 N
 sexannulate,0,S EH0 K . S AE1 N . Y UH0 . L AH0 T
 sexarticulate,0,S EH2 K . S AA0 . T IH1 . K Y UH0 . L AH0 T
 metatime,0,M EH2 . D AH0 . T AY1 M
 metamagic,0,M EH2 . D AH0 . M AE1 . JH AH0 K
 meedless,0,M IY1 D . L AH0 S
 cheeko,0,CH IY1 . K OW0
--prostil,5,P R AA1 . S T IH2 L
--olone,5,
--cort,5,K OW1 R T
--tropin,5,T R OW1 . P AH0 N
 wung,13,W AH1 NG
--idene,5,IH1 . D IY0 N
--betasol,5,
--methasone,5,M EH1 . TH AH0 . S OW2 N|M EH1 . TH AH0 . Z OW2 N
--metasone,5,
--prim,0,P R IH1 M
 allophilia,0,AE2 . L AH0 . F IH1 . L IY0 . AH0
--apalooza,5,
--tant,5,T AH1 N T
--pitant,5,P IH1 . T AH0 N T
--dutant,5,D UW1 . T AH0 N T
--netant,5,
--fos,5,F AA2 S
--fosfamide,5,F AA1 . S F AH0 . M AY2 D
--fosine,5,F AH1 . S IY2 N
--pride,0,P R AY1 D
--serod,5,
--imus,5,IH1 . M AH0 S
--rolimus,5,R OW1 . L AH0 . M AH0 S
--sterone,5,S T AH1 . R OW2 N
--gesterone,5,JH EH1 . S T AH0 . R OW2 N
 salcatonin,0,S AE2 L . K AH0 . T OW1 . N AH0 N
--steride,5,S T AH1 . R AY0 D
--terone,5,T AH1 . R OW2 N
 vally,0,V AE1 . L IY0
 puddy,4,P UH1 . D IY0
 jimps,0,JH IH1 M P S
--lutamide,5,L UW1 . D AH0 . M AY0 D
 bewb,0,B UW1 B|B Y UW1 B
--conazole,5,K AA1 . N AH0 . Z OW2 L
--relin,5,R EH1 . L AH0 N
--morelin,5,M OW0 . R EH1 . L AH0 N
--tirelin,5,
--ifene,5,IH1 . F IY0 N
--mifene,5,M IH1 . F IY0 N
--oxifene,5,AA1 K . S AH0 . F IY2 N
--eine,5,
--mestane,5,M EH1 . S T EY0 N
--rozole,5,R AH1 . Z OW2 L
--gest,5,JH EH1 S T
 pulmonarial,0,P AH2 L . M AH0 . N EH1 . R IY0 . AH0 L
 downtune,0,D AW0 N T . Y UW1 N|D AW0 N . T UW1 N
 hypermuscle,0,HH AY1 P AH0 . M AH1 S AH0 L
 acatalexis,0,AH0 . K AE2 . D AH0 . L EH1 K . S AH0 S
 gen-zer,5,JH EH0 N . Z IY1 . AH0 R
--formin,5,F AO1 R . M AH0 N
--glitazone,5,G L IH1 . D AH0 . Z OW2 N
--glitazar,5,G L IH1 . D AH0 . Z AA2 R
 gurdy,7,G AH1 R . D IY0
 swimmie,0,S W IH1 . M IY0
 erythremia,0,EH2 . R AH0 . TH R IY1 . M IY0 . AH0
--nidazole,5,N AY1 . D AH0 . Z OW2 L
--oxanide,5,AA1 K . S AH0 . N AY2 D
 grumly,0,G R AH1 M . L IY0
 ceramah,0,CH AH0 . R AE1 . M AH0
 schediaphilia,0,S K EH2 . D IY0 . AH0 . F IH1 . L IY0 . AH0
 cancellarial,0,K AE2 N . S AH0 . L EH1 . R IY0 . AH0 L
--oxacin,5,AA1 K . S AH0 . S AH0 N
--bactam,5,B AE1 K . T AE0 M
 awoman,0,EY0 . W UH1 . M AH0 N|AA0 . W UH1 . M AH0 N
 maxacalcitol,0,M AE2 K . S AH0 . K AE1 L . S AH0 . D AA2 L
--kacin,5,K EY1 . S AH0 N
--pristin,5,P R IH1 . S T AH0 N
 amborella,0,AE2 M . B AH0 . R EH1 . L AH0
--fungin,5,F AH1 N . JH AH0 N
--amivir,5,AE1 . M AH0 . V IY2 R
--asvir,5,
--buvir,5,B Y AH1 . V IY2 R
--cavir,5,K AH1 . V IY2 R
--ciclovir,5,S AY1 . K L OW0 . V IY2 R
--fovir,5,F AH1 . V IY2 R
--navir,5,N AH1 . V IY2 R
--previr,5,P R AH1 . V IY2 R
--tegravir,5,
--virine,5,V IY1 . R IY2 N
--viroc,5,V IY1 . R AA2 K
--virsen,5,V IY1 R . S AH0 N
--arabine,5,AE1 . R AH0 . B IY2 N
--citabine,5,S AY1 . D AH0 . B IY0 N
--ribine,5,
--racil,5,R AH1 . S AH0 L
--platin,5,P L AE1 . T AH0 N
 thrussy,0,TH R UH1 . S IY0
 puelline,0,P UW0 . EH1 . L IY2 N
--ication,5,AH0 . K EY1 . SH AH0 N
 g'wan,0,G W AA1 N
 cheena,0,CH IY1 . N AH0
 enterocoelic,0,EH2 N . T AH0 . R AH0 . UH0 . S IY1 . L AH0 K
@@ -135477,7 +135086,6 @@ expressedly,0,AH0 K . S P R EH1 . S AH0 D . L IY0
 paraliptic,0,P AE2 . R AH0 . L IH1 P . T AH0 K
 mosette,0,M OW0 . Z EH1 T
 wassed,0,W AE1 S T
--ham,0,HH AE2 M|HH AH1 M|AH1 M
 saca,0,S AA1 . K AH0
 belapped,0,B AH0 . L AE1 P T
 escheatery,0,AH0 S . CH IY1 . D AH0 . R IY0
@@ -135613,7 +135221,6 @@ ultracosmic,0,AH1 L . T R AH0 . K AA1 Z . M AH0 K
 supergrandmaster,0,S UW0 . P AH0 R . G R AE0 N D . M AA1 . S T AH0|S UW0 . P AH0 R . G R AE0 N D . M AE1 . S T AH0 R
 hypersuperlative,0,HH AY1 . P AH0 . S UW0 . P AH1 R . L AH0 . D AH0 V|HH AY1 . P AH0 S . Y UW0 . P AH1 R . L AH0 . D AH0 V
 supertranscendence,0,S UW1 P AH0 . T R AE0 N S EH1 N D AH0 N T S
--ition,5,IH1 . SH AH0 N
 ubuesque,0,UW0 . B UW0 . EH1 S K
 takkanah,0,T AA0 . K AH0 . N AA1|T AA0 . K AA0 . N AA1|T AH0 . K AA1 . N AH0
 xuanhuan,0,SH AA1 N HH . W AA1 N|SH EH1 N HH . W AA1 N
@@ -135723,7 +135330,6 @@ cwy,0,K W AY1
 mezzanined,0,M EH2 Z . N IY1 N D|M EH2 . Z AH0 . N IY1 N D
 atelomyelia,0,AE2 . D AH0 . L OW0 . M AY0 . IY1 . L IY0 . AH0
 swazz,0,S W AE1 Z
--iases,5,AY1 . AH0 . S IY0 Z
 panks,0,P AE1 NG K S|P EY1 NG K S
 blursed,0,B L AH1 R S T
 credulosity,0,K R EH2 . JH AH0 . L AA1 . S AH0 . D IY0
@@ -135803,7 +135409,6 @@ napolitana,0,N AA1 . P AH0 . L IY0 . T AA1 . N AH0|N AE1 . P AH0 . L IY0 . T AE1
 reneg,0,R AH0 . N EH1 G|R AH0 . N IH1 G|R AH0 . N EY1 G
 feirie,0,F IH1 . AH0 . R IY0
 cumbungi,0,K AH0 M . B AH1 NG . G IY0
--lord,0,L AO1 R D
 hoofball,0,HH UW1 F . B AA0 L
 learnification,0,L AH2 R . N AH0 . F AH0 . K EY1 . SH AH0 N
 troweller,0,T R AW1 . L AH0 R
@@ -136007,7 +135612,6 @@ gender-affirming,5,JH EH1 N . D AH0 . R AH0 . F AH1 R . M IY0 NG
 snoozapalooza,0,S N UW2 . Z AH0 . P AH0 . L UW1 . Z AH0
 scrunkly,0,S K R AH1 NG . K L IY0
 bonytail,0,B OW1 . N IY0 . D EY2 L
--entan,5,EH1 N . T AE0 N
 aprocitentan,0,AE2 . P R AH0 . S AH0 . T EH1 N . T AE0 N
 darusentan,0,D AE2 . R AH0 . S EH1 N . T AE0 N
 enrasentan,0,EH2 N . R AH0 . S EH1 N . T AE0 N
@@ -136273,7 +135877,6 @@ collopping,0,K AA1 . L AH0 . P IY0 NG
 grapholagnia,0,G R AA2 . F AH0 . L AE1 G . N IY0 . AH0
 manime,0,M AE1 . N AH0 . M EY0
 proompt,0,P R UW1 M P T
--oomer,5,UW1 . M AH0
 goomer,0,G UW1 . M AH0
 fremesis,0,F R EH1 . M AH0 . S AH0 S
 fremeses,0,F R EH1 . M AH0 . S IY0 Z
@@ -136354,7 +135957,6 @@ fraudience,0,AO1 . D IY0 . AH0 N T S|F R AA1 . D IY0 . AH0 N T S
 furgonomics,0,F AH2 R . G AH0 . N AA1 . M AH0 K S
 pissicle,0,P IH1 . S AH0 . K AH0 L
 dadication,0,D AE2 . D AH0 . K EY1 . SH AH0 N
--dives,0,D IY1 V Z|D AY1 V Z|D IH1 V Z
 gordonia,0,G AO0 R . D OW1 . N IY0 . AH0
 manniversary,0,M AE2 . N AH0 . V AH1 R S . R IY0
 vicenarious,0,V IH2 . S AH0 . N EH1 . R IY0 . AH0 S
@@ -136393,7 +135995,6 @@ girther,0,G AH1 R . TH AH0 R
 youses,0,Y UW1 . Z AH0 Z
 khramulya,0,K R AH0 . M UW1 L . Y AH0
 passhole,0,P AE1 S . HH OW0 L
--mastix,5,M AE1 . S T AH0 K S
 ablenationalism,0,EY2 . B AH0 L . N AE1 . SH AH0 . N AH0 . L IH2 . Z AH0 M
 forecaution,0,F AO0 R . K AA1 . SH AH0 N
 ischiocrural,0,IH2 . S K IY0 . AH0 . UH0 . K R UH1 . AH0 . R AH0 L
@@ -136506,7 +136107,6 @@ frosé,0,F R OW0 . Z EY1
 queap,0,K W IY1 P
 kindie,0,K IH1 N . D IY0
 self-segment,0,S EH2 L F . S EH0 G . M EH1 N T
--gonium,5,
 gypset,0,JH IH1 P . S EH2 T
 glunge,0,G L AH1 N JH
 maranoia,0,M AE0 . R AH0 . N OY1 . AH0
@@ -136522,7 +136122,6 @@ fapkin,0,F AE1 P . K AH0 N
 clunter,0,K L AH1 N . T AH0 R
 schweet,0,SH W IY1 T
 clunt,0,K L AH1 N T
--hub,0,HH AH1 B
 amphisexual,0,AE2 M . F AH0 . S EH1 K . SH UW0 . AH0 L
 wren-warbler,0,R EH1 N . W AA1 . B L AH0
 humilific,0,HH Y UW2 . M AH0 . L IH1 . F AH0 K
@@ -136554,7 +136153,6 @@ ladettish,0,L AE0 . D EH1 . D IH0 SH
 photoepilepsy,0,F OW2 . D OW0 . EH1 . P AH0 . L EH2 P . S IY0
 photoepileptic,0,F OW2 . D OW0 . EH2 . P AH0 . L EH1 P . T AH0 K
 zeligesque,0,Z EH2 . L AH0 . G EH1 S K
--plasm,0,P L AE1 . Z AH0 M
 adrastean,0,AE0 . D R AH0 . S T IY1 . AH0 N
 bozone,0,B OW1 . Z OW0 N
 trooner,0,T R UW1 . N AH0 R
@@ -136582,7 +136180,6 @@ hypersupreme,0,HH AY1 . P AH0 . S UW2 . P R IY1 M
 omnicomprehensive,0,AA2 M . N IY0 . K AA2 M . P R AH0 . HH EH1 N . S AH0 V
 swass,0,S W AE1 S
 bambooze,0,B AE0 M . B UW1 Z
--eezy,5,IY1 . Z IY0
 knowwhaddamean,0,N OW2 . W AA0 . D AH0 . M IY1 N
 giggity,0,G IH1 . G AH0 . D IY0
 sigmata,5,
@@ -136699,7 +136296,6 @@ hippocampian,0,HH AH0 . P AH0 . K AE1 M . P IY0 . AH0 N
 cupidian,0,K Y UW0 . P IH1 . D IY0 . AH0 N
 twunky,0,T W AH1 NG . K IY0
 fuckarounditis,0,F AH2 . K AH0 . R AW0 N . D AY1 . D AH0 S
--rise,0,R AY1 Z
 dysnomian,0,D AH0 . S N OW1 . M IY0 . AH0 N|D AY0 . S N OW1 . M IY0 . AH0 N
 mabian,0,M EY1 . B IY0 . AH0 N
 rosalindian,0,R AA0 . Z AH0 . L IH1 N . D IY0 . AH0 N
@@ -136751,7 +136347,6 @@ funfetti,0,F AH2 N . F EH1 . D IY0
 anogenic,0,AE2 . N OW0 . JH EH1 . N AH0 K
 unhaul,0,AH0 N . HH AA1 L
 clumpily,0,K L AH1 M . P AH0 . L IY0
--tuber,0,T UW1 . B AH0 R
 lellow,0,L EH1 . L AH0 . UH0
 barang-barang,5,
 britshka,0,B R IH1 CH . K AH0
@@ -136924,10 +136519,8 @@ grapist,0,G R EY1 . P AH0 S T
 therever,0,DH EH0 . R EH1 . V AH0 R
 hereforth,0,HH AH0 . AH0 R . F AO1 R TH
 autogynandromorphophilia,0,AO2 . D OW0 . G AY2 . N AE2 N . D R OW0 . M OW2 R . F AH0 . F IH1 . L IY0 . AH0
--ahh,5,AE1|AA1
 tergocentral,0,T AH2 R . G OW0 . S EH1 N . T R AH0 L
 counitary,0,K OW0 . Y UW1 . N AH0 . D EH0 . R IY0
--cation,0,K EY1 . SH AH0 N
 twintuition,0,T W AH0 N . T UW0 . IH1 . SH AH0 N
 pornado,0,P AO0 R . N EY1 . D OW0|P AO0 R . N EY1 . D OW2
 faetar,0,F AY0 . D AA1 R
@@ -137141,7 +136734,6 @@ writinger,0,R AY1 . D IY0 . NG AH0 R
 autagonistophilia,0,AO2 . D AH0 . G AA2 . N AH0 . S T OW0 . F IH1 . L IY0 . AH0
 depthometer,0,D EH0 P . TH AA1 . M AH0 . D AH0 R
 unparch,0,AH0 N . P AA1 CH
--taph,5,T AA1 F
 microaddress,0,M AY2 . K R AH0 . AE1 . D R EH0 S
 upz,0,AH1 P S
 starostynskyi,0,S T AA0 . R AA0 . S T IH1 N . S K IY0
@@ -137240,7 +136832,6 @@ autopolymerisation,0,AO2 . D OW0 . P AA2 . L AH0 . M AH0 . R AY0 . Z EY1 . SH AH
 troonery,0,T R UW1 . N AH0 . R IY0
 asdr,0,EY2 . EH2 S . D IY2 . AA1 R
 cambric,0,K AE1 M . B R AH0 K
--ces,5,S IY1 Z
 degradee,0,D AH0 . G R EY1 . D IY0
 postvolitionally,0,P OW2 S T . V AH0 L IH1 SH AH0 N AH0 L IY0|P OW2 S T . V AH0 L IH1 SH AH0 N L IY0|P AH2 UH0 S T . V AH0 L IH1 SH N AH0 L IY0
 prevolitionally,0,P R IY2 . V AH0 L IH1 SH AH0 N AH0 L IY0|P R IY2 . V AH0 L IH1 SH AH0 N L IY0|P R IY2 . V AH0 L IH1 SH N AH0 L IY0
@@ -137312,7 +136903,6 @@ semi-solid,0,S EH2 . M IY0 . S AA1 . L AH0 D
 lebia,0,L EH1 . B IY0 . AH0
 half-solid,0,HH AE2 F . S AA1 . L AH0 D
 quasi-solid,0,K W EY2 . Z AY0 . S AA1 . L AH0 D
--ations,5,EY1 . SH AH0 N Z
 specifist,0,S P AH0 . S IH1 . F AH0 S T
 struv,0,S T R AH1 V
 motherwise,0,M AH1 . DH AH0 R . W AY2 Z
@@ -137384,8 +136974,6 @@ sidetic,0,S IY2 . D EH1 . D AH0 K|S AH0 . D EH1 . D AH0 K
 tartronic,0,T AA0 . T R AA1 . N AH0 K
 cephalaria,0,S EH2 . F AH0 . L EH1 . R IY0 . AH0
 woohay,0,W UH0 . HH EY1|W UW0 . HH EY1
--alogue,5,AH1 . L AA2 G
--alog,5,AH1 . L AA2 G
 cleam,0,K L IY1 M
 senegalia,0,S EH2 . N AH0 . G AA1 . L IY0 . AH0|S EH2 . N AH0 . G EY1 . L IY0 . AH0
 bryoria,0,B R AY0 . OW1 . R IY0 . AH0
@@ -159095,7 +158683,6 @@ garrots,0,G AE1 . R AH0 T S
 adjudicates,6,AH0 . JH UW1 . D AH0 . K EY2 T S
 schusses,0,SH UH1 . S AH0 Z
 schussing,5,
-schussed,0,SH UH1 S T
 scortations,0,S K AA0 . T EY1 . SH AH0 N Z
 introns,5,
 scrimshawed,4,
@@ -190043,9 +189630,6 @@ outpoures,99,AW2 T . P AO1 R Z
 outpourred,99,AW2 T . P AO1 R D
 outpourring,99,AW2 T . P AO1 . R IY0 NG
 pompomes,99,
-reallowances,99,R IY1 . AH0 . L AW1 . AH0 N T . S AH0 Z
-reallowanced,99,R IY1 . AH0 . L AW1 . AH0 N T S T
-reallowancing,99,R IY1 . AH0 . L AW1 . AH0 N T . S IY0 NG
 rebooks,99,R IY0 . B UH1 K S
 rebookes,99,R IY0 . B UH1 K S
 rebooking,99,R IY0 . B UH1 . K IY0 NG
@@ -190065,17 +189649,6 @@ rebookedded,99,R IY0 . B UH1 K . T AH0 D
 rebookedding,99,R IY0 . B UH1 K . T IY0 NG
 rebookedder,99,R IY0 . B UH1 K . T AH0 R
 rebookeddest,99,R IY0 . B UH1 K . T AH0 S T
-recapitalizationes,99,R IY2 . K AE2 . P AH0 . D AH0 . L AH0 . Z EY1 . SH AH0 N Z
-recapitalizationed,99,R IY2 . K AE2 . P AH0 . D AH0 . L AH0 . Z EY1 . SH AH0 N D
-recapitalizationing,99,R IY2 . K AE2 . P AH0 . D AH0 . L AH0 . Z EY1 . SH AH0 . N IY0 NG
-recapitalizationned,99,R IY2 . K AE2 . P AH0 . D AH0 . L AH0 . Z EY1 . SH AH0 N D
-recapitalizationning,99,R IY2 . K AE2 . P AH0 . D AH0 . L AH0 . Z EY1 . SH AH0 . N IY0 NG
-recapitalizationss,99,R IY0 . K AE2 . P AH0 . D AH0 . L AH0 . Z EY1 . SH AH0 N . Z AH0 Z
-recapitalizationses,99,R IY0 . K AE2 . P AH0 . D AH0 . L AH0 . Z EY1 . SH AH0 N . Z AH0 Z
-recapitalizationsed,99,R IY0 . K AE2 . P AH0 . D AH0 . L AH0 . Z EY1 . SH AH0 N Z D
-recapitalizationsing,99,R IY0 . K AE2 . P AH0 . D AH0 . L AH0 . Z EY1 . SH AH0 N . Z IY0 NG
-recapitalizationssed,99,R IY0 . K AE2 . P AH0 . D AH0 . L AH0 . Z EY1 . SH AH0 N Z D
-recapitalizationssing,99,R IY0 . K AE2 . P AH0 . D AH0 . L AH0 . Z EY1 . SH AH0 N . Z IY0 NG
 refiling,99,R IY0 . F AY1 . L IY0 NG
 refiler,99,R IY0 . F AY1 . L AH0 R
 refilest,99,R IY0 . F AY1 . L AH0 S T

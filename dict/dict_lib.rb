@@ -119,6 +119,16 @@ def delete_headwords_ending_in_hyphen!(hash)
   n
 end
 
+def delete_headwords_starting_with_hyphen!(hash)
+  n = 0
+  hash.keys.each do |w|
+    next unless w.start_with?("-")
+    hash.delete(w)
+    n += 1
+  end
+  n
+end
+
 def useful_cmudict_line?(line)
   # ignore entries that start with comment characters, punctuation, or numbers
   if(line =~ /\A'/)
@@ -1164,6 +1174,8 @@ def add_frequency_info(cmudict, subtlex_hash, wordfreq_hash, wiktionary_words, p
   end
   puts "#{forbidden_scrub} explicitly forbidden surface forms removed after frequency phases" if forbidden_scrub > 0
 
+  hyp_head = delete_headwords_starting_with_hyphen!(hash)
+  puts "#{hyp_head} headwords starting with '-' removed after frequency phases" if hyp_head > 0
   hyp_tail = delete_headwords_ending_in_hyphen!(hash)
   puts "#{hyp_tail} headwords ending in '-' removed after frequency phases" if hyp_tail > 0
 
@@ -1269,6 +1281,8 @@ def rebuild_rhymecrime_dictionaries()
     end
   end
   delete_explicitly_forbidden_keys_from_hash(cmudict)
+  hyp_cmudict_start = delete_headwords_starting_with_hyphen!(cmudict)
+  puts "Removed #{hyp_cmudict_start} cmudict headwords starting with '-'" if hyp_cmudict_start > 0
   hyp_cmudict = delete_headwords_ending_in_hyphen!(cmudict)
   puts "Removed #{hyp_cmudict} cmudict headwords ending in '-'" if hyp_cmudict > 0
   rdict = build_rime_dict(cmudict)
@@ -1277,4 +1291,6 @@ def rebuild_rhymecrime_dictionaries()
   save_string_hash(rdict, generated_dict_path_under_dict_dir(RIME_DICT_FILENAME), RIME_DICT_HEADER)
   save_word_dict(word_dict)
   save_hyphen_variant_map!(word_dict.keys)
+  save_conceptnet_edge_map!(word_dict.keys)
+  save_numberbatch_vectors!(word_dict.keys)
 end

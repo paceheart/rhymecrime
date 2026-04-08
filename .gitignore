@@ -2,6 +2,7 @@ embed-dict.msgpack
 embed-dict-1.msgpack
 embed-dict-2.msgpack
 embed-dict-3.msgpack
+embed-dict-subword.msgpack
 hugging-face-access-token.txt
 semantic-similarity - HuggingFace Copy.rb
 *.*~
@@ -15,3 +16,9 @@ dict/subtlex/*.tsv
 dict/subtlex/*.json
 dict/wordfreq/*.tsv
 dict/generated/*
+# Topical relatedness source data (large; regenerated during dict build)
+conceptnet-edges.json
+numberbatch-vectors.msgpack
+experiments/conceptnet-assertions-5.7.0.csv.gz
+experiments/numberbatch-en-19.08.txt
+experiments/exp3_conceptnet_api_cache.json

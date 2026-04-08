@@ -94,6 +94,7 @@ describe 'RHYMES' do
     ought_not_rhyme 'axolotl', 'bottle' # stress mismatch, but I don't hate it
     ought_not_rhyme 'axolotls', 'bottles'  # stress mismatch, but I don't hate it
     oughta_rhyme 'spiral', 'viral'
+    ought_not_rhyme 'eyes', 'sees' # this was a bug due to two pronunciations of 'reprise'
   end
 
   context 'perfect rhymes must rhyme the last primary-stressed syllable, not just the last syllable' do
@@ -113,8 +114,7 @@ describe 'RHYMES' do
   context "homophones ought not count as rhymes" do
     ought_not_rhyme 'side', 'sighed'
     ought_not_rhyme 'blue', 'blew'
-    ought_not_rhyme_one_way 'base', 'bass', NOT_WORKING # gets confused by bass the fish
-    ought_not_rhyme_one_way 'bass', 'base'
+    ought_not_rhyme 'base', 'bass'
     ought_not_rhyme 'coral', 'choral'
     ought_not_rhyme 'leader', 'lieder'
     ought_not_rhyme 'lindsay', 'lindsey'
@@ -176,6 +176,8 @@ describe 'RHYMES' do
     oughta_rhyme 'action', 'traction'
     oughta_rhyme 'action', 'attraction'
     ought_not_rhyme 'traction', 'attraction' # arguable
+    ought_not_rhyme 'enchant', 'disenchant'
+    ought_not_rhyme 'enchanted', 'disenchanted'
 
     oughta_rhyme 'ice', 'dice'
     ought_not_rhyme 'ice', 'deice' # deice (de-ice) is not in cmudict, so this succeeds for the wrong reason
@@ -428,6 +430,7 @@ describe 'RHYMES' do
     oughta_rhyme 'roly-poly', 'holy'
     ought_not_rhyme 'roly-poly', 'poly'
     oughta_rhyme 'hara-kiri', 'weary'
+    oughta_rhyme 'queer', 'peer-to-peer'
   end
   
   context 'Limerick Heist' do
@@ -460,8 +463,8 @@ describe 'RHYMES' do
     oughta_rhyme 'curry', 'hurry' # curry [K AH1 R IY0] hurry [HH ER1 IY0]
     oughta_rhyme 'errors', 'terrors' # errors [EH1 R ER0 Z] terrors [T EH1 R AH0 R Z]
     oughta_rhyme 'array', 'hurray', NOT_WORKING # array [ER0 EY1] hurray [HH AH0 R EY1]
-    oughta_rhyme_one_way 'array', 'moray' # array [ER0 EY1] moray [M ER0 EY1]
-    oughta_rhyme_one_way 'moray', 'array', NOT_WORKING
+    oughta_rhyme 'array', 'moray', NOT_WORKING # array [ER0 EY1] moray [M ER0 EY1]
+    oughta_rhyme "taken", 'waken' # taken [T EY1 K IH0 N], waken [W EY1 K AH0 N]
     oughta_rhyme "takin'", 'waken' # takin' [T EY1 K IH0 N], waken [W EY1 K AH0 N]
     oughta_rhyme 'tons', 'funds' # [T AH1 N Z] [F AH1 N D Z], N D Z gets collapsed to N Z
     oughta_rhyme 'dance', 'ants' # plosive epenthesis. Technically this ought to only be valid within syllables, e.g. 'inside' ought not rhyme with 'ants hide', because you can't manifest a [t] out of nothing with 'inside', but whatever, it's fine.
@@ -469,6 +472,7 @@ describe 'RHYMES' do
     oughta_rhyme 'blotch', 'watch'
     oughta_rhyme 'blotched', 'watched'
     oughta_rhyme 'poor', 'tour' # P UW R / T UH R
+    oughta_rhyme 'informant', 'torment', NOT_WORKING
   end
 
   context 'imperfect rhymes' do
@@ -575,5 +579,248 @@ describe 'RHYMES' do
   context 'non-binary rhymes' do
     oughta_rhyme 'latex', 'paychecks', NOT_WORKING
     oughta_rhyme 'pitiful', 'biddable', NOT_WORKING # genderfluid plus T -> D
+    oughta_rhyme 'cello', 'concerto', NOT_WORKING
+    oughta_rhyme 'symphony', 'timpani', NOT_WORKING
+  end
+
+  context 'prereqs from spec_similar_rhymes: death' do
+    oughta_rhyme 'bled', 'dead'
+    oughta_rhyme 'bled', 'dread'
+    oughta_rhyme 'dead', 'dread'
+  end
+
+  context 'prereqs from spec_similar_rhymes: pirate' do
+    oughta_rhyme 'bold', 'gold'
+    oughta_rhyme 'buccaneer', 'commandeer'
+    oughta_rhyme 'buccaneer', 'peer-to-peer'
+    oughta_rhyme 'cache', 'lash'
+    oughta_rhyme 'coast', 'ghost'
+    oughta_rhyme 'cove', 'trove'
+    oughta_rhyme 'cracker', 'hacker'
+    oughta_rhyme 'crew', 'tattoo'
+    oughta_rhyme 'daring', 'swearing'
+    oughta_rhyme 'dvd', 'sea'
+    oughta_rhyme 'french', 'wench'
+    oughta_rhyme 'gang', 'hang'
+    oughta_rhyme 'handsome', 'ransom'
+    oughta_rhyme 'leg', 'peg'
+    oughta_rhyme 'loot', 'pursuit'
+    oughta_rhyme 'reef', 'thief'
+  end
+
+  context 'prereqs from spec_similar_rhymes: halloween' do
+    ought_not_rhyme 'broom', 'costume' # imperfect: stress mismatch
+    oughta_rhyme 'bat', 'cat'
+    oughta_rhyme 'celebration', 'decoration'
+    oughta_rhyme 'cider', 'spider'
+    oughta_rhyme 'fairy', 'scary'
+    oughta_rhyme 'fright', 'night'
+    oughta_rhyme 'sheet', 'treat'
+  end
+
+  context 'prereqs from spec_similar_rhymes: music' do
+    ought_not_rhyme 'arpeggio', 'show' # imperfect: stress mismatch
+    ought_not_rhyme 'cello', 'solo' # imperfect: stress mismatch
+    ought_not_rhyme 'concerto', 'solo' # imperfect: stress mismatch
+    ought_not_rhyme 'crooner', 'tuna'
+    ought_not_rhyme 'drumsticks', 'mix' # imperfect: stress mismatch
+    ought_not_rhyme 'oboe', 'piano' # imperfect: stress mismatch
+    ought_not_rhyme 'overtone', 'xylophone' # imperfect: stress mismatch
+    oughta_rhyme 'abbreviation', 'notation'
+    oughta_rhyme 'accidental', 'instrumental'
+    oughta_rhyme 'audition', 'composition'
+    ought_not_rhyme 'bar', 'repertoire' # imperfect: stress mismatch    oughta_rhyme 'baroque', 'folk'
+    oughta_rhyme 'beat', 'repeat'
+    oughta_rhyme 'beat', 'sheet'
+    oughta_rhyme 'bow', 'flow'
+    oughta_rhyme 'bridal', 'idol'
+    oughta_rhyme 'cantata', 'sonata'
+    ought_not_rhyme 'chord', 'record' # identical
+    oughta_rhyme 'clarinet', 'minuet'
+    oughta_rhyme 'croon', 'tune'
+    oughta_rhyme 'crooner', 'tuner'
+    oughta_rhyme 'duet', 'quartet'
+    oughta_rhyme 'duet', 'quintet'
+    oughta_rhyme 'ears', 'spheres'
+    oughta_rhyme 'enjoys', 'noise'
+    oughta_rhyme 'expressed', 'rest'
+    oughta_rhyme 'fandango', 'tango'
+    oughta_rhyme 'flute', 'lute'
+    oughta_rhyme 'fortissimo', 'pianissimo'
+    oughta_rhyme 'funk', 'punk'
+    oughta_rhyme 'gong', 'song'
+    oughta_rhyme 'harmonic', 'sonic'
+    oughta_rhyme 'harp', 'sharp'
+    ought_not_rhyme 'hemiola', 'viola' # identical (arguable)
+    oughta_rhyme 'jingle', 'single'
+    ought_not_rhyme 'mandolin', 'violin' # identical (arguable)
+    oughta_rhyme 'orchestration', 'vibration'
+    oughta_rhyme 'piano', 'soprano'
+    oughta_rhyme 'piece', 'release'
+    oughta_rhyme 'progression', 'session'
+    oughta_rhyme 'rave', 'wave'
+    oughta_rhyme 'recital', 'title'
+    oughta_rhyme 'sing', 'swing'
+    oughta_rhyme 'sings', 'strings'
+    oughta_rhyme 'sticks', 'mix'
+    oughta_rhyme 'violins', 'winds'
+  end
+
+  context 'prereqs from spec_similar_rhymes: water' do
+    oughta_rhyme 'flush', 'gush'
+    oughta_rhyme 'drink', 'sink'
+    oughta_rhyme 'pee', 'sea'
+    oughta_rhyme 'sky', 'supply'
+    oughta_rhyme 'sprayed', 'wade'
+    oughta_rhyme 'supplied', 'tide'
+    oughta_rhyme 'dam', 'swam'
+    oughta_rhyme 'slosh', 'wash'
+    oughta_rhyme 'humidity', 'turbidity'
+    oughta_rhyme 'bay', 'spray'
+    oughta_rhyme 'steam', 'stream'
+    oughta_rhyme 'eau', 'flow'
+    oughta_rhyme 'sweat', 'wet'
+    oughta_rhyme 'cool', 'pool'
+    oughta_rhyme 'drain', 'rain'
+    oughta_rhyme 'blood', 'flood'
+    oughta_rhyme 'marine', 'saline'
+    oughta_rhyme 'dip', 'sip'
+  end
+
+  context 'prereqs from spec_similar_rhymes: clumsy' do
+    oughta_rhyme 'bumbling', 'fumbling'
+    oughta_rhyme 'bumbling', 'stumbling'
+    oughta_rhyme 'excuse', 'shoes'
+    oughta_rhyme 'excuse', 'loose'
+    oughta_rhyme 'drop', 'flop'
+  end
+
+  context 'prereqs from spec_similar_rhymes: invoke' do
+    oughta_rhyme 'dares', 'prayers'
+    oughta_rhyme 'declare', 'prayer'
+  end
+
+  context 'prereqs from spec_similar_rhymes: prayers' do
+    oughta_rhyme 'addressed', 'blessed'
+    oughta_rhyme 'blessed', 'request'
+    oughta_rhyme 'appeal', 'kneel'
+    oughta_rhyme 'recites', 'rites'
+    ought_not_rhyme 'exhortations', 'meditations' # identical
+    oughta_rhyme 'humble', 'mumble'
+    oughta_rhyme 'jew', 'pew'
+    oughta_rhyme 'knee', 'plea'
+    oughta_rhyme 'heal', 'kneel'
+    oughta_rhyme 'healing', 'kneeling'
+    oughta_rhyme 'feast', 'priest'
+    oughta_rhyme 'feasts', 'priests'
+    oughta_rhyme 'blessed', 'confessed'
+  end
+
+  context 'prereqs from spec_similar_rhymes: carbon/bread/pasta' do
+    oughta_rhyme 'sink', 'zinc'
+    oughta_rhyme 'feast', 'yeast'
+    oughta_rhyme 'champagne', 'grain'
+    oughta_rhyme 'clam', 'ham'
+    oughta_rhyme 'dish', 'fish'
+    oughta_rhyme 'fork', 'pork'
+    oughta_rhyme 'italian', 'scallion'
+    oughta_rhyme 'paste', 'taste'
+    oughta_rhyme 'ester', 'sequester'
+    oughta_rhyme 'extract', 'react'
+  end
+
+  context 'prereqs from spec_similar_rhymes: crime' do
+    oughta_rhyme 'acquit', 'commit'
+    oughta_rhyme 'acquitted', 'committed'
+    oughta_rhyme 'arrest', 'confessed'
+    oughta_rhyme 'sleuth', 'truth'
+    oughta_rhyme 'drugs', 'thugs'
+    oughta_rhyme 'denial', 'trial'
+    oughta_rhyme 'job', 'mob'
+    oughta_rhyme 'repentance', 'sentence'
+    oughta_rhyme 'skulduggery', 'thuggery'
+    oughta_rhyme 'dog', 'smog'
+    oughta_rhyme 'gas', 'mass'
+    oughta_rhyme 'lake', 'quake'
+    oughta_rhyme 'nerd', 'word'
+  end
+
+  context 'prereqs from spec_similar_rhymes: magic/medical/football/exploration' do
+    oughta_rhyme 'chants', 'trance'
+    oughta_rhyme 'disease', 'expertise'
+    oughta_rhyme 'ccs', 'fees'
+    oughta_rhyme 'incomplete', 'yeet'
+    ought_not_rhyme 'backtrack', 'cul-de-sac' # imperfect: stress mismatch
+  end
+
+  context 'prereqs from spec_similar_rhymes: pair_related' do
+    oughta_rhyme 'fraud', 'god'
+    oughta_rhyme 'exciting', 'writing'
+    oughta_rhyme 'chewed', 'rude'
+    oughta_rhyme 'cuisine', 'mean'
+    oughta_rhyme 'feed', 'greed'
+    oughta_rhyme 'grain', 'pain'
+    oughta_rhyme 'bane', 'grain'
+    oughta_rhyme 'rice', 'vice'
+    oughta_rhyme 'dinner', 'sinner'
+    oughta_rhyme 'cake', 'rake'
+    ought_not_rhyme 'apocalypse', 'chips' # imperfect: stress mismatch
+    oughta_rhyme 'invader', 'seder'
+    oughta_rhyme 'bread', 'undead'
+    oughta_rhyme 'heinz', 'maligns'
+    oughta_rhyme 'served', 'undeserved'
+    oughta_rhyme 'savory', 'slavery'
+    oughta_rhyme 'crumb', 'scum'
+    oughta_rhyme 'organic', 'satanic'
+    oughta_rhyme 'abomination', 'starvation'
+    oughta_rhyme 'malign', 'wine'
+    oughta_rhyme 'traitor', 'waiter'
+    oughta_rhyme 'deceit', 'wheat'
+    oughta_rhyme 'dessert', 'hurt'
+    oughta_rhyme 'murky', 'turkey'
+    oughta_rhyme 'edgy', 'veggie'
+    oughta_rhyme 'consume', 'gloom'
+    oughta_rhyme 'buffet', 'gray'
+    oughta_rhyme 'crab', 'drab'
+    oughta_rhyme 'crustacean', 'illumination'
+    oughta_rhyme 'hydration', 'illumination'
+    oughta_rhyme 'melancholic', 'metabolic'
+    oughta_rhyme 'ashen', 'ration'
+    oughta_rhyme 'black', 'snack'
+    oughta_rhyme 'cuisine', 'unseen'
+    oughta_rhyme 'bleak', 'leek'
+    oughta_rhyme 'lady', 'shady'
+    oughta_rhyme 'bi', 'pie'
+    oughta_rhyme 'flan', 'pan'
+    oughta_rhyme 'flans', 'trans'
+    oughta_rhyme 'bard', 'hard'
+    ought_not_rhyme 'sachertorte', 'voldemort' # imperfect: stress mismatch
+    oughta_rhyme 'cider', 'snyder'
+  end
+
+  context 'prereqs from spec_similar_rhymes: related_rhymes' do
+    oughta_rhyme 'please', 'siamese'
+  end
+
+  context 'prereqs from spec_similar_rhymes: ought_not_rhyme (identical/prefix)' do
+    ought_not_rhyme 'atonal', 'tonal'
+    oughta_rhyme 'composition', 'musician'
+    oughta_rhyme 'compositions', 'musicians'
+    ought_not_rhyme 'composition', 'decomposition'
+    ought_not_rhyme 'condemnation', 'contamination' # arguable
+    ought_not_rhyme 'cycling', 'recycling'
+    ought_not_rhyme 'disenchanted', 'enchanted'
+    ought_not_rhyme 'dishonesty', 'honesty'
+    oughta_rhyme 'extracted', 'reacted'
+    ought_not_rhyme 'healthy', 'unhealthy'
+    ought_not_rhyme 'percussion', 'repercussion'
+    ought_not_rhyme 'sanitation', 'temptation'
+    ought_not_rhyme 'totalitarian', 'vegetarian'
+  end
+
+  context 'prereqs from spec_similar_rhymes: ought_not_rhyme (homophones/spelling variants)' do
+    ought_not_rhyme 'flour', 'flower'
+    ought_not_rhyme 'realise', 'realize'
+    ought_not_rhyme 'honor', 'honour'
   end
 end

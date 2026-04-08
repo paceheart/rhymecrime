@@ -32,7 +32,10 @@ require_relative 'spec/test_utils'
 #state = [41, 51, 0.13, -42, 100]
 #state = [50, 40, 0.2, -30, 120] # -> 65
 #state = [40, 90, 0.1, -80, 120] # -> 64
-state = [39, 90, 0.1, -80, 120] # -> 56
+#state = [39, 90, 0.1, -80, 120] # -> 56 (corpus-based, old approach)
+
+# $SIMILARITY_THRESHOLD, $CONCEPTNET_EDGE_BONUS (Numberbatch + ConceptNet approach)
+state = [10, 7] # -> 47 (via sweep; 49 through related? wrapper)
 
 $FINE_GRAINED = true
 $ANNEAL_MULT = $FINE_GRAINED ? 1 : 10
@@ -78,49 +81,27 @@ end
 $foo = FailCount.new
 
 energy_calculator = lambda do |state|
-  $SIMILARITY_THRESHOLD, $SENTENCE_SIMILARITY_ADJUSTMENT, $DOC_SIMILARITY_WEIGHT, $DOC_SIMILARITY_ADJUSTMENT = state
+  $SIMILARITY_THRESHOLD, $CONCEPTNET_EDGE_BONUS = state
   result = $foo.fail_count(state)
   puts "#{state} -> #{result}"
   return result
 end
 
+$MIN_EDGE_BONUS = 0
+$MAX_EDGE_BONUS = 30
+$EDGE_BONUS_INCREMENT = 1 * $ANNEAL_MULT
+
 state_change = lambda do |state|
-  thresh, sentence_adjustment, doc_weight, doc_adjustment, gloss_sim = state
+  thresh, edge_bonus = state
   mult = coin_flip ? 1 : -1
   if coin_flip
-    gloss_sim += $GLOSS_SIMILARITY_INCREMENT * mult
+    thresh += $SIMILARITY_THRESHOLD_INCREMENT * mult
   else
-    if coin_flip
-      if coin_flip
-        sentence_adjustment += $SENTENCE_ADJUSTMENT_INCREMENT * mult
-      else
-        thresh += $SIMILARITY_THRESHOLD_INCREMENT * mult
-        #sentence_weight += $SENTENCE_WEIGHT_INCREMENT * mult
-        #sentence_weight = sentence_weight.round(2)
-      end
-    else
-      if coin_flip
-        doc_adjustment += $DOC_ADJUSTMENT_INCREMENT * mult
-      else
-        doc_weight += $DOC_WEIGHT_INCREMENT * mult
-        doc_weight = doc_weight.round(2)
-      end
-    end
+    edge_bonus += $EDGE_BONUS_INCREMENT * mult
   end
-  thresh = $MIN_SIMILARITY_THRESHOLD unless thresh > $MIN_SIMILARITY_THRESHOLD 
-  thresh = $MAX_SIMILARITY_THRESHOLD unless thresh < $MAX_SIMILARITY_THRESHOLD
-  sentence_adjustment = $MIN_SENTENCE_ADJUSTMENT unless sentence_adjustment > $MIN_SENTENCE_ADJUSTMENT
-  sentence_adjustment = $MAX_SENTENCE_ADJUSTMENT unless sentence_adjustment < $MAX_SENTENCE_ADJUSTMENT
-  #sentence_weight = $MIN_SENTENCE_WEIGHT unless sentence_weight > $MIN_SENTENCE_WEIGHT
-  #sentence_weight = $MAX_SENTENCE_WEIGHT unless sentence_weight < $MAX_SENTENCE_WEIGHT
-  doc_adjustment = $MIN_DOC_ADJUSTMENT unless doc_adjustment > $MIN_DOC_ADJUSTMENT
-  doc_adjustment = $MAX_DOC_ADJUSTMENT unless doc_adjustment < $MAX_DOC_ADJUSTMENT
-  doc_weight = $MIN_DOC_WEIGHT unless doc_weight > $MIN_DOC_WEIGHT
-  doc_weight = $MAX_DOC_WEIGHT unless doc_weight < $MAX_DOC_WEIGHT
-  gloss_sim = $MIN_GLOSS_SIMILARITY unless gloss_sim > $MIN_GLOSS_SIMILARITY
-  gloss_sim = $MAX_GLOSS_SIMILARITY unless gloss_sim < $MAX_GLOSS_SIMILARITY
-  
-  return [thresh, sentence_adjustment, doc_weight, doc_adjustment, gloss_sim]
+  thresh = thresh.clamp($MIN_SIMILARITY_THRESHOLD, $MAX_SIMILARITY_THRESHOLD)
+  edge_bonus = edge_bonus.clamp($MIN_EDGE_BONUS, $MAX_EDGE_BONUS)
+  [thresh, edge_bonus]
 end
 
 Annealing::Metal.class_eval do
