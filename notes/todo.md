@@ -51,6 +51,8 @@ mosaic rhymes, e.g. commander / understand her
 
 handle unicode in input, e.g. saute (with accent on e)
 
+is thematically_related? symmetric? if so, canonicalize before caching
+
 ## Genderfluid rhymes
 
 Genderfluid rhyme: each syllable from the primary-stressed syllable onward has an exactly matching rime (nucleus + coda), checked syllable-by-syllable. Subsumes masculine, feminine, and dactylic rhyme regardless of syllable count.

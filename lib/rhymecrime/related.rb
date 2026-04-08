@@ -11,7 +11,6 @@
 #   2. WordNet gloss containment (high-precision rescue for polysemy)
 #   3. WordNet gloss-vector sense embeddings + morphy fallback (secondary rescue)
 #   4. USF Free Association 2-hop (boost to base score via human association graph)
-#   5. ConceptNet 2-hop paths (currently disabled; toggleable via $TWOHOP_ENABLED)
 #
 
 require 'json'
@@ -39,10 +38,10 @@ $SENSE_VECTOR_MIN_FLOOR = 5
 $SENSE_VECTOR_MORPHY_FLOOR = 13
 $SENSE_VECTOR_MIN_BASE = 6
 $SENSE_VECTOR_MAX_SENSES = 4
-$TWOHOP_ENABLED = false
-$TWOHOP_MIN_BRIDGE = 3.0
 $USF_TWOHOP_BOOST = 10
 $USF_MIN_BRIDGE_COS = 8
+# Skip USF graph work when primary score is below this (0 = same as pre-filter behavior).
+$USF_MIN_BASE = 0
 
 # --- ConceptNet edge map ---
 # Keys are "word1|word2" (alphabetically sorted), values are edge weights.
@@ -65,33 +64,6 @@ def conceptnet_edge_weight(word1, word2)
   conceptnet_edges[key] || 0.0
 end
 
-# --- ConceptNet 2-hop adjacency ---
-# Infers relatedness through an intermediate node: word1 -> bridge -> word2.
-# Returns the minimum edge weight along the best 2-hop path (bottleneck score).
-
-$cn_adjacency = nil
-def cn_adjacency
-  return $cn_adjacency unless $cn_adjacency.nil?
-  $cn_adjacency = Hash.new { |h, k| h[k] = [] }
-  conceptnet_edges.each do |key, weight|
-    next if weight < 1.0
-    a, b = key.split("|")
-    $cn_adjacency[a] << [b, weight]
-    $cn_adjacency[b] << [a, weight]
-  end
-  $cn_adjacency
-end
-
-def conceptnet_twohop_score(word1, word2)
-  best = 0.0
-  cn_adjacency[word1].each do |mid, wt1|
-    cn_adjacency[mid].each do |dest, wt2|
-      best = [[wt1, wt2].min, best].max if dest == word2
-    end
-  end
-  best
-end
-
 # --- USF Free Association Norms (Nelson, McEvoy & Schreiber 1998) ---
 # 5,019 cue words with ~72K forward association pairs from human participants.
 # Used for 2-hop inference: word1 → bridge → word2, validated by requiring
@@ -111,12 +83,16 @@ def usf_associations
 end
 
 def usf_twohop_bridge_validated?(word1, word2)
+  ua = usf_associations
+  # Neither endpoint is a USF cue → no word→bridge forward star to search.
+  return false if ua.empty? || (!ua[word1] && !ua[word2])
+
   [[word1, word2], [word2, word1]].each do |a, b|
-    targets_a = usf_associations[a]
+    targets_a = ua[a]
     next unless targets_a
     targets_a.each do |bridge, fsg1|
       next if fsg1 < 0.01
-      targets_b = usf_associations[bridge]
+      targets_b = ua[bridge]
       next unless targets_b
       fsg2 = targets_b[b]
       next unless fsg2 && fsg2 >= 0.01
@@ -144,9 +120,16 @@ def numberbatch
   $numberbatch
 end
 
+# Cached table handle — avoids calling #numberbatch on every vector lookup (hot path).
+def numberbatch_table
+  nb = $numberbatch
+  nb.nil? ? numberbatch : nb
+end
+
 def numberbatch_cosine(word1, word2)
-  v1 = numberbatch[word1]
-  v2 = numberbatch[word2]
+  nb = numberbatch_table
+  v1 = nb[word1]
+  v2 = nb[word2]
   return 0.0 if v1.nil? || v2.nil?
   dot = 0.0
   v1.size.times { |i| dot += v1[i] * v2[i] }
@@ -158,8 +141,25 @@ end
 # in any WordNet definition of word2, or vice versa.
 
 $gloss_derivation_cache = {}
+# All lowercase gloss tokens for a headword (union of every synset gloss); built once per word.
+$gloss_token_set_cache = {}
+# Pairs (sorted key) known not to match gloss containment either direction.
+$gloss_negative_pair_cache = Set.new
+
+def gloss_word_token_set(lemma_word)
+  $gloss_token_set_cache[lemma_word] ||= begin
+    tokens = Set.new
+    WordNet::Lemma.find_all(lemma_word).each do |lemma|
+      lemma.synsets.each do |synset|
+        synset.gloss.downcase.scan(/[a-z]+/).each { |tok| tokens << tok }
+      end
+    end
+    tokens
+  end
+end
 
 def validated_derivations(word)
+  nb = numberbatch_table
   candidates = [word]
   %w[al ian ical ous ic ly ing ed er tion ment s].each { |s| candidates << word + s }
   candidates << word[0..-2] + "ical" if word.end_with?("y")
@@ -167,8 +167,8 @@ def validated_derivations(word)
 
   candidates.select do |d|
     next true if d == word
-    v1 = numberbatch[word]
-    v2 = numberbatch[d]
+    v1 = nb[word]
+    v2 = nb[d]
     next false unless v1 && v2
     dot = 0.0
     v1.size.times { |i| dot += v1[i] * v2[i] }
@@ -178,17 +178,18 @@ end
 
 def gloss_contains?(topic_word, other_word)
   derivations = $gloss_derivation_cache[topic_word] ||= validated_derivations(topic_word)
-  WordNet::Lemma.find_all(other_word).each do |lemma|
-    lemma.synsets.each do |synset|
-      gloss_words = synset.gloss.downcase.scan(/[a-z]+/).to_set
-      derivations.each { |d| return true if gloss_words.include?(d) }
-    end
-  end
+  gloss_tokens = gloss_word_token_set(other_word)
+  derivations.each { |d| return true if gloss_tokens.include?(d) }
   false
 end
 
 def bidirectional_gloss_contains?(word1, word2)
-  gloss_contains?(word1, word2) || gloss_contains?(word2, word1)
+  pair_key = word1 < word2 ? "#{word1}\t#{word2}" : "#{word2}\t#{word1}"
+  return false if $gloss_negative_pair_cache.include?(pair_key)
+
+  hit = gloss_contains?(word1, word2) || gloss_contains?(word2, word1)
+  $gloss_negative_pair_cache.add(pair_key) unless hit
+  hit
 end
 
 # --- WordNet gloss-vector sense embeddings ---
@@ -205,14 +206,19 @@ GLOSS_STOP_WORDS = Set.new(%w[
   through during up down out off away back make made used one
 ]).freeze
 
+$sense_vectors_cache = {}
 def sense_vectors(word, max_senses = $SENSE_VECTOR_MAX_SENSES)
+  key = [word, max_senses]
+  return $sense_vectors_cache[key] if $sense_vectors_cache.key?(key)
+
+  nb = numberbatch_table
   vecs = []
   count = 0
   WordNet::Lemma.find_all(word).each do |lemma|
     lemma.synsets.each do |synset|
       break if count >= max_senses
       content_words = synset.gloss.downcase.scan(/[a-z]+/) - GLOSS_STOP_WORDS.to_a
-      embeds = content_words.filter_map { |w| numberbatch[w] }
+      embeds = content_words.filter_map { |w| nb[w] }
       next if embeds.size < 2
       dim = embeds.first.size
       avg = Array.new(dim, 0.0)
@@ -223,14 +229,16 @@ def sense_vectors(word, max_senses = $SENSE_VECTOR_MAX_SENSES)
       count += 1
     end
   end
+  $sense_vectors_cache[key] = vecs
   vecs
 end
 
 def directional_sense_cosines(word1, word2)
   best_1to2 = 0
   best_2to1 = 0
+  nb = numberbatch_table
 
-  v2_raw = numberbatch[word2]
+  v2_raw = nb[word2]
   if v2_raw
     sense_vectors(word1).each do |sv|
       dot = 0.0
@@ -240,7 +248,7 @@ def directional_sense_cosines(word1, word2)
     end
   end
 
-  v1_raw = numberbatch[word1]
+  v1_raw = nb[word1]
   if v1_raw
     sense_vectors(word2).each do |sv|
       dot = 0.0
@@ -263,6 +271,7 @@ end
 $morphy_sv_cache = {}
 def sense_vectors_morphy(word, max_senses = $SENSE_VECTOR_MAX_SENSES)
   return $morphy_sv_cache[word] if $morphy_sv_cache.key?(word)
+  nb = numberbatch_table
   morphs = (WordNet::Synset.morphy_all(word) rescue []).uniq - [word]
   vecs = []
   count = 0
@@ -273,7 +282,7 @@ def sense_vectors_morphy(word, max_senses = $SENSE_VECTOR_MAX_SENSES)
       lemma.synsets.each do |synset|
         break if count >= max_senses
         content_words = synset.gloss.downcase.scan(/[a-z]+/) - GLOSS_STOP_WORDS.to_a
-        embeds = content_words.filter_map { |w| numberbatch[w] }
+        embeds = content_words.filter_map { |w| nb[w] }
         next if embeds.size < 2
         dim = embeds.first.size
         avg = Array.new(dim, 0.0)
@@ -297,9 +306,10 @@ def morphy_directional_sense_cosines(word1, word2)
   return nil if sv1_morphy.empty? && sv2_morphy.empty?
 
   d1, d2 = directional_sense_cosines(word1, word2)
+  nb = numberbatch_table
 
   if sv1_morphy.any?
-    v2_raw = numberbatch[word2]
+    v2_raw = nb[word2]
     if v2_raw
       sv1_morphy.each do |sv|
         dot = 0.0
@@ -311,7 +321,7 @@ def morphy_directional_sense_cosines(word1, word2)
   end
 
   if sv2_morphy.any?
-    v1_raw = numberbatch[word1]
+    v1_raw = nb[word1]
     if v1_raw
       sv2_morphy.each do |sv|
         dot = 0.0
@@ -332,14 +342,14 @@ def similarity_threshold
 end
 
 def thematically_related?(word1, word2, include_self=false)
+  if ENV["RELATED_TRACE_THEMATIC"] == "1"
+    warn "thematically_related? word1=#{word1.inspect} word2=#{word2.inspect} include_self=#{include_self.inspect}"
+  end
+
   base = similarity(word1, word2)
   return true if base >= $SIMILARITY_THRESHOLD
 
   return true if bidirectional_gloss_contains?(word1, word2)
-
-  if $TWOHOP_ENABLED
-    return true if conceptnet_twohop_score(word1, word2) >= $TWOHOP_MIN_BRIDGE
-  end
 
   if !stop_word?(word1) && !stop_word?(word2) && base >= $SENSE_VECTOR_MIN_BASE
     d1, d2 = directional_sense_cosines(word1, word2)
@@ -358,6 +368,7 @@ def thematically_related?(word1, word2, include_self=false)
   end
 
   if $USF_TWOHOP_BOOST > 0 &&
+     base >= $USF_MIN_BASE &&
      (base + $USF_TWOHOP_BOOST) >= $SIMILARITY_THRESHOLD &&
      usf_twohop_bridge_validated?(word1, word2)
     return true

@@ -90,7 +90,7 @@ halloween,cider,1,
 halloween,spider,1,
 halloween,decoration,1,
 halloween,costume,1,
-halloween,ira,0,
+halloween,ira,0,prereq: halloween ought_not day+ira
 halloween,lindsay,0,
 halloween,lindsey,0,
 halloween,nicki,0,
@@ -219,12 +219,12 @@ crime,thing,0,
 crime,object,0,
 crime,transistors,0,
 crime,sky,0,
-crime,gas,0,
-crime,mass,0,
-crime,lake,0,
-crime,quake,0,
+crime,gas,0,ish prereq: crime ought_not gas+mass
+crime,mass,0,ish prereq: crime ought_not gas+mass
+crime,lake,0,prereq: crime ought_not lake+quake
+crime,quake,0,prereq: crime ought_not lake+quake
 crime,sci-fi,0,
-crime,word,0,
+crime,word,0,prereq: crime ought_not nerd+word
 pasta,champagne,1,
 pasta,grain,1,
 pasta,italian,1,
@@ -397,8 +397,6 @@ water,cool,1,
 water,pool,1,
 water,drain,1,
 water,rain,1,
-water,drain,1,
-water,rain,1,
 water,marine,1,
 water,saline,1,
 water,dip,1,
@@ -484,63 +482,63 @@ thing,cat,0,a very common word and a common word
 thing,pasta,0,a very common word and a common word
 thing,crime,0,a very common word and a common word
 word,etymology,1,a very common word and an uncommon word
-person,human,1
-person,personal,1
-person,people,1
-person,missing,1
-person,first,1
-person,second,1
-person,third,1
-person,someone,1
-person,anyone,1
-person,nobody,1
-person,adult,1
-person,child,1
-person,woman,1
-person,man,1
-person,self,1
-person,individual,1
-person,entity,1
-person,geometry,0
-person,math,0
-person,fortissimo,0
-person,malice,0
-person,woe,0
-person,sever,0
-person,appeal,0
-person,proof,0
-person,rhombus,0
-person,duck,0
-person,rancid,0
-person,harp,0
-person,coral,0
-person,supply,0
-person,steam,0
-person,stream,0
-person,drain,0
-person,ice,0
-person,penicillin,0
-person,scallion,0
-person,transistors,0
-person,undertow,0
-person,vice,0
-person,loot,0
-person,fungus,0
-person,chassis,0
-person,neutered,0
-person,paw,0
-person,zucchini,0
-magic,chants,1
-magic,trance,1
-medical,medicine,1
-medical,disease,1
-medical,expertise,1
-medical,fees,1
-medical,ccs,1
-medicine,disease,1
-medicine,expertise,1
-medicine,fees,1
-medicine,ccs,1
+person,human,1,
+person,personal,1,
+person,people,1,
+person,missing,1,
+person,first,1,
+person,second,1,
+person,third,1,
+person,someone,1,
+person,anyone,1,
+person,nobody,1,
+person,adult,1,
+person,child,1,
+person,woman,1,
+person,man,1,
+person,self,1,
+person,individual,1,
+person,entity,1,
+person,geometry,0,
+person,math,0,
+person,fortissimo,0,
+person,malice,0,
+person,woe,0,
+person,sever,0,
+person,appeal,0,
+person,proof,0,
+person,rhombus,0,
+person,duck,0,
+person,rancid,0,
+person,harp,0,
+person,coral,0,
+person,supply,0,
+person,steam,0,
+person,stream,0,
+person,drain,0,
+person,ice,0,
+person,penicillin,0,
+person,scallion,0,
+person,transistors,0,
+person,undertow,0,
+person,vice,0,
+person,loot,0,
+person,fungus,0,
+person,chassis,0,
+person,neutered,0,
+person,paw,0,
+person,zucchini,0,
+magic,chants,1,
+magic,trance,1,
+medical,medicine,1,
+medical,disease,1,
+medical,expertise,1,
+medical,fees,1,
+medical,ccs,1,
+medicine,disease,1,
+medicine,expertise,1,
+medicine,fees,1,
+medicine,ccs,1,
 music,key,1,polysemy: musical key vs door key
 music,scale,1,polysemy: musical scale vs fish scale
 music,staff,1,polysemy: musical staff vs employees
@@ -789,7 +787,6 @@ hospital,ward,1,
 pirate,cornea,0,
 pirate,pupil,0,
 pirate,iris,0,
-pirate,hook,1,
 pirate,whip,1,ish - lash/whip/flogging association
 abbreviation,music,1,ish prereq: music/abbreviation+notation
 abomination,evil,1,prereq: food+evil/starvation+abomination
@@ -904,27 +901,27 @@ food,waiter,1,prereq: food+evil/waiter+traitor
 food,wheat,1,prereq: food+evil/wheat+deceit
 food,wine,1,prereq: food+evil/wine+malign
 football,incomplete,1,prereq: football/yeet+incomplete
-football,pass,1
-football,throw,1
-football,tackle,1
+football,pass,1,
+football,throw,1,
+football,tackle,1,
 football,fish,0,
-football,rod,0
-football,bait,0
-football,quarterback,1
-football,stadium,1
-football,field,1
-football,basket,0
-football,bat,0
+football,rod,0,
+football,bait,0,
+football,quarterback,1,
+football,stadium,1,
+football,field,1,
+football,basket,0,
+football,bat,0,
 football,dribble,1,because of soccer
-football,goal,1
-football,cat,0
+football,goal,1,
+football,cat,0,
 football,dog,0,ish because hot dogs are served at football games
-football,duck,0
-football,cheer,1
-football,evil,0
-football,crime,0
-football,heist,0
-football,violin,0
+football,duck,0,
+football,cheer,1,
+football,evil,0,
+football,crime,0,
+football,heist,0,
+football,violin,0,
 football,yeet,1,prereq: football/yeet+incomplete
 fork,pasta,1,prereq: pasta/fork+pork
 french,pirate,1,prereq: pirate/french+wench
@@ -959,58 +956,51 @@ sky,water,1,prereq: water/sky+supply
 slosh,water,1,prereq: water/slosh+wash
 sprayed,water,1,prereq: water/sprayed+wade
 supplied,water,1,prereq: water/supplied+tide
-fluidity,water,1
+fluidity,water,1,
 turbidity,water,1,prereq: water/humidity+turbidity
-water,beam,0
-water,brick,0
-water,chimera,0
-water,dolphin,1
-water,fish,1
-water,ice,1
+water,beam,0,
+water,brick,0,
+water,chimera,0,
+water,dolphin,1,
+water,fish,1,
 water,metal,0,ish
-water,snow,1
-water,squeamish,0
-water,sting,0
-water,zinc,0
-water,think,0
-water,smart,0
-water,dumb,0
-rain,beam,0
-rain,brick,0
-rain,chimera,0
-rain,cloud,1
-rain,clouds,1
-rain,dolphin,0
-rain,fish,0
+water,snow,1,
+water,squeamish,0,
+water,sting,0,
+water,zinc,0,
+water,think,0,
+water,smart,0,
+water,dumb,0,
+rain,beam,0,
+rain,brick,0,
+rain,chimera,0,
+rain,cloud,1,
+rain,clouds,1,
+rain,dolphin,0,
+rain,fish,0,
 rain,ice,1,ish
-rain,snow,1
-rain,squeamish,0
-rain,think,0
-rain,smart,0
-rain,dumb,0
-rain,zinc,0
-brain,beam,0
-brain,brick,0
-brain,chimera,0
-brain,cloud,0
-brain,clouds,0
+rain,snow,1,
+rain,squeamish,0,
+rain,think,0,
+rain,smart,0,
+rain,dumb,0,
+rain,zinc,0,
+brain,beam,0,
+brain,brick,0,
+brain,chimera,0,
+brain,cloud,0,
+brain,clouds,0,
 brain,dolphin,0,ish
 brain,fish,0,ish
-brain,ice,1
-brain,snow,1
+brain,ice,1,
+brain,snow,1,
 brain,squeamish,0,ish
-brain,zinc,0
-brain,think,1
-brain,smart,1
-brain,dumb,1
+brain,zinc,0,
+brain,think,1,
+brain,smart,1,
+brain,dumb,1,
 wash,water,1,prereq: water/slosh+wash
 crime,dog,0,prereq: crime ought_not dog+smog
 crime,smog,0,prereq: crime ought_not dog+smog
-crime,gas,0,ish prereq: crime ought_not gas+mass
-crime,mass,0,ish prereq: crime ought_not gas+mass
-crime,lake,0,prereq: crime ought_not lake+quake
-crime,quake,0,prereq: crime ought_not lake+quake
 crime,nerd,0,prereq: crime ought_not nerd+word
-crime,word,0,prereq: crime ought_not nerd+word
 halloween,snyder,0,prereq: halloween ought_not cider+snyder
-halloween,ira,0,prereq: halloween ought_not day+ira
