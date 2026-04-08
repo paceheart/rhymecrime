@@ -10,6 +10,24 @@ Find semantically related rhymes
 * gem install rspec
 * Run rspec from the rhymecrime directory to verify installation. All tests should pass.
 
+## Repository layout
+
+Data and build artifacts are split so **sources** stay under `corpora/` and **regenerable caches** under `generated/` at the repo root. Ruby code resolves paths via `REPO_ROOT` / `GENERATED_DIR` in `dict/utils_rhyme.rb`, so loading works even when the process cwd is not the repository root (e.g. CGI).
+
+| Location | Role |
+|----------|------|
+| **`corpora/`** | Upstream or hand-maintained **inputs** (versioned when license/size allow). |
+| **`corpora/cmudict/`** | CMU Pronouncing Dictionary (tweaked 0.7c text + license/readme). |
+| **`corpora/wordnet/3.1/`** | WordNet 3.1 lexicon (same internal layout as the standard distribution: inner `dict/`, `LICENSE`, …). |
+| **`corpora/usf/`** | USF free-association norms (raw `Cue_Target_Pairs.*` shards). Compiled JSON used at runtime is produced into `generated/`. |
+| **`corpora/wiktionary/`** | Kaikki / Wiktextract English JSONL (often large; **gitignored** — fetch with `setup.sh` or equivalent). |
+| **`corpora/subtlex/`** | SUBTLEX-US frequency TSV (often **gitignored**). |
+| **`generated/`** | **Outputs** of `dict/dict.rb` and related steps: `word_dict.txt`, `rime_dict.txt`, `part_of_speech.json`, `hyphen_variant_map.json`, `wordfreq.tsv`, optional ConceptNet / Numberbatch / USF association JSON, etc. Entire directory is **gitignored**; clone → run `setup.sh` (wordfreq, Kaikki, …) then `cd dict && ruby dict.rb`. |
+| **`dict/`** | Compiler (`dict.rb`, `dict_lib.rb`), pronunciation / inflection / Wiktionary loaders, curated lists (`common_words.txt`, `rare_words.txt`, `forbid_list.txt`, …), and `dict/wordfreq/export_wordfreq_tsv.py`. |
+| **Repo root `*.rb`** | CGI and library entrypoints (`crime.rb`, `semantic-similarity.rb`, `rhyme.rb`, …). |
+| **`spec/`** | RSpec examples and `related.csv` (semantic relatedness expectations). |
+| **`experiments/`** | Optional **source** dumps for rebuilding topical data (e.g. ConceptNet assertions gzip, Numberbatch `.txt`); gitignored filenames listed in `.gitignore`. |
+
 ## Command Line Usage
 
 echo "word1=food" | rhyme.rb
@@ -52,7 +70,7 @@ otter / slaughter
 
 ### Building the Rhyming Dictionary
 
-First, run `dict/dict.rb` offline (from the `dict/` directory) to compile the rhyming dictionary into `dict/generated/`.
+First, run `dict/dict.rb` offline (from the `dict/` directory) to compile the rhyming dictionary into `generated/` at the repository root. Corpus inputs (CMUdict, WordNet, Kaikki extract, SUBTLEX, etc.) live under `corpora/`.
 It starts from cmudict, which has a bunch of lines like this:
 
   KITTEN  K IH1 T AH0 N  
@@ -88,7 +106,7 @@ output:        [IH  ZH AH  N] # stress digits removed
 We remove the stress markers so that we can rhyme 'furs' [F ER1 Z] with 'yours(2)' [Y ER0 Z]
 They will both have the rime [ER Z].
 
-The underscore-joined ARPABET string is the hash key in `dict/generated/rime_dict.txt`.
+The underscore-joined ARPABET string is the hash key in `generated/rime_dict.txt`.
 
 #### Step 2: Given the rime, look up all words that rhyme with it (including itself)
 

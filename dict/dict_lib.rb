@@ -1,15 +1,14 @@
 # encoding: utf-8
 #
-# RhymeCrime dictionary compiler: CMU + Wiktionary/kaikki + frequency phases → dict/generated/*.
-# Loaded by dict.rb (CLI). Use require_relative 'dict_lib' with process cwd = dict/ so relative
-# paths (cmudict/, WordNet3.1/, etc.) resolve. Defines rebuild_rhymecrime_dictionaries (no side
-# effects on require).
+# RhymeCrime dictionary compiler: CMU + Wiktionary/kaikki + frequency phases → ../generated/*.
+# Loaded by dict.rb (CLI). Run dict.rb with cwd = dict/; corpus inputs live under ../corpora/.
+# Defines rebuild_rhymecrime_dictionaries (no side effects on require).
 #
 # Change this to a string to display detailed output for a particular word
 TRACE_WORD = nil
 
 # Preprocess the cmudict data into a format that's efficient for looking up rhyming words.
-# Reads from CMUDICT_FILENAME; writes generated caches under dict/generated/ (see utils_rhyme).
+# Reads from CMUDICT_FILENAME; writes generated caches under <repo>/generated/ (see utils_rhyme).
 #
 # cmudict is the CMU Pronouncing Dictionary, a text file with lines like this:
 #  KITTEN  K IH1 T AH0 N
@@ -38,15 +37,18 @@ require_relative 'pronunciation.rb'
 require_relative 'wiktionary'
 require_relative 'inflect'
 
-CMUDICT_FILENAME = "cmudict/cmudict-0.7c.txt"
+REPO_ROOT = File.expand_path("..", __dir__)
+CORPORA_ROOT = File.join(REPO_ROOT, "corpora")
+
+CMUDICT_FILENAME = File.join(CORPORA_ROOT, "cmudict", "cmudict-0.7c.txt")
 RARE_WORDS_FILENAME = "rare_words.txt"
 COMMON_WORDS_FILENAME = "common_words.txt"
 
-WordNet::DB.path = "WordNet3.1/"
-SUBTLEX_FILENAME = "subtlex/SUBTLEXus.tsv"
+WordNet::DB.path = File.join(CORPORA_ROOT, "wordnet", "3.1")
+SUBTLEX_FILENAME = File.join(CORPORA_ROOT, "subtlex", "SUBTLEXus.tsv")
 SUBTLEX_PRESENCE_BONUS = 4
 
-WORDFREQ_FILENAME = "generated/wordfreq.tsv"
+WORDFREQ_FILENAME = File.join(REPO_ROOT, "generated", "wordfreq.tsv")
 WORDFREQ_COMMON_ZIPF = 3.0
 WORDFREQ_RARE_ZIPF = 2.0
 # SUBTLEX FREQlow this high means sustained lowercase dialogue use — used with weak_lemma_anchor

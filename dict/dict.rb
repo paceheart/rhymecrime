@@ -1,7 +1,7 @@
 #!/usr/bin/env ruby
 # encoding: utf-8
 #
-# CLI entry: rebuild RhymeCrime caches under dict/generated/.
+# CLI entry: rebuild RhymeCrime caches under ../generated/.
 # Run from this directory (dict/) so relative paths resolve:
 #   ruby dict.rb
 #

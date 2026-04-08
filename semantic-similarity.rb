@@ -19,14 +19,14 @@ require 'set'
 require_relative 'pace_utils'
 require_relative 'dict/utils_rhyme'
 
-WordNet::DB.path = File.join(File.dirname(__FILE__), "dict/WordNet3.1/") unless defined?(WordNet::DB) && WordNet::DB.path
+WordNet::DB.path = File.join(REPO_ROOT, "corpora", "wordnet", "3.1") unless defined?(WordNet::DB) && WordNet::DB.path
 
-CONCEPTNET_EDGES_FILE = 'conceptnet-edges.json'
-CONCEPTNET_EDGES_DICT_FILE = 'dict/generated/conceptnet_edges.json'
-NUMBERBATCH_VEC_FILE  = 'numberbatch-vectors.msgpack'
-NUMBERBATCH_VEC_DICT_FILE = 'dict/generated/numberbatch_vectors.msgpack'
-USF_ASSOCIATIONS_FILE = 'usf-associations.json'
-USF_ASSOCIATIONS_DICT_FILE = 'dict/generated/usf_associations.json'
+CONCEPTNET_EDGES_FILE = File.join(REPO_ROOT, "conceptnet-edges.json")
+CONCEPTNET_EDGES_DICT_FILE = File.join(REPO_ROOT, "generated", "conceptnet_edges.json")
+NUMBERBATCH_VEC_FILE  = File.join(REPO_ROOT, "numberbatch-vectors.msgpack")
+NUMBERBATCH_VEC_DICT_FILE = File.join(REPO_ROOT, "generated", "numberbatch_vectors.msgpack")
+USF_ASSOCIATIONS_FILE = File.join(REPO_ROOT, "usf-associations.json")
+USF_ASSOCIATIONS_DICT_FILE = File.join(REPO_ROOT, "generated", "usf_associations.json")
 
 SIMILAR_MAX = 500
 

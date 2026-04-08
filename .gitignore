@@ -4,11 +4,11 @@ semantic-similarity - HuggingFace Copy.rb
 *.*#
 corpus/*
 analysis/*
-dict/wiktionary/*.jsonl.gz
-dict/wiktionary/*.jsonl
-dict/subtlex/*.tsv
-dict/subtlex/*.json
-dict/generated/*
+corpora/wiktionary/*.jsonl.gz
+corpora/wiktionary/*.jsonl
+corpora/subtlex/*.tsv
+corpora/subtlex/*.json
+generated/
 # Topical relatedness source data (large; regenerated during dict build)
 conceptnet-edges.json
 numberbatch-vectors.msgpack

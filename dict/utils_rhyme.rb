@@ -18,20 +18,20 @@ CONCEPTNET_EDGES_FILENAME = "conceptnet_edges.json"
 # Numberbatch word vectors pre-filtered to word_dict keys; built in dict.rb, loaded at runtime.
 NUMBERBATCH_VECTORS_FILENAME = "numberbatch_vectors.msgpack"
 
-# Outputs of dict/dict_lib.rb (via dict.rb); not hand-edited. Paths are relative to the dict/
-# directory when the build runs with cwd = dict/; loaders use paths from the repository root.
-DICT_GENERATED_SUBDIR = "generated"
+# Outputs of dict/dict_lib.rb (via dict.rb); not hand-edited. Absolute paths under <repo>/generated/.
+REPO_ROOT = File.expand_path("..", __dir__)
+GENERATED_DIR = File.join(REPO_ROOT, "generated")
 
 def generated_dict_path(basename)
-  File.join("dict", DICT_GENERATED_SUBDIR, basename)
+  File.join(GENERATED_DIR, basename)
 end
 
 def generated_dict_path_under_dict_dir(basename)
-  File.join(DICT_GENERATED_SUBDIR, basename)
+  File.join(GENERATED_DIR, basename)
 end
 
 def ensure_generated_dict_dir!
-  FileUtils.mkdir_p(DICT_GENERATED_SUBDIR)
+  FileUtils.mkdir_p(GENERATED_DIR)
 end
 
 #
@@ -401,9 +401,10 @@ CONCEPTNET_EN_NODE_RE = %r{\A/c/en/([a-z][a-z]*)\z}
 
 def save_conceptnet_edge_map!(word_keys)
   require 'zlib'
-  gz_path = CONCEPTNET_ASSERTIONS_GZ
-  unless File.exist?(gz_path)
-    puts "Skipping ConceptNet edge map: #{gz_path} not found"
+  gz_path = [File.join(REPO_ROOT, "experiments", CONCEPTNET_ASSERTIONS_GZ),
+              File.join(REPO_ROOT, CONCEPTNET_ASSERTIONS_GZ)].find { |p| File.exist?(p) }
+  unless gz_path
+    puts "Skipping ConceptNet edge map: #{CONCEPTNET_ASSERTIONS_GZ} not found (repo root or experiments/)"
     return
   end
   dict_set = word_keys.to_set
@@ -443,9 +444,10 @@ end
 NUMBERBATCH_TXT = "numberbatch-en-19.08.txt"
 
 def save_numberbatch_vectors!(word_keys)
-  txt_path = NUMBERBATCH_TXT
-  unless File.exist?(txt_path)
-    puts "Skipping Numberbatch vectors: #{txt_path} not found"
+  txt_path = [File.join(REPO_ROOT, "experiments", NUMBERBATCH_TXT),
+              File.join(REPO_ROOT, NUMBERBATCH_TXT)].find { |p| File.exist?(p) }
+  unless txt_path
+    puts "Skipping Numberbatch vectors: #{NUMBERBATCH_TXT} not found (repo root or experiments/)"
     return
   end
   dict_set = word_keys.to_set
@@ -966,7 +968,7 @@ end
 def load_word_dict()
   pathname = generated_dict_path(WORD_DICT_FILENAME)
   unless File.exist?(pathname)
-    die "First run dict/dict.rb from dict/ to generate dictionary caches"
+    die "First run dict/dict.rb from dict/ to populate #{GENERATED_DIR}/"
   end
   word_dict = Hash.new
   IO.readlines(pathname, encoding: 'UTF-8').each{ |line|

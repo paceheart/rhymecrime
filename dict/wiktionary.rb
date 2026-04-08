@@ -8,7 +8,8 @@ require 'set'
 require_relative 'ipa_to_arpabet'
 require_relative 'pronunciation'
 
-WIKTIONARY_FILENAME = "wiktionary/kaikki-english-filtered.jsonl.gz"
+# Kaikki extract (large; often gitignored) under corpora/wiktionary/.
+WIKTIONARY_DATA_PATH = File.expand_path("../corpora/wiktionary/kaikki-english-filtered.jsonl.gz", __dir__)
 
 SKIP_FORM_TAGS = Set.new(%w[
   alternative obsolete dialectal nonstandard archaic
@@ -32,7 +33,7 @@ INFLECTION_TAGS = {
 #   forms_map: { base_word => [[inflected_form, base_word], ...] }
 #   pos_map: { word => Set<String> } union of Kaikki "pos" per lemma (Layer A ∩ WordNet in dict_lib)
 def load_wiktionary
-  path = File.join(File.dirname(__FILE__), WIKTIONARY_FILENAME)
+  path = WIKTIONARY_DATA_PATH
   unless File.exist?(path)
     puts "Wiktionary data not found at #{path}; skipping."
     return [{}, {}, {}]

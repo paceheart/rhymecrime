@@ -104,7 +104,7 @@ def rdict
 end
 
 def load_rime_dict_as_hash()
-  load_string_hash(generated_dict_path(RIME_DICT_FILENAME)) or die "First run dict/dict.rb (from dict/) to generate dictionary caches"
+  load_string_hash(generated_dict_path(RIME_DICT_FILENAME)) or die "First run dict/dict.rb (from dict/) to populate generated/"
 end
 
 def pronunciations(word)
@@ -127,7 +127,7 @@ end
 
 # Sorted list of RhymeCrime part-of-speech tags for +word+ (Kaikki +pos+ union, then lexical
 # Kaikki POS intersected with WordNet coarse POS when WN has the lemma; see apply_lexical_pos_layer_a!
-# in dict/dict_lib.rb. Empty if unknown or before dict/generated/part_of_speech.json exists.
+# in dict/dict_lib.rb. Empty if unknown or before generated/part_of_speech.json exists.
 $part_of_speech_by_word = nil
 def part_of_speech_tags(word)
   w = word.to_s.downcase.strip

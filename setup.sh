@@ -33,8 +33,8 @@ sudo chmod o+x *
 
 sudo dnf install xorg-x11-xauth.x86_64 xorg-x11-server-utils.x86_64 dbus-x11.x86_64
 
-# Wiktionary pronunciation + POS + forms data (kaikki.org / wiktextract)
-mkdir -p dict/wiktionary
+# Wiktionary pronunciation + POS + forms data (kaikki.org / wiktextract) → corpora/wiktionary/
+mkdir -p corpora/wiktionary
 curl -fL "https://kaikki.org/dictionary/English/kaikki.org-dictionary-English.jsonl" \
   | ruby -rjson -e '
     $stdin.set_encoding("UTF-8")
@@ -49,10 +49,10 @@ curl -fL "https://kaikki.org/dictionary/English/kaikki.org-dictionary-English.js
       out[:forms] = forms.map { |f| { form: f["form"], tags: f["tags"] } } if forms && !forms.empty?
       puts JSON.generate(out)
     end
-  ' | gzip > dict/wiktionary/kaikki-english-filtered.jsonl.gz
+  ' | gzip > corpora/wiktionary/kaikki-english-filtered.jsonl.gz
 
-# Wordfreq Zipf export (generated artifact for dict/dict.rb; dict/generated/ is gitignored)
+# Wordfreq Zipf export → generated/wordfreq.tsv (gitignored; used by dict/dict.rb)
 python3 -m pip install --user wordfreq
-mkdir -p dict/generated
+mkdir -p generated
 python3 dict/wordfreq/export_wordfreq_tsv.py
 
