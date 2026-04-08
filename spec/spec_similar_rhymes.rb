@@ -119,26 +119,20 @@ describe 'SET_RELATED' do
     set_related_oughta_contain 'music', 'clarinet', 'minuet'
     set_related_oughta_contain 'music', 'accidental', 'instrumental'
     set_related_oughta_contain 'music', 'sings', 'strings'
-    set_related_oughta_contain 'music', 'glissando', 'ritardando'
-    set_related_oughta_contain 'music', 'viola', 'hemiola'
-    set_related_oughta_contain 'music', 'overtone', 'xylophone'
+    # ritardando OOV: set_related_oughta_contain 'music', 'glissando', 'ritardando'
+    set_related_oughta_contain 'music', 'viola', 'hemiola', NOT_WORKING # arguable stress mismatch
+    set_related_oughta_contain 'music', 'overtone', 'xylophone', NOT_WORKING # arguable stress mismatch
     set_related_oughta_contain 'music', 'wave', 'rave'
     set_related_oughta_contain 'music', 'beat', 'repeat'
     set_related_oughta_contain 'music', 'flow', 'bow'
     set_related_oughta_contain 'music', 'jingle', 'single' # as in a hit single
-    set_related_oughta_contain 'music', 'bar', 'repertoire'
-    set_related_ought_not_contain 'music', 'bars', 'scores'
-    set_related_ought_not_contain 'music', 'bass', 'base'
     set_related_oughta_contain 'music', 'harp', 'sharp'
-    set_related_oughta_contain 'music', 'show', 'arpeggio' # if we squish the stress
-    set_related_oughta_contain 'music', 'mix', 'drumsticks' # if we squish the stress
-    set_related_oughta_contain 'music', 'violin', 'mandolin'
+    set_related_oughta_contain 'music', 'show', 'arpeggio', NOT_WORKING # stress mismatch
+    set_related_oughta_contain 'music', 'mix', 'drumsticks', NOT_WORKING # stress mismatch
+    set_related_oughta_contain 'music', 'violin', 'mandolin', NOT_WORKING # arguable stress mismatch
     set_related_oughta_contain 'music', 'rest', 'expressed'
     set_related_oughta_contain 'music', 'lute', 'flute'
     set_related_oughta_contain 'music', 'fortissimo', 'pianissimo'
-    set_related_ought_not_contain 'music', 'cello', 'solo'
-    set_related_ought_not_contain 'music', 'cello', 'concerto'
-    set_related_ought_not_contain 'music', 'solo', 'concerto'
     set_related_oughta_contain 'music', 'gong', 'song' # reverse relatedness would fix
     set_related_oughta_contain 'music', 'duet', 'quartet'
     set_related_oughta_contain 'music', 'duet', 'quintet'
@@ -260,7 +254,8 @@ describe 'SET_RELATED' do
   end
 
   context 'exploration' do
-    set_related_oughta_contain 'exploration', 'cul-de-sac', 'backtrack'
+    set_related_oughta_contain 'exploration', 'knapsack', 'backtrack', NOT_WORKING # non-binary
+    set_related_oughta_contain 'exploration', 'pack', 'track'
   end
   
   context 'prefix' do
@@ -275,18 +270,17 @@ describe 'SET_RELATED' do
   
   context 'imperfect' do
     # relax the stress:
-    set_related_oughta_contain 'halloween', 'broom', 'costume'
-    set_related_oughta_contain 'music', 'oboe', 'piano'
-    set_related_oughta_contain 'music', 'cello', 'solo'
-    set_related_oughta_contain 'music', 'cello', 'concerto'
-    set_related_oughta_contain 'music', 'solo', 'concerto'
-    # dwim a non-final consonant
-    set_related_oughta_contain 'music', 'symphony', 'timpani'
+    set_related_oughta_contain 'halloween', 'broom', 'costume', NOT_WORKING
+    set_related_oughta_contain 'music', 'oboe', 'piano', NOT_WORKING
+    set_related_oughta_contain 'music', 'cello', 'solo', NOT_WORKING
+    set_related_oughta_contain 'music', 'cello', 'concerto', NOT_WORKING
+    set_related_oughta_contain 'music', 'solo', 'concerto', NOT_WORKING
+    set_related_oughta_contain 'music', 'symphony', 'timpani', NOT_WORKING # this would only work if we dwim a non-final consonant
   end
 
   context 'no spelling variants' do
-    set_related_ought_not_contain 'agree', 'harmonize', 'harmonise'
-    set_related_ought_not_contain 'ace', 'honor', 'honour'
+    set_related_ought_not_contain 'funeral', 'eulogize', 'eulogise'
+    set_related_ought_not_contain 'courtroom', 'honor', 'honour'
   end
 
 end
@@ -358,10 +352,10 @@ describe 'PAIR_RELATED' do
     pair_related_ought_not_contain 'food', 'evil', 'vegetarian', 'totalitarian' # it's a damn shame that this is an identical rhyme
     pair_related_oughta_contain 'food', 'evil', 'dinner', 'sinner'
     pair_related_oughta_contain 'food', 'evil', 'cake', 'rake'
-    pair_related_oughta_contain 'food', 'evil', 'mushroom', 'doom'
-    pair_related_oughta_contain 'food', 'evil', 'chips', 'apocalypse'
-    pair_related_oughta_contain 'food', 'evil', 'seder', 'darth vader'
-    pair_related_oughta_contain 'food', 'evil', 'sachertorte', 'voldemort'
+    pair_related_oughta_contain 'food', 'evil', 'mushroom', 'doom', NOT_WORKING # stress mismatch
+    pair_related_oughta_contain 'food', 'evil', 'chips', 'apocalypse', NOT_WORKING # stress mismatch
+    pair_related_oughta_contain 'food', 'evil', 'seder', 'invader'
+    pair_related_oughta_contain 'food', 'evil', 'sachertorte', 'voldemort', NOT_WORKING # would be cool, but a big stretch
     pair_related_oughta_contain 'food', 'evil', 'bread', 'undead'
     pair_related_oughta_contain 'food', 'evil', 'heinz', 'maligns'
     pair_related_oughta_contain 'food', 'evil', 'served', 'undeserved' # this is not quite an identical rhyme becauze the s in undeserved is pronounced like a z

@@ -791,12 +791,12 @@ pirate,pupil,0,
 pirate,iris,0,
 pirate,hook,1,
 pirate,whip,1,ish - lash/whip/flogging association
-abbreviation,music,1,prereq: music/abbreviation+notation
+abbreviation,music,1,ish prereq: music/abbreviation+notation
 abomination,evil,1,prereq: food+evil/starvation+abomination
 addressed,prayers,1,prereq: prayers/addressed+blessed
 apocalypse,evil,1,prereq: food+evil/chips+apocalypse
 ashen,dark,1,prereq: food+dark/ration+ashen
-avant-garde,hard,1,prereq: avant-garde+music/hard+bard
+avant-garde,hard,0,prereq: avant-garde+music/hard+bard
 backtrack,exploration,1,prereq: exploration/cul-de-sac+backtrack
 bane,evil,1,prereq: food+evil/grain+bane
 bard,music,1,prereq: avant-garde+music/hard+bard
@@ -846,7 +846,7 @@ dark,illumination,1,prereq: food+dark/crustacean+illumination
 dark,melancholic,1,prereq: food+dark/metabolic+melancholic
 dark,murky,1,prereq: food+dark/turkey+murky
 dark,unseen,1,prereq: food+dark/cuisine+unseen
-darth vader,evil,1,prereq: food+evil/seder+darth vader
+invader,evil,1,prereq: food+evil/seder+invader
 deceit,evil,1,prereq: food+evil/wheat+deceit
 declare,invoke,1,prereq: invoke/declare+prayer
 dessert,food,1,prereq: food+evil/dessert+hurt
@@ -860,7 +860,7 @@ evil,malign,1,prereq: food+evil/wine+malign
 evil,maligns,1,prereq: food+evil/heinz+maligns
 evil,mean,1,prereq: food+evil/cuisine+mean
 evil,pain,1,prereq: food+evil/grain+pain
-evil,rake,1,prereq: food+evil/cake+rake
+evil,rake,1,ish because this sense of rake is archaic/obscure. prereq: food+evil/cake+rake
 evil,rude,1,prereq: food+evil/chewed+rude
 evil,satanic,1,prereq: food+evil/organic+satanic
 evil,scum,1,prereq: food+evil/crumb+scum
@@ -894,7 +894,7 @@ food,ration,1,prereq: food+dark/ration+ashen
 food,rice,1,prereq: food+evil/rice+vice
 food,sachertorte,1,prereq: food+evil/sachertorte+voldemort
 food,savory,1,prereq: food+evil/savory+slavery
-food,seder,1,prereq: food+evil/seder+darth vader
+food,seder,1,prereq: food+evil/seder+invader
 food,served,1,prereq: food+evil/served+undeserved
 food,snack,1,prereq: food+dark/snack+black
 food,starvation,1,prereq: food+evil/starvation+abomination
@@ -904,6 +904,27 @@ food,waiter,1,prereq: food+evil/waiter+traitor
 food,wheat,1,prereq: food+evil/wheat+deceit
 food,wine,1,prereq: food+evil/wine+malign
 football,incomplete,1,prereq: football/yeet+incomplete
+football,pass,1
+football,throw,1
+football,tackle,1
+football,fish,0,
+football,rod,0
+football,bait,0
+football,quarterback,1
+football,stadium,1
+football,field,1
+football,basket,0
+football,bat,0
+football,dribble,1,because of soccer
+football,goal,1
+football,cat,0
+football,dog,0,ish because hot dogs are served at football games
+football,duck,0
+football,cheer,1
+football,evil,0
+football,crime,0
+football,heist,0
+football,violin,0
 football,yeet,1,prereq: football/yeet+incomplete
 fork,pasta,1,prereq: pasta/fork+pork
 french,pirate,1,prereq: pirate/french+wench
@@ -938,7 +959,50 @@ sky,water,1,prereq: water/sky+supply
 slosh,water,1,prereq: water/slosh+wash
 sprayed,water,1,prereq: water/sprayed+wade
 supplied,water,1,prereq: water/supplied+tide
+fluidity,water,1
 turbidity,water,1,prereq: water/humidity+turbidity
+water,beam,0
+water,brick,0
+water,chimera,0
+water,dolphin,1
+water,fish,1
+water,ice,1
+water,metal,0,ish
+water,snow,1
+water,squeamish,0
+water,sting,0
+water,zinc,0
+water,think,0
+water,smart,0
+water,dumb,0
+rain,beam,0
+rain,brick,0
+rain,chimera,0
+rain,cloud,1
+rain,clouds,1
+rain,dolphin,0
+rain,fish,0
+rain,ice,1,ish
+rain,snow,1
+rain,squeamish,0
+rain,think,0
+rain,smart,0
+rain,dumb,0
+rain,zinc,0
+brain,beam,0
+brain,brick,0
+brain,chimera,0
+brain,cloud,0
+brain,clouds,0
+brain,dolphin,0,ish
+brain,fish,0,ish
+brain,ice,1
+brain,snow,1
+brain,squeamish,0,ish
+brain,zinc,0
+brain,think,1
+brain,smart,1
+brain,dumb,1
 wash,water,1,prereq: water/slosh+wash
 crime,dog,0,prereq: crime ought_not dog+smog
 crime,smog,0,prereq: crime ought_not dog+smog

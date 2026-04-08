@@ -7,9 +7,9 @@
 # Combines multiple offline signals:
 #   1. Numberbatch cosine similarity + ConceptNet edge bonus (primary)
 #   2. WordNet gloss containment (high-precision rescue for polysemy)
-#   3. ConceptNet 2-hop paths (inferring relatedness through intermediate nodes)
-#   4. WordNet gloss-vector sense embeddings (secondary rescue)
-#   5. USF Free Association 2-hop (boost to base score via human association graph)
+#   3. WordNet gloss-vector sense embeddings + morphy fallback (secondary rescue)
+#   4. USF Free Association 2-hop (boost to base score via human association graph)
+#   5. ConceptNet 2-hop paths (currently disabled; toggleable via $TWOHOP_ENABLED)
 #
 
 require_relative 'Cosine'
@@ -42,9 +42,11 @@ SIMILAR_MAX = 500
 $SIMILARITY_THRESHOLD = 10
 $CONCEPTNET_EDGE_BONUS = 7
 $SENSE_VECTOR_THRESHOLD = 9
+$SENSE_VECTOR_MIN_FLOOR = 5
+$SENSE_VECTOR_MORPHY_FLOOR = 13
 $SENSE_VECTOR_MIN_BASE = 6
 $SENSE_VECTOR_MAX_SENSES = 4
-$TWOHOP_ENABLED = true
+$TWOHOP_ENABLED = false
 $TWOHOP_MIN_BRIDGE = 3.0
 $USF_TWOHOP_BOOST = 10
 $USF_MIN_BRIDGE_COS = 8
@@ -237,8 +239,9 @@ def sense_vectors(word, max_senses = $SENSE_VECTOR_MAX_SENSES)
   vecs
 end
 
-def max_sense_cosine(word1, word2)
-  best = 0
+def directional_sense_cosines(word1, word2)
+  best_1to2 = 0
+  best_2to1 = 0
 
   v2_raw = numberbatch[word2]
   if v2_raw
@@ -246,7 +249,7 @@ def max_sense_cosine(word1, word2)
       dot = 0.0
       sv.size.times { |i| dot += sv[i] * v2_raw[i] }
       score = (dot * 100).round
-      best = score if score > best
+      best_1to2 = score if score > best_1to2
     end
   end
 
@@ -256,11 +259,83 @@ def max_sense_cosine(word1, word2)
       dot = 0.0
       sv.size.times { |i| dot += sv[i] * v1_raw[i] }
       score = (dot * 100).round
-      best = score if score > best
+      best_2to1 = score if score > best_2to1
     end
   end
 
-  best
+  [best_1to2, best_2to1]
+end
+
+def max_sense_cosine(word1, word2)
+  directional_sense_cosines(word1, word2).max
+end
+
+# Morphy-resolved sense vectors for inflected forms (plurals, verb conjugations)
+# that lack direct WordNet lemma entries. Only used as a fallback when
+# sense_vectors returns empty.
+$morphy_sv_cache = {}
+def sense_vectors_morphy(word, max_senses = $SENSE_VECTOR_MAX_SENSES)
+  return $morphy_sv_cache[word] if $morphy_sv_cache.key?(word)
+  morphs = (WordNet::Synset.morphy_all(word) rescue []).uniq - [word]
+  vecs = []
+  count = 0
+  morphs.each do |form|
+    break if count >= max_senses
+    WordNet::Lemma.find_all(form).each do |lemma|
+      break if count >= max_senses
+      lemma.synsets.each do |synset|
+        break if count >= max_senses
+        content_words = synset.gloss.downcase.scan(/[a-z]+/) - GLOSS_STOP_WORDS.to_a
+        embeds = content_words.filter_map { |w| numberbatch[w] }
+        next if embeds.size < 2
+        dim = embeds.first.size
+        avg = Array.new(dim, 0.0)
+        embeds.each { |v| dim.times { |i| avg[i] += v[i] } }
+        mag = Math.sqrt(avg.sum { |x| x * x })
+        next if mag < 1e-9
+        vecs << avg.map! { |x| x / mag }
+        count += 1
+      end
+    end
+  end
+  $morphy_sv_cache[word] = vecs
+  vecs
+end
+
+def morphy_directional_sense_cosines(word1, word2)
+  sv1_orig = sense_vectors(word1)
+  sv2_orig = sense_vectors(word2)
+  sv1_morphy = sv1_orig.empty? ? sense_vectors_morphy(word1) : []
+  sv2_morphy = sv2_orig.empty? ? sense_vectors_morphy(word2) : []
+  return nil if sv1_morphy.empty? && sv2_morphy.empty?
+
+  d1, d2 = directional_sense_cosines(word1, word2)
+
+  if sv1_morphy.any?
+    v2_raw = numberbatch[word2]
+    if v2_raw
+      sv1_morphy.each do |sv|
+        dot = 0.0
+        sv.size.times { |i| dot += sv[i] * v2_raw[i] }
+        score = (dot * 100).round
+        d1 = score if score > d1
+      end
+    end
+  end
+
+  if sv2_morphy.any?
+    v1_raw = numberbatch[word1]
+    if v1_raw
+      sv2_morphy.each do |sv|
+        dot = 0.0
+        sv.size.times { |i| dot += sv[i] * v1_raw[i] }
+        score = (dot * 100).round
+        d2 = score if score > d2
+      end
+    end
+  end
+
+  [d1, d2]
 end
 
 # --- Legacy embed dict (wiki-news-subword) ---
@@ -342,10 +417,20 @@ def semantically_related?(word1, word2, include_self=false)
     return true if conceptnet_twohop_score(word1, word2) >= $TWOHOP_MIN_BRIDGE
   end
 
-  if !stop_word?(word1) && !stop_word?(word2) &&
-     base >= $SENSE_VECTOR_MIN_BASE &&
-     max_sense_cosine(word1, word2) >= $SENSE_VECTOR_THRESHOLD
-    return true
+  if !stop_word?(word1) && !stop_word?(word2) && base >= $SENSE_VECTOR_MIN_BASE
+    d1, d2 = directional_sense_cosines(word1, word2)
+    sv_max = [d1, d2].max
+    sv_min = [d1, d2].min
+    both_have_senses = sense_vectors(word1).size > 0 && sense_vectors(word2).size > 0
+    if both_have_senses
+      return true if sv_max >= $SENSE_VECTOR_THRESHOLD && sv_min >= $SENSE_VECTOR_MIN_FLOOR
+    elsif $SENSE_VECTOR_MORPHY_FLOOR > 0
+      morphy_result = morphy_directional_sense_cosines(word1, word2)
+      if morphy_result
+        md1, md2 = morphy_result
+        return true if [md1, md2].max >= $SENSE_VECTOR_THRESHOLD && [md1, md2].min >= $SENSE_VECTOR_MORPHY_FLOOR
+      end
+    end
   end
 
   if $USF_TWOHOP_BOOST > 0 &&
