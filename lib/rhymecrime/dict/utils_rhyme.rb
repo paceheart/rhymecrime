@@ -69,11 +69,8 @@ def explicitly_forbidden?(word)
 end
 
 def load_forbid_list_as_array
-  if(File.exist?("forbid_list.txt"))
-     return IO.readlines("forbid_list.txt", chomp: true, encoding: 'UTF-8')
-  else
-    return IO.readlines("dict/forbid_list.txt", chomp: true, encoding: 'UTF-8')
-  end
+  path = File.join(__dir__, "forbid_list.txt")
+  IO.readlines(path, chomp: true, encoding: "UTF-8")
 end
 
 def delete_explicitly_forbidden_words_from_array(array)
@@ -579,11 +576,8 @@ def all_forms(word)
 end
 
 def load_variants_raw
-  if(File.exist?("spelling_variants.txt"))
-     return IO.readlines("spelling_variants.txt", chomp: true, encoding: 'UTF-8')
-  else
-     return IO.readlines("dict/spelling_variants.txt", chomp: true, encoding: 'UTF-8')
-  end
+  path = File.join(__dir__, "spelling_variants.txt")
+  IO.readlines(path, chomp: true, encoding: "UTF-8")
 end
 
 def load_variants
