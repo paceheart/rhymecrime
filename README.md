@@ -1,5 +1,5 @@
 # RhymeCrime
-Find semantically related rhymes
+Find thematically related rhymes
 
 ## Installation
 
@@ -16,7 +16,7 @@ Data and build artifacts are split so **sources** stay under `corpora/` and **re
 
 | Location | Role |
 |----------|------|
-| **`lib/`** | On the load path. `lib/rhymecrime.rb` defines `Rhymecrime::ROOT`; application code lives under **`lib/rhymecrime/`** (`crime.rb`, `semantic-similarity.rb`, `frontend.rb`, helpers, and the **`dict/`** subtree). Use `require "rhymecrime/..."` from `bin/` and specs (after unshifting `lib/`). |
+| **`lib/`** | On the load path. `lib/rhymecrime.rb` defines `Rhymecrime::ROOT`; application code lives under **`lib/rhymecrime/`** (`crime.rb`, `related.rb`, `frontend.rb`, helpers, and the **`dict/`** subtree). Use `require "rhymecrime/..."` from `bin/` and specs (after unshifting `lib/`). |
 | **`bin/`** | **Executables**: `rhyme.rb`, `similar.rb`, `debug.rb`, `anneal.rb`, `dict-build` (dictionary rebuild). Each prepends `lib/` to `$LOAD_PATH` as needed. |
 | **`assets/`** | Static fragments and CSS for the CGI UI (`header.html`, `footer.html`, `*.css`). Loaded via `File.join(REPO_ROOT, "assets", ...)`. |
 | **`corpora/`** | Upstream or hand-maintained **inputs** (versioned when license/size allow). |
@@ -25,11 +25,11 @@ Data and build artifacts are split so **sources** stay under `corpora/` and **re
 | **`corpora/usf/`** | USF free-association norms (raw `Cue_Target_Pairs.*` shards). Runtime graph: `generated/usf_associations.json` (you build from the raw shards; not produced by `dict-build` today). |
 | **`corpora/wiktionary/`** | Kaikki / Wiktextract English JSONL (often large; **gitignored** — fetch with `setup.sh` or equivalent). |
 | **`corpora/subtlex/`** | SUBTLEX-US frequency TSV (often **gitignored**). |
-| **`corpora/conceptnet/`** | Optional **ConceptNet** assertions gzip (`conceptnet-assertions-5.7.0.csv.gz`) for semantic edge weights in `generated/conceptnet_edges.json` (large; **gitignored**). |
+| **`corpora/conceptnet/`** | Optional **ConceptNet** assertions gzip (`conceptnet-assertions-5.7.0.csv.gz`) for thematic edge weights in `generated/conceptnet_edges.json` (large; **gitignored**). |
 | **`corpora/numberbatch/`** | Optional **Numberbatch** English vectors (`numberbatch-en-19.08.txt`) for `generated/numberbatch_vectors.msgpack` (large; **gitignored**). |
 | **`generated/`** | **Outputs** of `./bin/dict-build` (see `lib/rhymecrime/dict/dict.rb`): `word_dict.txt`, `rime_dict.txt`, `part_of_speech.json`, `hyphen_variant_map.json`, `wordfreq.tsv`, and when source corpora are present `conceptnet_edges.json`, `numberbatch_vectors.msgpack`. Semantic relatedness also reads `usf_associations.json` here if present. Entire directory is **gitignored**; clone → run `setup.sh` (wordfreq, Kaikki, …) then `./bin/dict-build`. |
 | **`lib/rhymecrime/dict/`** | Dictionary compiler (`dict.rb`), pronunciation / inflection / Wiktionary loaders, curated lists (`common_words.txt`, `rare_words.txt`, `forbid_list.txt`, …), and `dict/wordfreq/export_wordfreq_tsv.py`. |
-| **`spec/`** | RSpec examples and `related.csv` (semantic relatedness expectations). |
+| **`spec/`** | RSpec examples and `related.csv` (thematic relatedness expectations). |
 
 ## Command Line Usage
 
@@ -137,24 +137,24 @@ Also we filter out slurs.
 
 ### Semantic Relatedness
 
-Currently, RhymeCrime outsources its semantic relatedness to the Datamuse API.
+Thematic relatedness is computed offline in `related.rb` (Numberbatch, ConceptNet edges, WordNet, USF, etc.), not via a live lexical API.
 
 ### Putting it all together
 
 When you enter a single word, RhymeCrime displays rhymes for that word (separating out the rare words, where rarity is computed as described above) and in a separate column, displays sets of rhyming words. The sets of rhyming words are computed as follows:
 
-Compute the set of all words semantically related to INPUT_REL1, call it RELATEDS1.  
+Compute the set of all words thematically related to INPUT_REL1, call it RELATEDS1.  
 For each word REL1 in RELATEDS1,  
   Get all rhymes RHYME1 of REL1.  
   If R is in RELATEDS1, compute R's rime and put RHYME1 in the bucket labeled by that rime.  
 Return all buckets with two or more words in them.  
 
-When you enter two words, RhymeCrime first displays rhymes for WORD1 that are semantically related to WORD2,  
+When you enter two words, RhymeCrime first displays rhymes for WORD1 that are thematically related to WORD2,  
 and in a separate column, displays pairs of rhyming words (RHYME1 / RHYME2) in which RHYME1 is related to WORD1 and RHYME2 is related to WORD2. 
 
 Algorithm:  
-Compute the set of all words semantically related to INPUT_REL1, call it RELATEDS1.  
-Compute the set of all words semantically related to INPUT_REL2, call it RELATEDS2.  
+Compute the set of all words thematically related to INPUT_REL1, call it RELATEDS1.  
+Compute the set of all words thematically related to INPUT_REL2, call it RELATEDS2.  
 For each word REL1 in RELATEDS1,  
   Get all rhymes RHYME of REL1.  
   If RHYME rhymes with REL1 and is related to INPUT_REL2, we win! "REL1 / RHYME" is a pair.  

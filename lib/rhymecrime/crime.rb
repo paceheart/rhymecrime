@@ -25,7 +25,7 @@ require 'cgi'
 require_relative 'dict/utils_rhyme'
 require_relative 'dict/phoneme.rb'
 require_relative 'dict/pronunciation.rb'
-require_relative 'semantic-similarity'
+require_relative "related"
 
 #
 # utilities
@@ -313,13 +313,13 @@ def find_synonyms(word)
 end
 
 #
-# Semantic Relatedness
+# Thematic relatedness
 #
 
 def find_related_words(word, include_self, include_rhymeless=true)
   words = []
   unless explicitly_forbidden?(word)
-    words = RelatedWords.find_semantically_related_words(word, include_self, include_rhymeless)
+    words = RelatedWords.find_thematically_related_words(word, include_self, include_rhymeless)
     words = filter_out_dispreferred_words(words, word)
   end
   return words
@@ -328,7 +328,7 @@ end
 def find_related_rhymes(rhyme, rel)
   result = find_rhyming_words(rhyme, false)
   result = filter_out_dispreferred_words(result, rhyme)
-  result = result.select{|w| semantically_related?(rhyme, w)}
+  result = result.select { |w| thematically_related?(rhyme, w) }
 end
 
 $rhyming_tuple_cache = Hash.new()
@@ -346,7 +346,7 @@ def really_find_rhyming_tuples(input_rel1)
   # Rhyming word sets that are related to INPUT_REL1.
   # Each element of the returned array is an array of words that rhyme with each other and are all related to INPUT_REL1.
   # Algorithm:
-  # Compute the set of all words semantically related to INPUT_REL1, call it RELATEDS1.
+  # Compute the set of all words thematically related to INPUT_REL1, call it RELATEDS1.
   # For each word REL1 in RELATEDS1,
   #   Get all rhymes RHYME1 of REL1.
   #   If R is in RELATEDS1, compute R's rime and put RHYME1 in the bucket labeled by that rime.
@@ -382,8 +382,8 @@ def find_rhyming_pairs(input_rel1, input_rel2)
   # Pairs of rhyming words where the first word is related to INPUT_REL1 and the second word is related to INPUT_REL2
   # Each element of the returned array is a pair of rhyming words [W1 W2] where W1 is related to INPUT_REL1 and W2 is related to INPUT_REL2
   # Algorithm:
-  # Compute the set of all words semantically related to INPUT_REL1, call it RELATEDS1.
-  # Compute the set of all words semantically related to INPUT_REL2, call it RELATEDS2.
+  # Compute the set of all words thematically related to INPUT_REL1, call it RELATEDS1.
+  # Compute the set of all words thematically related to INPUT_REL2, call it RELATEDS2.
   # For each word REL1 in RELATEDS1,
   #   Get all non-identical rhymes RHYME of REL1.
   #   If RHYME rhymes with REL1 and is related to INPUT_REL2, we win! "REL1 / RHYME" is a pair.
@@ -619,7 +619,7 @@ def rhymecrime(word1, word2, goal, output_format='text', debug_mode=false)
   #   RhymeCrime displays rhymes for that word (see find_rhyming_words), separating out the rare words (see rare?)
   #   and in a separate column, displays sets of rhyming words (see find_rhyming_tuples)
   # When you enter two words,
-  #   RhymeCrime first displays rhymes for WORD1 that are semantically related to WORD2 (see related_rhymes),
+  #   RhymeCrime first displays rhymes for WORD1 that are thematically related to WORD2 (see related_rhymes),
   #   and in a separate column, displays pairs of rhyming words (RHYME1 / RHYME2) in which RHYME1 is related to WORD1 and RHYME2 is related to WORD2. (see find_rhyming_pairs)
   $output_format = output_format
   $debug_mode = debug_mode
@@ -684,10 +684,10 @@ end
 #
 
 def related?(word1, word2, include_self=false)
-  # Is word1 conceptually related to word2?
+  # Is word1 thematically related to word2?
   word1 = preferred_form(word1)
   word2 = preferred_form(word2)
-  not explicitly_forbidden?(word1) and not explicitly_forbidden?(word2) and semantically_related?(word1, word2)
+  not explicitly_forbidden?(word1) and not explicitly_forbidden?(word2) and thematically_related?(word1, word2)
 end
 
 def rhymes?(word1, word2, identical_ok=true)

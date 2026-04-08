@@ -1,14 +1,5 @@
 hugging-face-access-token.txt
-semantic-similarity - HuggingFace Copy.rb
 *.*~
 *.*#
-corpus/*
-analysis/*
-corpora/wiktionary/*.jsonl.gz
-corpora/wiktionary/*.jsonl
-corpora/subtlex/*.tsv
-corpora/subtlex/*.json
-generated/
-# Topical relatedness source data (large; inputs for dict build)
-corpora/conceptnet/conceptnet-assertions-5.7.0.csv.gz
-corpora/numberbatch/numberbatch-en-19.08.txt
+corpora/*
+generated/*

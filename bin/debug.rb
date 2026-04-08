@@ -11,5 +11,5 @@ puts "Debugging '#{word1}' and '#{word2}'"
 $debug_mode = true
 
 puts "related? #{related?(word1, word2)}"
-puts "semantically_related? #{semantically_related?(word1, word2, false)}"
+puts "thematically_related? #{thematically_related?(word1, word2, false)}"
 puts "similarity #{similarity(word1, word2)}"

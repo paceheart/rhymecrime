@@ -201,7 +201,7 @@ def compute_and_print_similar_html
   # CGI Input: word1, word2 (optional)
   # Output: A bunch of stuff
   word1, word2 = parse_cgi_input
-  print_html_header(word1, word2, title="Semantic Similarity", handler="similar.rb")
+  print_html_header(word1, word2, title="Thematic Similarity", handler="similar.rb")
   compute_and_print_html_similar_middle(word1, word2)
   print_html_footer
 end

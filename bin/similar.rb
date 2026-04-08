@@ -1,7 +1,7 @@
 #!/usr/bin/env ruby
 
 #
-# front end for semantic similarity
+# front end for thematic relatedness
 #
 
 $LOAD_PATH.unshift File.expand_path("../lib", __dir__)

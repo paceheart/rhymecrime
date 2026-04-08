@@ -1,6 +1,8 @@
 #!/usr/bin/env ruby
 # coding: utf-8
 #
+# related.rb — word relatedness (Numberbatch, ConceptNet, WordNet, USF, …). Load: require "rhymecrime/related"
+#
 # Determine topical relatedness of two words
 # or retrieve a list of topically related words.
 #
@@ -329,7 +331,7 @@ def similarity_threshold
   $SIMILARITY_THRESHOLD
 end
 
-def semantically_related?(word1, word2, include_self=false)
+def thematically_related?(word1, word2, include_self=false)
   base = similarity(word1, word2)
   return true if base >= $SIMILARITY_THRESHOLD
 
@@ -385,8 +387,8 @@ end
 # Enumerates RhymeCrime headwords and returns those topically related to +word+.
 class RelatedWords
   class << self
-    def find_semantically_related_words(word, include_self, include_rhymeless = true)
-      words = find_all_semantically_related_words(word, include_rhymeless)
+    def find_thematically_related_words(word, include_self, include_rhymeless = true)
+      words = find_all_thematically_related_words(word, include_rhymeless)
       words.push(word) if include_self
       if words.length > SIMILAR_MAX
         words = words.sort_by { |w| -similarity(w, word) }
@@ -395,7 +397,7 @@ class RelatedWords
       words
     end
 
-    def find_all_semantically_related_words(word, include_rhymeless = true)
+    def find_all_thematically_related_words(word, include_rhymeless = true)
       @related_word_cache ||= {}
       key = [word, include_rhymeless]
       return @related_word_cache[key] if @related_word_cache.key?(key)
@@ -403,7 +405,7 @@ class RelatedWords
       words = []
       debug "Finding words related to #{word}... "
       words_we_care_about.each do |w|
-        if w != word && (include_rhymeless || has_rhyming_word?(word)) && semantically_related?(word, w)
+        if w != word && (include_rhymeless || has_rhyming_word?(word)) && thematically_related?(word, w)
           words.push(w)
         end
       end

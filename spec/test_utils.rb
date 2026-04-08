@@ -64,7 +64,7 @@ end
 
 def relatedness_test_passes?(test_case)
   expected = test_case['oughta be related?']
-  actual = semantically_related?(test_case["word1"], test_case["word2"], false)
+  actual = thematically_related?(test_case["word1"], test_case["word2"], false)
   debug expected == actual ? "." : "F"
   return expected == actual
 end
