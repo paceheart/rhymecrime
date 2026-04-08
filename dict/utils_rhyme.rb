@@ -127,6 +127,22 @@ def word_dict_includes_headword?(w)
   defined?($word_dict) && $word_dict.is_a?(Hash) && !$word_dict.empty? && $word_dict.key?(w)
 end
 
+# Headwords to consider when expanding topical relatedness (RhymeCrime lexicon + test extras).
+# Requires crime.rb to have defined +word_dict+ and optionally WORDS_NEEDED_FOR_TESTING.
+def word_we_care_about?(word)
+  w = word.to_s.downcase.strip
+  return false if w.empty?
+  return false if explicitly_forbidden?(w)
+  return true if defined?(WORDS_NEEDED_FOR_TESTING) && WORDS_NEEDED_FOR_TESTING.include?(w)
+  word_dict_includes_headword?(w)
+end
+
+def words_we_care_about
+  keys = word_dict.keys
+  keys |= WORDS_NEEDED_FOR_TESTING if defined?(WORDS_NEEDED_FOR_TESTING)
+  keys.uniq
+end
+
 # Returns UK spelling for a US (z) headword, or nil if not applicable.
 def us_to_uk_ize_spelling(us_word)
   w = us_word.to_s

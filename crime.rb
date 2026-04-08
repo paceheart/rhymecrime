@@ -319,7 +319,7 @@ end
 def find_related_words(word, include_self, include_rhymeless=true)
   words = []
   unless explicitly_forbidden?(word)
-    words = wet_corpus.find_semantically_related_words(word, include_self, include_rhymeless)
+    words = RelatedWords.find_semantically_related_words(word, include_self, include_rhymeless)
     words = filter_out_dispreferred_words(words, word)
   end
   return words

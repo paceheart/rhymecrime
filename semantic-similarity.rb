@@ -18,9 +18,7 @@ require 'msgpack'
 require 'rwordnet'
 require 'set'
 require_relative 'pace_utils'
-require_relative 'IndexedWetCorpus'
 require_relative 'dict/utils_rhyme'
-require_relative 'WordNetReverseDictionary'
 
 WordNet::DB.path = File.join(File.dirname(__FILE__), "dict/WordNet3.1/") unless defined?(WordNet::DB) && WordNet::DB.path
 
@@ -50,12 +48,6 @@ $TWOHOP_ENABLED = false
 $TWOHOP_MIN_BRIDGE = 3.0
 $USF_TWOHOP_BOOST = 10
 $USF_MIN_BRIDGE_COS = 8
-
-# Legacy corpus-based parameters (kept for potential hybrid use)
-$SENTENCE_SIMILARITY_ADJUSTMENT = 90
-$DOC_SIMILARITY_WEIGHT = 0.1
-$DOC_SIMILARITY_ADJUSTMENT = -80
-$GLOSS_SIMILARITY = 120
 
 # --- ConceptNet edge map ---
 # Keys are "word1|word2" (alphabetically sorted), values are edge weights.
@@ -394,13 +386,6 @@ def get_embedding(word)
   embed_dict[word]
 end
 
-# --- Corpus ---
-
-$wet = nil
-def wet_corpus
-  $wet ||= IndexedWetCorpus.new
-end
-
 # --- Main scoring ---
 
 def similarity_threshold
@@ -456,33 +441,6 @@ def similarity(word1, word2)
   (cos * 100).round + edge_bonus
 end
 
-# Legacy corpus-based similarity (kept for anneal.rb backward compat and hybrid experiments)
-def corpus_similarity(word1, word2)
-  return 0 if stop_word?(word1) || stop_word?(word2)
-  sentence_cooccurrence = wet_corpus.cooccurrence(word1, word2, true) + $SENTENCE_SIMILARITY_ADJUSTMENT
-  doc_cooccurrence = wet_corpus.cooccurrence(word1, word2, false)
-  adjusted_doc_cooccurrence = doc_cooccurrence * $DOC_SIMILARITY_WEIGHT + $DOC_SIMILARITY_ADJUSTMENT
-  gloss = adjusted_gloss_cooccurrence(word1, word2)
-  r = rarity(word1, word2)
-  (sentence_cooccurrence + adjusted_doc_cooccurrence + gloss) * r
-end
-
-$wn_dict = nil
-def wn_dict
-  $wn_dict ||= WordNetReverseDictionary.new
-end
-
-def adjusted_gloss_cooccurrence(word, gloss_word)
-  wn_dict.gloss_cooccurs?(word, gloss_word) ? $GLOSS_SIMILARITY : 0
-end
-
-def rarity(word1, word2)
-  idf1 = wet_corpus.inverse_document_frequency(word1)
-  idf2 = wet_corpus.inverse_document_frequency(word2)
-  most_common_idf = [idf1, idf2].min
-  most_common_idf - 1
-end
-
 def cosine_similarity(word1, word2)
   vec1 = get_embedding(word1)
   vec2 = get_embedding(word2)
@@ -497,32 +455,35 @@ def print_similarity(word1, word2)
   puts "#{word1} #{word2}: #{similarity(word1, word2)}"
 end
 
-class IndexedWetCorpus
-
-  def find_semantically_related_words(word, include_self, include_rhymeless=true)
-    words = find_all_semantically_related_words(word, include_rhymeless)
-    if(include_self)
-      words.push(word)
-    end
-    if words.length > SIMILAR_MAX
-      words = words.sort_by!{|w| -similarity(w, word)}
-      words = words[0..SIMILAR_MAX-1]
-    end
-    return words
-  end
-
-  memoize def find_all_semantically_related_words(word, include_rhymeless=true)
-    words = []
-    debug "Finding words related to #{word}... "
-    for w in words_we_care_about do
-      if w != word and (include_rhymeless or has_rhyming_word?(word)) and semantically_related?(word, w)
-        words.push(w)
+# Enumerates RhymeCrime headwords and returns those topically related to +word+.
+class RelatedWords
+  class << self
+    def find_semantically_related_words(word, include_self, include_rhymeless = true)
+      words = find_all_semantically_related_words(word, include_rhymeless)
+      words.push(word) if include_self
+      if words.length > SIMILAR_MAX
+        words = words.sort_by { |w| -similarity(w, word) }
+        words = words[0..SIMILAR_MAX - 1]
       end
+      words
     end
-    debug "#{words.length()}\n"
-    return words
-  end
 
+    def find_all_semantically_related_words(word, include_rhymeless = true)
+      @related_word_cache ||= {}
+      key = [word, include_rhymeless]
+      return @related_word_cache[key] if @related_word_cache.key?(key)
+
+      words = []
+      debug "Finding words related to #{word}... "
+      words_we_care_about.each do |w|
+        if w != word && (include_rhymeless || has_rhyming_word?(word)) && semantically_related?(word, w)
+          words.push(w)
+        end
+      end
+      debug "#{words.length}\n"
+      @related_word_cache[key] = words
+    end
+  end
 end
 
 def similarity_color(similarity)
