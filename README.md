@@ -29,12 +29,11 @@ Data and build artifacts are split so **sources** stay under `corpora/` and **re
 | **`corpora/numberbatch/`** | Optional **Numberbatch** English vectors (`numberbatch-en-19.08.txt`) for `generated/numberbatch_vectors.msgpack` (large; **gitignored**). |
 | **`generated/`** | **Outputs** of `./bin/dict-build` (see `lib/rhymecrime/dict/dict.rb`): `word_dict.txt`, `rime_dict.txt`, `part_of_speech.json`, `hyphen_variant_map.json`, `wordfreq.tsv`, and when source corpora are present `conceptnet_edges.json`, `numberbatch_vectors.msgpack`. Semantic relatedness also reads `usf_associations.json` here if present. Entire directory is **gitignored**; clone → run `setup.sh` (wordfreq, Kaikki, …) then `./bin/dict-build`. |
 | **`lib/rhymecrime/dict/`** | Dictionary compiler (`dict.rb`), pronunciation / inflection / Wiktionary loaders, curated lists (`common_words.txt`, `rare_words.txt`, `forbid_list.txt`, …), and `dict/wordfreq/export_wordfreq_tsv.py`. |
-| **Repo root `rhyme.rb`, `similar.rb`, …** | Thin wrappers that `load` the matching script under `bin/` for deployments that expect those names at the repo root (e.g. CGI). |
 | **`spec/`** | RSpec examples and `related.csv` (semantic relatedness expectations). |
 
 ## Command Line Usage
 
-echo "word1=food" | rhyme.rb
+echo "word1=food" | bin/rhyme.rb
 
 You can change OUTPUT_TYPE from 'cgi' to 'text' if you want to use it at the command line.
 
@@ -43,10 +42,10 @@ You can change OUTPUT_TYPE from 'cgi' to 'text' if you want to use it at the com
 * put everything into your cgi-bin directory
 * configure your webserver to allow Ruby scripts
 * cd /WHATEVER/cgi-bin/
-* chmod +x *.rb bin/dict-build
+* chmod +x bin/*.rb bin/dict-build
 * ./bin/dict-build
 
-That rebuilds caches under `generated/` (loads `lib/rhymecrime/dict/dict.rb` and runs the rebuild). Then open `rhyme.rb` (root wrapper or `bin/rhyme.rb`) to bring up the web interface. Symlink `assets/*.css` into your static docroot if needed (see `setup.sh`).
+That rebuilds caches under `generated/` (loads `lib/rhymecrime/dict/dict.rb` and runs the rebuild). Configure your app server to run `bin/rhyme.rb` (and `bin/similar.rb` if needed) for the web UI. Symlink `assets/*.css` into your static docroot if needed (see `setup.sh`).
 
 ## Examples:
 
@@ -159,3 +158,9 @@ Compute the set of all words semantically related to INPUT_REL2, call it RELATED
 For each word REL1 in RELATEDS1,  
   Get all rhymes RHYME of REL1.  
   If RHYME rhymes with REL1 and is related to INPUT_REL2, we win! "REL1 / RHYME" is a pair.  
+
+## Credits
+
+RhymeCrime was created by <a href="http://paceheart.com">Pace Heart</a> and extended/maintained by all the contributors to this repository.
+
+See assets/footer.html for the list of libraries and data sources used by RhymeCrime.

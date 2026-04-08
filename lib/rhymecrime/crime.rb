@@ -14,7 +14,7 @@ $display_word_similarities = false
 
 #
 # Public interface: rhymecrime(word1, word2, goal, output_format='text', debug_mode=false)
-# see rhyme.rb for documentation
+# see bin/rhyme.rb for documentation
 # 
 
 require 'rwordnet'

@@ -13,7 +13,7 @@ gem install scalpel memery msgpack
 sudo dnf install -y httpd php php-mysqli mariadb105
 # do this: https://editrocket.com/articles/ruby_apache_windows.html
 # and add this: SetEnv GEM_HOME "/home/daemon/.gem/ruby/2.2.0"
-# and add this in the <Directory /> block: RedirectMatch ^/$ http://rhymecrime.com/cgi-bin/rhyme.rb
+# and add this in the <Directory /> block: RedirectMatch ^/$ http://rhymecrime.com/cgi-bin/bin/rhyme.rb
 # to this file: /etc/httpd/conf/httpd.conf
 sudo systemctl start httpd
 sudo systemctl enable httpd
@@ -29,7 +29,7 @@ ln -s ../cgi-bin/assets/crimestyle-wide.css
 
 # not sure this is necessary:
 cd /var/www/cgi-bin/
-sudo chmod o+x *
+sudo chmod o+x bin/*.rb bin/dict-build
 
 sudo dnf install xorg-x11-xauth.x86_64 xorg-x11-server-utils.x86_64 dbus-x11.x86_64
 
