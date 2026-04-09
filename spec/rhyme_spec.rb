@@ -2,43 +2,33 @@
 # rhymes
 #
 
-def oughta_rhyme(word1, word2, is_working=true)
-  oughta_rhyme_one_way(word1, word2, is_working)
-  oughta_rhyme_one_way(word2, word1, is_working)
+def oughta_rhyme(word1, word2, not_working_message: nil)
+  oughta_rhyme_one_way(word1, word2, not_working_message: not_working_message)
+  oughta_rhyme_one_way(word2, word1, not_working_message: not_working_message)
 end
 
-def oughta_rhyme_one_way(word1, word2, is_working=true)
-  if is_working
-    test_name = "'#{word1}' oughta have '#{word2}' in its list of rhymes"
-    it test_name do
-      expect(find_preferred_rhyming_words(word1).include?(word2)).to eql(true), "'#{word1}' (#{debug_info(word1)}) oughta include '#{word2}' ((#{debug_info(word2)}) in its list of rhymes, but instead it only rhymes with #{find_preferred_rhyming_words(word1)}"
-    end
-  else # NOT_WORKING
-    if TEST_FOR_SURPRISING_SUCCESSES
-      ought_not_rhyme_one_way(word1, word2, true)
-    end
+def oughta_rhyme_one_way(word1, word2, not_working_message: nil)
+  test_name = "'#{word1}' oughta have '#{word2}' in its list of rhymes"
+  it test_name do
+    skip_if_not_working(not_working_message)
+    expect(find_preferred_rhyming_words(word1).include?(word2)).to eql(true), "'#{word1}' (#{debug_info(word1)}) oughta include '#{word2}' ((#{debug_info(word2)}) in its list of rhymes, but instead it only rhymes with #{find_preferred_rhyming_words(word1)}"
   end
 end
 
-def ought_not_rhyme(word1, word2, is_working=true)
-  ought_not_rhyme_one_way(word1, word2, is_working)
-  ought_not_rhyme_one_way(word2, word1, is_working)
+def ought_not_rhyme(word1, word2, not_working_message: nil)
+  ought_not_rhyme_one_way(word1, word2, not_working_message: not_working_message)
+  ought_not_rhyme_one_way(word2, word1, not_working_message: not_working_message)
 end
 
-def ought_not_rhyme_one_way(word1, word2, is_working=true)
-  if is_working
-    test_name = "'#{word1}' ought not have '#{word2}' in its list of rhymes"
-    it test_name do
-      expect(find_preferred_rhyming_words(word1).include?(word2)).to eql(false), "'#{word1}' (#{debug_info(word1)}) ought not include '#{word2}' (#{debug_info(word2)}) as a rhyme, but it does, and it also rhymes with #{find_preferred_rhyming_words(word1)}"
-    end
-  else # NOT_WORKING
-    if TEST_FOR_SURPRISING_SUCCESSES
-      oughta_rhyme_one_way(word1, word2, true)
-    end
+def ought_not_rhyme_one_way(word1, word2, not_working_message: nil)
+  test_name = "'#{word1}' ought not have '#{word2}' in its list of rhymes"
+  it test_name do
+    skip_if_not_working(not_working_message)
+    expect(find_preferred_rhyming_words(word1).include?(word2)).to eql(false), "'#{word1}' (#{debug_info(word1)}) ought not include '#{word2}' (#{debug_info(word2)}) as a rhyme, but it does, and it also rhymes with #{find_preferred_rhyming_words(word1)}"
   end
 end
 
-def could_go_either_way(word1, word2, is_working=true)
+def could_go_either_way(word1, word2, not_working_message: nil)
 end
 
 describe 'RHYMES' do
@@ -103,7 +93,7 @@ describe 'RHYMES' do
     ought_not_rhyme 'tea', 'bounty'
     ought_not_rhyme 'eyeball', 'mall'
     ought_not_rhyme 'eyeball', 'ball'
-    oughta_rhyme 'eyeball', 'highball', NOT_WORKING # wiktionary lacks a pronunciation for 'highball'
+    oughta_rhyme 'eyeball', 'highball', not_working_message: "wiktionary lacks a pronunciation for 'highball'"
     ought_not_rhyme 'painting', 'ring'
   end
 
@@ -130,12 +120,12 @@ describe 'RHYMES' do
   
   context 'identical rhymes' do
     ought_not_rhyme 'leave', 'believe'
-    oughta_rhyme 'troll', 'patrol', NOT_WORKING
-    oughta_rhyme 'troll', 'control', NOT_WORKING
+    oughta_rhyme 'troll', 'patrol', not_working_message: true
+    oughta_rhyme 'troll', 'control', not_working_message: true
     oughta_rhyme 'end', 'pend'
     oughta_rhyme 'end', 'append'
     ought_not_rhyme 'pend', 'append' # identical
-    oughta_rhyme 'upend', 'pend' # , NOT_WORKING # 'upend' isn't in cmudict, and if it were, we'd get an incorrect syllable boundary anyway
+    oughta_rhyme 'upend', 'pend' # skipped candidate: 'upend' isn't in cmudict, and if it were, we'd get an incorrect syllable boundary anyway
     ought_not_rhyme 'end', 'upend' # working for the wrong reasons: 'upend' isn't in cmudict, and if it were, we'd get an incorrect syllable boundary anyway
     ought_not_rhyme 'lied', 'relied'
     ought_not_rhyme 'confide', 'defied'
@@ -170,7 +160,7 @@ describe 'RHYMES' do
     ought_not_rhyme 'unable', 'disable' # dis- is a prefix
     oughta_rhyme 'able', 'sable' # s- is not a prefix
     oughta_rhyme 'table', 'disable'
-    oughta_rhyme 'sable', 'disable' # , NOT_WORKING # arguable
+    oughta_rhyme 'sable', 'disable' # skipped candidate: arguable
     ought_not_rhyme 'able', 'disable'
 
     oughta_rhyme 'action', 'traction'
@@ -222,7 +212,7 @@ describe 'RHYMES' do
     ought_not_rhyme_one_way 'goner', 'honour' # ...but not honour
     oughta_rhyme_one_way 'realisable', 'advisable' # input realisable, you oughta get advisable
     oughta_rhyme 'advisable', 'realizable' # but input advisable, and you oughta get realizable...
-    ought_not_rhyme_one_way 'advisable', 'realisable' # , NOT_WORKING # ...but not realisable with an s
+    ought_not_rhyme_one_way 'advisable', 'realisable' # skipped candidate: ...but not realisable with an s
   end
 
   context 'profanity is allowed' do
@@ -256,7 +246,7 @@ describe 'RHYMES' do
   end
 
   context 'd vs. t' do
-    # Many pairs below expect NA intervocalic flapping (T~D) as alternate prons; triage NOT_WORKING until implemented.
+    # Many pairs below expect NA intervocalic flapping (T~D) as alternate prons; triage skipped examples until implemented.
     ought_not_rhyme 'need', 'meat'
     oughta_rhyme 'needy', 'meaty'
     oughta_rhyme 'neediest', 'greediest'
@@ -354,12 +344,12 @@ describe 'RHYMES' do
     oughta_rhyme 'ladle', 'fatal'
     oughta_rhyme 'beetle', 'needle'
     oughta_rhyme 'noodle', 'brutal'
-    oughta_rhyme 'coital', 'colloidal', NOT_WORKING # was tied to *us→*al promotion (removed)
+    oughta_rhyme 'coital', 'colloidal', not_working_message: "was tied to *us→*al promotion (removed)"
     oughta_rhyme 'potato', 'tornado'
     oughta_rhyme 'transmittable', 'biddable'
     oughta_rhyme 'debatable', 'tradable'
     # Compound boundary may block flap (Withgott proper):
-    oughta_rhyme 'whiteout', 'hideout', NOT_WORKING # Wiktionary stress is wrong for whiteout
+    oughta_rhyme 'whiteout', 'hideout', not_working_message: "Wiktionary stress is wrong for whiteout"
     ought_not_rhyme 'cottage', 'bodice'
     oughta_rhyme 'tighten', 'whiten'
     ought_not_rhyme 'tighten', 'widen'
@@ -452,7 +442,7 @@ describe 'RHYMES' do
     oughta_rhyme 'car', 'tsar'
     oughta_rhyme 'car', 'czar'
     ought_not_rhyme 'czar', 'tsar'
-    oughta_rhyme 'lad', 'vlad'# , NOT_WORKING # 'vlad' gets syllabified as V . L AE D
+    oughta_rhyme 'lad', 'vlad', not_working_message: "'vlad' gets syllabified as V . L AE D"
     oughta_rhyme 'withdraw', 'voila'
   end
   
@@ -462,8 +452,8 @@ describe 'RHYMES' do
     oughta_rhyme 'foster', 'impostor' # foster [AA S T ER] imposter [AO S T ER]
     oughta_rhyme 'curry', 'hurry' # curry [K AH1 R IY0] hurry [HH ER1 IY0]
     oughta_rhyme 'errors', 'terrors' # errors [EH1 R ER0 Z] terrors [T EH1 R AH0 R Z]
-    oughta_rhyme 'array', 'hurray', NOT_WORKING # array [ER0 EY1] hurray [HH AH0 R EY1]
-    oughta_rhyme 'array', 'moray', NOT_WORKING # array [ER0 EY1] moray [M ER0 EY1]
+    oughta_rhyme 'array', 'hurray', not_working_message: "array [ER0 EY1] hurray [HH AH0 R EY1]"
+    oughta_rhyme 'array', 'moray', not_working_message: "array [ER0 EY1] moray [M ER0 EY1]"
     oughta_rhyme "taken", 'waken' # taken [T EY1 K IH0 N], waken [W EY1 K AH0 N]
     oughta_rhyme "takin'", 'waken' # takin' [T EY1 K IH0 N], waken [W EY1 K AH0 N]
     oughta_rhyme 'tons', 'funds' # [T AH1 N Z] [F AH1 N D Z], N D Z gets collapsed to N Z
@@ -472,7 +462,7 @@ describe 'RHYMES' do
     oughta_rhyme 'blotch', 'watch'
     oughta_rhyme 'blotched', 'watched'
     oughta_rhyme 'poor', 'tour' # P UW R / T UH R
-    oughta_rhyme 'informant', 'torment', NOT_WORKING
+    oughta_rhyme 'informant', 'torment', not_working_message: true
   end
 
   context 'imperfect rhymes' do
@@ -484,14 +474,14 @@ describe 'RHYMES' do
     oughta_rhyme 'dodged', 'massaged'
     oughta_rhyme 'dodging', 'massaging'
     oughta_rhyme 'fennel', 'sentimental' # it's OK to elide the final T in 'sentimental'
-    oughta_rhyme 'greediest', 'devious', NOT_WORKING
-    oughta_rhyme 'fence', 'wince', NOT_WORKING
-    oughta_rhyme 'vintage', 'percentage', NOT_WORKING
-    oughta_rhyme 'girl', 'world', NOT_WORKING
+    oughta_rhyme 'greediest', 'devious', not_working_message: true
+    oughta_rhyme 'fence', 'wince', not_working_message: true
+    oughta_rhyme 'vintage', 'percentage', not_working_message: true
+    oughta_rhyme 'girl', 'world', not_working_message: true
     oughta_rhyme 'false', 'malts' # sure I guess? otherwise 'false' won't rhyme with anything at all
     oughta_rhyme 'else', 'melts' # sure I guess? otherwise 'else' won't rhyme with anything at all
-    oughta_rhyme 'poor', 'core', NOT_WORKING # in some dialects, these rhyme
-    oughta_rhyme 'cajun', 'occasion', NOT_WORKING
+    oughta_rhyme 'poor', 'core', not_working_message: "in some dialects, these rhyme"
+    oughta_rhyme 'cajun', 'occasion', not_working_message: true
   end
   
   context 'rhymes too imperfect to live' do
@@ -502,7 +492,7 @@ describe 'RHYMES' do
   
   context 'loan words' do
     oughta_rhyme 'amour', 'bonjour'
-    ought_not_rhyme 'bocce', 'mocha', NOT_WORKING # bad bocce pron in CMUdict
+    ought_not_rhyme 'bocce', 'mocha', not_working_message: "bad bocce pron in CMUdict"
   end
 
   context 'modern words' do
@@ -520,13 +510,13 @@ describe 'RHYMES' do
     oughta_rhyme 'couples', 'throuples'
     oughta_rhyme 'url', 'hell'
     oughta_rhyme 'urls', 'smells'
-    ought_not_rhyme 'url', 'curl', NOT_WORKING # bad url pron
+    ought_not_rhyme 'url', 'curl', not_working_message: "bad url pron"
   end
 
   context '-er' do
     ought_not_rhyme 'freer', 'beer'
-    oughta_rhyme 'freer', 'seer', NOT_WORKING # bad seer pron in CMUdict
-    ought_not_rhyme 'seer', 'beer', NOT_WORKING # bad seer pron in CMUdict
+    oughta_rhyme 'freer', 'seer', not_working_message: "bad seer pron in CMUdict"
+    ought_not_rhyme 'seer', 'beer', not_working_message: "bad seer pron in CMUdict"
   end
 
   context 'common_words.txt' do
@@ -538,8 +528,8 @@ describe 'RHYMES' do
     oughta_rhyme 'locker', 'clocker'
     ought_not_rhyme 'fails', 'entrails' # 'entrails' stress is on the first syllable
     oughta_rhyme 'guess', 'finesse'
-    oughta_rhyme 'nest', 'finessed', NOT_WORKING # it's an identical rhyme. I'd like to include it but I don't know how without including unwanted identical rhymes
-    oughta_rhyme 'keto', 'mosquito', NOT_WORKING # bad wiktionary pron for keto
+    oughta_rhyme 'nest', 'finessed', not_working_message: "it's an identical rhyme. I'd like to include it but I don't know how without including unwanted identical rhymes"
+    oughta_rhyme 'keto', 'mosquito', not_working_message: "bad wiktionary pron for keto"
     oughta_rhyme 'bold', 'oversold'
     oughta_rhyme 'vibe', 'unsubscribe'
     oughta_rhyme 'vibes', 'unsubscribes'
@@ -571,17 +561,17 @@ describe 'RHYMES' do
     # plus a syllable boundary before zoned's CMU string. General prefix morphology is overkill for this alone.
   context 'prefix morphology' do
     oughta_rhyme 'owned', 'zoned'
-    oughta_rhyme 'unowned', 'zoned', NOT_WORKING
-    oughta_rhyme 'owned', 'rezoned', NOT_WORKING
-    oughta_rhyme 'unowned', 'rezoned', NOT_WORKING
+    oughta_rhyme 'unowned', 'zoned', not_working_message: true
+    oughta_rhyme 'owned', 'rezoned', not_working_message: true
+    oughta_rhyme 'unowned', 'rezoned', not_working_message: true
   end
   
   context 'non-binary rhymes' do
-    oughta_rhyme 'latex', 'paychecks', NOT_WORKING
-    oughta_rhyme 'pitiful', 'biddable', NOT_WORKING # genderfluid plus T -> D
-    oughta_rhyme 'cello', 'concerto', NOT_WORKING
-    oughta_rhyme 'symphony', 'timpani', NOT_WORKING
-    oughta_rhyme 'bounty', 'brown tea', NOT_WORKING
+    oughta_rhyme 'latex', 'paychecks', not_working_message: true
+    oughta_rhyme 'pitiful', 'biddable', not_working_message: "genderfluid plus T -> D"
+    oughta_rhyme 'cello', 'concerto', not_working_message: true
+    oughta_rhyme 'symphony', 'timpani', not_working_message: true
+    oughta_rhyme 'bounty', 'brown tea', not_working_message: true
   end
 
   context 'prereqs from similar_rhymes_spec: death' do
@@ -684,7 +674,7 @@ describe 'RHYMES' do
     oughta_rhyme 'cool', 'pool'
     oughta_rhyme 'drain', 'rain'
     oughta_rhyme 'blood', 'flood'
-    ought_not_rhyme 'marine', 'saline', NOT_WORKING # stress mismatch
+    ought_not_rhyme 'marine', 'saline', not_working_message: "stress mismatch"
     oughta_rhyme 'dip', 'sip'
   end
 

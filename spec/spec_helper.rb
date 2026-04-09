@@ -16,8 +16,20 @@
 $LOAD_PATH.unshift File.expand_path("../lib", __dir__)
 require "rhymecrime/crime"
 
-TEST_FOR_SURPRISING_SUCCESSES = true
-NOT_WORKING = false # don't edit this one
+# Skip an example when +not_working_message+ is truthy (except +false+).
+# Use +true+ or +""+ for the default reason "not working"; use a String for a custom skip message.
+def skip_if_not_working(not_working_message)
+  return if not_working_message.nil? || not_working_message == false
+
+  reason =
+    if not_working_message == true
+      "not working"
+    else
+      s = not_working_message.to_s.strip
+      s.empty? ? "not working" : s
+    end
+  skip(reason)
+end
 
 # Rarity specs tagged :rarity_ish (oughta_be_*_ish) are lower priority. To run only stricter
 # examples:  rspec spec/rarity_spec.rb --tag ~rarity_ish

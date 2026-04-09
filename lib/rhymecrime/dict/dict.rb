@@ -61,10 +61,8 @@ def rebuild_rhymecrime_dictionaries()
     end
   end
   delete_explicitly_forbidden_keys_from_hash(cmudict)
-  hyp_cmudict_start = delete_headwords_starting_with_hyphen!(cmudict)
-  puts "Removed #{hyp_cmudict_start} cmudict headwords starting with '-'" if hyp_cmudict_start > 0
-  hyp_cmudict = delete_headwords_ending_in_hyphen!(cmudict)
-  puts "Removed #{hyp_cmudict} cmudict headwords ending with '-'" if hyp_cmudict > 0
+  hyp_cmudict_edge = delete_headwords_with_edge_hyphen!(cmudict)
+  puts "Removed #{hyp_cmudict_edge} cmudict headwords with a leading or trailing '-'" if hyp_cmudict_edge > 0
   rdict = build_rime_dict(cmudict)
   word_dict = build_word_dict(cmudict, rdict, subtlex_hash, wordfreq_hash, wiktionary_words, pos_map, forms_map)
   merge_word_dict_pronunciations_into_rdict!(rdict, word_dict)

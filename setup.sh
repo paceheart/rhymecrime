@@ -57,3 +57,17 @@ python3 -m pip install --user -r lib/rhymecrime/dict/wordfreq/requirements.txt
 mkdir -p generated
 python3 lib/rhymecrime/dict/wordfreq/export_wordfreq_tsv.py
 
+# ConceptNet 5.7 assertions (CC-BY-SA 4.0) → corpora/conceptnet/ (dict-build → conceptnet_edges.json)
+# https://github.com/commonsense/conceptnet5/wiki/Downloads
+mkdir -p corpora/conceptnet
+curl -fL -o corpora/conceptnet/conceptnet-assertions-5.7.0.csv.gz \
+  "https://s3.amazonaws.com/conceptnet/downloads/2019/edges/conceptnet-assertions-5.7.0.csv.gz"
+
+# ConceptNet Numberbatch 19.08 English (CC-BY-SA 4.0) → corpora/numberbatch/numberbatch-en-19.08.txt (dict-build → numberbatch_vectors.msgpack)
+# Official distribution is .txt.gz; gunzip leaves the plain .txt that utils_rhyme.rb expects.
+# https://github.com/commonsense/conceptnet-numberbatch#downloads
+mkdir -p corpora/numberbatch
+curl -fL -o corpora/numberbatch/numberbatch-en-19.08.txt.gz \
+  "https://conceptnet.s3.amazonaws.com/downloads/2019/numberbatch/numberbatch-en-19.08.txt.gz"
+gunzip -f corpora/numberbatch/numberbatch-en-19.08.txt.gz
+

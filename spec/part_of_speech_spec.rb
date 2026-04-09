@@ -1,8 +1,9 @@
 # Desired lexical POS per lemma (see dict build / part_of_speech.json policy).
 # Requires generated/part_of_speech.json from: ./bin/dict-build
 #
-# Table: each row is the word, then POS abbreviations — noun, verb, adj, adv (output keys
-# match Kaikki strings stored in part_of_speech.json), with an optional final NOT_WORKING.
+# Table: each row is either
+#   - an Array: word, then POS abbreviations (noun, verb, adj, adv — keys match Kaikki), or
+#   - a Hash: :word, :expect (array of tags), optional :not_working_message (truthy → skip with that reason; use true for "not working").
 
 PART_OF_SPEECH_EXPECTED = [
   %w[run verb noun],
@@ -24,9 +25,9 @@ PART_OF_SPEECH_EXPECTED = [
   %w[fox noun],
   %w[foxy adj],
   %w[foxily adv],
-  %w[foxiness noun NOT_WORKING],
+  { word: "foxiness", expect: %w[noun], not_working_message: true },
   %w[very adv adj], # the very (adj) best
-  %w[downtown noun adj NOT_WORKING],
+  { word: "downtown", expect: %w[noun adj], not_working_message: true },
   %w[central adj],
   %w[centralize verb],
   %w[centralization noun],
@@ -37,7 +38,7 @@ PART_OF_SPEECH_EXPECTED = [
   %w[analysis noun],
   %w[jaw noun verb],
   %w[breaker noun],
-  %w[jawbreaker noun NOT_WORKING],
+  { word: "jawbreaker", expect: %w[noun], not_working_message: true },
   %w[decide verb],
   %w[throuple noun],
   %w[blog noun verb],
@@ -46,13 +47,13 @@ PART_OF_SPEECH_EXPECTED = [
   %w[jogger noun],
   %w[dance noun verb],
   %w[ant noun],
-  %w[ants noun NOT_WORKING],
+  { word: "ants", expect: %w[noun], not_working_message: true },
   %w[magenta adj noun],
   %w[yellow adj noun verb],
   %w[margin noun],
   %w[marginal adj],
   %w[quickly adv],
-  %w[yeet verb NOT_WORKING],
+  { word: "yeet", expect: %w[verb], not_working_message: true },
   %w[twerk verb]
 ].freeze
 
@@ -66,12 +67,14 @@ describe "PART OF SPEECH" do
   end
 
   PART_OF_SPEECH_EXPECTED.each do |row|
-    word = row[0]
-    expected = row[1..]
-    not_working = (expected[-1] == "NOT_WORKING")
-    expected = expected[0...-1] if not_working # remove the NOT_WORKING
+    word, expected, not_working_message =
+      if row.is_a?(Hash)
+        [row.fetch(:word), row.fetch(:expect), row[:not_working_message]]
+      else
+        [row[0], row[1..], nil]
+      end
     it "#{word} is #{expected.join(', ')}" do
-      skip "marked NOT_WORKING in PART_OF_SPEECH_EXPECTED" if not_working
+      skip_if_not_working(not_working_message)
       expect(tags(word)).to match_array(expected)
     end
   end

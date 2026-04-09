@@ -170,7 +170,7 @@ def add_frequency_info(cmudict, subtlex_hash, wordfreq_hash, wiktionary_words, p
       extra += 1
     end
   end
-  puts "#{extra} extra words added from SUBTLEX (not in cmudict)"
+  puts "#{extra} extra words added from SUBTLEX"
 
   # Phase 5: add words from common_words.txt not already in the dict.
   common_extra = 0
@@ -418,10 +418,8 @@ def add_frequency_info(cmudict, subtlex_hash, wordfreq_hash, wiktionary_words, p
   end
   puts "#{forbidden_scrub} explicitly forbidden surface forms removed after frequency phases" if forbidden_scrub > 0
 
-  hyp_head = delete_headwords_starting_with_hyphen!(hash)
-  puts "#{hyp_head} headwords starting with '-' removed after frequency phases" if hyp_head > 0
-  hyp_tail = delete_headwords_ending_in_hyphen!(hash)
-  puts "#{hyp_tail} headwords ending with '-' removed after frequency phases" if hyp_tail > 0
+  hyp_edge = delete_headwords_with_edge_hyphen!(hash)
+  puts "#{hyp_edge} headwords with a leading or trailing '-' removed after frequency phases" if hyp_edge > 0
 
   puts "#{count + extra + common_extra + floor_applied + hyp_floor + inherited + cw_inherited + morph_inherited + morph_corpus} total entries with frequency data"
   return hash

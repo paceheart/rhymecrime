@@ -6,117 +6,86 @@
 # rare?
 # 
 
-def oughta_be_common(word, is_working=true, important=true)
-  if(is_working)
-    test_name = "'#{word}' oughta be common"
-    it test_name do
-      msg = "'#{word}' oughta be common, but is rare, with frequency #{frequency(word)}"
-      msg += " (but it's not that big a deal)" unless important
-      expect(rare?(word)).to eql(false), msg
-    end
-  else # NOT_WORKING
-    if TEST_FOR_SURPRISING_SUCCESSES
-      oughta_be_rare(word, true, important)
-    end
+def oughta_be_common(word, important: true, not_working_message: nil)
+  test_name = "'#{word}' oughta be common"
+  it test_name do
+    skip_if_not_working(not_working_message)
+    msg = "'#{word}' oughta be common, but is rare, with frequency #{frequency(word)}"
+    msg += " (but it's not that big a deal)" unless important
+    expect(rare?(word)).to eql(false), msg
   end
 end
 
 # Lower priority than oughta_be_common / oughta_be_rare: tagged :rarity_ish so you can
 # focus on stricter examples first, e.g.  rspec spec/rarity_spec.rb --tag ~rarity_ish
-def oughta_be_common_ish(word, is_working=true)
-  if(is_working)
-    it "'#{word}' oughta be common (ish)", :rarity_ish do
-      msg = "'#{word}' oughta be common, but is rare, with frequency #{frequency(word)} (but it's not that big a deal)"
-      expect(rare?(word)).to eql(false), msg
-    end
-  else # NOT_WORKING
-    if TEST_FOR_SURPRISING_SUCCESSES
-      oughta_be_rare_ish(word, true)
-    end
+def oughta_be_common_ish(word, not_working_message: nil)
+  it "'#{word}' oughta be common (ish)", :rarity_ish do
+    skip_if_not_working(not_working_message)
+    msg = "'#{word}' oughta be common, but is rare, with frequency #{frequency(word)} (but it's not that big a deal)"
+    expect(rare?(word)).to eql(false), msg
   end
 end
 
 # Rhymeless words are filtered out early, so we can't test their rarity,
 # but we can still verify that they have no rhymes
-def oughta_be_common_but_has_no_rhymes(word, is_working=true)
-  ought_not_have_rhymes(word, is_working)
+def oughta_be_common_but_has_no_rhymes(word, not_working_message: nil)
+  ought_not_have_rhymes(word, not_working_message: not_working_message)
 end
 
-def ought_not_have_rhymes(word, is_working=true)
-  if(is_working)
-    test_name = "'#{word}' oughta have no rhymes"
-    it test_name do
-      expect(find_preferred_rhyming_words(word)).to be_empty, "'#{word}' ought not have any rhymes, but it does: #{find_preferred_rhyming_words(word)}"
-    end
-  else # NOT_WORKING
-    if TEST_FOR_SURPRISING_SUCCESSES
-      oughta_have_rhymes(word, true)
-    end
+def ought_not_have_rhymes(word, not_working_message: nil)
+  test_name = "'#{word}' oughta have no rhymes"
+  it test_name do
+    skip_if_not_working(not_working_message)
+    expect(find_preferred_rhyming_words(word)).to be_empty, "'#{word}' ought not have any rhymes, but it does: #{find_preferred_rhyming_words(word)}"
   end
 end
 
-def oughta_have_rhymes(word, is_working=true)
-  if(is_working)
-    test_name = "'#{word}' oughta have rhymes"
-    it test_name do
-      expect(find_preferred_rhyming_words(word)).not_to be_empty, "'#{word}' oughta have rhymes, but it doesn't."
-    end
-  else # NOT_WORKING
-    if TEST_FOR_SURPRISING_SUCCESSES
-      oughta_have_rhymes(word, true)
-    end
+def oughta_have_rhymes(word, not_working_message: nil)
+  test_name = "'#{word}' oughta have rhymes"
+  it test_name do
+    skip_if_not_working(not_working_message)
+    expect(find_preferred_rhyming_words(word)).not_to be_empty, "'#{word}' oughta have rhymes, but it doesn't."
   end
 end
 
 # borderline - it's okay if these are either common or rare
-def oughta_be_uncommon(word, is_working=true)
+def oughta_be_uncommon(word, not_working_message: nil)
   # intentional no-op
 end
 
-def oughta_be_rare(word, is_working=true, important=true)
-  if(is_working)
-    test_name = "'#{word}' oughta be rare"
-    it test_name do
-      msg = "'#{word}' oughta be rare, but is common, with frequency #{frequency(word)}"
-      msg += " (but it's not that big a deal)" unless important
-      expect(rare?(word)).to eql(true), msg
-    end
-  else # NOT_WORKING
-    if TEST_FOR_SURPRISING_SUCCESSES
-      oughta_be_common(word, true, important)
-    end
+def oughta_be_rare(word, important: true, not_working_message: nil)
+  test_name = "'#{word}' oughta be rare"
+  it test_name do
+    skip_if_not_working(not_working_message)
+    msg = "'#{word}' oughta be rare, but is common, with frequency #{frequency(word)}"
+    msg += " (but it's not that big a deal)" unless important
+    expect(rare?(word)).to eql(true), msg
   end
 end
 
-def oughta_be_rare_ish(word, is_working=true)
-  if(is_working)
-    it "'#{word}' oughta be rare (ish)", :rarity_ish do
-      msg = "'#{word}' oughta be rare, but is common, with frequency #{frequency(word)} (but it's not that big a deal)"
-      expect(rare?(word)).to eql(true), msg
-    end
-  else # NOT_WORKING
-    if TEST_FOR_SURPRISING_SUCCESSES
-      oughta_be_common_ish(word, true)
-    end
+def oughta_be_rare_ish(word, not_working_message: nil)
+  it "'#{word}' oughta be rare (ish)", :rarity_ish do
+    skip_if_not_working(not_working_message)
+    msg = "'#{word}' oughta be rare, but is common, with frequency #{frequency(word)} (but it's not that big a deal)"
+    expect(rare?(word)).to eql(true), msg
   end
 end
 
 # Rhymeless words are filtered out early, so we can't test their rarity,
 # but we can still verify that they have no rhymes
-def oughta_be_rare_but_has_no_rhymes(word, is_working=true)
-  ought_not_have_rhymes(word, is_working)
+def oughta_be_rare_but_has_no_rhymes(word, not_working_message: nil)
+  ought_not_have_rhymes(word, not_working_message: not_working_message)
 end
 
 def allowed?(word)
   !explicitly_forbidden?(word) && word_dict.key?(word)
 end
 
-def oughta_be_forbidden(word, is_working=true)
-  if(is_working)
-    test_name = "'#{word}' oughta be forbidden"
-    it test_name do
-      expect(allowed?(word)).to eql(false), "'#{word}' oughta be forbidden, but is allowed."
-    end
+def oughta_be_forbidden(word, not_working_message: nil)
+  test_name = "'#{word}' oughta be forbidden"
+  it test_name do
+    skip_if_not_working(not_working_message)
+    expect(allowed?(word)).to eql(false), "'#{word}' oughta be forbidden, but is allowed."
   end
 end
 
@@ -207,7 +176,7 @@ describe 'RARITY' do
 
     # Longer letter-strings: same FP-2 issue as 2-3 char (wordfreq/Wiktionary), not spoken as lemmas.
     context 'four- and five-letter initialisms' do
-      oughta_be_common_ish 'nato', NOT_WORKING
+      oughta_be_common_ish 'nato', not_working_message: true
       oughta_be_rare 'hdtv'
       oughta_be_rare 'nasa'
       oughta_be_rare 'wifi'
@@ -224,7 +193,7 @@ describe 'RARITY' do
       oughta_be_uncommon 'oled'
       oughta_be_rare 'fifo'
       oughta_be_rare 'lifo'
-      oughta_be_common_ish 'unix', NOT_WORKING
+      oughta_be_common_ish 'unix', not_working_message: true
       oughta_be_rare_ish 'apis'
       oughta_be_rare 'sram'
       oughta_be_rare 'perl'
@@ -273,7 +242,7 @@ describe 'RARITY' do
     oughta_be_common 'vanes'
     oughta_be_common 'chicanery'
     oughta_be_common 'combatants'
-    oughta_be_common_ish 'noncombatants', NOT_WORKING
+    oughta_be_common_ish 'noncombatants', not_working_message: true
     oughta_be_common 'rapt'
     oughta_be_common 'sparkly'
     oughta_be_common 'splashy'
@@ -492,7 +461,7 @@ describe 'RARITY' do
     oughta_be_common 'curmudgeon'
     oughta_be_common 'serendipity'
     oughta_be_common 'brouhaha'
-    oughta_be_common 'kerfuffle', NOT_WORKING
+    oughta_be_common 'kerfuffle', not_working_message: true
     oughta_be_common 'hullabaloo'
     oughta_be_common 'shenanigans'
     oughta_be_rare 'shenanigan'
@@ -507,7 +476,7 @@ describe 'RARITY' do
     oughta_be_common 'insidious'
     oughta_be_common 'malarkey'
     oughta_be_common 'tomfoolery'
-    oughta_be_common 'skulduggery', NOT_WORKING
+    oughta_be_common 'skulduggery', not_working_message: true
     oughta_be_common 'flabbergasted'
   end
 
@@ -522,8 +491,8 @@ describe 'RARITY' do
     oughta_be_common_ish 'vlogs'
     oughta_be_common_ish 'vlogged'
     oughta_be_common_ish 'vlogging'
-    oughta_be_common_ish 'vlogger', NOT_WORKING
-    oughta_be_common_ish 'vloggers', NOT_WORKING
+    oughta_be_common_ish 'vlogger', not_working_message: true
+    oughta_be_common_ish 'vloggers', not_working_message: true
     oughta_be_common 'selfie'
     oughta_be_common 'hashtag'
     oughta_be_common 'emoji'
@@ -535,8 +504,8 @@ describe 'RARITY' do
     oughta_be_common_but_has_no_rhymes 'polyam'
     oughta_be_common 'polyamory'
     oughta_be_common 'polyamorous'
-    oughta_be_common 'throuple', NOT_WORKING
-    oughta_be_common 'throuples', NOT_WORKING
+    oughta_be_common 'throuple', not_working_message: true
+    oughta_be_common 'throuples', not_working_message: true
     oughta_be_rare 'thruple'
     oughta_be_rare 'thrupple'
     oughta_be_common 'yeet'
@@ -548,7 +517,7 @@ describe 'RARITY' do
     oughta_be_common 'twerks'
     oughta_be_common 'twerked'
     oughta_be_common 'twerking'
-    oughta_be_common_ish 'url', NOT_WORKING
+    oughta_be_common_ish 'url', not_working_message: true
     oughta_be_common_ish 'urls'
     oughta_be_rare 'urled'
     oughta_be_rare 'urling'
@@ -632,7 +601,7 @@ describe 'RARITY' do
   end
 
   context 'literary and rhetorical terms' do
-    oughta_be_common 'palimpsest', NOT_WORKING
+    oughta_be_common 'palimpsest', not_working_message: true
     oughta_be_common_but_has_no_rhymes 'quincunx'
     oughta_be_rare 'tmesis'
     oughta_be_rare 'hendiadys'
@@ -653,9 +622,9 @@ describe 'RARITY' do
     oughta_be_uncommon 'isomorphism'
     oughta_be_rare 'hermeneutics'
     oughta_be_rare 'eigenvalue'
-    oughta_be_rare_ish 'chromatography', NOT_WORKING
-    oughta_be_rare 'electrophoresis', NOT_WORKING
-    oughta_be_rare_ish 'spectrometer', NOT_WORKING
+    oughta_be_rare_ish 'chromatography', not_working_message: true
+    oughta_be_rare 'electrophoresis', not_working_message: true
+    oughta_be_rare_ish 'spectrometer', not_working_message: true
     oughta_be_common 'reagent'
     oughta_be_rare 'adiabatic'
   end
@@ -672,7 +641,7 @@ describe 'RARITY' do
   end
 
   context 'archaic vocabulary' do
-    oughta_be_common_ish 'forsooth', NOT_WORKING
+    oughta_be_common_ish 'forsooth', not_working_message: true
     oughta_be_uncommon 'hauberk'
     oughta_be_rare 'varlet'
     oughta_be_uncommon 'seneschal'
@@ -681,7 +650,7 @@ describe 'RARITY' do
     oughta_be_rare 'diapason'
     oughta_be_rare 'cynosure'
     oughta_be_uncommon 'panegyric'
-    oughta_be_common_ish 'synecdoche', NOT_WORKING
+    oughta_be_common_ish 'synecdoche', not_working_message: true
     oughta_be_rare 'schenectady'
   end
 
@@ -834,17 +803,17 @@ describe 'RARITY' do
     oughta_be_common "sky"
     oughta_be_common "skies"
     oughta_be_rare "skys"
-    oughta_be_rare "skying", NOT_WORKING
+    oughta_be_rare "skying", not_working_message: true
     oughta_be_common "goose"
     oughta_be_common "geese"
-    oughta_be_common "gooses", NOT_WORKING
+    oughta_be_common "gooses", not_working_message: true
     oughta_be_common "mouse"
     oughta_be_common "mice"
     oughta_be_uncommon "mouses"
     oughta_be_uncommon "mousing"
     oughta_be_uncommon "moused"
     oughta_be_rare "mousingly"
-    oughta_be_common_ish "mousiness", NOT_WORKING
+    oughta_be_common_ish "mousiness", not_working_message: true
     oughta_be_rare "mousinesses"
     oughta_be_rare "mousinessly"
     oughta_be_common_ish "mouser"
@@ -857,9 +826,9 @@ describe 'RARITY' do
     oughta_be_rare "foxly"
     oughta_be_common "foxy"
     oughta_be_rare "foxyness"
-    oughta_be_common_ish "foxily", NOT_WORKING
+    oughta_be_common_ish "foxily", not_working_message: true
     oughta_be_rare "foxyly"
-    oughta_be_common_ish "foxiness", NOT_WORKING
+    oughta_be_common_ish "foxiness", not_working_message: true
     oughta_be_rare "foxinesses"
     oughta_be_common "foxier"
     oughta_be_common "foxiest"
@@ -988,21 +957,21 @@ describe 'RARITY' do
       oughta_be_common_ish 'heebie-jeebies'
       oughta_be_common_ish 'hara-kiri'
       oughta_be_common_ish 'itsy-bitsy'
-      oughta_be_rare_ish 'hurdy-gurdy', NOT_WORKING
-      oughta_be_common_ish 'okey-dokey', NOT_WORKING
+      oughta_be_rare_ish 'hurdy-gurdy', not_working_message: true
+      oughta_be_common_ish 'okey-dokey', not_working_message: true
       oughta_be_common_ish 'tutti-frutti'
       oughta_be_common_ish 'willy-nilly'
       oughta_be_uncommon 'pell-mell'
       oughta_be_common_ish 'flim-flam'
-      oughta_be_common_ish 'savoir-faire', NOT_WORKING
+      oughta_be_common_ish 'savoir-faire', not_working_message: true
       oughta_be_common_ish 'papier-mache'
-      oughta_be_rare_ish 'pince-nez', NOT_WORKING
-      oughta_be_common_ish 'cock-a-doodle-doo', NOT_WORKING
+      oughta_be_rare_ish 'pince-nez', not_working_message: true
+      oughta_be_common_ish 'cock-a-doodle-doo', not_working_message: true
       oughta_be_common_ish 'roly-poly'
     end
 
     context 'with existing final words' do
-      oughta_be_common_ish 'ping-pong', NOT_WORKING
+      oughta_be_common_ish 'ping-pong', not_working_message: true
       oughta_be_common 'yo-yo'
       oughta_be_rare 'yoyo'
       oughta_be_rare 'about-face'
@@ -1012,7 +981,7 @@ describe 'RARITY' do
       oughta_be_rare 'long-term'
       oughta_be_rare 'record-breaking'
       oughta_be_rare 'laid-back'
-      oughta_be_rare 'one-sided', NOT_WORKING
+      oughta_be_rare 'one-sided', not_working_message: true
       oughta_be_rare 'non-stop'
       oughta_be_rare 'one-way'
       oughta_be_rare 'two-way'
@@ -1166,7 +1135,7 @@ describe 'RARITY' do
     oughta_be_common 'chilies'
     oughta_be_common 'cush'
     oughta_be_common 'gangbuster'
-    oughta_be_common_ish 'glassmaker', NOT_WORKING
+    oughta_be_common_ish 'glassmaker', not_working_message: true
     oughta_be_common_ish 'glassmaking'
     oughta_be_rare 'glassmake'
     oughta_be_rare 'glassmakes'
@@ -1300,7 +1269,7 @@ describe 'RARITY' do
     oughta_be_rare 'maligner'
     oughta_be_rare 'malignest'
     oughta_be_common 'malignant'
-    oughta_be_common_ish 'malignance', NOT_WORKING
+    oughta_be_common_ish 'malignance', not_working_message: true
     oughta_be_common 'malignancy'
     oughta_be_rare 'malignancys'
     oughta_be_common 'malignancies'
@@ -1316,7 +1285,7 @@ describe 'RARITY' do
     oughta_be_rare 'presentssed'
     oughta_be_rare 'presentssing'
     oughta_be_common 'presence'
-    oughta_be_common_ish 'presencing', NOT_WORKING
+    oughta_be_common_ish 'presencing', not_working_message: true
     oughta_be_rare 'nubbin'
     oughta_be_rare 'fealest'
     oughta_be_rare 'byrnies'

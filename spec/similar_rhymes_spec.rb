@@ -22,29 +22,19 @@ def set_related_works(input)
   end
 end
 
-def set_related_oughta_contain(input, output1, output2, is_working=true)
-  if(is_working)
-    test_name = "set_related: #{input} -> #{output1} / #{output2}"
-    it test_name do
-      expect(set_related_contains?(input, output1, output2)).to eql(true), "Set-related rhymes for '#{input}' oughta include '#{output1}' (#{debug_info(output1)}) / '#{output2}' (#{debug_info(output2)}) / ..., but instead we just get #{find_rhyming_tuples(input)}"
-    end
-  else # NOT_WORKING
-    if TEST_FOR_SURPRISING_SUCCESSES
-      set_related_ought_not_contain(input, output1, output2, true)
-    end
+def set_related_oughta_contain(input, output1, output2, not_working_message: nil)
+  test_name = "set_related: #{input} -> #{output1} / #{output2}"
+  it test_name do
+    skip_if_not_working(not_working_message)
+    expect(set_related_contains?(input, output1, output2)).to eql(true), "Set-related rhymes for '#{input}' oughta include '#{output1}' (#{debug_info(output1)}) / '#{output2}' (#{debug_info(output2)}) / ..., but instead we just get #{find_rhyming_tuples(input)}"
   end
 end
 
-def set_related_ought_not_contain(input, output1, output2, is_working=true)
-  if(is_working)
-    test_name = "set_related: #{input} !-> #{output1} / #{output2}"
-    it test_name do
-      expect(set_related_contains?(input, output1, output2)).to eql(false), "Set-related rhymes for '#{input}' ought not include '#{output1}' / '#{output2}' / ..."
-    end
-  else # NOT_WORKING
-    if TEST_FOR_SURPRISING_SUCCESSES
-      set_related_oughta_contain(input, output1, output2, true)
-    end
+def set_related_ought_not_contain(input, output1, output2, not_working_message: nil)
+  test_name = "set_related: #{input} !-> #{output1} / #{output2}"
+  it test_name do
+    skip_if_not_working(not_working_message)
+    expect(set_related_contains?(input, output1, output2)).to eql(false), "Set-related rhymes for '#{input}' ought not include '#{output1}' / '#{output2}' / ..."
   end
 end
 
@@ -120,16 +110,16 @@ describe 'SET_RELATED' do
     set_related_oughta_contain 'music', 'accidental', 'instrumental'
     set_related_oughta_contain 'music', 'sings', 'strings'
     # ritardando OOV: set_related_oughta_contain 'music', 'glissando', 'ritardando'
-    set_related_oughta_contain 'music', 'viola', 'hemiola', NOT_WORKING # arguable stress mismatch
-    set_related_oughta_contain 'music', 'overtone', 'xylophone', NOT_WORKING # arguable stress mismatch
+    set_related_oughta_contain 'music', 'viola', 'hemiola', not_working_message: "arguable stress mismatch"
+    set_related_oughta_contain 'music', 'overtone', 'xylophone', not_working_message: "arguable stress mismatch"
     set_related_oughta_contain 'music', 'wave', 'rave'
     set_related_oughta_contain 'music', 'beat', 'repeat'
     set_related_oughta_contain 'music', 'flow', 'bow'
     set_related_oughta_contain 'music', 'jingle', 'single' # as in a hit single
     set_related_oughta_contain 'music', 'harp', 'sharp'
-    set_related_oughta_contain 'music', 'show', 'arpeggio', NOT_WORKING # stress mismatch
-    set_related_oughta_contain 'music', 'mix', 'drumsticks', NOT_WORKING # stress mismatch
-    set_related_oughta_contain 'music', 'violin', 'mandolin', NOT_WORKING # arguable stress mismatch
+    set_related_oughta_contain 'music', 'show', 'arpeggio', not_working_message: "stress mismatch"
+    set_related_oughta_contain 'music', 'mix', 'drumsticks', not_working_message: "stress mismatch"
+    set_related_oughta_contain 'music', 'violin', 'mandolin', not_working_message: "arguable stress mismatch"
     set_related_oughta_contain 'music', 'rest', 'expressed'
     set_related_oughta_contain 'music', 'lute', 'flute'
     set_related_oughta_contain 'music', 'fortissimo', 'pianissimo'
@@ -143,11 +133,16 @@ describe 'SET_RELATED' do
     set_related_oughta_contain 'music', 'abbreviation', 'notation' # identical rhymes are OK if they're part of a tuple that contains non-identical rhymes such as the previous line
     set_related_ought_not_contain 'music', 'tv', 'vision'
     set_related_ought_not_contain 'music', 'bass', 'brass' # the fish is not related to the tuba
-    it 'no proper subsets: we should get bone / intone / trombone, and not also get bone / intone' do
-      bone_intone = ['bone', 'intone']
-      bone_intone_trombone = ['bone', 'intone', 'trombone']
+    it 'set_related music: bone / intone / trombone tuple' do
+      skip_if_not_working(true)
+      bone_intone_trombone = %w[bone intone trombone]
       tuples = find_rhyming_tuples('music', 'en')
-      # NOT_WORKING: expect(tuples.include?(bone_intone_trombone)).to eql(true)
+      expect(tuples.include?(bone_intone_trombone)).to eql(true)
+    end
+
+    it 'no proper subsets: music ought not return bone / intone alone' do
+      bone_intone = %w[bone intone]
+      tuples = find_rhyming_tuples('music', 'en')
       expect(tuples.include?(bone_intone)).to eql(false)
     end
   end
@@ -254,7 +249,7 @@ describe 'SET_RELATED' do
   end
 
   context 'exploration' do
-    set_related_oughta_contain 'exploration', 'knapsack', 'backtrack', NOT_WORKING # non-binary
+    set_related_oughta_contain 'exploration', 'knapsack', 'backtrack', not_working_message: "non-binary"
     set_related_oughta_contain 'exploration', 'pack', 'track'
   end
   
@@ -270,12 +265,12 @@ describe 'SET_RELATED' do
   
   context 'imperfect' do
     # relax the stress:
-    set_related_oughta_contain 'halloween', 'broom', 'costume', NOT_WORKING
-    set_related_oughta_contain 'music', 'oboe', 'piano', NOT_WORKING
-    set_related_oughta_contain 'music', 'cello', 'solo', NOT_WORKING
-    set_related_oughta_contain 'music', 'cello', 'concerto', NOT_WORKING
-    set_related_oughta_contain 'music', 'solo', 'concerto', NOT_WORKING
-    set_related_oughta_contain 'music', 'symphony', 'timpani', NOT_WORKING # this would only work if we dwim a non-final consonant
+    set_related_oughta_contain 'halloween', 'broom', 'costume', not_working_message: true
+    set_related_oughta_contain 'music', 'oboe', 'piano', not_working_message: true
+    set_related_oughta_contain 'music', 'cello', 'solo', not_working_message: true
+    set_related_oughta_contain 'music', 'cello', 'concerto', not_working_message: true
+    set_related_oughta_contain 'music', 'solo', 'concerto', not_working_message: true
+    set_related_oughta_contain 'music', 'symphony', 'timpani', not_working_message: "this would only work if we dwim a non-final consonant"
   end
 
   context 'no spelling variants' do
@@ -302,29 +297,19 @@ def pair_related_contains?(input1, input2, output1, output2)
   return result
 end
 
-def pair_related_oughta_contain(input1, input2, output1, output2, is_working=true)
-  if(is_working)
-    test_name = "pair_related: #{input1} / #{input2} -> #{output1} / #{output2}"
-    it test_name do
-      expect(pair_related_contains?(input1, input2, output1, output2)).to eql(true), "Pair-related rhymes for '#{input1}' / '#{input2}' oughta include '#{output1}' (#{debug_info(output1)}) / '#{output2}' (#{debug_info(output2)}), but instead we just get #{find_rhyming_pairs(input1, input2)}"
-    end
-  else # NOT_WORKING
-    if TEST_FOR_SURPRISING_SUCCESSES
-      pair_related_ought_not_contain(input1, input2, output1, output2, true)
-    end
+def pair_related_oughta_contain(input1, input2, output1, output2, not_working_message: nil)
+  test_name = "pair_related: #{input1} / #{input2} -> #{output1} / #{output2}"
+  it test_name do
+    skip_if_not_working(not_working_message)
+    expect(pair_related_contains?(input1, input2, output1, output2)).to eql(true), "Pair-related rhymes for '#{input1}' / '#{input2}' oughta include '#{output1}' (#{debug_info(output1)}) / '#{output2}' (#{debug_info(output2)}), but instead we just get #{find_rhyming_pairs(input1, input2)}"
   end
 end
 
-def pair_related_ought_not_contain(input1, input2, output1, output2, is_working=true)
-  if(is_working)
-    test_name = "pair_related: #{input1} / #{input2} !-> #{output1} / #{output2}"
-    it test_name do
-      expect(pair_related_contains?(input1, input2, output1, output2)).to eql(false), "Pair-related rhymes for '#{input1}' / '#{input2}' ought not include '#{output1}' / '#{output2}'"
-    end
-  else # NOT_WORKING
-    if TEST_FOR_SURPRISING_SUCCESSES
-      pair_related_oughta_contain(input1, input2, output1, output2, true)
-    end
+def pair_related_ought_not_contain(input1, input2, output1, output2, not_working_message: nil)
+  test_name = "pair_related: #{input1} / #{input2} !-> #{output1} / #{output2}"
+  it test_name do
+    skip_if_not_working(not_working_message)
+    expect(pair_related_contains?(input1, input2, output1, output2)).to eql(false), "Pair-related rhymes for '#{input1}' / '#{input2}' ought not include '#{output1}' / '#{output2}'"
   end
 end
 
@@ -352,10 +337,10 @@ describe 'PAIR_RELATED' do
     pair_related_ought_not_contain 'food', 'evil', 'vegetarian', 'totalitarian' # it's a damn shame that this is an identical rhyme
     pair_related_oughta_contain 'food', 'evil', 'dinner', 'sinner'
     pair_related_oughta_contain 'food', 'evil', 'cake', 'rake'
-    pair_related_oughta_contain 'food', 'evil', 'mushroom', 'doom', NOT_WORKING # stress mismatch
-    pair_related_oughta_contain 'food', 'evil', 'chips', 'apocalypse', NOT_WORKING # stress mismatch
+    pair_related_oughta_contain 'food', 'evil', 'mushroom', 'doom', not_working_message: "stress mismatch"
+    pair_related_oughta_contain 'food', 'evil', 'chips', 'apocalypse', not_working_message: "stress mismatch"
     pair_related_oughta_contain 'food', 'evil', 'seder', 'invader'
-    pair_related_oughta_contain 'food', 'evil', 'sachertorte', 'voldemort', NOT_WORKING # would be cool, but a big stretch
+    pair_related_oughta_contain 'food', 'evil', 'sachertorte', 'voldemort', not_working_message: "would be cool, but a big stretch"
     pair_related_oughta_contain 'food', 'evil', 'bread', 'undead'
     pair_related_oughta_contain 'food', 'evil', 'heinz', 'maligns'
     pair_related_oughta_contain 'food', 'evil', 'served', 'undeserved' # this is not quite an identical rhyme becauze the s in undeserved is pronounced like a z
@@ -415,29 +400,19 @@ def related_rhymes?(input_rhyme, input_related, output)
   find_related_rhymes(input_rhyme, input_related).include?(output)
 end
 
-def related_rhymes_oughta_contain(input_rhyme, input_related, output, is_working=true)
-  if(is_working)
-    test_name = "related_rhymes #{input_rhyme} + #{input_related} -> #{output}"
-    it test_name do
-      expect(related_rhymes?(input_rhyme, input_related, output)).to eql(true), "'#{output}' (#{debug_info(output)}) oughta be one of the words that rhyme with '#{input_rhyme}' (#{debug_info(input_rhyme)}) and is related to '#{input_related}'"
-    end
-  else # NOT_WORKING
-    if TEST_FOR_SURPRISING_SUCCESSES
-      related_rhymes_ought_not_contain(input_rhyme, input_related, output, true)
-    end
+def related_rhymes_oughta_contain(input_rhyme, input_related, output, not_working_message: nil)
+  test_name = "related_rhymes #{input_rhyme} + #{input_related} -> #{output}"
+  it test_name do
+    skip_if_not_working(not_working_message)
+    expect(related_rhymes?(input_rhyme, input_related, output)).to eql(true), "'#{output}' (#{debug_info(output)}) oughta be one of the words that rhyme with '#{input_rhyme}' (#{debug_info(input_rhyme)}) and is related to '#{input_related}'"
   end
 end
 
-def related_rhymes_ought_not_contain(input_rhyme, input_related, output, is_working=true)
-  if(is_working)
-    test_name = "related_rhymes #{input_rhyme} + #{input_related} !-> #{output}"
-    it test_name do
-      expect(related_rhymes?(input_rhyme, input_related, output)).to eql(true), "'#{output}' (#{debug_info(output)}) ought not one of the words that rhyme with '#{input_rhyme}' (#{debug_info(input_rhyme)}) and is related to '#{input_related}'"
-    end
-  else # NOT_WORKING
-    if TEST_FOR_SURPRISING_SUCCESSES
-      related_rhymes_oughta_contain(input_rhyme, input_related, output, true)
-    end
+def related_rhymes_ought_not_contain(input_rhyme, input_related, output, not_working_message: nil)
+  test_name = "related_rhymes #{input_rhyme} + #{input_related} !-> #{output}"
+  it test_name do
+    skip_if_not_working(not_working_message)
+    expect(related_rhymes?(input_rhyme, input_related, output)).to eql(true), "'#{output}' (#{debug_info(output)}) ought not one of the words that rhyme with '#{input_rhyme}' (#{debug_info(input_rhyme)}) and is related to '#{input_related}'"
   end
 end
 

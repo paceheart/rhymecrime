@@ -17,20 +17,10 @@ def delete_explicitly_forbidden_keys_from_hash(cmudict)
 end
 
 # Incomplete / artifact headwords (e.g. truncated compounds); not useful as lookup keys.
-def delete_headwords_ending_in_hyphen!(hash)
+def delete_headwords_with_edge_hyphen!(hash)
   n = 0
   hash.keys.each do |w|
-    next unless w.end_with?("-")
-    hash.delete(w)
-    n += 1
-  end
-  n
-end
-
-def delete_headwords_starting_with_hyphen!(hash)
-  n = 0
-  hash.keys.each do |w|
-    next unless w.start_with?("-")
+    next unless w.start_with?("-") || w.end_with?("-")
     hash.delete(w)
     n += 1
   end
