@@ -322,10 +322,10 @@ module Rhymecrime
     class << self
       include Memery
 
-      memoize def find_related_words(word, include_self, include_rhymeless = true)
+      memoize def find_related_words(word, include_self, include_rhymeless = true, max_candidates = SIMILAR_MAX)
         words = []
         unless explicitly_forbidden?(word)
-          words = RelatedWords.find_thematically_related_words(word, include_self, include_rhymeless)
+          words = RelatedWords.find_thematically_related_words(word, include_self, include_rhymeless, max_candidates)
           words = filter_out_dispreferred_words(words, word)
         end
         words
@@ -334,8 +334,8 @@ module Rhymecrime
   end
 end
 
-def find_related_words(word, include_self, include_rhymeless = true)
-  Rhymecrime::FindRelatedWordsMemo.find_related_words(word, include_self, include_rhymeless)
+def find_related_words(word, include_self, include_rhymeless = true, max_candidates = SIMILAR_MAX)
+  Rhymecrime::FindRelatedWordsMemo.find_related_words(word, include_self, include_rhymeless, max_candidates)
 end
 
 def find_related_rhymes(rhyme, rel)
@@ -366,7 +366,7 @@ def really_find_rhyming_tuples(input_rel1)
   # Return all buckets with two or more words in them.
   related_rhymes = Hash.new {|h,k| h[k] = [] } # hash of arrays
   unless(explicitly_forbidden?(input_rel1))
-    relateds1 = find_related_words(input_rel1, true)
+    relateds1 = find_related_words(input_rel1, true, true, nil)
     relateds1.each { |rel1|
       for rel1pron in pronunciations(rel1)
         rime = rel1pron.rime
@@ -402,8 +402,8 @@ def find_rhyming_pairs(input_rel1, input_rel2)
   #   If RHYME rhymes with REL1 and is related to INPUT_REL2, we win! "REL1 / RHYME" is a pair.
   related_rhymes = Hash.new {|h,k| h[k] = [] } # hash of arrays
   unless(explicitly_forbidden?(input_rel1) || explicitly_forbidden?(input_rel2))
-    relateds1 = find_related_words(input_rel1, true)
-    relateds2 = find_related_words(input_rel2, true).to_set
+    relateds1 = find_related_words(input_rel1, true, true, nil)
+    relateds2 = find_related_words(input_rel2, true, true, nil).to_set
     relateds1.each { |rel1|
       # rel1 is a word related to input_rel1. We're looking for rhyming pairs [rel1 rel2].
       debug "rhymes for #{rel1} (#{debug_info(rel1)}):<br>"
@@ -701,6 +701,16 @@ def related?(word1, word2, include_self=false)
   word1 = preferred_form(word1)
   word2 = preferred_form(word2)
   not explicitly_forbidden?(word1) and not explicitly_forbidden?(word2) and thematically_related?(word1, word2)
+end
+
+# Human-oriented debug line: why +related?+ is true, or +nil+ if it is false.
+# Applies the same +preferred_form+ and forbid rules as +related?+.
+def why_related?(word1, word2, include_self = false)
+  w1 = preferred_form(word1)
+  w2 = preferred_form(word2)
+  return "forbidden headword: #{w1}" if explicitly_forbidden?(w1)
+  return "forbidden headword: #{w2}" if explicitly_forbidden?(w2)
+  why_thematically_related?(w1, w2, include_self)
 end
 
 def rhymes?(word1, word2, identical_ok=true)

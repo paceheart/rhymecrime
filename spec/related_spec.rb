@@ -8,7 +8,8 @@ def oughta_be_related(word1, word2, is_working=true)
   if(is_working)
     test_name = "'#{word1}' oughta be related to '#{word2}'"
     it test_name do
-      expect(related?(word1, word2, false)).to eql(true), "'#{word1}' is #{similarity(word1, word2).round} related to '#{word2}', which is under the similarity threshold of #{similarity_threshold()} (#{debug_info(word1)} / #{debug_info(word2)})"
+      sim = similarity(word1, word2).round
+      expect(related?(word1, word2, false)).to eql(true), "'#{word1}' / '#{word2}': expected related but related? was false. similarity=#{sim} (Numberbatch+ConceptNet centiles, threshold #{similarity_threshold()}); gloss/sense-vector/USF paths can still pass when sim is lower. #{debug_info(word1)} / #{debug_info(word2)}"
     end
   else # NOT_WORKING
     if TEST_FOR_SURPRISING_SUCCESSES
@@ -21,7 +22,8 @@ def ought_not_be_related(word1, word2, is_working=true)
   if(is_working)
     test_name = "'#{word1}' ought not be related to '#{word2}'"
     it test_name do
-      expect(related?(word1, word2, false)).to eql(false), "'#{word1}' is #{similarity(word1, word2).round} related to '#{word2}', which meets the similarity threshold of #{similarity_threshold()} (#{debug_info(word1)} / #{debug_info(word2)})"
+      sim = similarity(word1, word2).round
+      expect(related?(word1, word2, false)).to eql(false), "'#{word1}' / '#{word2}': expected unrelated but related? was true. similarity=#{sim} (threshold #{similarity_threshold()}). If sim is below threshold, a rescue path matched (WordNet gloss containment, sense vectors, or USF two-hop). #{debug_info(word1)} / #{debug_info(word2)}"
     end
   else # NOT_WORKING
     if TEST_FOR_SURPRISING_SUCCESSES

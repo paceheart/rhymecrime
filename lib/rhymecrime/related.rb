@@ -377,6 +377,52 @@ def thematically_related?(word1, word2, include_self=false)
   false
 end
 
+# Same decision as +thematically_related?+, but returns a short reason string when true, or +nil+ when false.
+# Order of checks matches +thematically_related?+ (first win is reported). +include_self+ is accepted for API
+# parity; it is not used by the predicate today.
+def why_thematically_related?(word1, word2, include_self = false)
+  base = similarity(word1, word2)
+  if base >= $SIMILARITY_THRESHOLD
+    return "similarity: #{base} >= #{$SIMILARITY_THRESHOLD} (Numberbatch centiles + ConceptNet edge bonus)"
+  end
+
+  if bidirectional_gloss_contains?(word1, word2)
+    return "gloss: bidirectional WordNet gloss/derivation containment"
+  end
+
+  if !stop_word?(word1) && !stop_word?(word2) && base >= $SENSE_VECTOR_MIN_BASE
+    d1, d2 = directional_sense_cosines(word1, word2)
+    sv_max = [d1, d2].max
+    sv_min = [d1, d2].min
+    both_have_senses = sense_vectors(word1).size > 0 && sense_vectors(word2).size > 0
+    if both_have_senses
+      if sv_max >= $SENSE_VECTOR_THRESHOLD && sv_min >= $SENSE_VECTOR_MIN_FLOOR
+        return "sense_vectors: directional max=#{sv_max} min=#{sv_min} (need max>=#{$SENSE_VECTOR_THRESHOLD} min>=#{$SENSE_VECTOR_MIN_FLOOR}; base similarity=#{base})"
+      end
+    elsif $SENSE_VECTOR_MORPHY_FLOOR > 0
+      morphy_result = morphy_directional_sense_cosines(word1, word2)
+      if morphy_result
+        md1, md2 = morphy_result
+        mx = [md1, md2].max
+        mn = [md1, md2].min
+        if mx >= $SENSE_VECTOR_THRESHOLD && mn >= $SENSE_VECTOR_MORPHY_FLOOR
+          return "sense_vectors_morphy: directional max=#{mx} min=#{mn} (need max>=#{$SENSE_VECTOR_THRESHOLD} min>=#{$SENSE_VECTOR_MORPHY_FLOOR}; base similarity=#{base})"
+        end
+      end
+    end
+  end
+
+  if $USF_TWOHOP_BOOST > 0 &&
+     base >= $USF_MIN_BASE &&
+     (base + $USF_TWOHOP_BOOST) >= $SIMILARITY_THRESHOLD &&
+     usf_twohop_bridge_validated?(word1, word2)
+    boosted = base + $USF_TWOHOP_BOOST
+    return "usf_twohop: base=#{base} + boost=#{$USF_TWOHOP_BOOST} => #{boosted} >= #{$SIMILARITY_THRESHOLD}, validated bridge"
+  end
+
+  nil
+end
+
 def similarity(word1, word2)
   return 0 if stop_word?(word1) || stop_word?(word2)
 
@@ -398,12 +444,15 @@ end
 # Enumerates RhymeCrime headwords and returns those topically related to +word+.
 class RelatedWords
   class << self
-    def find_thematically_related_words(word, include_self, include_rhymeless = true)
+    # +max_candidates+ default +SIMILAR_MAX+ caps the list by Numberbatch-centile +similarity+ for UI / display.
+    # Pass +nil+ for no cap (e.g. set_related / pair rhyming): truncation can drop words that are related via
+    # gloss or sense vectors but rank below the cap on +similarity+ alone.
+    def find_thematically_related_words(word, include_self, include_rhymeless = true, max_candidates = SIMILAR_MAX)
       words = find_all_thematically_related_words(word, include_rhymeless)
       words.push(word) if include_self
-      if words.length > SIMILAR_MAX
+      if max_candidates && words.length > max_candidates
         words = words.sort_by { |w| -similarity(w, word) }
-        words = words[0..SIMILAR_MAX - 1]
+        words = words[0..max_candidates - 1]
       end
       words
     end

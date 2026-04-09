@@ -51,6 +51,8 @@ mosaic rhymes, e.g. commander / understand her
 
 handle unicode in input, e.g. saute (with accent on e)
 
+handle compound words like "ice cream" "cream cheese" "hot dog"
+
 is thematically_related? symmetric? if so, canonicalize before caching
 
 ## Genderfluid rhymes

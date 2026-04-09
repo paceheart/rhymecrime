@@ -400,7 +400,7 @@ describe 'PAIR_RELATED' do
   end
 
   context 'fashion music' do
-    pair_related_oughta_contain 'avant-garde', 'music', 'hard', 'bard'
+    pair_related_oughta_contain 'fashion', 'music', 'avant-garde', 'bard'
   end
 end
 

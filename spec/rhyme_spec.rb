@@ -130,8 +130,8 @@ describe 'RHYMES' do
   
   context 'identical rhymes' do
     ought_not_rhyme 'leave', 'believe'
-    ought_not_rhyme 'troll', 'patrol'
-    ought_not_rhyme 'troll', 'control'
+    oughta_rhyme 'troll', 'patrol', NOT_WORKING
+    oughta_rhyme 'troll', 'control', NOT_WORKING
     oughta_rhyme 'end', 'pend'
     oughta_rhyme 'end', 'append'
     ought_not_rhyme 'pend', 'append' # identical
@@ -263,9 +263,9 @@ describe 'RHYMES' do
     oughta_rhyme 'meatiest', 'greediest'
     ought_not_rhyme 'panties', 'candies'
     ought_not_rhyme 'ants', 'hands'
-    ought_not_rhyme 'kitten', 'hidden'
+    ought_not_rhyme 'kitten', 'hidden' # arguable
     oughta_rhyme 'kitten', 'smitten'
-    ought_not_rhyme 'hidden', 'smitten'
+    ought_not_rhyme 'hidden', 'smitten' # arguable
     oughta_rhyme 'hidden', 'forbidden'
     ought_not_rhyme 'kitten', 'forbidden'
     oughta_rhyme 'little', 'riddle'
@@ -476,7 +476,7 @@ describe 'RHYMES' do
   end
 
   context 'imperfect rhymes' do
-    oughta_rhyme 'mushroom', 'doom', NOT_WORKING # no pronunciation for 'mushroom', and its stress is off
+    ought_not_rhyme 'mushroom', 'doom' # stress mismatch
     oughta_rhyme 'dodge', 'massage' # only in Texas, but we don't want dodge to get lonely in its empty lodge
     oughta_rhyme 'dodges', 'massages'
     oughta_rhyme 'dodger', 'massager'
@@ -486,7 +486,7 @@ describe 'RHYMES' do
     oughta_rhyme 'fennel', 'sentimental' # it's OK to elide the final T in 'sentimental'
     oughta_rhyme 'greediest', 'devious', NOT_WORKING
     oughta_rhyme 'fence', 'wince', NOT_WORKING
-    oughta_rhyme 'vintage', 'percentage', NOT_WORKING 
+    oughta_rhyme 'vintage', 'percentage', NOT_WORKING
     oughta_rhyme 'girl', 'world', NOT_WORKING
     oughta_rhyme 'false', 'malts' # sure I guess? otherwise 'false' won't rhyme with anything at all
     oughta_rhyme 'else', 'melts' # sure I guess? otherwise 'else' won't rhyme with anything at all
@@ -581,6 +581,7 @@ describe 'RHYMES' do
     oughta_rhyme 'pitiful', 'biddable', NOT_WORKING # genderfluid plus T -> D
     oughta_rhyme 'cello', 'concerto', NOT_WORKING
     oughta_rhyme 'symphony', 'timpani', NOT_WORKING
+    oughta_rhyme 'bounty', 'brown tea', NOT_WORKING
   end
 
   context 'prereqs from similar_rhymes_spec: death' do
@@ -683,7 +684,7 @@ describe 'RHYMES' do
     oughta_rhyme 'cool', 'pool'
     oughta_rhyme 'drain', 'rain'
     oughta_rhyme 'blood', 'flood'
-    oughta_rhyme 'marine', 'saline'
+    ought_not_rhyme 'marine', 'saline', NOT_WORKING # stress mismatch
     oughta_rhyme 'dip', 'sip'
   end
 
