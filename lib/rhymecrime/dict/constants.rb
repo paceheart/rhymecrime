@@ -1,0 +1,66 @@
+# encoding: utf-8
+
+require_relative "utils_rhyme"
+require "rwordnet"
+
+TRACE_WORD = nil
+DICT_BUILD_VERBOSE = false
+
+CORPORA_ROOT = File.join(REPO_ROOT, "corpora")
+
+CMUDICT_FILENAME = File.join(CORPORA_ROOT, "cmudict", "cmudict-0.7c.txt")
+RARE_WORDS_FILENAME = "rare_words.txt"
+COMMON_WORDS_FILENAME = "common_words.txt"
+
+WordNet::DB.path = File.join(CORPORA_ROOT, "wordnet", "3.1")
+SUBTLEX_FILENAME = File.join(CORPORA_ROOT, "subtlex", "SUBTLEXus.tsv")
+SUBTLEX_PRESENCE_BONUS = 4
+
+WORDFREQ_FILENAME = File.join(REPO_ROOT, "generated", "wordfreq.tsv")
+WORDFREQ_COMMON_ZIPF = 3.0
+WORDFREQ_RARE_ZIPF = 2.0
+# SUBTLEX FREQlow this high means sustained lowercase dialogue use — used with weak_lemma_anchor
+# and with two-letter all-proper handling below.
+SUBTLEX_OVERRIDE_PROPER_MIN = 12
+# Two-letter all-proper, single synset: only clear "all proper" when SUBTLEX FREQlow falls in
+# this band — high enough for real dialogue (bi ~32) but below nickel-style fragment spam (ni)
+# and above iron Fe appearing as dialogue junk (~17).
+SUBTLEX_SINGLE_PROPER_OVERRIDE_MIN = 28
+SUBTLEX_SINGLE_PROPER_OVERRIDE_MAX = 40
+# Phase 11: minimum raw SUBTLEX FREQlow on a base before it may promote non-list inflections.
+MORPH_CORPUS_SUBTLEX_MIN = 40
+# Plural :s only: allow WN noun-only bases below the corpus floor when still attested in subtitles
+# (e.g. gramophone SUBTLEX 15 → gramophones).
+MORPH_LEXICAL_NOUN_PLURAL_SUBTLEX_MIN = 10
+# Phase 6: skip weak Zipf for 4-letter tokens with no WordNet entry (surname spam ~2.3) but keep neologisms ≥ this (yeet ~2.51).
+WIKT_FLOOR_4L_WEAK_ZIPF_BELOW = 2.5
+
+RIME_DICT_HEADER = "# RhymeCrime's rime dictionary
+# https://github.com/paceheart/rhymecrime
+#
+# Built by the dictionary compiler (see dict.rb, phonology.rb, rime.rb).
+#
+# Each line is of the form:
+#
+# RIME  WORD1 WORD2 WORD3 ...
+#
+# where RIME is an underscore-concatenated ARPABET encoding of phonemes
+# from the head vowel of the prosodic head through word end (see Pronunciation#rime_array).
+#
+# This data is automatically distilled from a forked version of the
+# CMU Pronouncing Dictionary, with some manual tweaks and some
+# programmatic preprocessing as described in the dict/ Ruby sources.
+#
+# Singleton rimes are excluded. Buckets where every word is rare (frequency <= RARE_FREQ_MAX) are excluded.
+#"
+
+WORD_DICT_HEADER = "# RhymeCrime's word info dictionary
+# https://github.com/paceheart/rhymecrime
+#
+# Built by the dictionary compiler (see dict.rb, frequency.rb).
+#
+# Each line is of the form:
+#
+# WORD,FREQUENCY,PRONUNCIATION1|PRONUNCIATION2...
+#
+#"

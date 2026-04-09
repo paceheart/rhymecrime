@@ -2,7 +2,8 @@
 # encoding: utf-8
 #
 # Rebuild RhymeCrime caches under <repo>/generated/.
-# Loads lib/rhymecrime/dict/dict.rb with cwd = that directory (relative list files), then runs rebuild.
+# Loads lib/rhymecrime/dict/dict.rb (which requires constants, phonology, lexical, morphology, rime, frequency)
+# with cwd = that directory (relative list files), then runs rebuild.
 #
 #   ./bin/dict-build
 #
