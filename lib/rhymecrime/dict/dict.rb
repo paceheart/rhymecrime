@@ -68,6 +68,7 @@ MORPH_CORPUS_SUBTLEX_MIN = 40
 MORPH_LEXICAL_NOUN_PLURAL_SUBTLEX_MIN = 10
 # Phase 6: skip weak Zipf for 4-letter tokens with no WordNet entry (surname spam ~2.3) but keep neologisms ≥ this (yeet ~2.51).
 WIKT_FLOOR_4L_WEAK_ZIPF_BELOW = 2.5
+
 RIME_DICT_HEADER = "# RhymeCrime's rime dictionary
 # https://github.com/paceheart/rhymecrime
 #
@@ -84,7 +85,7 @@ RIME_DICT_HEADER = "# RhymeCrime's rime dictionary
 # CMU Pronouncing Dictionary, with some manual tweaks and some
 # programmatic preprocessing as described in dict.rb.
 #
-# Singleton rimes are excluded.
+# Singleton rimes are excluded. Buckets where every word is rare (frequency <= RARE_FREQ_MAX) are excluded.
 #"
 
 WORD_DICT_HEADER = "# RhymeCrime's word info dictionary
@@ -643,9 +644,62 @@ end
 # surface row. If Kaikki also lists +adj+ on the lemma, require Wordfreq Zipf on the inflected
 # surface so lexicon rows for marginal verbs (e.g. *taboo*) do not promote rare *tabooed* when
 # corpus use is negligible. OOV bases (no WordNet entry) keep the legacy open policy.
-def morph_base_allows_verb_forms?(base, inflected, pos_map, forms_map, zipf_inf, wordfreq_hash = nil)
+#
+# When +list_authoritative_base+ is true (Phase 9 only), skip Kaikki/corpus verb attestation: entries in
+# common_words.txt are curated list headwords (*finesse*→*finessed* must inherit).
+def morph_base_allows_verb_forms?(base, inflected, pos_map, forms_map, zipf_inf, wordfreq_hash = nil, list_authoritative_base: false)
   inflection_suffix_kind = Inflect.send(:match_suffix_kind, base, inflected)
   return true unless inflection_suffix_kind == :ed || inflection_suffix_kind == :ing
+
+  # No *-ing* on regular *-ed* participles (*whipped*→*whippeding*). Short *-ed* stems (e.g. *bed*) skip.
+  if inflection_suffix_kind == :ing && base.end_with?("ed") && base.bytesize >= 5
+    return false
+  end
+
+  # No stacking *-ed* onto a surface that is already a productive *-s* inflection (*presents*→*presentsed*).
+  if inflection_suffix_kind == :ed && inflected == base + "ed" && base.bytesize >= 5 &&
+      base.end_with?("s") && !base.end_with?("ss", "us", "is")
+    stem_candidate = base.byteslice(0, base.bytesize - 1)
+    if stem_candidate.bytesize >= 3 && Inflect.inflection_of_base?(stem_candidate, base)
+      return false
+    end
+  end
+
+  # Same pattern for *-ing* (*presents*→*presentsing*).
+  if inflection_suffix_kind == :ing && inflected == base + "ing" && base.bytesize >= 5 &&
+      base.end_with?("s") && !base.end_with?("ss", "us", "is")
+    stem_candidate = base.byteslice(0, base.bytesize - 1)
+    if stem_candidate.bytesize >= 3 && Inflect.inflection_of_base?(stem_candidate, base)
+      return false
+    end
+  end
+
+  # Inflect consonant-doubling: *presents*+*s*+*ed*→*presentssed* (and *…sing*). Block when *base* is
+  # already a productive *-s* surface of a WordNet lemma (*present*→*presents*); *gas*→*gassed* stays
+  # allowed (*ga* is not a WN headword).
+  if (inflection_suffix_kind == :ed || inflection_suffix_kind == :ing) &&
+      base.end_with?("s") && !base.end_with?("ss", "us", "is") && base.bytesize >= 5
+    stem_one_s = base.byteslice(0, base.bytesize - 1)
+    if stem_one_s.bytesize >= 4 && Inflect.inflection_of_base?(stem_one_s, base) && wn_has_entry?(stem_one_s)
+      if (inflection_suffix_kind == :ed && inflected == base + "s" + "ed") ||
+          (inflection_suffix_kind == :ing && inflected == base + "s" + "ing")
+        return false
+      end
+    end
+  end
+
+  # *presentss*: Inflect accepts *presents*+*s*; block *-ed/-ing* when one *s* peeler yields a known
+  # headword that already inflects to +base+ (*harness*→*harnes* is not lexical, so it passes).
+  if (inflection_suffix_kind == :ed || inflection_suffix_kind == :ing) && base.end_with?("ss") && base.bytesize >= 6 && wordfreq_hash
+    chop = base.byteslice(0, base.bytesize - 1)
+    if chop.bytesize >= 4 && Inflect.inflection_of_base?(chop, base)
+      chop_zipf = (wordfreq_hash[chop] || 0).to_f
+      chop_known = wn_has_entry?(chop) || chop_zipf >= WORDFREQ_RARE_ZIPF
+      return false if chop_known
+    end
+  end
+
+  return true if list_authoritative_base
 
   tags = morph_part_of_speech_tags(pos_map, base)
   wn_in = wn_has_entry?(base)
@@ -684,7 +738,20 @@ def morph_base_allows_comparative_er_est?(base, w, pos_map, base_first_pron, for
   inflection_suffix_kind = Inflect.send(:match_suffix_kind, base, w)
   return true unless inflection_suffix_kind == :er || inflection_suffix_kind == :est
 
+  # Standard English uses *more/most* for many *-less* adjectives; block synthetic *-er/-est* unless Kaikki attests.
+  if base.end_with?("less") && base.bytesize >= 6
+    return false unless wiktionary_surface_form_attested?(forms_map, base, w)
+  end
+
+  # No *-er/-est* on plural / 3sg *-s* surfaces (*needles*→*needlesest*, *poses*→*poseser*) unless attested.
   bl = base.bytesize
+  if bl >= 5 && base.end_with?("s") && !base.end_with?("ss", "us", "is")
+    stem_candidate = base.byteslice(0, bl - 1)
+    if stem_candidate.bytesize >= 3 && Inflect.inflection_of_base?(stem_candidate, base)
+      return false unless wiktionary_surface_form_attested?(forms_map, base, w)
+    end
+  end
+
   if base.end_with?("y") && bl >= 2
     stem = base.byteslice(0, bl - 1)
     return false if w == base + "er" || w == base + "est"
@@ -791,6 +858,27 @@ def merge_word_dict_pronunciations_into_rdict!(rdict, word_dict)
   rdict
 end
 
+def word_dict_frequency_for_rime_bucket(word_dict, word)
+  entry = word_dict[word]
+  return 0 if entry.nil?
+  entry[0].to_i
+end
+
+# Drop rime lines where every word has frequency <= RARE_FREQ_MAX (see rare? in crime.rb).
+def delete_rare_only_rime_buckets!(rdict, word_dict)
+  removed = 0
+  rdict.delete_if do |_rime, words|
+    next false if words.nil? || words.empty?
+    all_rare = words.all? do |w|
+      word_dict_frequency_for_rime_bucket(word_dict, w) <= RARE_FREQ_MAX
+    end
+    removed += 1 if all_rare
+    all_rare
+  end
+  puts "#{rdict.length} out of #{rdict.length + removed} rime buckets remain after removing buckets containing only rare words" if removed > 0
+  rdict
+end
+
 def filter_cmudict(cmudict, rdict)
   # filter out words that differ only in apostrophes, and pronunciations with no rhymes
   filtered_cmudict = Hash.new
@@ -870,14 +958,14 @@ def compute_frequency(word, subtlex_hash, wordfreq_hash)
   lexically_anchored = in_wordnet && !weak_lexical_anchor
 
   subtlex_freq = subtlex_frequency(word, subtlex_hash)
-  if zipf > 0 && zipf < WORDFREQ_RARE_ZIPF && subtlex_freq > 4
-    subtlex_freq = 4
+  if zipf > 0 && zipf < WORDFREQ_RARE_ZIPF && subtlex_freq > RARE_FREQ_MAX
+    subtlex_freq = RARE_FREQ_MAX
   end
 
   # Without a lexical anchor, high Zipf often reflects encyclopedic/person-name hits; do not let
   # SUBTLEX alone push past the rare threshold (e.g. nam ~ Viet Nam fragments in subtitles).
   if !lexically_anchored && zipf >= WORDFREQ_COMMON_ZIPF
-    subtlex_freq = [subtlex_freq, 4].min
+    subtlex_freq = [subtlex_freq, RARE_FREQ_MAX].min
   end
 
   block_short_initialism_wordfreq = acronym_shape_wordfreq_only?(word) && subtlex_freq == 0 && !in_wordnet
@@ -958,7 +1046,7 @@ def add_frequency_info(cmudict, subtlex_hash, wordfreq_hash, wiktionary_words, p
   # Require Zipf >= RARE to avoid junk words
   floor_applied = 0
   hash.each do |word, entry|
-    next if entry[0] > 4
+    next if entry[0] > RARE_FREQ_MAX
     next if rare_words.include?(word)
     next unless wiktionary_words.include?(word)
     zipf = wordfreq_hash[word] || 0
@@ -984,7 +1072,7 @@ def add_frequency_info(cmudict, subtlex_hash, wordfreq_hash, wiktionary_words, p
   # Skip inflected forms of hyphenated bases — those are handled by Phase 8 (or blocked).
   hyp_floor = 0
   hash.each do |word, entry|
-    next if entry[0] > 4
+    next if entry[0] > RARE_FREQ_MAX
     next if rare_words.include?(word)
     next unless word.include?('-')
     next if $inflection_base_words.key?(word) && $inflection_base_words[word].include?('-')
@@ -1011,7 +1099,7 @@ def add_frequency_info(cmudict, subtlex_hash, wordfreq_hash, wiktionary_words, p
     # Do not copy frequency from hyphenated base to hyphenated inflection (hoity-toity → hoity-toities).
     next if inflected.include?("-") && base.include?("-")
     base_freq = hash.key?(base) ? hash[base][0] : 0
-    next unless base_freq > 4
+    next unless base_freq > RARE_FREQ_MAX
     wf_inf = wordfreq_hash[inflected]
     next if wf_inf && wf_inf >= WORDFREQ_COMMON_ZIPF
     inflection_suffix_kind = Inflect.send(:match_suffix_kind, base, inflected)
@@ -1029,23 +1117,35 @@ def add_frequency_info(cmudict, subtlex_hash, wordfreq_hash, wiktionary_words, p
 
   # Phase 9: suffix inheritance from common_words.txt (Inflect spelling patterns).
   # Phase 8 only fills entries with frequency 0; listed headwords still leave plurals / -ing, etc.
-  # in the rare bins (1–4). Match forward (listed + suffix = word) or reverse (word + suffix = listed,
-  # e.g. regionalize… ← regionalized). No wordfreq / WN verb guards here — the list is authoritative.
+  # in the rare bins (1..RARE_FREQ_MAX). Match forward (listed + suffix = word) or reverse (word + suffix = listed,
+  # e.g. regionalize… ← regionalized). Structural junk guards only; list headwords skip Kaikki verb
+  # attestation (see +list_authoritative_base+ on +morph_base_allows_verb_forms?+).
   cw_sorted = common_words.uniq.sort_by { |b| -b.length }
   cw_inherited = 0
   # Multiple rounds: e.g. regionalized → regionalize → regionalizing in one build.
   loop do
     round = 0
     hash.each do |word, entry|
-      next if entry[0] > 4
+      next if entry[0] > RARE_FREQ_MAX
       next if rare_words.include?(word)
       cw_sorted.each do |listed|
         next if listed == word
         forward = Inflect.inflection_of_base?(listed, word)
         reverse = !forward && Inflect.inflection_of_base?(word, listed)
         next unless forward || reverse
+        base, infl = forward ? [listed, word] : [word, listed]
+        inflection_suffix_kind = Inflect.send(:match_suffix_kind, base, infl)
+        next if inflection_suffix_kind.nil?
+        wf_infl = wordfreq_hash[infl] || 0
+        next if inflection_suffix_kind == :s && !morph_base_allows_plural_s?(base, pos_map, forms_map, infl)
+        list_auth = common_words.include?(base)
+        next if (inflection_suffix_kind == :ed || inflection_suffix_kind == :ing) && !morph_base_allows_verb_forms?(base, infl, pos_map, forms_map, wf_infl, wordfreq_hash, list_authoritative_base: list_auth)
+        if inflection_suffix_kind == :er || inflection_suffix_kind == :est
+          base_p0 = hash[base]&.dig(1)&.first
+          next unless morph_base_allows_comparative_er_est?(base, infl, pos_map, base_p0, forms_map, wf_infl)
+        end
         listed_freq = hash.key?(listed) ? hash[listed][0] : 0
-        donor = listed_freq > 4 ? listed_freq : 99
+        donor = listed_freq > RARE_FREQ_MAX ? listed_freq : 99
         entry[0] = donor
         round += 1
         cw_inherited += 1
@@ -1057,7 +1157,7 @@ def add_frequency_info(cmudict, subtlex_hash, wordfreq_hash, wiktionary_words, p
   puts "#{cw_inherited} forms inherited frequency from common_words.txt bases" if cw_inherited > 0
 
   # Phase 10: morphological extensions from common_words.txt headwords only (Inflect matcher).
-  # Unlike an “any freq>4 lemma” scan, this avoids promoting foxed/gooses/bruisers from ordinary
+  # Unlike an “any freq>RARE_FREQ_MAX lemma” scan, this avoids promoting foxed/gooses/bruisers from ordinary
   # common nouns and avoids hyphenated blast (topsy-turvy → topsy-turvys).
   # OOV rows: list headwords are authoritative (no SUBTLEX/Wikt gate). Existing keys may be raised.
   # -ing from a base requires a WordNet verb lemma (same FP-4 guard as Phase 8).
@@ -1067,12 +1167,12 @@ def add_frequency_info(cmudict, subtlex_hash, wordfreq_hash, wiktionary_words, p
     # Snapshot keys so new OOV entries do not disturb this pass; multi-round picks them up as donors.
     hash.keys.each do |base|
       bent = hash[base]
-      next unless bent && bent[0] > 4
+      next unless bent && bent[0] > RARE_FREQ_MAX
       next unless common_words.include?(base)
       next if stop_word?(base)
       next if rare_words.include?(base)
       next if base.include?("-")
-      donor = bent[0] > 4 ? bent[0] : 99
+      donor = bent[0] > RARE_FREQ_MAX ? bent[0] : 99
       base_prons = bent[1]
       Inflect.each_derivable_form(base) do |w|
         next if w == base
@@ -1088,7 +1188,7 @@ def add_frequency_info(cmudict, subtlex_hash, wordfreq_hash, wiktionary_words, p
         end
         next if wf >= WORDFREQ_COMMON_ZIPF
         if hash.key?(w)
-          next if hash[w][0] > 4
+          next if hash[w][0] > RARE_FREQ_MAX
           hash[w][0] = donor
           if hash[w][1].empty?
             promo = morph_derived_prons_for_promotion(base_prons, base, w)
@@ -1103,10 +1203,10 @@ def add_frequency_info(cmudict, subtlex_hash, wordfreq_hash, wiktionary_words, p
     end
     break if round == 0
   end
-  puts "#{morph_inherited} morphological extensions inherited from freq>4 bases" if morph_inherited > 0
+  puts "#{morph_inherited} morphological extensions inherited from freq>#{RARE_FREQ_MAX} bases" if morph_inherited > 0
 
   # Phase 11: non-list bases with strong SUBTLEX dialogue use may promote attested inflections.
-  # Tighter than old “any freq>4”: no hyphen, min length; plural :s can also use a lower SUBTLEX
+  # Tighter than old “any freq>RARE_FREQ_MAX”: no hyphen, min length; plural :s can also use a lower SUBTLEX
   # floor when WordNet has the base as noun-only (gramophone → gramophones); blocks gooses-style
   # verbal plurals via wn_base_has_verb?. Non-plural suffixes still require MORPH_CORPUS_SUBTLEX_MIN.
   morph_corpus = 0
@@ -1116,7 +1216,7 @@ def add_frequency_info(cmudict, subtlex_hash, wordfreq_hash, wiktionary_words, p
       next if common_words.include?(base)
       next if base.include?("-")
       bent = hash[base]
-      next unless bent && bent[0] > 4
+      next unless bent && bent[0] > RARE_FREQ_MAX
       next if stop_word?(base) || rare_words.include?(base)
       next if base.bytesize < 5
       sub_raw = subtlex_hash[base] || 0
@@ -1124,7 +1224,7 @@ def add_frequency_info(cmudict, subtlex_hash, wordfreq_hash, wiktionary_words, p
       lexical_plural_ok = wn_has_entry?(base) && !wn_base_has_verb?(base) &&
         sub_raw >= MORPH_LEXICAL_NOUN_PLURAL_SUBTLEX_MIN
       next unless corpus_ok || lexical_plural_ok
-      donor = bent[0] > 4 ? bent[0] : 99
+      donor = bent[0] > RARE_FREQ_MAX ? bent[0] : 99
       base_prons = bent[1]
       Inflect.each_derivable_form(base) do |w|
         next if w == base || w.include?("-") || rare_words.include?(w)
@@ -1141,7 +1241,7 @@ def add_frequency_info(cmudict, subtlex_hash, wordfreq_hash, wiktionary_words, p
         if inflection_suffix_kind == :s
           next unless hash.key?(w)
           next if wn_base_has_verb?(base)
-          next if hash[w][0] > 4
+          next if hash[w][0] > RARE_FREQ_MAX
           next unless corpus_ok || lexical_plural_ok
           hash[w][0] = donor
           if hash[w][1].empty?
@@ -1150,7 +1250,7 @@ def add_frequency_info(cmudict, subtlex_hash, wordfreq_hash, wiktionary_words, p
           end
         elsif corpus_ok
           if hash.key?(w)
-            next if hash[w][0] > 4
+            next if hash[w][0] > RARE_FREQ_MAX
             hash[w][0] = donor
             if hash[w][1].empty?
               promo = morph_derived_prons_for_promotion(base_prons, base, w)
@@ -1292,6 +1392,7 @@ def rebuild_rhymecrime_dictionaries()
   rdict = build_rime_dict(cmudict)
   word_dict = build_word_dict(cmudict, rdict, subtlex_hash, wordfreq_hash, wiktionary_words, pos_map, forms_map)
   merge_word_dict_pronunciations_into_rdict!(rdict, word_dict)
+  delete_rare_only_rime_buckets!(rdict, word_dict)
   save_string_hash(rdict, generated_dict_path_under_dict_dir(RIME_DICT_FILENAME), RIME_DICT_HEADER)
   save_word_dict(word_dict)
   save_hyphen_variant_map!(word_dict.keys)

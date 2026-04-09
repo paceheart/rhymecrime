@@ -341,6 +341,9 @@ def similarity_threshold
   $SIMILARITY_THRESHOLD
 end
 
+# True iff the two headwords are judged topically related. Symmetric in +word1+ / +word2+:
+# similarity and ConceptNet edges are symmetric; gloss checks both directions; sense-vector
+# and morphy paths use max/min of the two directional cosines; USF two-hop tries both orders.
 def thematically_related?(word1, word2, include_self=false)
   if ENV["RELATED_TRACE_THEMATIC"] == "1"
     warn "thematically_related? word1=#{word1.inspect} word2=#{word2.inspect} include_self=#{include_self.inspect}"

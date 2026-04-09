@@ -19,6 +19,8 @@ CONCEPTNET_EDGES_FILENAME = "conceptnet_edges.json"
 NUMBERBATCH_VECTORS_FILENAME = "numberbatch_vectors.msgpack"
 # USF cue→target association strengths (FSG); place under generated/ for runtime (e.g. built from corpora/usf/).
 USF_ASSOCIATIONS_FILENAME = "usf_associations.json"
+# Word-frequency rare ceiling: treat as rare when frequency is at or below this (see rare? in crime.rb).
+RARE_FREQ_MAX = 4
 
 # Outputs of dict.rb (dictionary compiler); not hand-edited. Absolute paths under <repo>/generated/.
 REPO_ROOT = File.expand_path("../../..", __dir__)

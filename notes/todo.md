@@ -53,7 +53,7 @@ handle unicode in input, e.g. saute (with accent on e)
 
 handle compound words like "ice cream" "cream cheese" "hot dog"
 
-is thematically_related? symmetric? if so, canonicalize before caching
+canonicalize thematically_related? before caching, to cache symmetry
 
 ## Genderfluid rhymes
 
@@ -61,4 +61,11 @@ Genderfluid rhyme: each syllable from the primary-stressed syllable onward has a
 
 Non-binary rhyme: a genderfluid rhyme that is not a perfect rhyme. The individual syllable rimes all match, but the intervening onsets (consonant clusters between syllables) differ, so the overall contiguous rime does not match. Examples: latex / paychecks, pitiful / biddable.
 
+## Dictionary Tiering
 
+features:
+- do we have rhymes for it?
+- do we have relateds for it?
+
+obscure_topic_1 -rel-> common_word_1 -rhyme-> common_word_2 <-rel obscure_topic_2
+obscure_word -rhyme-> common_word

@@ -543,7 +543,7 @@ def ubiquity(word)
 end
 
 def rare?(word)
-  frequency(word) <= 4 # rare_words/common_words + frequency pipeline
+  frequency(word) <= RARE_FREQ_MAX
 end
 
 def filter_out_rare_words(words)
