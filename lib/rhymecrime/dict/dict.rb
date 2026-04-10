@@ -88,4 +88,12 @@ def rebuild_rhymecrime_dictionaries()
     save_conceptnet_edge_map!(word_dict.keys)
     save_numberbatch_vectors!(word_dict.keys)
   end
+
+  common_n = 0
+  word_dict.each_value do |(freq, _)|
+    if freq > RARE_FREQ_MAX
+      common_n += 1
+    end
+  end
+  puts "word_dict: #{word_dict.size} entries (#{common_n} common)"
 end

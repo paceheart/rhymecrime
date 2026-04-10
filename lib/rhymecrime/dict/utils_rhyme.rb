@@ -572,9 +572,10 @@ def numberbatch_headwords_intersecting(dict_set)
       first = false
       next
     end
+    line = line.scrub
     sp = line.index(" ") || line.index("\t")
     next unless sp && sp.positive?
-    token = line.byteslice(0, sp)
+    token = line.byteslice(0, sp).scrub
     next unless token.match?(/\A[a-z][a-z_]*\z/)
     by_nb[token]&.each { |w| out.add(w) }
   end
@@ -752,9 +753,10 @@ def save_numberbatch_vectors!(word_keys)
       first = false
       next
     end
+    line = line.scrub
     parts = line.rstrip.split(" ")
-    word = parts[0]
-    next unless word.match?(/\A[a-z][a-z_]*\z/)
+    word = parts[0]&.scrub
+    next unless word&.match?(/\A[a-z][a-z_]*\z/)
     next unless dict_by_nb[word]
     vec = parts[1..].map(&:to_f)
     mag = Math.sqrt(vec.sum { |v| v * v })

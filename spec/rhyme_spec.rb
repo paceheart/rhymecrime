@@ -85,6 +85,7 @@ describe 'RHYMES' do
     ought_not_rhyme 'axolotls', 'bottles'  # stress mismatch, but I don't hate it
     oughta_rhyme 'spiral', 'viral'
     ought_not_rhyme 'eyes', 'sees' # this was a bug due to two pronunciations of 'reprise'
+    ought_not_rhyme 'biopic', 'myopic' # stress mismatch
   end
 
   context 'perfect rhymes must rhyme the last primary-stressed syllable, not just the last syllable' do
@@ -213,6 +214,10 @@ describe 'RHYMES' do
     oughta_rhyme_one_way 'realisable', 'advisable' # input realisable, you oughta get advisable
     oughta_rhyme 'advisable', 'realizable' # but input advisable, and you oughta get realizable...
     ought_not_rhyme_one_way 'advisable', 'realisable' # skipped candidate: ...but not realisable with an s
+    ought_not_rhyme 'catalog', 'catalogue'
+    ought_not_rhyme 'catalogs', 'catalogues'
+    ought_not_rhyme 'catalogged', 'catalogued'
+    ought_not_rhyme 'cataloging', 'cataloguing'
   end
 
   context 'profanity is allowed' do
@@ -533,15 +538,15 @@ describe 'RHYMES' do
     oughta_rhyme 'nest', 'finessed', not_working_message: "it's an identical rhyme. I'd like to include it but I don't know how without including unwanted identical rhymes"
     oughta_rhyme 'keto', 'mosquito', not_working_message: "bad wiktionary pron for keto"
     oughta_rhyme 'bold', 'oversold'
-    oughta_rhyme 'vibe', 'unsubscribe'
-    oughta_rhyme 'vibes', 'unsubscribes'
-    oughta_rhyme 'vibed', 'unsubscribed'
-    ought_not_rhyme 'vibe', 'unsubscribed'
-    ought_not_rhyme 'vibe', 'unsubscribes'
-    ought_not_rhyme 'vibed', 'unsubscribe'
-    ought_not_rhyme 'vibes', 'unsubscribe'
-    ought_not_rhyme 'vibed', 'unsubscribes'
-    oughta_rhyme 'vibing', 'unsubscribing'
+    oughta_rhyme 'vibe', 'subscribe'
+    oughta_rhyme 'vibes', 'subscribes'
+    oughta_rhyme 'vibed', 'subscribed'
+    ought_not_rhyme 'vibe', 'subscribed'
+    ought_not_rhyme 'vibe', 'subscribes'
+    ought_not_rhyme 'vibed', 'subscribe'
+    ought_not_rhyme 'vibes', 'subscribe'
+    ought_not_rhyme 'vibed', 'subscribes'
+    oughta_rhyme 'vibing', 'subscribing'
   end
 
   context 'long words' do
