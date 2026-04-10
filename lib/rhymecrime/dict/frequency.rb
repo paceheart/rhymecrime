@@ -92,11 +92,14 @@ end
 
 # Kaikki +wordfreq+ OOV rescue (idea 2b): forms in +forms_map+ whose +base+ has wordfreq Zipf ≥ +zipf_floor+.
 # Does not use Inflect forward derivation (idea 2a) — too many FPs.
-def kaikki_form_oov_rescue_headwords(forms_map, wordfreq_hash, zipf_floor)
+def kaikki_form_oov_rescue_headwords(forms_map, wordfreq_hash, zipf_floor, wiktionary_words = nil)
   out = Set.new
+  wk = wiktionary_words || Set.new
   forms_map.each do |base, pairs|
     z = wordfreq_hash[base] || 0
-    next if z < zipf_floor
+    anchored = z >= zipf_floor ||
+      (wk.include?(base) && z >= WORDFREQ_KAIKKI_FORM_BASE_MIN)
+    next unless anchored
     pairs.each do |form, b|
       out.add(form) if b == base
     end
@@ -126,12 +129,60 @@ end
 # Strict OOV (no wordfreq row): keep only if Kaikki form-of-Zipf≥RARE base (2b) ∪ SUBTLEX FREQlow>0 ∪ WordNet
 # lemma — rhyme neighbors alone do not rescue; Kaikki POS alone does not (see +wordfreq_oov_lexical_rescue?+).
 # Inflect-from-strong-base (2a) is intentionally not used here (too noisy).
+#
+# Exception: CMU surface forms written with a hyphen or apostrophe (e.g. okey-dokey, takin') often lack
+# WordNet / wordfreq rows but share a live rime bucket; keep them when they were original CMU headwords.
+# *-in'* merged after original CMU snapshot (Wiktionary/Inflect, e.g. fakin'): same disconnect case as takin'
+# but +original_cmudict_headwords+ does not include them. Pattern is tight (*…in'*); +kitchenin'+ is removed
+# earlier if +explicitly_forbidden?+.
 # Prunes +rdict+ and re-runs +delete_rare_only_rime_buckets!+ until fixed point so partner removal can cascade.
-def filter_word_dict_disconnected!(word_dict, rdict, subtlex_hash, wordfreq_hash, pos_map, forms_map)
+def cmudict_surface_rhyme_rescue?(word, prons, has_rhyme, original_cmudict_headwords)
+  return false unless word.is_a?(String)
+  return false if prons.nil? || prons.empty?
+  return false unless has_rhyme
+  o = original_cmudict_headwords
+  return false if o.nil? || (o.respond_to?(:empty?) && o.empty?)
+
+  hyphen_surface = word.include?("-")
+  apostrophe_surface = word.include?("'") || word.include?("\u2019")
+
+  if o.include?(word)
+    return hyphen_surface || apostrophe_surface
+  end
+
+  apostrophe_surface && word.match?(/\A[a-z]+in['\u2019]\z/)
+end
+
+# Colloquial g-dropping: prefer *…in'* as the headword. Drop bare *…in* when the apostrophe form is also
+# present, *…in* is not an original CMU headword (keeps *puffin*, *bobbin*, …), or *makin* (CMU surname
+# homograph) when *makin'* is in original CMU.
+def strip_gdrop_bare_homographs!(hash, cmudict_orig)
+  removed = 0
+  hash.keys.dup.each do |ap|
+    next unless ap.is_a?(String)
+    next unless ap.match?(/\A[a-z]+in['\u2019]\z/)
+
+    bare = ap.sub(/['\u2019]\z/, "")
+    next unless hash.key?(bare)
+
+    strip = !cmudict_orig.include?(bare) || (bare == "makin" && cmudict_orig.include?("makin'"))
+    next unless strip
+
+    hash.delete(bare)
+    removed += 1
+    if dict_trace_word?(bare) || dict_trace_word?(ap)
+      puts "TRACE g-drop strip: removed bare #{bare} (paired #{ap})"
+    end
+  end
+  puts "Removed #{removed} bare *…in headwords shadowed by colloquial *…in' (g-drop policy)" if removed > 0
+  removed
+end
+
+def filter_word_dict_disconnected!(word_dict, rdict, subtlex_hash, wordfreq_hash, pos_map, forms_map, original_cmudict_headwords = nil, wiktionary_words = nil)
   dict_set = word_dict.keys.to_set
   nb = nil
   cn = nil
-  kaikki_form_rescue_set = kaikki_form_oov_rescue_headwords(forms_map, wordfreq_hash, WORDFREQ_RARE_ZIPF)
+  kaikki_form_rescue_set = kaikki_form_oov_rescue_headwords(forms_map, wordfreq_hash, WORDFREQ_RARE_ZIPF, wiktionary_words)
   rounds = 0
   total_removed = 0
   loop do
@@ -168,9 +219,10 @@ def filter_word_dict_disconnected!(word_dict, rdict, subtlex_hash, wordfreq_hash
                f2b = kaikki_form_rescue_set.include?(w)
                s4 = subtlex_freqlow_positive?(w, subtlex_hash)
                wnw = wn_has_entry?(w)
-               r = f2b || s4 || wnw
+               surf_r = cmudict_surface_rhyme_rescue?(w, prons, has_rhyme, original_cmudict_headwords)
+               r = f2b || s4 || wnw || surf_r
                if dict_trace_word?(w)
-                 puts "TRACE disconnect round=#{rounds} #{w}: freq=0 wordfreq_row=no oov_2b=#{f2b} oov_subtlex=#{s4} wn=#{wnw} has_rhyme=#{has_rhyme} (ignored for OOV) keep=#{r} remove=#{!r}"
+                 puts "TRACE disconnect round=#{rounds} #{w}: freq=0 wordfreq_row=no oov_2b=#{f2b} oov_subtlex=#{s4} wn=#{wnw} cmudict_surface_rhyme=#{surf_r} has_rhyme=#{has_rhyme} keep=#{r} remove=#{!r}"
                end
                r
              end
@@ -688,6 +740,8 @@ def add_frequency_info(cmudict, subtlex_hash, wordfreq_hash, wiktionary_words, p
   end
   puts "#{morph_corpus} morphological extensions from strong-corpus bases (not in common_words list)" if morph_corpus > 0
 
+  strip_gdrop_bare_homographs!(hash, cmudict_orig)
+
   forbidden_scrub = 0
   hash.keys.each do |word|
     next unless explicitly_forbidden?(word)
@@ -709,6 +763,6 @@ def build_word_dict(cmudict, rdict, subtlex_hash, wordfreq_hash, wiktionary_word
   word_dict = filter_word_dict(word_dict)
   merge_word_dict_pronunciations_into_rdict!(rdict, word_dict)
   delete_rare_only_rime_buckets!(rdict, word_dict)
-  filter_word_dict_disconnected!(word_dict, rdict, subtlex_hash, wordfreq_hash, pos_map, forms_map)
+  filter_word_dict_disconnected!(word_dict, rdict, subtlex_hash, wordfreq_hash, pos_map, forms_map, original_cmudict_headwords, wiktionary_words)
   word_dict
 end

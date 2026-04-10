@@ -1,6 +1,9 @@
 class Pronunciation
   attr_reader :phonemes
 
+  # IH not dwimmed when followed by these (after syllable dots); see +with_dwimmed_schwas+.
+  DWIMMED_SCHWA_PROTECTED_NEXT = %w[R NG SH].freeze
+
   def initialize(phonemes)
     @phonemes = phonemes
   end
@@ -28,21 +31,48 @@ class Pronunciation
   # Conflate unstressed IH0 with AH0 (CMU/Wikt/Inflect policy): illicit/solicit, yeeted/defeated.
   # Skips IH0 before R, NG, or SH (beer, selfish/shellfish). If a change would remove all
   # primary/secondary stress from the pronunciation, returns +self+ unchanged.
+  #
+  # G-dropped *-in'* (*takin'*, *comin'*, *runnin'*): CMU already uses IH0 before final N, which
+  # we map to AH0 so the rime matches *taken*/*waken* (EY_K_AH_N). Some IPA pipelines may emit
+  # IH1 on that syllable while an earlier vowel carries primary stress; treat that as the same
+  # reduced vowel (IH1 → AH0) only when N is word-final and a primary-stressed vowel precedes
+  # (avoids *begin*, where IH1 is the only primary).
   def with_dwimmed_schwas
     return self if empty?
     out = @phonemes.dup
-    protected_next = %w[R NG SH]
+    len = out.length
     changed = false
+    prior_primary = false
     i = 0
-    while i < out.length
-      if out[i] == "IH0"
+    while i < len
+      ph = out[i]
+      if ph == "IH0"
         j = i + 1
-        j += 1 while j < out.length && out[j] == "."
-        next_bare = (j < out.length) ? out[j].tr("0-2", "") : nil
-        unless next_bare && protected_next.include?(next_bare)
+        j += 1 while j < len && out[j] == "."
+        dwim_ih0 = if j >= len
+                     true
+                   else
+                     nb = out[j].tr("0-2", "")
+                     !DWIMMED_SCHWA_PROTECTED_NEXT.include?(nb)
+                   end
+        if dwim_ih0
           out[i] = "AH0"
           changed = true
         end
+      elsif ph == "IH1" && prior_primary
+        j = i + 1
+        j += 1 while j < len && out[j] == "."
+        if j < len && out[j].tr("0-2", "") == "N"
+          k = j + 1
+          k += 1 while k < len && out[k] == "."
+          if k >= len
+            out[i] = "AH0"
+            changed = true
+          end
+        end
+      end
+      if !ph.syllable_boundary? && ph.vowel? && ph.include?("1")
+        prior_primary = true
       end
       i += 1
     end

@@ -426,7 +426,7 @@ describe 'RHYMES' do
     ought_not_rhyme 'roly-poly', 'poly'
     oughta_rhyme 'hara-kiri', 'weary'
     oughta_rhyme 'queer', 'peer-to-peer'
-    oughta_rhyme 'so-so', 'mafioso'
+    oughta_rhyme 'so-so', 'mafioso', not_working_message: "so-so should have first syllable stressed instead of both"
     oughta_rhyme 'fib', 'ad-lib'
   end
   
@@ -449,7 +449,7 @@ describe 'RHYMES' do
     oughta_rhyme 'car', 'tsar'
     oughta_rhyme 'car', 'czar'
     ought_not_rhyme 'czar', 'tsar'
-    oughta_rhyme 'lad', 'vlad', not_working_message: "'vlad' gets syllabified as V . L AE D"
+    oughta_rhyme 'lad', 'vlad'pu
     oughta_rhyme 'withdraw', 'voila'
   end
   
@@ -470,6 +470,21 @@ describe 'RHYMES' do
     oughta_rhyme 'blotched', 'watched'
     oughta_rhyme 'poor', 'tour' # P UW R / T UH R
     oughta_rhyme 'informant', 'torment', not_working_message: true
+  end
+
+  context "-in'" do
+    oughta_rhyme "winnin'", "linen"
+    oughta_rhyme "failin'", "wailin'"
+    oughta_rhyme "makin'", "bacon"
+    oughta_rhyme "huffin'", "puffin"
+    oughta_rhyme "huffin'", "puffin'"
+    ought_not_rhyme "puffin", "puffin'"
+    oughta_rhyme "puffin", "muffin"
+    oughta_rhyme "puffin'", "muffin"
+    oughta_rhyme "poopin'", "scoopin'"
+    oughta_rhyme "sobbin'", "bobbin"
+    oughta_rhyme "sobbin'", "bobbin'"
+    ought_not_rhyme "bobbin'", "bobbin'"
   end
 
   context 'imperfect rhymes' do

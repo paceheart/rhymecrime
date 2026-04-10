@@ -18,8 +18,13 @@ require "rhymecrime/crime"
 
 # Skip an example when +not_working_message+ is truthy (except +false+).
 # Use +true+ or +""+ for the default reason "not working"; use a String for a custom skip message.
+#
+# To actually run those examples (see if fixes made them pass):
+#   RHYMECRIME_RUN_SKIPPED=1 rspec spec/rhyme_spec.rb
+# Values treated as on: 1, true, yes, on (case-insensitive).
 def skip_if_not_working(not_working_message)
   return if not_working_message.nil? || not_working_message == false
+  return if rhymecrime_run_skipped_examples?
 
   reason =
     if not_working_message == true
@@ -29,6 +34,12 @@ def skip_if_not_working(not_working_message)
       s.empty? ? "not working" : s
     end
   skip(reason)
+end
+
+def rhymecrime_run_skipped_examples?
+  v = ENV.fetch("RHYMECRIME_RUN_SKIPPED", "")
+  v = v.strip.downcase
+  !v.empty? && %w[1 true yes on].include?(v)
 end
 
 # Rarity specs tagged :rarity_ish (oughta_be_*_ish) are lower priority. To run only stricter

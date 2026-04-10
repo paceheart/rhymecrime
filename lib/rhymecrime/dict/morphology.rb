@@ -285,6 +285,60 @@ def morph_derived_prons_for_promotion(base_prons, base_word, inflected_word)
   syll ? [syll] : []
 end
 
+# Pronunciation for colloquial *…in'* from the syllabified *…ing* form: final NG → N, and the vowel
+# immediately before that NG is set to AH0 (schwa) so the rime aligns with *taken*/*waken* without
+# +with_dwimmed_schwas+ on the whole word.
+def morph_gdropped_in_apostrophe_syllabified_pronunciation(ing_syll, in_prime_word)
+  return nil if ing_syll.nil? || ing_syll.empty?
+
+  ph = ing_syll.phonemes.reject { |p| p == "." }
+  return nil if ph.length < 2
+
+  last = ph.last
+  return nil unless last.tr("0-2", "") == "NG"
+
+  penult = ph[-2]
+  return nil unless penult.vowel?
+
+  new_flat = Pronunciation.new(ph[0..-3] + ["AH0", "N"])
+  syllabified = normalize_flat_arphabet_pronunciation(new_flat).syllabify
+  unless WHITELIST.include?(in_prime_word)
+    return nil unless final_consonant_cluster_ok?(syllabified.final_consonant_cluster_array)
+  end
+  syllabified
+end
+
+# Kaikki-attested verbal *…ing* → colloquial *…in'* (not in CMU); same attestation gate as +merge_inflected_forms!+.
+def merge_gdropped_in_apostrophe_forms!(cmudict, forms_map)
+  added = 0
+  forms_map.each do |base_word, form_pairs|
+    next unless wn_base_has_verb?(base_word)
+
+    form_pairs.each do |inflected_word, b|
+      next unless b == base_word
+      next unless inflected_word.end_with?("ing")
+      next unless cmudict.key?(inflected_word)
+
+      in_prime = Inflect.gdropped_in_apostrophe_spelling(base_word, inflected_word)
+      next if in_prime.nil?
+      next if cmudict.key?(in_prime)
+      next if ignore_cmudict_word?(in_prime, cmudict)
+
+      ing_prons = cmudict[inflected_word]
+      next if ing_prons.nil? || ing_prons.empty?
+
+      syll = morph_gdropped_in_apostrophe_syllabified_pronunciation(ing_prons.first, in_prime)
+      next if syll.nil?
+
+      cmudict[in_prime] = [syll]
+      added += 1
+      puts "TRACE g-drop merge: #{in_prime} ← #{inflected_word} (base=#{base_word})" if dict_trace_word?(in_prime)
+    end
+  end
+  puts "Generated #{added} g-dropped *in'* pronunciations from verbal *ing*" if added > 0
+  added
+end
+
 def merge_inflected_forms!(cmudict, forms_map)
   added = 0
   forms_map.each do |base_word, form_pairs|

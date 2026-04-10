@@ -61,7 +61,12 @@ def acronym_shape_wordfreq_only?(word)
 end
 
 def wn_has_entry?(word)
-  !WordNet::Lemma.find_all(hyphens_to_underscores(word)).empty?
+  w = word.to_s
+  return false if w.empty?
+  # WordNet lemmas are usually hyphenated (topsy-turvy); older call sites used underscores only and missed them.
+  [w, hyphens_to_underscores(w), w.tr("_", "-")].uniq.any? do |c|
+    !WordNet::Lemma.find_all(c).empty?
+  end
 end
 
 # True if WordNet lists the base as a verb (any sense). Used to avoid Phase 8 giving

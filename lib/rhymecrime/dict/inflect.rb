@@ -111,6 +111,36 @@ module Inflect
     nil
   end
 
+  # Colloquial g-dropped spelling *…in'* from verbal *…ing* and the same +base+ as +match_suffix_kind+.
+  # Returns nil unless +ing_w+ is the canonical Inflect participle of +base+ (same cases as +:ing+).
+  def self.gdropped_in_apostrophe_spelling(base, ing_w)
+    return nil unless inflection_of_base?(base, ing_w)
+    return nil unless match_suffix_kind(base, ing_w) == :ing
+
+    bl = base.bytesize
+    il = ing_w.bytesize
+
+    if base.end_with?("y") && bl >= 2
+      stem = base.byteslice(0, bl - 1)
+      return stem + "yin'" if ing_w == stem + "ying"
+    end
+
+    if base.end_with?("e") && bl >= 2 && !base.end_with?("ee")
+      stem = base.byteslice(0, bl - 1)
+      return stem + "in'" if ing_w == stem + "ing"
+    end
+
+    return nil unless ing_w.start_with?(base)
+    rest = ing_w.byteslice(bl, il - bl)
+    return base + "in'" if rest == "ing"
+
+    if bl >= 2 && il == bl + 1 + 3 && ing_w.end_with?("ing") && ing_w.getbyte(bl) == base.getbyte(bl - 1)
+      return base + base[-1] + "in'"
+    end
+
+    nil
+  end
+
   private
 
   # Returns :s, :ed, :ing, :er, :est, or nil. Shared by +derive+ and +inflection_of_base?+.

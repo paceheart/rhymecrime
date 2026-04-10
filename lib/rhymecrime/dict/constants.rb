@@ -42,6 +42,9 @@ SUBTLEX_PRESENCE_BONUS = 4
 WORDFREQ_FILENAME = File.join(REPO_ROOT, "generated", "wordfreq.tsv")
 WORDFREQ_COMMON_ZIPF = 3.0
 WORDFREQ_RARE_ZIPF = 2.0
+# Kaikki inflections of a Wiktionary lemma: rescue at freq==0 disconnect when base Zipf is below
+# +WORDFREQ_RARE_ZIPF+ but still shows measurable corpus use (e.g. *throuple* ~1.3 → *throuples*).
+WORDFREQ_KAIKKI_FORM_BASE_MIN = 1.0
 # SUBTLEX FREQlow this high means sustained lowercase dialogue use — used with weak_lemma_anchor
 # and with two-letter all-proper handling below.
 SUBTLEX_OVERRIDE_PROPER_MIN = 12

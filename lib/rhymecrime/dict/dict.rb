@@ -59,6 +59,7 @@ def rebuild_rhymecrime_dictionaries()
   save_part_of_speech_map(pos_map)
   merge_wiktionary!(cmudict, wiktionary_prons)
   merge_inflected_forms!(cmudict, forms_map)
+  merge_gdropped_in_apostrophe_forms!(cmudict, forms_map)
   subtlex_hash = load_subtlex
   # Track which words are inflected forms for frequency inheritance
   forms_map.each do |base_word, form_pairs|
