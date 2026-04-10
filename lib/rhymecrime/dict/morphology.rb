@@ -46,6 +46,15 @@ def corpus_inflection_suffix_zipf_attested?(wordfreq_hash, base, suffix_kind)
   false
 end
 
+# Inflect doubles final *k* when the base ends in *-ck*, which spells *ckk* (*lock*→*lockked*, *snuck*→*snuckked*).
+# English adds *-ed/-ing/-er/-est* without that extra *k* (*locked*, *snucking*). *Trek*→*trekked* doubles *k*
+# after a vowel letter, not after *ck*.
+def morph_inflect_ck_double_k_junk?(base, inflected)
+  return false unless base.end_with?("ck")
+  inflected == base + "ked" || inflected == base + "king" ||
+    inflected == base + "ker" || inflected == base + "kest"
+end
+
 # -ed/-ing: Kaikki +verb+ when present; cross-check WordNet so noun-only lemmas do not inherit
 # verbal junk (FP-4). When both Kaikki and WordNet agree the base is a verb, require a Kaikki
 # surface row. If Kaikki also lists +adj+ on the lemma, require Wordfreq Zipf on the inflected
@@ -106,6 +115,15 @@ def morph_base_allows_verb_forms?(base, inflected, pos_map, forms_map, zipf_inf,
     end
   end
 
+  # No second *-ed* on spellings that already end in *-ed* (*sinned*→*sinneded*, *programmed*→*programmedded*).
+  # Short bases (*bed*→*bedded*) skip via length floor.
+  if inflection_suffix_kind == :ed && base.bytesize >= 5 && base.end_with?("ed") &&
+      inflected.start_with?(base) && inflected.bytesize > base.bytesize
+    return false
+  end
+
+  return false if morph_inflect_ck_double_k_junk?(base, inflected)
+
   return true if list_authoritative_base
 
   tags = morph_part_of_speech_tags(pos_map, base)
@@ -144,6 +162,8 @@ end
 def morph_base_allows_comparative_er_est?(base, w, pos_map, base_first_pron, forms_map, zipf_w)
   inflection_suffix_kind = Inflect.send(:match_suffix_kind, base, w)
   return true unless inflection_suffix_kind == :er || inflection_suffix_kind == :est
+
+  return false if morph_inflect_ck_double_k_junk?(base, w)
 
   # Standard English uses *more/most* for many *-less* adjectives; block synthetic *-er/-est* unless Kaikki attests.
   if base.end_with?("less") && base.bytesize >= 6

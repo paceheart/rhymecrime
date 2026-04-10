@@ -16,6 +16,8 @@ PART_OF_SPEECH_FILENAME = "part_of_speech.json"
 HYPHEN_VARIANT_MAP_FILENAME = "hyphen_variant_map.json"
 # ConceptNet-derived edge weights for topical relatedness; built in dict.rb, loaded at runtime.
 CONCEPTNET_EDGES_FILENAME = "conceptnet_edges.json"
+# English lemmas on kept ConceptNet relations; built by bin/preprocess-conceptnet-lemma-cache → generated/.
+CONCEPTNET_LEMMA_CACHE_SUFFIX = ".en-kept-lemmas.txt.gz"
 # Numberbatch word vectors pre-filtered to word_dict keys; built in dict.rb, loaded at runtime.
 NUMBERBATCH_VECTORS_FILENAME = "numberbatch_vectors.msgpack"
 # USF cue→target association strengths (FSG); place under generated/ for runtime (e.g. built from corpora/usf/).
@@ -394,6 +396,10 @@ end
 # Kept relations: RelatedTo, Synonym, IsA, HasA, PartOf, UsedFor, CapableOf, AtLocation,
 # Causes, HasProperty, HasSubevent, DerivedFrom, FormOf, SimilarTo, HasPrerequisite,
 # HasContext, MannerOf, ReceivesAction, HasFirstSubevent, HasLastSubevent, DefinedAs
+#
+# Lemma list gzip when assertions exist: built by +ensure_conceptnet_lemma_cache_for_build!+ (dict-build) or
+# setup.sh / bin/preprocess-conceptnet-lemma-cache. +conceptnet_headwords_intersecting+ aborts if cache still missing/stale.
+# Path: CONCEPTNET_LEMMA_CACHE_GZ, else <repo>/generated/<assertions-basename>.en-kept-lemmas.txt.gz.
 CONCEPTNET_ASSERTIONS_GZ = "conceptnet-assertions-5.7.0.csv.gz"
 CONCEPTNET_KEEP_RELATIONS = %w[
   /r/RelatedTo /r/Synonym /r/IsA /r/HasA /r/PartOf /r/UsedFor /r/CapableOf
@@ -401,7 +407,19 @@ CONCEPTNET_KEEP_RELATIONS = %w[
   /r/SimilarTo /r/HasPrerequisite /r/HasContext /r/MannerOf /r/ReceivesAction
   /r/HasFirstSubevent /r/HasLastSubevent /r/DefinedAs
 ].to_set.freeze
+CONCEPTNET_KEEP_RELATION_INDEX = CONCEPTNET_KEEP_RELATIONS.each_with_object({}) { |r, h| h[r] = true }.freeze
 CONCEPTNET_EN_NODE_RE = %r{\A/c/en/([a-z][a-z]*)\z}
+
+# Fast /c/en/<ascii_lowercase_word> parse (same acceptance as +CONCEPTNET_EN_NODE_RE+); avoids MatchData in hot loops.
+def conceptnet_en_lemma_from_uri(uri)
+  return nil unless uri
+  len = uri.bytesize
+  return nil if len <= 6
+  return nil unless uri.start_with?("/c/en/")
+  w = uri.byteslice(6, len - 6)
+  return nil if w.empty?
+  w.each_byte.all? { |b| b >= 97 && b <= 122 } ? w : nil
+end
 
 def conceptnet_assertions_gz_path
   env = ENV["CONCEPTNET_ASSERTIONS_GZ"]
@@ -419,6 +437,172 @@ def conceptnet_assertions_gz_path
   nil
 end
 
+def conceptnet_lemma_cache_derived_gz_path(assertions_path)
+  return nil unless assertions_path
+  stem = File.basename(assertions_path).sub(/\.csv\.gz\z/i, "").sub(/\.gz\z/i, "")
+  File.join(GENERATED_DIR, "#{stem}#{CONCEPTNET_LEMMA_CACHE_SUFFIX}")
+end
+
+# Canonical lemma-cache path (read + write): CONCEPTNET_LEMMA_CACHE_GZ if set, else under +GENERATED_DIR+.
+def conceptnet_lemma_cache_output_gz_path(assertions_path = nil)
+  assertions_path ||= conceptnet_assertions_gz_path
+  return nil unless assertions_path
+  env = ENV["CONCEPTNET_LEMMA_CACHE_GZ"]
+  return env if env && !env.empty?
+  conceptnet_lemma_cache_derived_gz_path(assertions_path)
+end
+
+def conceptnet_lemma_cache_usable?(assertions_gz, cache_gz)
+  return false unless cache_gz && File.file?(cache_gz) && !File.zero?(cache_gz)
+  return false unless assertions_gz && File.file?(assertions_gz)
+  File.mtime(cache_gz) >= File.mtime(assertions_gz)
+end
+
+# Ensures generated lemma cache exists and is no older than assertions (dict-build entrypoint).
+# setup.sh also runs bin/preprocess-conceptnet-lemma-cache after downloading assertions; this covers
+# fresh clones and upgraded assertion files without a separate admin step.
+def ensure_conceptnet_lemma_cache_for_build!
+  gz = conceptnet_assertions_gz_path
+  return unless gz
+
+  cache = conceptnet_lemma_cache_output_gz_path(gz)
+  abort "Could not derive ConceptNet lemma cache path for #{gz}" unless cache
+  return if File.file?(cache) && conceptnet_lemma_cache_usable?(gz, cache)
+
+  puts "ConceptNet lemma cache missing or stale; building #{cache} (long scan)…"
+  build_conceptnet_lemma_cache!
+end
+
+# Loads lemma lines from a cache built by +build_conceptnet_lemma_cache!+ (skips # comments).
+def conceptnet_lemma_vocab_load(cache_gz_path)
+  require "zlib"
+  s = Set.new
+  Zlib::GzipReader.open(cache_gz_path, encoding: "UTF-8") do |gz|
+    gz.each_line do |line|
+      w = line.rstrip
+      next if w.empty? || w.start_with?("#")
+      s.add(w)
+    end
+  end
+  s
+end
+
+def conceptnet_lemma_vocab_load_cached(cache_gz_path)
+  mtime = File.mtime(cache_gz_path)
+  memo = $conceptnet_lemma_vocab_memo
+  if memo.is_a?(Hash) && memo[:path] == cache_gz_path && memo[:mtime] == mtime
+    return memo[:set]
+  end
+  set = conceptnet_lemma_vocab_load(cache_gz_path)
+  $conceptnet_lemma_vocab_memo = { path: cache_gz_path, mtime: mtime, set: set }
+  set
+end
+
+# Yields each distinct English lemma pair (w1, w2), w1 != w2, on a kept relation (same rules as edge export).
+def each_conceptnet_kept_en_en_lemma_pair(gz_path)
+  return enum_for(:each_conceptnet_kept_en_en_lemma_pair, gz_path) unless block_given?
+
+  keep = CONCEPTNET_KEEP_RELATION_INDEX
+  require "zlib"
+  Zlib::GzipReader.open(gz_path, encoding: "UTF-8") do |gz|
+    gz.each_line do |line|
+      next unless line.include?("/c/en/")
+      parts = line.split("\t", 5)
+      next if parts.length < 4
+      next unless keep[parts[1]]
+      w1 = conceptnet_en_lemma_from_uri(parts[2])
+      w2 = conceptnet_en_lemma_from_uri(parts[3])
+      next unless w1 && w2
+      next if w1 == w2
+      yield w1, w2
+    end
+  end
+end
+
+# One-time (or when upgrading ConceptNet): scan assertions gz and write sorted unique lemmas for fast dict builds.
+def build_conceptnet_lemma_cache!(output_path: nil)
+  assertions = conceptnet_assertions_gz_path
+  raise "No conceptnet assertions .csv.gz found (set CONCEPTNET_ASSERTIONS_GZ=/path/to/file.gz)" unless assertions
+
+  output_path ||= conceptnet_lemma_cache_output_gz_path(assertions)
+  raise "Could not derive output path from #{assertions}" unless output_path
+
+  vocab = Set.new
+  edges = 0
+  each_conceptnet_kept_en_en_lemma_pair(assertions) do |w1, w2|
+    edges += 1
+    print "." if (edges % 5_000_000).zero?
+    vocab.add(w1)
+    vocab.add(w2)
+  end
+  puts if edges >= 5_000_000
+
+  sorted = vocab.to_a.sort!
+  FileUtils.mkdir_p(File.dirname(output_path))
+  require "zlib"
+  Zlib::GzipWriter.open(output_path, Zlib::BEST_SPEED) do |gz|
+    gz.puts "# RhymeCrime ConceptNet English lemmas (endpoints on kept relations, /c/en/<ascii_a-z> only)"
+    gz.puts "# Built from: #{assertions}"
+    sorted.each { |w| gz.puts(w) }
+  end
+  puts "Wrote #{sorted.size} lemmas from #{edges} edges to #{output_path}"
+  output_path
+end
+
+# Subset of +dict_set+ that have a Numberbatch row (lowercase a-z token in the embedding file).
+def numberbatch_headwords_intersecting(dict_set)
+  return Set.new if dict_set.nil? || dict_set.empty?
+  txt_path = numberbatch_txt_path
+  return Set.new unless txt_path
+  out = Set.new
+  first = true
+  File.foreach(txt_path, encoding: "UTF-8") do |line|
+    if first
+      first = false
+      next
+    end
+    sp = line.index(" ") || line.index("\t")
+    next unless sp && sp.positive?
+    word = line.byteslice(0, sp)
+    next unless word.each_byte.all? { |b| b >= 97 && b <= 122 }
+    out.add(word) if dict_set.include?(word)
+  end
+  out
+end
+
+# Subset of +dict_set+ that appear as /c/en/… endpoints on a kept ConceptNet relation (same filter as edge export).
+def conceptnet_headwords_intersecting(dict_set)
+  return Set.new if dict_set.nil? || dict_set.empty?
+  gz_path = conceptnet_assertions_gz_path
+  return Set.new unless gz_path
+
+  cache_path = conceptnet_lemma_cache_output_gz_path(gz_path)
+  unless cache_path
+    abort "ConceptNet lemma cache path could not be derived for assertions: #{gz_path}"
+  end
+  unless File.file?(cache_path)
+    abort <<~MSG
+      ConceptNet lemma cache missing (required for dict-build):
+        #{cache_path}
+      Run once from repo root:
+        ./bin/preprocess-conceptnet-lemma-cache
+    MSG
+  end
+  unless conceptnet_lemma_cache_usable?(gz_path, cache_path)
+    abort <<~MSG
+      ConceptNet lemma cache is older than the assertions file (required):
+        cache: #{cache_path}
+        assertions: #{gz_path}
+      Re-run:
+        ./bin/preprocess-conceptnet-lemma-cache
+    MSG
+  end
+
+  vocab = conceptnet_lemma_vocab_load_cached(cache_path)
+  puts "Using ConceptNet lemma cache #{cache_path} (#{vocab.size} lemmas) for headword intersection"
+  dict_set & vocab
+end
+
 def save_conceptnet_edge_map!(word_keys)
   require 'zlib'
   gz_path = conceptnet_assertions_gz_path
@@ -429,18 +613,18 @@ def save_conceptnet_edge_map!(word_keys)
   dict_set = word_keys.to_set
   edges = {}
   lines = 0
+  keep = CONCEPTNET_KEEP_RELATION_INDEX
   Zlib::GzipReader.open(gz_path, encoding: "UTF-8") do |gz|
     gz.each_line do |line|
       lines += 1
       print "." if lines % 5_000_000 == 0
-      parts = line.chomp.split("\t")
-      next if parts.size < 5
-      relation = parts[1]
-      next unless CONCEPTNET_KEEP_RELATIONS.include?(relation)
-      m1 = CONCEPTNET_EN_NODE_RE.match(parts[2])
-      m2 = CONCEPTNET_EN_NODE_RE.match(parts[3])
-      next unless m1 && m2
-      w1, w2 = m1[1], m2[1]
+      next unless line.include?("/c/en/")
+      parts = line.split("\t", 5)
+      next if parts.length < 5
+      next unless keep[parts[1]]
+      w1 = conceptnet_en_lemma_from_uri(parts[2])
+      w2 = conceptnet_en_lemma_from_uri(parts[3])
+      next unless w1 && w2
       next if w1 == w2
       next unless dict_set.include?(w1) || dict_set.include?(w2)
       weight = begin

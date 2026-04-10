@@ -7,6 +7,13 @@
 #
 #   ./bin/dict-build
 #
+# Faster rebuilds while iterating (skips slow ConceptNet + Numberbatch exports; leaves prior generated files):
+#   RHYMECRIME_DICT_SKIP_CONCEPTNET_NUMBERBATCH=1 ./bin/dict-build
+#
+# ConceptNet lemma cache (generated/*.en-kept-lemmas.txt.gz) is built by setup.sh after downloading
+# assertions, or automatically at the start of dict-build if missing/stale. Optional manual refresh:
+#   ./bin/preprocess-conceptnet-lemma-cache
+#
 
 repo = File.expand_path("..", __dir__)
 dict_dir = File.join(repo, "lib", "rhymecrime", "dict")

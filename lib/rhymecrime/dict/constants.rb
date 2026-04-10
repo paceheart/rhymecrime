@@ -3,7 +3,29 @@
 require_relative "utils_rhyme"
 require "rwordnet"
 
-TRACE_WORD = nil
+# Trace one headword through dict-build (frequency, CMU ingest, rime, …). Set env when running:
+#   DICT_TRACE_WORD=kitchening ./bin/dict-build
+# Code compares against the constant TRACE_WORD; the env var name is DICT_TRACE_WORD.
+_dict_trace = ENV["DICT_TRACE_WORD"].to_s.strip
+TRACE_WORD = _dict_trace.empty? ? nil : _dict_trace
+
+def dict_trace_word?(word)
+  TRACE_WORD && word == TRACE_WORD
+end
+
+# Phase 8 / 10 / 11: +base+ → +infl+ inflection row touches TRACE_WORD.
+def dict_trace_morph?(base, infl)
+  TRACE_WORD && (TRACE_WORD == base || TRACE_WORD == infl)
+end
+
+# Phase 9: hash key +word+, common_words candidate +listed+, morph +base+ → +infl+.
+def dict_trace_phase9?(word, listed, base, infl)
+  return false unless TRACE_WORD
+
+  tw = TRACE_WORD
+  tw == word || tw == listed || tw == base || tw == infl
+end
+
 DICT_BUILD_VERBOSE = false
 
 CORPORA_ROOT = File.join(REPO_ROOT, "corpora")

@@ -78,3 +78,89 @@ end
 def failing_test_count
   relatedness_test_cases.count - succeeding_test_count
 end
+
+# --- rarity.csv (spec/rarity_spec.rb) ---
+
+RARITY_CSV_KINDS = %w[
+  common common_ish rare rare_ish uncommon forbidden
+  common_no_rhymes rare_no_rhymes have_rhymes
+].freeze
+
+def rarity_csv_path
+  File.expand_path("rarity.csv", __dir__)
+end
+
+def load_rarity_csv_rows
+  raw = File.read(rarity_csv_path, encoding: "UTF-8")
+  CSV.parse(raw, headers: true, encoding: "UTF-8")
+end
+
+def validate_rarity_csv_row!(row, line_hint = nil)
+  ctx = row["context"]
+  word = row["word"]
+  kind = row["kind"]
+  hint = line_hint ? " (#{line_hint})" : ""
+  raise "rarity.csv: empty context#{hint}" if ctx.nil? || ctx.strip.empty?
+  raise "rarity.csv: empty word#{hint}" if word.nil? || word.empty?
+  raise "rarity.csv: unknown kind #{kind.inspect}#{hint}" unless RARITY_CSV_KINDS.include?(kind.to_s.strip)
+end
+
+def define_rarity_nested_contexts(names, &block)
+  if names.empty?
+    yield
+  else
+    context(names.first) do
+      define_rarity_nested_contexts(names.drop(1), &block)
+    end
+  end
+end
+
+def apply_rarity_csv_row(row)
+  validate_rarity_csv_row!(row)
+  word = row["word"]
+  skip = row["skip"].to_s.strip == "1" ? true : nil
+  important = row["important"].to_s.strip != "0"
+  case row["kind"].strip
+  when "common"
+    oughta_be_common word, important: important, not_working_message: skip
+  when "common_ish"
+    oughta_be_common_ish word, not_working_message: skip
+  when "rare"
+    oughta_be_rare word, important: important, not_working_message: skip
+  when "rare_ish"
+    oughta_be_rare_ish word, not_working_message: skip
+  when "uncommon"
+    oughta_be_uncommon word, not_working_message: skip
+  when "forbidden"
+    oughta_be_forbidden word, not_working_message: skip
+  when "common_no_rhymes"
+    oughta_be_common_but_has_no_rhymes word, not_working_message: skip
+  when "rare_no_rhymes"
+    oughta_be_rare_but_has_no_rhymes word, not_working_message: skip
+  when "have_rhymes"
+    oughta_have_rhymes word, not_working_message: skip
+  else
+    raise "rarity.csv: unhandled kind #{row['kind'].inspect}"
+  end
+end
+
+# Loads spec/rarity.csv and defines nested RSpec contexts + examples. Requires +oughta_be_*+ helpers from
+# +rarity_spec.rb+ (same pattern as +related_spec.rb+ / +related.csv+).
+def load_and_define_rarity_test_cases_from_csv
+  rows = load_rarity_csv_rows
+  rows.each_with_index do |row, i|
+    validate_rarity_csv_row!(row, "line #{i + 2}")
+  end
+  order = []
+  rows.each do |row|
+    c = row["context"]
+    order << c unless order.include?(c)
+  end
+  order.each do |ctx|
+    names = ctx.split(" / ").map(&:strip).reject(&:empty?)
+    grouped = rows.select { |r| r["context"] == ctx }
+    define_rarity_nested_contexts(names) do
+      grouped.each { |r| apply_rarity_csv_row(r) }
+    end
+  end
+end

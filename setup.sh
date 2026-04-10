@@ -29,7 +29,7 @@ ln -s ../cgi-bin/assets/crimestyle-wide.css
 
 # not sure this is necessary:
 cd /var/www/cgi-bin/
-sudo chmod o+x bin/*.rb bin/dict-build
+sudo chmod o+x bin/*.rb bin/dict-build bin/preprocess-conceptnet-lemma-cache
 
 sudo dnf install xorg-x11-xauth.x86_64 xorg-x11-server-utils.x86_64 dbus-x11.x86_64
 
@@ -57,11 +57,14 @@ python3 -m pip install --user -r lib/rhymecrime/dict/wordfreq/requirements.txt
 mkdir -p generated
 python3 lib/rhymecrime/dict/wordfreq/export_wordfreq_tsv.py
 
-# ConceptNet 5.7 assertions (CC-BY-SA 4.0) → corpora/conceptnet/ (dict-build → conceptnet_edges.json)
+# ConceptNet 5.7 assertions (CC-BY-SA 4.0) → corpora/conceptnet/; lemma cache → generated/ (dict-build needs it)
 # https://github.com/commonsense/conceptnet5/wiki/Downloads
 mkdir -p corpora/conceptnet
 curl -fL -o corpora/conceptnet/conceptnet-assertions-5.7.0.csv.gz \
   "https://s3.amazonaws.com/conceptnet/downloads/2019/edges/conceptnet-assertions-5.7.0.csv.gz"
+mkdir -p generated
+# Lemma list gzip for fast headword intersection (dict-build also auto-builds if missing/stale)
+./bin/preprocess-conceptnet-lemma-cache
 
 # ConceptNet Numberbatch 19.08 English (CC-BY-SA 4.0) → corpora/numberbatch/numberbatch-en-19.08.txt (dict-build → numberbatch_vectors.msgpack)
 # Official distribution is .txt.gz; gunzip leaves the plain .txt that utils_rhyme.rb expects.

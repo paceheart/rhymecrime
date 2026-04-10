@@ -93,3 +93,41 @@ def filter_cmudict(cmudict, rdict)
   puts "#{proncount} out of #{total} pronunciations remain in the dictionary after removing pronunciations with no rhymes"
   return filtered_cmudict
 end
+
+# Mirrors +identical_rhyme?+ in crime.rb: true when every +target_rime+ pronunciation of +rhyme_word+ matches +target_rs+,
+# or when there is no such pronunciation (vacuous; candidate is filtered out for identical_ok=false).
+def headword_identical_rhyme?(rhyme_word, target_rs, target_rime, word_dict)
+  prons = word_dict[rhyme_word]&.dig(1)
+  return true if prons.nil? || prons.empty?
+  prons.each do |pron|
+    next unless pron.rime == target_rime
+    return false if pron.rhyme_syllables_array != target_rs
+  end
+  true
+end
+
+# True if +word+ has at least one rime-bucket partner treated as a non-identical rhyme (+find_rhyming_words(..., false)+).
+def headword_has_nonidentical_rhyme_partner?(word, prons, rdict, word_dict)
+  return false if prons.nil? || prons.empty?
+  prons.each do |pron|
+    rime = pron.rime
+    next if rime.empty?
+    rs = pron.rhyme_syllables_array
+    (rdict[rime] || []).each do |other|
+      next if other == word
+      next if headword_identical_rhyme?(other, rs, rime, word_dict)
+      return true
+    end
+  end
+  false
+end
+
+# Drop rime-bucket members not in +allowed+; remove singleton buckets (same invariant as +merge_word_dict_pronunciations_into_rdict!+).
+def prune_rdict_to_headwords!(rdict, allowed)
+  allowed = allowed.to_set if allowed.is_a?(Array)
+  rdict.each do |_rime, words|
+    words.reject! { |w| !allowed.include?(w) }
+  end
+  rdict.reject! { |_rime, words| words.nil? || words.length <= 1 }
+  rdict
+end
