@@ -55,6 +55,21 @@ def morph_inflect_ck_double_k_junk?(base, inflected)
     inflected == base + "ker" || inflected == base + "kest"
 end
 
+# True when Inflect *-ed* or *-ing* duplicates a role Kaikki already fills for the verb lexeme
+# (+kaikki_verb_morph+ from +load_wiktionary+).
+def morph_kaikki_redundant_verb_inflection_blocked?(base, suffix_kind, kaikki_verb_morph)
+  return false if kaikki_verb_morph.nil?
+
+  case suffix_kind
+  when :ed
+    kaikki_verb_morph[:past_surfaces].include?(base)
+  when :ing
+    kaikki_verb_morph[:non_lemma_surfaces_in_pp_paradigm].include?(base)
+  else
+    false
+  end
+end
+
 # -ed/-ing: Kaikki +verb+ when present; cross-check WordNet so noun-only lemmas do not inherit
 # verbal junk (FP-4). When both Kaikki and WordNet agree the base is a verb, require a Kaikki
 # surface row. If Kaikki also lists +adj+ on the lemma, require Wordfreq Zipf on the inflected
@@ -63,7 +78,11 @@ end
 #
 # When +list_authoritative_base+ is true (Phase 9 only), skip Kaikki/corpus verb attestation: entries in
 # common_words.txt are curated list headwords (*finesse*→*finessed* must inherit).
-def morph_base_allows_verb_forms?(base, inflected, pos_map, forms_map, zipf_inf, wordfreq_hash = nil, list_authoritative_base: false)
+#
+# +kaikki_verb_morph+ (from +load_wiktionary+): blocks Inflect *-ed*/*-ing* when Kaikki already documents
+# the corresponding verb slot in the lexeme (*snuck* is a past surface of *sneak*; do not add *snucked*;
+# *sneaking* is the present participle; do not add *snucking* from *snuck*).
+def morph_base_allows_verb_forms?(base, inflected, pos_map, forms_map, zipf_inf, wordfreq_hash = nil, list_authoritative_base: false, kaikki_verb_morph: nil)
   inflection_suffix_kind = Inflect.send(:match_suffix_kind, base, inflected)
   return true unless inflection_suffix_kind == :ed || inflection_suffix_kind == :ing
 
@@ -124,6 +143,10 @@ def morph_base_allows_verb_forms?(base, inflected, pos_map, forms_map, zipf_inf,
 
   return false if morph_inflect_ck_double_k_junk?(base, inflected)
 
+  if kaikki_verb_morph && morph_kaikki_redundant_verb_inflection_blocked?(base, inflection_suffix_kind, kaikki_verb_morph)
+    return false
+  end
+
   return true if list_authoritative_base
 
   tags = morph_part_of_speech_tags(pos_map, base)
@@ -179,10 +202,16 @@ def morph_base_allows_comparative_er_est?(base, w, pos_map, base_first_pron, for
     end
   end
 
+  # *-y*→*-ier/-iest* is for adjectives (*happy*→*happier*), not nouns (*buddy*→*buddier* junk).
   if base.end_with?("y") && bl >= 2
     stem = base.byteslice(0, bl - 1)
     return false if w == base + "er" || w == base + "est"
-    return true if w == stem + "ier" || w == stem + "iest"
+    if w == stem + "ier" || w == stem + "iest"
+      tags_y = morph_part_of_speech_tags(pos_map, base)
+      adj_y = tags_y.any? ? tags_y.include?("adj") : wn_base_has_adjective?(base)
+      return false unless adj_y
+      return true
+    end
     return false
   end
 

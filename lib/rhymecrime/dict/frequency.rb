@@ -33,6 +33,24 @@ def load_subtlex()
   return subtlex_hash
 end
 
+# True if +w+ hits at least one external lexicon used for runtime relatedness / audit (wordfreq TSV,
+# SUBTLEX FREQlow, WordNet lemma, pre-merge CMU headword, USF cue/target, ConceptNet lemma cache,
+# Numberbatch embedding list). Used to block morph phases from copying base_freq>RARE_FREQ_MAX onto
+# surfaces that exist only via Kaikki/Inflect (e.g. *necrophilias*).
+def inflection_surface_reference_attested?(w, subtlex_hash, wordfreq_hash, original_cmudict_headwords, cn_vocab, nb_token_set, usf_word_set)
+  return true if wordfreq_hash.key?(w)
+  return true if (subtlex_hash[w] || 0).to_i > 0
+  return true if wn_has_entry?(w)
+  return true if original_cmudict_headwords.include?(w)
+  return true if usf_word_set.include?(w)
+
+  u = hyphens_to_underscores(w)
+  return true if cn_vocab&.include?(u)
+  return true if nb_token_set&.include?(u)
+
+  false
+end
+
 def subtlex_frequency(word, subtlex_hash)
   count = subtlex_hash[word]
   return 0 if count == 0
@@ -72,8 +90,6 @@ def filter_word_dict(word_dict)
   return filtered_word_dict
 end
 
-KAIKKI_LEXICAL_POS_FOR_OOV_RESCUE = %w[noun verb adj adv pron det prep conj].freeze
-
 # Kaikki +wordfreq+ OOV rescue (idea 2b): forms in +forms_map+ whose +base+ has wordfreq Zipf ≥ +zipf_floor+.
 # Does not use Inflect forward derivation (idea 2a) — too many FPs.
 def kaikki_form_oov_rescue_headwords(forms_map, wordfreq_hash, zipf_floor)
@@ -88,33 +104,33 @@ def kaikki_form_oov_rescue_headwords(forms_map, wordfreq_hash, zipf_floor)
   out
 end
 
-def kaikki_lexical_pos_rescue?(w, pos_map)
-  tags = pos_map[w]
-  return false if tags.nil? || tags.empty?
-  tags.any? { |t| KAIKKI_LEXICAL_POS_FOR_OOV_RESCUE.include?(t) }
-end
-
 def subtlex_freqlow_positive?(w, subtlex_hash)
   (subtlex_hash[w] || 0).positive?
 end
 
-# Wordfreq-OOV headwords: Kaikki form-of-strong-base (2b) ∪ Kaikki lexical POS (3) ∪ SUBTLEX FREQlow (4).
+# Strict wordfreq-OOV anchors: Kaikki form-of-Zipf≥RARE base (2b) ∪ SUBTLEX FREQlow>0 ∪ WordNet lemma.
+# Kaikki lexical POS alone is excluded (CMU artefacts like +mopus+). +pos_map+ unused; kept for call-site API.
 def wordfreq_oov_lexical_rescue?(w, subtlex_hash, wordfreq_hash, pos_map, kaikki_form_rescue_set)
   return false if wordfreq_hash.key?(w)
   kaikki_form_rescue_set.include?(w) ||
-    kaikki_lexical_pos_rescue?(w, pos_map) ||
-    subtlex_freqlow_positive?(w, subtlex_hash)
+    subtlex_freqlow_positive?(w, subtlex_hash) ||
+    wn_has_entry?(w)
 end
 
-# Drop freq==0 headwords that cannot rhyme (no non-identical partner in the final rime index) and have no
-# relatedness anchor. Words with a +wordfreq_hash+ row: Numberbatch / ConceptNet / WordNet. Words with no
-# wordfreq row (TSV miss): Kaikki form-of-Zipf≥RARE base (2b) ∪ Kaikki lexical POS ∪ SUBTLEX FREQlow>0 — not
-# Inflect-from-strong-base (2a), which is too noisy.
+# Drop freq==0 headwords that fail the disconnect policy, then prune rime index until fixed point.
+#
+# Has a +wordfreq_hash+ row (exported wordfreq TSV): never drop here — the token is corpus-attested. Rhyme-only
+# OOV junk was removed in earlier rounds; without this, those removals would cascade and evict attested rares
+# that no longer have a live rhyme partner and lack a NB/CN/WN hit.
+#
+# Strict OOV (no wordfreq row): keep only if Kaikki form-of-Zipf≥RARE base (2b) ∪ SUBTLEX FREQlow>0 ∪ WordNet
+# lemma — rhyme neighbors alone do not rescue; Kaikki POS alone does not (see +wordfreq_oov_lexical_rescue?+).
+# Inflect-from-strong-base (2a) is intentionally not used here (too noisy).
 # Prunes +rdict+ and re-runs +delete_rare_only_rime_buckets!+ until fixed point so partner removal can cascade.
 def filter_word_dict_disconnected!(word_dict, rdict, subtlex_hash, wordfreq_hash, pos_map, forms_map)
   dict_set = word_dict.keys.to_set
-  nb = numberbatch_headwords_intersecting(dict_set)
-  cn = conceptnet_headwords_intersecting(dict_set)
+  nb = nil
+  cn = nil
   kaikki_form_rescue_set = kaikki_form_oov_rescue_headwords(forms_map, wordfreq_hash, WORDFREQ_RARE_ZIPF)
   rounds = 0
   total_removed = 0
@@ -125,12 +141,40 @@ def filter_word_dict_disconnected!(word_dict, rdict, subtlex_hash, wordfreq_hash
       freq, prons = word_dict[w]
       next if freq > 0
       has_rhyme = headword_has_nonidentical_rhyme_partner?(w, prons, rdict, word_dict)
-      related = if wordfreq_hash.key?(w)
-                  nb.include?(w) || cn.include?(w) || wn_has_entry?(w)
-                else
-                  wordfreq_oov_lexical_rescue?(w, subtlex_hash, wordfreq_hash, pos_map, kaikki_form_rescue_set)
-                end
-      next if has_rhyme || related
+      if dict_trace_word?(w) && freq == 0
+        prons.each do |pron|
+          next if pron.rime.empty?
+          cohort = rdict[pron.rime]
+          if cohort.nil? || cohort.empty?
+            puts "TRACE disconnect #{w}: rime=#{pron.rime} has no rdict bucket (dropped as singleton/rare-only cohort earlier) — explains has_rhyme=false vs filter_cmudict message"
+          else
+            others = cohort.reject { |x| x == w }
+            puts "TRACE disconnect #{w}: rime=#{pron.rime} bucket=#{cohort.size} others=#{others.take(10).inspect}#{' …' if others.size > 10}"
+          end
+        end
+      end
+      in_wordfreq_tsv = wordfreq_hash.key?(w)
+      keep = if in_wordfreq_tsv
+               if dict_trace_word?(w)
+                 nb ||= numberbatch_headwords_intersecting(dict_set)
+                 cn ||= conceptnet_headwords_intersecting(dict_set)
+                 nbw = nb.include?(w)
+                 cnw = cn.include?(w)
+                 wnw = wn_has_entry?(w)
+                 puts "TRACE disconnect round=#{rounds} #{w}: freq=0 wordfreq_row=yes nb=#{nbw} cn=#{cnw} wn=#{wnw} has_rhyme=#{has_rhyme} keep=true (TSV attested; not dropped here)"
+               end
+               true
+             else
+               f2b = kaikki_form_rescue_set.include?(w)
+               s4 = subtlex_freqlow_positive?(w, subtlex_hash)
+               wnw = wn_has_entry?(w)
+               r = f2b || s4 || wnw
+               if dict_trace_word?(w)
+                 puts "TRACE disconnect round=#{rounds} #{w}: freq=0 wordfreq_row=no oov_2b=#{f2b} oov_subtlex=#{s4} wn=#{wnw} has_rhyme=#{has_rhyme} (ignored for OOV) keep=#{r} remove=#{!r}"
+               end
+               r
+             end
+      next if keep
       word_dict.delete(w)
       removed += 1
     end
@@ -140,7 +184,7 @@ def filter_word_dict_disconnected!(word_dict, rdict, subtlex_hash, wordfreq_hash
     break if removed == 0 || rounds >= 12
   end
   if total_removed > 0
-    puts "#{total_removed} headwords removed (freq==0, no usable rhymes, no relatedness anchor)"
+    puts "#{total_removed} headwords removed (freq==0 disconnect filter)"
   end
   word_dict
 end
@@ -198,17 +242,22 @@ def compute_frequency(word, subtlex_hash, wordfreq_hash)
 
   freq = [subtlex_freq, wordfreq_boost].max
 
-  if(word == TRACE_WORD)
-    puts "TRACE compute_frequency: subtlex=#{subtlex_freq} zipf=#{zipf} wordfreq_boost=#{wordfreq_boost} block_short_init=#{block_short_initialism_wordfreq} all_proper=#{wn_all_proper} => #{freq}"
+  if word == TRACE_WORD
+    puts "TRACE compute_frequency: subtlex=#{subtlex_freq} zipf=#{zipf} in_wn=#{in_wordnet} lexical_anchor=#{lexically_anchored} wordfreq_boost=#{wordfreq_boost} (needs zipf≥#{WORDFREQ_COMMON_ZIPF} for boost) block_short_init=#{block_short_initialism_wordfreq} all_proper=#{wn_all_proper} => #{freq}"
   end
   return freq
 end
 
-def add_frequency_info(cmudict, subtlex_hash, wordfreq_hash, wiktionary_words, pos_map, forms_map)
+def add_frequency_info(cmudict, subtlex_hash, wordfreq_hash, wiktionary_words, pos_map, forms_map, kaikki_verb_morph = nil, original_cmudict_headwords = nil)
   count = 0
   hash = Hash.new
   rare_words = IO.readlines(RARE_WORDS_FILENAME, chomp: true, encoding: 'UTF-8')
   common_words = IO.readlines(COMMON_WORDS_FILENAME, chomp: true, encoding: 'UTF-8')
+  cmudict_orig = original_cmudict_headwords || Set.new
+  ref_cn = conceptnet_lemma_vocab_for_attestation
+  ref_nb_path = numberbatch_txt_path
+  ref_nb = ref_nb_path ? numberbatch_corpus_token_set(ref_nb_path) : nil
+  ref_usf = usf_corpus_word_set
   for word, prons in cmudict
     if(stop_word?(word))
       freq = 999999
@@ -280,25 +329,8 @@ def add_frequency_info(cmudict, subtlex_hash, wordfreq_hash, wiktionary_words, p
   end
   puts "#{floor_applied} words received Wiktionary existence floor" if floor_applied > 0
 
-  # Phase 7: Hyphenated word existence floor.
-  # SUBTLEX and wordfreq tokenize on hyphens, so hyphenated words systematically score 0.
-  # Grant floor when the compound is attested (Wiktionary headword or WordNet MWE) and
-  # the final segment is not independently useful for rhyming: no WordNet lemma, and raw SUBTLEX < 12.
-  # Skip inflected forms of hyphenated bases — those are handled by Phase 8 (or blocked).
-  hyp_floor = 0
-  hash.each do |word, entry|
-    next if entry[0] > RARE_FREQ_MAX
-    next if rare_words.include?(word)
-    next unless word.include?('-')
-    next if $inflection_base_words.key?(word) && $inflection_base_words[word].include?('-')
-    next unless wiktionary_words.include?(word) || wn_has_entry?(word)
-    final = word.split('-').last
-    next if wn_has_entry?(final)
-    next if subtlex_hash[final] >= 12
-    entry[0] = 5
-    hyp_floor += 1
-  end
-  puts "#{hyp_floor} hyphenated words received existence floor" if hyp_floor > 0
+  # Phase 7 (hyphenated word existence floor) disabled: it promoted many proper names / junk;
+  # hyphenated headwords now rely on compute_frequency, Phase 6, and later phases only.
 
   # Phase 8: frequency inheritance for inflected forms.
   # Inherit from any common base word. Skip only when wordfreq shows the inflection itself
@@ -312,6 +344,10 @@ def add_frequency_info(cmudict, subtlex_hash, wordfreq_hash, wiktionary_words, p
     tr = dict_trace_morph?(base, inflected)
     unless hash.key?(inflected)
       puts "TRACE Phase8 #{inflected} ← #{base}: skip (inflected not in hash)" if tr
+      next
+    end
+    if rare_words.include?(inflected)
+      puts "TRACE Phase8 #{inflected} ← #{base}: skip (in rare_words.txt)" if tr
       next
     end
     if hash[inflected][0] > 0
@@ -339,7 +375,7 @@ def add_frequency_info(cmudict, subtlex_hash, wordfreq_hash, wiktionary_words, p
       next
     end
     zf_w = wordfreq_hash[inflected] || 0
-    if (inflection_suffix_kind == :ed || inflection_suffix_kind == :ing) && !morph_base_allows_verb_forms?(base, inflected, pos_map, forms_map, zf_w, wordfreq_hash)
+    if (inflection_suffix_kind == :ed || inflection_suffix_kind == :ing) && !morph_base_allows_verb_forms?(base, inflected, pos_map, forms_map, zf_w, wordfreq_hash, kaikki_verb_morph: kaikki_verb_morph)
       puts "TRACE Phase8 #{inflected} ← #{base}: skip (verb forms blocked; suffix=#{inflection_suffix_kind} zipf_inf=#{zf_w})" if tr
       next
     end
@@ -349,6 +385,10 @@ def add_frequency_info(cmudict, subtlex_hash, wordfreq_hash, wiktionary_words, p
         puts "TRACE Phase8 #{inflected} ← #{base}: skip (:er/:est not allowed)" if tr
         next
       end
+    end
+    if base_freq > RARE_FREQ_MAX && !common_words.include?(base) && !inflection_surface_reference_attested?(inflected, subtlex_hash, wordfreq_hash, cmudict_orig, ref_cn, ref_nb, ref_usf)
+      puts "TRACE Phase8 #{inflected} ← #{base}: skip (inflected not in wordfreq/SUBTLEX/WN/CMU/USF/CN/NB)" if tr
+      next
     end
     hash[inflected][0] = base_freq
     puts "TRACE Phase8 #{inflected} ← #{base}: inherited freq=#{base_freq} suffix=#{inflection_suffix_kind}" if tr
@@ -360,7 +400,8 @@ def add_frequency_info(cmudict, subtlex_hash, wordfreq_hash, wiktionary_words, p
   # Phase 8 only fills entries with frequency 0; listed headwords still leave plurals / -ing, etc.
   # in the rare bins (1..RARE_FREQ_MAX). Match forward (listed + suffix = word) or reverse (word + suffix = listed,
   # e.g. regionalize… ← regionalized). Structural junk guards only; list headwords skip Kaikki verb
-  # attestation (see +list_authoritative_base+ on +morph_base_allows_verb_forms?+).
+  # attestation (see +list_authoritative_base+ on +morph_base_allows_verb_forms?+). When +listed+ is in
+  # common_words.txt, also skip +inflection_surface_reference_attested?+ so curated lemmas can lift OOV inflections.
   cw_sorted = common_words.uniq.sort_by { |b| -b.length }
   cw_inherited = 0
   # Multiple rounds: e.g. regionalized → regionalize → regionalizing in one build.
@@ -393,7 +434,7 @@ def add_frequency_info(cmudict, subtlex_hash, wordfreq_hash, wiktionary_words, p
           next
         end
         list_auth = common_words.include?(base)
-        if (inflection_suffix_kind == :ed || inflection_suffix_kind == :ing) && !morph_base_allows_verb_forms?(base, infl, pos_map, forms_map, wf_infl, wordfreq_hash, list_authoritative_base: list_auth)
+        if (inflection_suffix_kind == :ed || inflection_suffix_kind == :ing) && !morph_base_allows_verb_forms?(base, infl, pos_map, forms_map, wf_infl, wordfreq_hash, list_authoritative_base: list_auth, kaikki_verb_morph: kaikki_verb_morph)
           puts "TRACE Phase9 #{infl} ← #{base} (listed=#{listed}): skip (verb forms blocked; suffix=#{inflection_suffix_kind} list_auth=#{list_auth} zipf=#{wf_infl})" if tr
           next
         end
@@ -406,6 +447,11 @@ def add_frequency_info(cmudict, subtlex_hash, wordfreq_hash, wiktionary_words, p
         end
         listed_freq = hash.key?(listed) ? hash[listed][0] : 0
         donor = listed_freq > RARE_FREQ_MAX ? listed_freq : 99
+        # +word+ is the headword receiving +donor+; +listed+ is the common_words.txt anchor (skip corpus gate when curated).
+        if donor > RARE_FREQ_MAX && !common_words.include?(listed) && !inflection_surface_reference_attested?(word, subtlex_hash, wordfreq_hash, cmudict_orig, ref_cn, ref_nb, ref_usf)
+          puts "TRACE Phase9 #{word} ← base=#{base} (listed=#{listed}): skip (surface not in wordfreq/SUBTLEX/WN/CMU/USF/CN/NB)" if tr
+          next
+        end
         entry[0] = donor
         puts "TRACE Phase9 #{word}: set freq=#{donor} via listed=#{listed} base=#{base} infl=#{infl} suffix=#{inflection_suffix_kind}" if tr
         round += 1
@@ -474,7 +520,7 @@ def add_frequency_info(cmudict, subtlex_hash, wordfreq_hash, wiktionary_words, p
           puts "TRACE Phase10 #{w} ← #{base}: skip (plural :s not allowed)" if tr
           next
         end
-        if (inflection_suffix_kind == :ed || inflection_suffix_kind == :ing) && !morph_base_allows_verb_forms?(base, w, pos_map, forms_map, wf, wordfreq_hash)
+        if (inflection_suffix_kind == :ed || inflection_suffix_kind == :ing) && !morph_base_allows_verb_forms?(base, w, pos_map, forms_map, wf, wordfreq_hash, kaikki_verb_morph: kaikki_verb_morph)
           puts "TRACE Phase10 #{w} ← #{base}: skip (verb forms blocked; suffix=#{inflection_suffix_kind} zipf=#{wf})" if tr
           next
         end
@@ -488,6 +534,7 @@ def add_frequency_info(cmudict, subtlex_hash, wordfreq_hash, wiktionary_words, p
           puts "TRACE Phase10 #{w} ← #{base}: skip (form Zipf #{wf} ≥ #{WORDFREQ_COMMON_ZIPF})" if tr
           next
         end
+        # Phase 10 scans only common_words.txt bases; list headwords are authoritative (no reference-corpus gate).
         if hash.key?(w)
           if hash[w][0] > RARE_FREQ_MAX
             puts "TRACE Phase10 #{w} ← #{base}: skip (existing freq #{hash[w][0]} > #{RARE_FREQ_MAX})" if tr
@@ -571,7 +618,7 @@ def add_frequency_info(cmudict, subtlex_hash, wordfreq_hash, wiktionary_words, p
           puts "TRACE Phase11 #{w} ← #{base}: skip (plural :s not allowed)" if tr
           next
         end
-        if (inflection_suffix_kind == :ed || inflection_suffix_kind == :ing) && !morph_base_allows_verb_forms?(base, w, pos_map, forms_map, wf, wordfreq_hash)
+        if (inflection_suffix_kind == :ed || inflection_suffix_kind == :ing) && !morph_base_allows_verb_forms?(base, w, pos_map, forms_map, wf, wordfreq_hash, kaikki_verb_morph: kaikki_verb_morph)
           puts "TRACE Phase11 #{w} ← #{base}: skip (verb forms blocked; suffix=#{inflection_suffix_kind} zipf=#{wf})" if tr
           next
         end
@@ -583,6 +630,11 @@ def add_frequency_info(cmudict, subtlex_hash, wordfreq_hash, wiktionary_words, p
         end
         if wf >= WORDFREQ_COMMON_ZIPF
           puts "TRACE Phase11 #{w} ← #{base}: skip (Zipf #{wf} ≥ #{WORDFREQ_COMMON_ZIPF})" if tr
+          next
+        end
+        base_zipf = wordfreq_hash[base] || 0
+        if donor > RARE_FREQ_MAX && base_zipf < WORDFREQ_COMMON_ZIPF && !inflection_surface_reference_attested?(w, subtlex_hash, wordfreq_hash, cmudict_orig, ref_cn, ref_nb, ref_usf)
+          puts "TRACE Phase11 #{w} ← #{base}: skip (form not in wordfreq/SUBTLEX/WN/CMU/USF/CN/NB; base Zipf #{base_zipf} < #{WORDFREQ_COMMON_ZIPF})" if tr
           next
         end
         if inflection_suffix_kind == :s
@@ -647,13 +699,13 @@ def add_frequency_info(cmudict, subtlex_hash, wordfreq_hash, wiktionary_words, p
   hyp_edge = delete_headwords_with_edge_hyphen!(hash)
   puts "#{hyp_edge} headwords with a leading or trailing '-' removed after frequency phases" if hyp_edge > 0
 
-  puts "#{count + extra + common_extra + floor_applied + hyp_floor + inherited + cw_inherited + morph_inherited + morph_corpus} total entries with frequency data"
+  puts "#{count + extra + common_extra + floor_applied + inherited + cw_inherited + morph_inherited + morph_corpus} total entries with frequency data"
   return hash
 end
 
-def build_word_dict(cmudict, rdict, subtlex_hash, wordfreq_hash, wiktionary_words, pos_map, forms_map)
+def build_word_dict(cmudict, rdict, subtlex_hash, wordfreq_hash, wiktionary_words, pos_map, forms_map, kaikki_verb_morph = nil, original_cmudict_headwords = nil)
   cmudict = filter_cmudict(cmudict, rdict)
-  word_dict = add_frequency_info(cmudict, subtlex_hash, wordfreq_hash, wiktionary_words, pos_map, forms_map)
+  word_dict = add_frequency_info(cmudict, subtlex_hash, wordfreq_hash, wiktionary_words, pos_map, forms_map, kaikki_verb_morph, original_cmudict_headwords)
   word_dict = filter_word_dict(word_dict)
   merge_word_dict_pronunciations_into_rdict!(rdict, word_dict)
   delete_rare_only_rime_buckets!(rdict, word_dict)

@@ -14,7 +14,7 @@
 #       → rime      — rime index build / merge / rare-bucket prune / filter_cmudict
 #       → frequency — SUBTLEX + wordfreq + compute_frequency + add_frequency_info + build_word_dict
 #         (build_word_dict merges pronunciations into rdict, prunes rare-only buckets, drops freq==0 orphans
-#          with no rhymes and no relatedness anchors)
+#          per disconnect: wordfreq TSV row ⇒ keep; strict OOV ⇒ Kaikki/SUBTLEX rescue only, not rhyme-alone)
 #     this file     — rebuild_rhymecrime_dictionaries only
 #
 # Corpus inputs live under <repo>/corpora/. Invoked by bin/dict-build.
@@ -50,8 +50,9 @@ end
 def rebuild_rhymecrime_dictionaries()
   ensure_conceptnet_lemma_cache_for_build!
   cmudict = load_cmudict
+  original_cmudict_headwords = cmudict.keys.each_with_object(Set.new) { |k, s| s.add(k) }
   wordfreq_hash = load_wordfreq
-  wiktionary_prons, forms_map, pos_map = load_wiktionary
+  wiktionary_prons, forms_map, pos_map, kaikki_verb_morph = load_wiktionary
   apply_lexical_pos_layer_a!(pos_map)
   wn_seed_pos_map_for_cmudict_gaps!(pos_map, cmudict)
   apply_lexical_pos_layer_b!(pos_map, wordfreq_hash)
@@ -77,7 +78,7 @@ def rebuild_rhymecrime_dictionaries()
   hyp_cmudict_edge = delete_headwords_with_edge_hyphen!(cmudict)
   puts "Removed #{hyp_cmudict_edge} cmudict headwords with a leading or trailing '-'" if hyp_cmudict_edge > 0
   rdict = build_rime_dict(cmudict)
-  word_dict = build_word_dict(cmudict, rdict, subtlex_hash, wordfreq_hash, wiktionary_words, pos_map, forms_map)
+  word_dict = build_word_dict(cmudict, rdict, subtlex_hash, wordfreq_hash, wiktionary_words, pos_map, forms_map, kaikki_verb_morph, original_cmudict_headwords)
   save_string_hash(rdict, generated_dict_path_under_dict_dir(RIME_DICT_FILENAME), RIME_DICT_HEADER)
   save_word_dict(word_dict)
   save_hyphen_variant_map!(word_dict.keys)

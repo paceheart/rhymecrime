@@ -421,6 +421,16 @@ def conceptnet_en_lemma_from_uri(uri)
   w.each_byte.all? { |b| b >= 97 && b <= 122 } ? w : nil
 end
 
+# CMU-style compounds use hyphens; Numberbatch, ConceptNet /c/en/, etc. use underscores.
+def hyphens_to_underscores(word)
+  word.to_s.tr("-", "_")
+end
+
+# True if +dict_set+ contains this ConceptNet lemma spelling or the hyphenated CMU-style variant.
+def conceptnet_dict_includes_lemma?(dict_set, cn_lemma)
+  dict_set.include?(cn_lemma) || dict_set.include?(cn_lemma.tr("_", "-"))
+end
+
 def conceptnet_assertions_gz_path
   env = ENV["CONCEPTNET_ASSERTIONS_GZ"]
   return env if env && !env.empty? && File.file?(env)
@@ -549,11 +559,12 @@ def build_conceptnet_lemma_cache!(output_path: nil)
   output_path
 end
 
-# Subset of +dict_set+ that have a Numberbatch row (lowercase a-z token in the embedding file).
+# Subset of +dict_set+ that have a Numberbatch row (lowercase a-z and underscore in the embedding file).
 def numberbatch_headwords_intersecting(dict_set)
   return Set.new if dict_set.nil? || dict_set.empty?
   txt_path = numberbatch_txt_path
   return Set.new unless txt_path
+  by_nb = dict_set.group_by { |w| hyphens_to_underscores(w) }
   out = Set.new
   first = true
   File.foreach(txt_path, encoding: "UTF-8") do |line|
@@ -563,9 +574,9 @@ def numberbatch_headwords_intersecting(dict_set)
     end
     sp = line.index(" ") || line.index("\t")
     next unless sp && sp.positive?
-    word = line.byteslice(0, sp)
-    next unless word.each_byte.all? { |b| b >= 97 && b <= 122 }
-    out.add(word) if dict_set.include?(word)
+    token = line.byteslice(0, sp)
+    next unless token.match?(/\A[a-z][a-z_]*\z/)
+    by_nb[token]&.each { |w| out.add(w) }
   end
   out
 end
@@ -600,7 +611,9 @@ def conceptnet_headwords_intersecting(dict_set)
 
   vocab = conceptnet_lemma_vocab_load_cached(cache_path)
   puts "Using ConceptNet lemma cache #{cache_path} (#{vocab.size} lemmas) for headword intersection"
-  dict_set & vocab
+  dict_set.each_with_object(Set.new) do |w, out|
+    out.add(w) if vocab.include?(hyphens_to_underscores(w))
+  end
 end
 
 def save_conceptnet_edge_map!(word_keys)
@@ -626,7 +639,7 @@ def save_conceptnet_edge_map!(word_keys)
       w2 = conceptnet_en_lemma_from_uri(parts[3])
       next unless w1 && w2
       next if w1 == w2
-      next unless dict_set.include?(w1) || dict_set.include?(w2)
+      next unless conceptnet_dict_includes_lemma?(dict_set, w1) || conceptnet_dict_includes_lemma?(dict_set, w2)
       weight = begin
         JSON.parse(parts[4])["weight"] || 1.0
       rescue
@@ -664,6 +677,66 @@ def numberbatch_txt_path
   nil
 end
 
+# First-column headword tokens in the Numberbatch embedding file (underscore spelling, /c/en/-style).
+def numberbatch_corpus_token_set(txt_path)
+  s = Set.new
+  first = true
+  File.foreach(txt_path, encoding: "UTF-8") do |line|
+    if first
+      first = false
+      next
+    end
+    line = line.scrub
+    sp = line.index(" ") || line.index("\t")
+    next unless sp && sp.positive?
+
+    token = line.byteslice(0, sp).scrub
+    next unless token.match?(/\A[a-z][a-z_]*\z/)
+
+    s.add(token)
+  end
+  s
+end
+
+# Cue and single-token target spellings from USF Cue_Target_Pairs shards under corpora/usf/.
+def usf_corpus_word_set
+  dir = File.join(REPO_ROOT, "corpora", "usf")
+  s = Set.new
+  return s unless Dir.exist?(dir)
+
+  Dir.glob(File.join(dir, "Cue_Target_Pairs.*")).sort.each do |path|
+    File.foreach(path, encoding: "UTF-8") do |line|
+      line = line.scrub
+      next if line.include?("CUE,")
+      next unless line.match?(/\A[A-Z]/)
+
+      parts = line.split(",", 3)
+      next if parts.length < 2
+
+      cue = parts[0]
+      target = parts[1]
+      next unless cue && target
+
+      s.add(cue.strip.downcase)
+      ts = target.strip.downcase
+      s.add(ts) if ts.match?(/\A[a-z][a-z0-9'-]*\z/)
+    end
+  end
+  s
+end
+
+# ConceptNet English lemma vocabulary for attestation checks; nil if assertions/cache unavailable.
+def conceptnet_lemma_vocab_for_attestation
+  gz_path = conceptnet_assertions_gz_path
+  return nil unless gz_path
+
+  cache_path = conceptnet_lemma_cache_output_gz_path(gz_path)
+  return nil unless cache_path && File.file?(cache_path)
+  return nil unless conceptnet_lemma_cache_usable?(gz_path, cache_path)
+
+  conceptnet_lemma_vocab_load_cached(cache_path)
+end
+
 def save_numberbatch_vectors!(word_keys)
   txt_path = numberbatch_txt_path
   unless txt_path
@@ -671,6 +744,7 @@ def save_numberbatch_vectors!(word_keys)
     return
   end
   dict_set = word_keys.to_set
+  dict_by_nb = dict_set.group_by { |w| hyphens_to_underscores(w) }
   vectors = {}
   first = true
   File.foreach(txt_path, encoding: "UTF-8") do |line|
@@ -680,8 +754,8 @@ def save_numberbatch_vectors!(word_keys)
     end
     parts = line.rstrip.split(" ")
     word = parts[0]
-    next unless word.match?(/\A[a-z]+\z/)
-    next unless dict_set.include?(word)
+    next unless word.match?(/\A[a-z][a-z_]*\z/)
+    next unless dict_by_nb[word]
     vec = parts[1..].map(&:to_f)
     mag = Math.sqrt(vec.sum { |v| v * v })
     next if mag == 0

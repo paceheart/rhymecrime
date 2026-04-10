@@ -4,6 +4,7 @@
 require "set"
 require_relative "inflect"
 require_relative "constants"
+require_relative "utils_rhyme"
 
 #
 # WordNet
@@ -60,7 +61,7 @@ def acronym_shape_wordfreq_only?(word)
 end
 
 def wn_has_entry?(word)
-  !WordNet::Lemma.find_all(word).empty?
+  !WordNet::Lemma.find_all(hyphens_to_underscores(word)).empty?
 end
 
 # True if WordNet lists the base as a verb (any sense). Used to avoid Phase 8 giving

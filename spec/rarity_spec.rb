@@ -11,13 +11,42 @@ require_relative "test_utils"
 # rare?
 #
 
+def allowed?(word)
+  !explicitly_forbidden?(word) && word_dict.key?(word)
+end
+
+# Coarse bucket for expectations: not allowed for use (:forbidden) vs allowed and rare vs common.
+def rarity_category(word)
+  return :forbidden unless allowed?(word)
+  rare?(word) ? :rare : :common
+end
+
+# Human-readable state for failure messages.
+def rarity_status_line(word)
+  f = frequency(word)
+  case rarity_category(word)
+  when :forbidden
+    if explicitly_forbidden?(word)
+      "explicitly_forbidden, frequency #{f}"
+    elsif !word_dict.key?(word)
+      "not in word_dict (frequency #{f})"
+    else
+      "not allowed, frequency #{f}"
+    end
+  when :rare
+    "in word_dict, frequency #{f}, rare"
+  when :common
+    "in word_dict, frequency #{f}, common"
+  end
+end
+
 def oughta_be_common(word, important: true, not_working_message: nil)
   test_name = "'#{word}' oughta be common"
   it test_name do
     skip_if_not_working(not_working_message)
-    msg = "'#{word}' oughta be common, but is rare, with frequency #{frequency(word)}"
+    msg = "'#{word}' oughta be common, but is #{rarity_category(word)} — #{rarity_status_line(word)}"
     msg += " (but it's not that big a deal)" unless important
-    expect(rare?(word)).to eql(false), msg
+    expect(rarity_category(word)).to eq(:common), msg
   end
 end
 
@@ -26,8 +55,8 @@ end
 def oughta_be_common_ish(word, not_working_message: nil)
   it "'#{word}' oughta be common (ish)", :rarity_ish do
     skip_if_not_working(not_working_message)
-    msg = "'#{word}' oughta be common, but is rare, with frequency #{frequency(word)} (but it's not that big a deal)"
-    expect(rare?(word)).to eql(false), msg
+    msg = "'#{word}' oughta be common (ish), but is #{rarity_category(word)} — #{rarity_status_line(word)} (but it's not that big a deal)"
+    expect(rarity_category(word)).to eq(:common), msg
   end
 end
 
@@ -62,17 +91,17 @@ def oughta_be_rare(word, important: true, not_working_message: nil)
   test_name = "'#{word}' oughta be rare"
   it test_name do
     skip_if_not_working(not_working_message)
-    msg = "'#{word}' oughta be rare, but is common, with frequency #{frequency(word)}"
+    msg = "'#{word}' oughta be rare, but is #{rarity_category(word)} — #{rarity_status_line(word)}"
     msg += " (but it's not that big a deal)" unless important
-    expect(rare?(word)).to eql(true), msg
+    expect(rarity_category(word)).to eq(:rare), msg
   end
 end
 
 def oughta_be_rare_ish(word, not_working_message: nil)
   it "'#{word}' oughta be rare (ish)", :rarity_ish do
     skip_if_not_working(not_working_message)
-    msg = "'#{word}' oughta be rare, but is common, with frequency #{frequency(word)} (but it's not that big a deal)"
-    expect(rare?(word)).to eql(true), msg
+    msg = "'#{word}' oughta be rare (ish), but is #{rarity_category(word)} — #{rarity_status_line(word)} (but it's not that big a deal)"
+    expect(rarity_category(word)).to eq(:rare), msg
   end
 end
 
@@ -82,15 +111,12 @@ def oughta_be_rare_but_has_no_rhymes(word, not_working_message: nil)
   ought_not_have_rhymes(word, not_working_message: not_working_message)
 end
 
-def allowed?(word)
-  !explicitly_forbidden?(word) && word_dict.key?(word)
-end
-
 def oughta_be_forbidden(word, not_working_message: nil)
   test_name = "'#{word}' oughta be forbidden"
   it test_name do
     skip_if_not_working(not_working_message)
-    expect(allowed?(word)).to eql(false), "'#{word}' oughta be forbidden, but is allowed."
+    msg = "'#{word}' oughta be forbidden, but is #{rarity_category(word)} — #{rarity_status_line(word)}"
+    expect(rarity_category(word)).to eq(:forbidden), msg
   end
 end
 

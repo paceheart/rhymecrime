@@ -132,7 +132,7 @@ module Rhymecrime
       nb_path = generated_dict_path(NUMBERBATCH_VECTORS_FILENAME)
       if File.exist?(nb_path)
         nb = MessagePack.unpack(File.binread(nb_path))
-        vec = nb[w]
+        vec = nb[hyphens_to_underscores(w)]
         if vec
           io.puts "--- #{NUMBERBATCH_VECTORS_FILENAME} ---"
           io.puts "present: yes (dim=#{vec.size})"
@@ -150,7 +150,8 @@ module Rhymecrime
       cn_path = generated_dict_path(CONCEPTNET_EDGES_FILENAME)
       if File.exist?(cn_path)
         edges = JSON.parse(File.read(cn_path, encoding: "UTF-8"))
-        hits = edges.keys.select { |k| k.split("|").include?(w) }
+        cnw = hyphens_to_underscores(w)
+        hits = edges.keys.select { |k| k.split("|").include?(w) || k.split("|").include?(cnw) }
         if hits.any?
           sample = hits.first(8)
           io.puts "--- #{CONCEPTNET_EDGES_FILENAME} ---"

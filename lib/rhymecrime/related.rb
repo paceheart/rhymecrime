@@ -60,7 +60,7 @@ def conceptnet_edges
 end
 
 def conceptnet_edge_weight(word1, word2)
-  key = [word1, word2].sort.join("|")
+  key = [hyphens_to_underscores(word1), hyphens_to_underscores(word2)].sort.join("|")
   conceptnet_edges[key] || 0.0
 end
 
@@ -128,8 +128,8 @@ end
 
 def numberbatch_cosine(word1, word2)
   nb = numberbatch_table
-  v1 = nb[word1]
-  v2 = nb[word2]
+  v1 = nb[hyphens_to_underscores(word1)]
+  v2 = nb[hyphens_to_underscores(word2)]
   return 0.0 if v1.nil? || v2.nil?
   dot = 0.0
   v1.size.times { |i| dot += v1[i] * v2[i] }
@@ -167,8 +167,8 @@ def validated_derivations(word)
 
   candidates.select do |d|
     next true if d == word
-    v1 = nb[word]
-    v2 = nb[d]
+    v1 = nb[hyphens_to_underscores(word)]
+    v2 = nb[hyphens_to_underscores(d)]
     next false unless v1 && v2
     dot = 0.0
     v1.size.times { |i| dot += v1[i] * v2[i] }
@@ -218,7 +218,7 @@ def sense_vectors(word, max_senses = $SENSE_VECTOR_MAX_SENSES)
     lemma.synsets.each do |synset|
       break if count >= max_senses
       content_words = synset.gloss.downcase.scan(/[a-z]+/) - GLOSS_STOP_WORDS.to_a
-      embeds = content_words.filter_map { |w| nb[w] }
+      embeds = content_words.filter_map { |w| nb[hyphens_to_underscores(w)] }
       next if embeds.size < 2
       dim = embeds.first.size
       avg = Array.new(dim, 0.0)
@@ -238,7 +238,7 @@ def directional_sense_cosines(word1, word2)
   best_2to1 = 0
   nb = numberbatch_table
 
-  v2_raw = nb[word2]
+  v2_raw = nb[hyphens_to_underscores(word2)]
   if v2_raw
     sense_vectors(word1).each do |sv|
       dot = 0.0
@@ -248,7 +248,7 @@ def directional_sense_cosines(word1, word2)
     end
   end
 
-  v1_raw = nb[word1]
+  v1_raw = nb[hyphens_to_underscores(word1)]
   if v1_raw
     sense_vectors(word2).each do |sv|
       dot = 0.0
@@ -282,7 +282,7 @@ def sense_vectors_morphy(word, max_senses = $SENSE_VECTOR_MAX_SENSES)
       lemma.synsets.each do |synset|
         break if count >= max_senses
         content_words = synset.gloss.downcase.scan(/[a-z]+/) - GLOSS_STOP_WORDS.to_a
-        embeds = content_words.filter_map { |w| nb[w] }
+        embeds = content_words.filter_map { |w| nb[hyphens_to_underscores(w)] }
         next if embeds.size < 2
         dim = embeds.first.size
         avg = Array.new(dim, 0.0)
@@ -309,7 +309,7 @@ def morphy_directional_sense_cosines(word1, word2)
   nb = numberbatch_table
 
   if sv1_morphy.any?
-    v2_raw = nb[word2]
+    v2_raw = nb[hyphens_to_underscores(word2)]
     if v2_raw
       sv1_morphy.each do |sv|
         dot = 0.0
@@ -321,7 +321,7 @@ def morphy_directional_sense_cosines(word1, word2)
   end
 
   if sv2_morphy.any?
-    v1_raw = nb[word1]
+    v1_raw = nb[hyphens_to_underscores(word1)]
     if v1_raw
       sv2_morphy.each do |sv|
         dot = 0.0

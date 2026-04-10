@@ -27,21 +27,38 @@ INFLECTION_TAGS = {
   "adj" => [["comparative"], ["superlative"]],
 }
 
+# Empty Kaikki verb morphology (see +load_wiktionary+ fourth return value).
+def empty_kaikki_verb_morphology
+  {
+    past_surfaces: Set.new,
+    lemmas_with_present_participle: Set.new,
+    verb_paradigm_forms: Hash.new { |h, k| h[k] = Set.new },
+    # Surfaces that appear as a non-lemma form in some verb paradigm whose lemma has an explicit
+    # present participle in Kaikki — Inflect *-ing* from that surface is redundant (*snuck*→*snucking*).
+    non_lemma_surfaces_in_pp_paradigm: Set.new
+  }
+end
+
 # Load kaikki.org filtered JSONL.
-# Returns [pron_hash, forms_map, pos_map]
+# Returns [pron_hash, forms_map, pos_map, kaikki_verb_morph]
 #   pron_hash: { word => [Pronunciation, ...] }  (same format as load_cmudict)
 #   forms_map: { base_word => [[inflected_form, base_word], ...] }
 #   pos_map: { word => Set<String> } union of Kaikki "pos" per lemma (Layer A ∩ WordNet in dict.rb)
+#   kaikki_verb_morph: Hash with :past_surfaces (Set), :lemmas_with_present_participle (Set),
+#     :verb_paradigm_forms (lemma => Set of attested inflected surfaces), and
+#     :non_lemma_surfaces_in_pp_paradigm (Set) for morph gating.
 def load_wiktionary
   path = WIKTIONARY_DATA_PATH
   unless File.exist?(path)
     puts "Wiktionary data not found at #{path}; skipping."
-    return [{}, {}, {}]
+    m = empty_kaikki_verb_morphology
+    return [{}, {}, {}, m]
   end
 
   pron_hash = Hash.new { |h, k| h[k] = [] }
   forms_map = Hash.new { |h, k| h[k] = [] }
   pos_map = {}
+  verb_morph = empty_kaikki_verb_morphology
   total = 0; converted = 0; skipped = 0
 
   Zlib::GzipReader.open(path, encoding: 'UTF-8') do |gz|
@@ -83,13 +100,19 @@ def load_wiktionary
         skipped += 1
       end
 
-      collect_inflected_forms(obj, word, pos, forms_map)
+      collect_inflected_forms(obj, word, pos, forms_map, verb_morph)
+    end
+  end
+
+  verb_morph[:lemmas_with_present_participle].each do |lemma|
+    verb_morph[:verb_paradigm_forms][lemma].each do |form|
+      verb_morph[:non_lemma_surfaces_in_pp_paradigm].add(form) if form != lemma
     end
   end
 
   puts "Wiktionary: #{total} entries with pronunciation, #{converted} converted, #{skipped} skipped"
   puts "Wiktionary: #{pron_hash.size} unique words, #{forms_map.size} words with inflected forms"
-  [pron_hash, forms_map, pos_map]
+  [pron_hash, forms_map, pos_map, verb_morph]
 end
 
 def pick_ga_sounds(sounds)
@@ -115,7 +138,7 @@ def pick_ga_sounds(sounds)
   result.uniq
 end
 
-def collect_inflected_forms(obj, base_word, pos, forms_map)
+def collect_inflected_forms(obj, base_word, pos, forms_map, verb_morph = nil)
   forms = obj["forms"]
   return if forms.nil? || forms.empty?
 
@@ -130,6 +153,14 @@ def collect_inflected_forms(obj, base_word, pos, forms_map)
     next if tags.any? { |t| SKIP_FORM_TAGS.include?(t) }
 
     next unless valid_tag_sets.any? { |required| required.all? { |rt| tags.include?(rt) } }
+
+    if verb_morph && pos == "verb"
+      if tags.include?("past") || (tags.include?("participle") && tags.include?("past"))
+        verb_morph[:past_surfaces].add(form)
+      end
+      verb_morph[:lemmas_with_present_participle].add(base_word) if tags.include?("participle") && tags.include?("present")
+      verb_morph[:verb_paradigm_forms][base_word].add(form)
+    end
 
     unless forms_map[base_word].any? { |existing_form, _| existing_form == form }
       forms_map[base_word] << [form, base_word]

@@ -421,6 +421,8 @@ describe 'RHYMES' do
     ought_not_rhyme 'roly-poly', 'poly'
     oughta_rhyme 'hara-kiri', 'weary'
     oughta_rhyme 'queer', 'peer-to-peer'
+    oughta_rhyme 'so-so', 'mafioso'
+    oughta_rhyme 'fib', 'ad-lib'
   end
   
   context 'Limerick Heist' do
@@ -626,6 +628,7 @@ describe 'RHYMES' do
     oughta_rhyme 'bow', 'flow'
     oughta_rhyme 'bridal', 'idol'
     oughta_rhyme 'cantata', 'sonata'
+    ought_not_rhyme 'cord', 'record' # identical
     ought_not_rhyme 'chord', 'record' # identical
     oughta_rhyme 'clarinet', 'minuet'
     oughta_rhyme 'croon', 'tune'

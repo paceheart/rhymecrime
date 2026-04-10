@@ -3,10 +3,11 @@
 require_relative "utils_rhyme"
 require "rwordnet"
 
-# Trace one headword through dict-build (frequency, CMU ingest, rime, …). Set env when running:
+# Trace one headword through dict-build (frequency, CMU ingest, rime, disconnect, …). Set env when running:
 #   DICT_TRACE_WORD=kitchening ./bin/dict-build
-# Code compares against the constant TRACE_WORD; the env var name is DICT_TRACE_WORD.
+#   TRACE_WORD=kitchening ./bin/dict-build   # alias if DICT_TRACE_WORD unset
 _dict_trace = ENV["DICT_TRACE_WORD"].to_s.strip
+_dict_trace = ENV["TRACE_WORD"].to_s.strip if _dict_trace.empty?
 TRACE_WORD = _dict_trace.empty? ? nil : _dict_trace
 
 def dict_trace_word?(word)
