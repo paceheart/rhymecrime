@@ -32,11 +32,11 @@ class Pronunciation
   # Skips IH0 before R, NG, or SH (beer, selfish/shellfish). If a change would remove all
   # primary/secondary stress from the pronunciation, returns +self+ unchanged.
   #
-  # G-dropped *-in'* (*takin'*, *comin'*, *runnin'*): CMU already uses IH0 before final N, which
-  # we map to AH0 so the rime matches *taken*/*waken* (EY_K_AH_N). Some IPA pipelines may emit
-  # IH1 on that syllable while an earlier vowel carries primary stress; treat that as the same
-  # reduced vowel (IH1 → AH0) only when N is word-final and a primary-stressed vowel precedes
-  # (avoids *begin*, where IH1 is the only primary).
+  # Post-tonic *IH* before word-final *N* (IH0, IH1, or IH2): map to AH0 when primary stress (1)
+  # already appeared earlier — *takin'*/*taken*, *puffin* (bird IH2), *puffin'*, etc. Skips *begin*
+  # (IH1 is the only primary) and leaves IH before NG alone (handled by the general IH0 branch).
+  #
+  # Other IH0: conflate with AH0 except before R, NG, SH (beer, selfish).
   def with_dwimmed_schwas
     return self if empty?
     out = @phonemes.dup
@@ -46,7 +46,21 @@ class Pronunciation
     i = 0
     while i < len
       ph = out[i]
-      if ph == "IH0"
+      if (ph == "IH0" || ph == "IH1" || ph == "IH2") && prior_primary
+        j = i + 1
+        j += 1 while j < len && out[j] == "."
+        if j < len && out[j].tr("0-2", "") == "N"
+          k = j + 1
+          k += 1 while k < len && out[k] == "."
+          if k >= len
+            out[i] = "AH0"
+            changed = true
+          end
+        end
+      end
+      # IH0 still IH0: post-tonic-N branch above matched (prior_primary) but next phone was not
+      # word-final N (e.g. *dodges* / *massages* IH0 before Z). Must not be elsif — that skipped this.
+      if ph == "IH0" && out[i] == "IH0"
         j = i + 1
         j += 1 while j < len && out[j] == "."
         dwim_ih0 = if j >= len
@@ -58,17 +72,6 @@ class Pronunciation
         if dwim_ih0
           out[i] = "AH0"
           changed = true
-        end
-      elsif ph == "IH1" && prior_primary
-        j = i + 1
-        j += 1 while j < len && out[j] == "."
-        if j < len && out[j].tr("0-2", "") == "N"
-          k = j + 1
-          k += 1 while k < len && out[k] == "."
-          if k >= len
-            out[i] = "AH0"
-            changed = true
-          end
         end
       end
       if !ph.syllable_boundary? && ph.vowel? && ph.include?("1")
