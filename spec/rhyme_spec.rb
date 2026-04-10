@@ -449,7 +449,7 @@ describe 'RHYMES' do
     oughta_rhyme 'car', 'tsar'
     oughta_rhyme 'car', 'czar'
     ought_not_rhyme 'czar', 'tsar'
-    oughta_rhyme 'lad', 'vlad'pu
+    oughta_rhyme 'lad', 'vlad'
     oughta_rhyme 'withdraw', 'voila'
   end
   
