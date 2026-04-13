@@ -16,7 +16,7 @@ module Inflect
   def self.derive(base_pron, base_word, inflected_word)
     return nil if base_pron.nil? || base_pron.empty?
 
-    base_phonemes = base_pron.phonemes.reject { |p| p == "." }
+    base_phonemes = base_pron.phonemes.each_with_object([]) { |p, a| a << p unless p == "." }
     return nil if base_phonemes.empty?
 
     suffix = match_suffix_kind(base_word, inflected_word)

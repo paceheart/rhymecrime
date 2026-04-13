@@ -109,17 +109,13 @@ module IpaToArpabet
     # Remove content in parentheses (optional segments like "(ɹ)")
     cleaned = cleaned.gsub(/\([^)]*\)/, '')
 
-    stress_queue = []
-    pos = 0
-    chars = cleaned.chars
-    # Pre-scan for stress markers and record their positions relative to phonemes
     tokens = []
-
     pos = 0
+    len = cleaned.length
     pending_stress = 0  # 0=unstressed, 1=primary, 2=secondary
 
-    while pos < chars.length
-      char = chars[pos]
+    while pos < len
+      char = cleaned[pos]
 
       if char == "ˈ" || char == "\u02C8"
         pending_stress = 1
@@ -131,21 +127,22 @@ module IpaToArpabet
         next
       end
 
-      # Try longest match
+      # Try longest match (substring by character index — no chars[].join per attempt)
       matched = false
       IPA_TO_ARPABET.each do |ipa, arpa|
-        candidate = chars[pos, ipa.length].join
-        if candidate == ipa
-          if VOWELS.include?(arpa)
-            tokens << "#{arpa}#{pending_stress}"
-            pending_stress = 0
-          else
-            tokens << arpa
-          end
-          pos += ipa.length
-          matched = true
-          break
+        ipalen = ipa.length
+        next if pos + ipalen > len
+        next unless cleaned[pos, ipalen] == ipa
+
+        if VOWELS.include?(arpa)
+          tokens << "#{arpa}#{pending_stress}"
+          pending_stress = 0
+        else
+          tokens << arpa
         end
+        pos += ipalen
+        matched = true
+        break
       end
       next if matched
 

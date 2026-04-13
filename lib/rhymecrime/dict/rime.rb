@@ -15,14 +15,11 @@ def build_rime_dict(cmudict)
     end
     i = i + 1;
   end
-  # sort, and remove duplicate words
+  # sort in-place and uniq in-place to avoid an extra array allocation per bucket
   for rime, words in rdict
-    new_words = words.sort.uniq
-    if(new_words.nil?)
-      rdict.delete(rime)
-    else
-      rdict[rime] = new_words
-    end
+    words.sort!
+    words.uniq!
+    rdict[rime] = words
   end
   print "Identified #{rdict.length} unique rimes, "
   rdict = rdict.reject!{|rime, words| words.length <= 1 }
@@ -41,8 +38,9 @@ def merge_word_dict_pronunciations_into_rdict!(rdict, word_dict)
       (rdict[rime] ||= []) << word
     end
   end
-  rdict.each do |rime, words|
-    rdict[rime] = words.sort.uniq
+  rdict.each do |_rime, words|
+    words.sort!
+    words.uniq!
   end
   rdict.reject! { |_rime, words| words.length <= 1 }
   rdict
@@ -105,10 +103,16 @@ end
 # True if +word+ has at least one rime-bucket partner treated as a non-identical rhyme (+find_rhyming_words(..., false)+).
 def headword_has_nonidentical_rhyme_partner?(word, prons, rdict, word_dict)
   return false if prons.nil? || prons.empty?
+
+  seen = {}
   prons.each do |pron|
     rime = pron.rime
     next if rime.empty?
     rs = pron.rhyme_syllables_array
+    key = [rime, rs]
+    next if seen[key]
+
+    seen[key] = true
     (rdict[rime] || []).each do |other|
       next if other == word
       next if headword_identical_rhyme?(other, rs, rime, word_dict)

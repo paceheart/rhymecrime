@@ -54,11 +54,14 @@ def rebuild_rhymecrime_dictionaries()
   original_cmudict_headwords = cmudict.keys.each_with_object(Set.new) { |k, s| s.add(k) }
   wordfreq_hash = load_wordfreq
   wiktionary_prons, forms_map, pos_map, kaikki_verb_morph = load_wiktionary
+  wiktionary_headwords = wiktionary_prons.keys
   apply_lexical_pos_layer_a!(pos_map)
   wn_seed_pos_map_for_cmudict_gaps!(pos_map, cmudict)
   apply_lexical_pos_layer_b!(pos_map, wordfreq_hash)
   save_part_of_speech_map(pos_map)
   merge_wiktionary!(cmudict, wiktionary_prons)
+  wiktionary_prons.clear
+  wiktionary_prons = nil
   merge_inflected_forms!(cmudict, forms_map)
   merge_gdropped_in_apostrophe_forms!(cmudict, forms_map)
   subtlex_hash = load_subtlex
@@ -69,7 +72,7 @@ def rebuild_rhymecrime_dictionaries()
     end
   end
   # Build set of all words with Wiktionary presence (for existence floor)
-  wiktionary_words = Set.new(wiktionary_prons.keys)
+  wiktionary_words = Set.new(wiktionary_headwords)
   forms_map.each do |base_word, form_pairs|
     wiktionary_words.add(base_word)
     form_pairs.each do |inflected_word, _|

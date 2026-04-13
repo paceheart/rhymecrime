@@ -16,10 +16,20 @@ require_relative "rime"
 # sentence-initial capitalization and proper noun uses.
 #
 
+def load_word_list_set(path)
+  s = Set.new
+  File.foreach(path, chomp: true, encoding: "UTF-8") do |line|
+    next if line.empty?
+
+    s.add(line)
+  end
+  s
+end
+
 def load_subtlex()
   subtlex_hash = Hash.new(0)
   first = true
-  IO.readlines(SUBTLEX_FILENAME, encoding: 'UTF-8').each do |line|
+  File.foreach(SUBTLEX_FILENAME, encoding: "UTF-8") do |line|
     if first
       first = false
       next
@@ -362,8 +372,8 @@ end
 def add_frequency_info(cmudict, subtlex_hash, wordfreq_hash, wiktionary_words, pos_map, forms_map, kaikki_verb_morph = nil, original_cmudict_headwords = nil)
   count = 0
   hash = Hash.new
-  rare_words = IO.readlines(RARE_WORDS_FILENAME, chomp: true, encoding: 'UTF-8')
-  common_words = IO.readlines(COMMON_WORDS_FILENAME, chomp: true, encoding: 'UTF-8')
+  rare_words = load_word_list_set(RARE_WORDS_FILENAME)
+  common_words = load_word_list_set(COMMON_WORDS_FILENAME)
   cmudict_orig = original_cmudict_headwords || Set.new
   ref_cn = conceptnet_lemma_vocab_for_attestation
   ref_nb_path = numberbatch_txt_path
@@ -513,7 +523,7 @@ def add_frequency_info(cmudict, subtlex_hash, wordfreq_hash, wiktionary_words, p
   # e.g. regionalize… ← regionalized). Structural junk guards only; list headwords skip Kaikki verb
   # attestation (see +list_authoritative_base+ on +morph_base_allows_verb_forms?+). When +listed+ is in
   # common_words.txt, also skip +inflection_surface_reference_attested?+ so curated lemmas can lift OOV inflections.
-  cw_sorted = common_words.uniq.sort_by { |b| -b.length }
+  cw_sorted = common_words.sort_by { |b| -b.length }
   cw_inherited = 0
   # Multiple rounds: e.g. regionalized → regionalize → regionalizing in one build.
   # Iterate common_words × small candidate sets (derivations / inverse stems) instead of hash × common_words.

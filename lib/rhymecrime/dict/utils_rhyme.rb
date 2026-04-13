@@ -75,7 +75,9 @@ end
 
 def load_forbid_list_as_array
   path = File.join(__dir__, "forbid_list.txt")
-  IO.readlines(path, chomp: true, encoding: "UTF-8")
+  lines = []
+  File.foreach(path, chomp: true, encoding: "UTF-8") { |line| lines << line }
+  lines
 end
 
 def delete_explicitly_forbidden_words_from_array(array)
@@ -876,7 +878,9 @@ end
 
 def load_variants_raw
   path = File.join(__dir__, "spelling_variants.txt")
-  IO.readlines(path, chomp: true, encoding: "UTF-8")
+  lines = []
+  File.foreach(path, chomp: true, encoding: "UTF-8") { |line| lines << line }
+  lines
 end
 
 def load_variants
@@ -1206,18 +1210,18 @@ def load_string_hash(filename)
   # KEY  STRING1 STRING2 ...
   # substitutes "_" with " " in keys after loading
   hash = Hash.new # hash of strings
-  IO.readlines(filename, encoding: 'UTF-8').each{ |line|
-    if(useful_line?(line))
+  File.foreach(filename, encoding: "UTF-8") do |line|
+    if useful_line?(line)
       tokens = line.split
       key = tokens.shift # now TOKENS contains only the value strings
       key = key.sanitize
-      hash[key] = tokens.map{ |str| str.desanitize }
+      hash[key] = tokens.map { |str| str.desanitize }
     else
       debug "Ignoring #{filename} line: #{line}"
     end
-  }
+  end
   debug "Loaded #{hash.length} entries from #{filename}"
-  return hash
+  hash
 end
 def save_string_hash(hash, filename, header="")
   # sanitizes spaces into underscores
@@ -1270,22 +1274,22 @@ def load_word_dict()
     die "First run ./bin/dict-build to populate #{GENERATED_DIR}/"
   end
   word_dict = Hash.new
-  IO.readlines(pathname, encoding: 'UTF-8').each{ |line|
-    if(useful_line?(line))
-      word, freq, pronunciations_str = line.split(",")
-      word = word.desanitize
-      freq = freq.to_i
-      prons = Array.new
-      pronunciation_strings = pronunciations_str.split("|")
-      for pronstr in pronunciation_strings
-        phonemes = pronstr.split(" ")
-        pron = Pronunciation.new(phonemes)
-        push_pronunciation_unless_duplicate!(prons, pron)
-      end
-      word_info = [freq, prons]
-      word_dict[word] = word_info
+  File.foreach(pathname, encoding: "UTF-8") do |line|
+    next unless useful_line?(line)
+
+    word, freq, pronunciations_str = line.split(",")
+    word = word.desanitize
+    freq = freq.to_i
+    prons = Array.new
+    pronunciation_strings = pronunciations_str.split("|")
+    for pronstr in pronunciation_strings
+      phonemes = pronstr.split(" ")
+      pron = Pronunciation.new(phonemes)
+      push_pronunciation_unless_duplicate!(prons, pron)
     end
-  }
+    word_info = [freq, prons]
+    word_dict[word] = word_info
+  end
   clear_spelling_variant_hyphen_caches!
   word_dict
 end

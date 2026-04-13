@@ -1,3 +1,5 @@
+require_relative "phoneme.rb"
+
 class Pronunciation
   attr_reader :phonemes
 
@@ -5,7 +7,7 @@ class Pronunciation
   DWIMMED_SCHWA_PROTECTED_NEXT = %w[R NG SH].freeze
 
   def initialize(phonemes)
-    @phonemes = phonemes
+    @phonemes = phonemes.map { |p| Phoneme.intern(p) }
   end
 
   def ==(other)
@@ -53,7 +55,7 @@ class Pronunciation
           k = j + 1
           k += 1 while k < len && out[k] == "."
           if k >= len
-            out[i] = "AH0"
+            out[i] = Phoneme.intern("AH0")
             changed = true
           end
         end
@@ -70,7 +72,7 @@ class Pronunciation
                      !DWIMMED_SCHWA_PROTECTED_NEXT.include?(nb)
                    end
         if dwim_ih0
-          out[i] = "AH0"
+          out[i] = Phoneme.intern("AH0")
           changed = true
         end
       end
@@ -105,32 +107,21 @@ class Pronunciation
       next unless nxt && nxt.vowel? && (nxt.include?("0") || nxt.include?("2"))
       after_nxt = (i < out.length - 2) ? out[i + 2] : nil
       next if after_nxt == "N"
-      out[i] = "D"
+      out[i] = Phoneme.intern("D")
       changed = true
     end
     changed ? self.class.new(out) : self
   end
 
   def rime_array
-    # "Rime" in linguistics is the matching material for English end-rhymes.
-    # Usually it applies to a syllable, and means the vowel and anything after it.
-    # In RhymeCrime, we want perfect rhymes, so we use 'rime' to mean the linguistic rime of
-    # the primary-stressed syllable, and _everything_ after that, including following syllables.
-    # In CMUdict, the primary-stressed vowel is indicated by a "1".
-    # Some words don't have a 1, so we settle for the final secondarily-stressed vowel,
-    # or failing that, the last vowel.
-    #
-    # input: [IH0 N S IH1 ZH AH0 N] # the pronunciation of 'incision'
-    # output:        [IH  ZH AH  N] # the pronunciation of '-ision' with stress markers removed
-    #
-    # We remove the stress markers so that we can rhyme 'furs' [F ER1 Z] with 'yours(2)' [Y ER0 Z]
-    # They will both have the rime [ER Z].
-    if(empty?)
-      [ ]
-    else
-      raw = rime_array_with_stress("1") || rime_array_with_stress("2") || rime_array_with_stress("0") or raise RuntimeError, "Pronunciation with no vowels: #{self}"
-      flap_t_in_rime(raw)
-    end
+    return @rime_array if defined?(@rime_array)
+
+    @rime_array = if empty?
+                    [].freeze
+                  else
+                    raw = rime_array_with_stress("1") || rime_array_with_stress("2") || rime_array_with_stress("0") or raise RuntimeError, "Pronunciation with no vowels: #{self}"
+                    flap_t_in_rime(raw).freeze
+                  end
   end
 
   ARPABET_VOWELS = %w[AA AE AH AO AW AY EH EY IH IY OW OY UH UW].to_set
@@ -147,7 +138,7 @@ class Pronunciation
       next unless nxt && ARPABET_VOWELS.include?(nxt)
       after_nxt = (i < out.length - 2) ? out[i + 2] : nil
       next if after_nxt == "N"
-      out[i] = "D"
+      out[i] = Phoneme.intern("D")
     end
     out
   end
@@ -192,8 +183,9 @@ class Pronunciation
   end
 
   def rime
-    # Underscore-joined ARPABET; hash key into the rime dictionary.
-    rime_array.join("_")
+    return @rime if defined?(@rime)
+
+    @rime = rime_array.join("_").freeze
   end
 
   # Consonants immediately before the primary-stressed vowel (same syllable); stress digits stripped.
@@ -210,12 +202,13 @@ class Pronunciation
   end
 
   def rhyme_syllables_array
-    # Like rime_array but spans the whole stressed syllable (keeps syllable-initial consonants).
-    if(empty?)
-      [ ]
-    else
-      rhyme_syllables_array_with_stress("1") || rhyme_syllables_array_with_stress("2") || rhyme_syllables_array_with_stress("0") or raise RuntimeError, "Pronunciation with no vowels: #{self}"
-    end
+    return @rhyme_syllables_array if defined?(@rhyme_syllables_array)
+
+    @rhyme_syllables_array = if empty?
+                               [].freeze
+                             else
+                               (rhyme_syllables_array_with_stress("1") || rhyme_syllables_array_with_stress("2") || rhyme_syllables_array_with_stress("0") or raise RuntimeError, "Pronunciation with no vowels: #{self}").freeze
+                             end
   end
 
   def rhyme_syllables_array_with_stress(stress)

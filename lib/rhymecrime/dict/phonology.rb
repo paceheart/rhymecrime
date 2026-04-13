@@ -108,6 +108,34 @@ def apply_shared_arphabet_phoneme_string_normalizations(phoneme_space_string)
   line
 end
 
+# Suffix replacements for imperfect-rhyme conflation; order must match +conflate_imperfect_rhyme_phoneme_string+.
+CONFLATE_IMPERFECT_RHYME_SUFFIX_RULES = [
+  [%w[L S], %w[L T S]],
+  [%w[M T], %w[M P T]],
+  [%w[N D Z], %w[N Z]],
+  [%w[N S], %w[N T S]],
+  [%w[T CH], %w[CH]],
+  [%w[ZH], %w[JH]],
+  [%w[ZH AH0 Z], %w[JH AH0 Z]],
+  [%w[ZH D], %w[JH D]],
+  [%w[ZH IY0 NG], %w[JH IY0 NG]],
+  [%w[ZH AH0 R], %w[JH AH0 R]],
+  [%w[ZH AH0 R Z], %w[JH AH0 R Z]],
+].freeze
+
+# Array-native conflate (avoids an extra join/split vs string-only path).
+def conflate_imperfect_rhyme_phoneme_tokens(tokens)
+  t = tokens.dup
+  CONFLATE_IMPERFECT_RHYME_SUFFIX_RULES.each do |from, to|
+    n = from.length
+    next if t.length < n
+    next unless t[-n, n] == from
+
+    t[-n, n] = to
+  end
+  t
+end
+
 # Flat ARPAbet pronunciation (no syllable dots): same pipeline as CMU phoneme tail after the headword.
 def normalize_flat_arphabet_pronunciation(pron)
   return pron if pron.nil? || pron.empty?
@@ -116,8 +144,8 @@ def normalize_flat_arphabet_pronunciation(pron)
 
   s = apply_shared_arphabet_phoneme_string_normalizations(flat.join(" "))
   p = Pronunciation.new(s.split).with_dwimmed_schwas
-  s2 = conflate_imperfect_rhyme_phoneme_string(p.phonemes.join(" "))
-  Pronunciation.new(s2.split).with_flapped_t
+  tok = conflate_imperfect_rhyme_phoneme_tokens(p.phonemes)
+  Pronunciation.new(tok).with_flapped_t
 end
 
 # Flat phoneme lists for +stem+ (each stored pronunciation, dots stripped).
@@ -149,27 +177,14 @@ def syllabify_with_common_prefix_split(word, normalized_flat_pron, flat_by_word)
 end
 
 def conflate_imperfect_rhyme_phoneme_string(phoneme_space_string)
-  # @todo allow this to be toggleable at runtime instead of dictionary-building time
-  line = phoneme_space_string.dup
-  line.gsub!(/ L S$/, ' L T S') # false / malts, else / melts. Sure I guess? Otherwise 'false' and 'else' won't rhyme with anything at all.
-  line.gsub!(/ M T$/, ' M P T') # dreamt / tempt
-  line.gsub!(/ N D Z$/, ' N Z') # tons [T AH1 N Z] / funds [F AH1 N D Z]
-  line.gsub!(/ N S$/, ' N T S') # dance / ants
-  line.gsub!(/ T CH$/, ' CH') # blotch / watch
-  line.gsub!(/ ZH$/, ' JH') # massage [M AH0 S AA1 ZH] / dodge [D AA1 JH]
-  line.gsub!(/ ZH AH0 Z$/, ' JH AH0 Z') # massages [M AH0 S AA1 ZH AH0 Z] / dodges [D AA1 JH IH0 Z]
-  line.gsub!(/ ZH D$/, ' JH D') # massaged / dodged
-  line.gsub!(/ ZH IY0 NG$/, ' JH IY0 NG') # massaging / dodging
-  line.gsub!(/ ZH AH0 R$/, ' JH AH0 R') # massager / dodger
-  line.gsub!(/ ZH AH0 R Z$/, ' JH AH0 R Z') # massagers / dodgers
-  line
+  conflate_imperfect_rhyme_phoneme_tokens(phoneme_space_string.split).join(" ")
 end
 
 def load_cmudict()
   # word => [pronunciation1, pronunciation2 ...]
   # pronunciation = [syllable1, syllable1, ...]
   hash = Hash.new {|h,k| h[k] = [] } # hash of arrays
-  IO.readlines(CMUDICT_FILENAME, encoding: 'UTF-8').each{ |line|
+  File.foreach(CMUDICT_FILENAME, encoding: "UTF-8") { |line|
     if(useful_cmudict_line?(line))
       line = preprocess_cmudict_line(line)
       tokens = line.split

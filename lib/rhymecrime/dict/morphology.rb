@@ -277,11 +277,11 @@ end
 # We do **not** use +WORDFREQ_RARE_ZIPF+ alone here: erroneous *+s* plurals (*sheeps* ~2.2) sit in the
 # 2.0–2.9 band from web text but lack subtitle use; SUBTLEX or common Zipf separates them from real plurals.
 #
-# WordNet **mass-dominant** nouns (+wn_noun_base_mass_dominant_for_productive_plural?+): every noun sense is in
-# a mass-leaning lexicographer file (attribute, feeling, food, motive, possession, state, substance). For those
-# bases, Inflect *+s* is allowed only when the **plural surface** itself is dialogue- or Zipf-strong — not when
-# Kaikki merely lists the form. That blocks *nostalgias* / *chaoses* / *goodwills* while *apples* (noun.plant)
-# still promotes via Wiktionary / SUBTLEX / Zipf as before.
+# WordNet **mass-dominant** nouns (+wn_noun_base_mass_dominant_for_productive_plural?+) and **feeling+attribute**
+# lemmas (+wn_noun_base_feeling_plus_attribute_plural_needs_own_corpus?+, e.g. *indifference*): Inflect *+s* is
+# allowed only when the **plural surface** itself is dialogue- or Zipf-strong — not when Kaikki merely lists
+# the form. That blocks *nostalgias* / *chaoses* / *goodwills* and keeps *indifferences* from inheriting a
+# common base tier while *apples* (noun.plant) still promotes via Wiktionary / SUBTLEX / Zipf as before.
 def morph_base_allows_plural_s?(base, pos_map, forms_map, plural_word, wordfreq_hash: nil, subtlex_hash: nil)
   tags = morph_part_of_speech_tags(pos_map, base)
   if tags.any?
@@ -293,7 +293,8 @@ def morph_base_allows_plural_s?(base, pos_map, forms_map, plural_word, wordfreq_
     if tags.include?("adj")
       return wiktionary_surface_form_attested?(forms_map, base, plural_word)
     end
-    if wn_noun_base_mass_dominant_for_productive_plural?(base)
+    if wn_noun_base_mass_dominant_for_productive_plural?(base) ||
+       wn_noun_base_feeling_plus_attribute_plural_needs_own_corpus?(base)
       return (subtlex_hash && subtlex_hash[plural_word].to_i > 0) ||
              (wordfreq_hash && (wordfreq_hash[plural_word] || 0).to_f >= WORDFREQ_COMMON_ZIPF)
     end

@@ -99,19 +99,36 @@ def wn_base_has_noun?(base)
   lemmas.any? { |l| l.pos == "n" }
 end
 
-# WordNet noun lexicographer files where productive *+s* plurals are usually non-standard
-# (*nostalgias*, *chaoses*, *rices*) unless a lexicon lists the plural. Count-friendly files
-# (*noun.animal*, *noun.artifact*, …) are intentionally omitted — mixed lemmas need ≥1 such sense
-# to avoid an all–mass-dominant classification.
+# WordNet noun lexicographer files used for “mass-dominant” plural policy. *noun.attribute* alone
+# mixes count and mass (*indifference*/*indifferences*); we only treat attribute lemmas as mass-locked
+# when some sense is also in +WN_NOUN_LEXNAME_HARD_MASS+ (*goodwill*: possession + attribute + feeling).
+# *noun.person* synsets are ignored (+Chaos+ the deity vs *chaos* the mass noun).
 WN_NOUN_LEXNAME_MASS_DOMINANT = Set.new(%w[
   noun.attribute
   noun.cognition
   noun.feeling
   noun.food
   noun.motive
+  noun.phenomenon
   noun.possession
   noun.state
   noun.substance
+]).freeze
+
+WN_NOUN_LEXNAME_HARD_MASS = Set.new(%w[
+  noun.cognition
+  noun.food
+  noun.motive
+  noun.phenomenon
+  noun.possession
+  noun.state
+  noun.substance
+]).freeze
+
+# Bases whose usual plural is not *+s* (*deer*, *sheep*, …). WordNet 3.1 +noun.exc+ often omits
+# identity pairs like *deer* → *deer*, so we merge this list after loading the file.
+WN_INVARIANT_PLURAL_BASES_FALLBACK = Set.new(%w[
+  bison cod deer moose sheep swine trout
 ]).freeze
 
 # Princeton WordNet 3.x +lexnames+ table: two-digit file id → lexicographer file name (see lexnames(5WN)).
@@ -189,6 +206,7 @@ def wn_noun_exc_invariant_plural_bases
       end
       break if s.any?
     end
+    s.merge(WN_INVARIANT_PLURAL_BASES_FALLBACK)
     s.freeze
   end
 end
@@ -221,13 +239,43 @@ def wn_noun_base_mass_dominant_for_productive_plural?(base)
   syns = wn_noun_synsets_unified(base)
   return false if syns.empty?
 
-  syns.each do |s|
-    ln = wn_synset_noun_lexname(s)
-    return false if ln.nil?
-    return false unless WN_NOUN_LEXNAME_MASS_DOMINANT.include?(ln)
+  # Mythology / named-entity senses (*Chaos*) live in +noun.person+; they should not prevent treating
+  # the everyday mass noun as mass-dominant for plural policy.
+  syns.reject! { |s| wn_synset_noun_lexname(s) == "noun.person" }
+  return false if syns.empty?
+
+  lexnames = syns.map { |s| wn_synset_noun_lexname(s) }
+  return false if lexnames.any?(&:nil?)
+
+  return false unless lexnames.all? { |ln| WN_NOUN_LEXNAME_MASS_DOMINANT.include?(ln) }
+
+  # *indifference*: feeling + attribute only → do not block *indifferences*. *goodwill*: also possession/state-class.
+  if lexnames.include?("noun.attribute") && lexnames.none? { |ln| WN_NOUN_LEXNAME_HARD_MASS.include?(ln) }
+    return false
   end
 
   true
+end
+
+# *indifference*-style lemmas: after the mass-dominant exception (feeling + attribute, no hard-mass sense),
+# we still must not copy a strong base frequency onto *+s* (*indifferences*) when the plural is only
+# weakly attested — same corpus bar as full mass nouns. Pure *noun.feeling* (*nostalgia*) stays on the
+# mass-dominant path instead.
+def wn_noun_base_feeling_plus_attribute_plural_needs_own_corpus?(base)
+  return false unless wn_has_entry?(base)
+  return false unless wn_base_has_noun?(base)
+
+  syns = wn_noun_synsets_unified(base)
+  return false if syns.empty?
+
+  syns.reject! { |s| wn_synset_noun_lexname(s) == "noun.person" }
+  return false if syns.empty?
+
+  uniq_lex = syns.map { |s| wn_synset_noun_lexname(s) }.compact.uniq
+  return false if uniq_lex.empty?
+  return false unless uniq_lex.all? { |ln| %w[noun.feeling noun.attribute].include?(ln) }
+
+  uniq_lex.include?("noun.feeling") && uniq_lex.include?("noun.attribute")
 end
 
 # WordNet lemma +pos+ codes → strings stored with Kaikki data (part_of_speech.json).
