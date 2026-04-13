@@ -5,3 +5,4 @@ hugging-face-access-token.txt
 corpora/*
 generated/*
 experiments/*
+tmp/*

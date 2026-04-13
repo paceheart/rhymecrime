@@ -3,6 +3,7 @@
 # Flyweight pool for ARPAbet token strings (CMU / Wiktionary / Inflect) to cut heap churn during dict-build.
 module Phoneme
   @pool = {}
+  @bare = {}
   def self.intern(str)
     s = str.to_s
     @pool[s] ||= s.dup.freeze
@@ -10,6 +11,12 @@ module Phoneme
 
   def self.intern_tokens(tokens)
     tokens.map { |t| intern(t) }
+  end
+
+  # Strip stress digits (0–2) from an ARPAbet token; memoized per interned phone.
+  def self.bare_base(str)
+    s = str.to_s
+    @bare[s] ||= s.tr("0-2", "").freeze
   end
 end
 

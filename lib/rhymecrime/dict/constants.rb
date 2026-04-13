@@ -82,8 +82,8 @@ MORPH_CORPUS_SUBTLEX_MIN = 40
 # Plural :s only: allow WN noun-only bases below the corpus floor when still attested in subtitles
 # (e.g. gramophone SUBTLEX 15 → gramophones).
 MORPH_LEXICAL_NOUN_PLURAL_SUBTLEX_MIN = 10
-# Phase 6: skip weak Zipf for 4-letter tokens with no WordNet entry (surname spam ~2.3) but keep neologisms ≥ this (yeet ~2.51).
-WIKT_FLOOR_4L_WEAK_ZIPF_BELOW = 2.5
+# Phase 6: skip Wiktionary floor for 4-letter OOV tokens below this Zipf (*mobo* ~2.5); *yeet* ~2.51 stays eligible.
+WIKT_FLOOR_4L_WEAK_ZIPF_BELOW = 2.51
 
 RIME_DICT_HEADER = "# RhymeCrime's rime dictionary
 # https://github.com/paceheart/rhymecrime

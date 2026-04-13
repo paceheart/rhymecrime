@@ -1,4 +1,6 @@
 # encoding: utf-8
+# frozen_string_literal: true
+
 # CMU ingest, ARPAbet normalization, syllabification, Wiktionary pronunciation merge.
 
 require_relative "utils_rhyme"
@@ -58,17 +60,21 @@ def preprocess_cmudict_line(line)
   line
 end
 
-def gsub_unless_followed_by_r(line, old, new)
-  # substitute OLD for NEW unless OLD is followed by " R"
-  
-  # Protect R from the upcoming gsub.
-  line.gsub!(old + " R", "fubarduckR")
+# Placeholder must not appear in ARPAbet text; avoids allocating "old + \" R\"" on every call.
+GSUB_UNLESS_R_PLACEHOLDER = "fubarduckR"
 
-  line.gsub!(old, new)
-  
-  # put R back the way it was
-  line.gsub!("fubarduckR", old + " R")
-  return line
+# Prebuilt " AO{n} R" / " AO{n}" / " AA{n}" triples — no per-call string concat.
+GSUB_AO_NOT_BEFORE_R = [
+  [" AO0 R", " AO0", " AA0"],
+  [" AO1 R", " AO1", " AA1"],
+  [" AO2 R", " AO2", " AA2"],
+].freeze
+
+def gsub_unless_followed_by_r(line, old_followed_by_r, old_plain, new_plain)
+  line.gsub!(old_followed_by_r, GSUB_UNLESS_R_PLACEHOLDER)
+  line.gsub!(old_plain, new_plain)
+  line.gsub!(GSUB_UNLESS_R_PLACEHOLDER, old_followed_by_r)
+  line
 end
 
 # ARPAbet string normalizations historically run only on CMU lines; they also apply to Wikt/kaikki
@@ -101,9 +107,9 @@ def apply_shared_arphabet_phoneme_string_normalizations(phoneme_space_string)
   line.gsub!("UW2 R", "UH2 R")
 
   # caught [K AA1 T] / fought [F AO1 T]; not before R (bar / score)
-  line = gsub_unless_followed_by_r(line, " AO0", " AA0")
-  line = gsub_unless_followed_by_r(line, " AO1", " AA1")
-  line = gsub_unless_followed_by_r(line, " AO2", " AA2")
+  GSUB_AO_NOT_BEFORE_R.each do |old_r, old_plain, new_plain|
+    line = gsub_unless_followed_by_r(line, old_r, old_plain, new_plain)
+  end
 
   line
 end

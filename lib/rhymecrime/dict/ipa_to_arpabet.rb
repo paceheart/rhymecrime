@@ -99,6 +99,17 @@ module IpaToArpabet
 
   VOWELS = Set.new(%w[AA AE AH AO AW AY EH ER EY IH IY OW OY UH UW])
 
+  IPA_TO_ARPABET.each { |pair| pair[0].freeze; pair[1].freeze }
+
+  # Prebuilt "AA0".."UW2" tokens — avoids "#{arpa}#{pending_stress}" per vowel.
+  STRESSED_VOWEL_TOKEN = {}.tap do |h|
+    VOWELS.each do |v|
+      h[[v, 0]] = "#{v}0".freeze
+      h[[v, 1]] = "#{v}1".freeze
+      h[[v, 2]] = "#{v}2".freeze
+    end
+  end.freeze
+
   # Convert an IPA string like "/ˈsɛlfi/" to an array of ARPAbet phonemes
   # with stress markers on vowels (e.g. ["S", "EH1", "L", "F", "IY0"]).
   # Returns nil if conversion fails.
@@ -135,7 +146,7 @@ module IpaToArpabet
         next unless cleaned[pos, ipalen] == ipa
 
         if VOWELS.include?(arpa)
-          tokens << "#{arpa}#{pending_stress}"
+          tokens << STRESSED_VOWEL_TOKEN.fetch([arpa, pending_stress])
           pending_stress = 0
         else
           tokens << arpa
@@ -170,14 +181,22 @@ module IpaToArpabet
 
     # If no vowel got primary stress and word has vowels, assign stress 1
     # to the first vowel marked 0 (heuristic for monosyllables without markers)
-    has_primary = tokens.any? { |t| t.end_with?("1") }
+    has_primary = false
+    tokens.each do |t|
+      if t.end_with?("1")
+        has_primary = true
+        break
+      end
+    end
     unless has_primary
       tokens.each_with_index do |t, i|
-        base = t.chomp("0").chomp("1").chomp("2")
-        if VOWELS.include?(base) && t.end_with?("0")
-          tokens[i] = "#{base}1"
-          break
-        end
+        next unless t.end_with?("0")
+
+        base = t.delete_suffix("0")
+        next unless VOWELS.include?(base)
+
+        tokens[i] = STRESSED_VOWEL_TOKEN.fetch([base, 1])
+        break
       end
     end
 

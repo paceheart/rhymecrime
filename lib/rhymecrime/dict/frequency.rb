@@ -303,6 +303,13 @@ def compute_frequency(word, subtlex_hash, wordfreq_hash)
     wordfreq_boost = 0
   end
 
+  # No WordNet lemma: tiny SUBTLEX FREQlow counts are often surname fragments or one-off lines — do not pair
+  # them with a strong Zipf score into a common bin (*anders*). Cap SUBTLEX-derived score the same way.
+  if !in_wordnet && sub_raw.positive? && sub_raw < SUBTLEX_OVERRIDE_PROPER_MIN
+    wordfreq_boost = 0
+    subtlex_freq = [subtlex_freq, RARE_FREQ_MAX].min
+  end
+
   freq = [subtlex_freq, wordfreq_boost].max
 
   dict_trace_puts(word, "compute_frequency: subtlex=#{subtlex_freq} zipf=#{zipf} in_wn=#{in_wordnet} lexical_anchor=#{lexically_anchored} wordfreq_boost=#{wordfreq_boost} (needs zipf≥#{WORDFREQ_COMMON_ZIPF} for boost) block_short_init=#{block_short_initialism_wordfreq} all_proper=#{wn_all_proper} => #{freq}") if dict_trace_word?(word)
@@ -441,6 +448,9 @@ def add_frequency_info(cmudict, subtlex_hash, wordfreq_hash, wiktionary_words, p
     # Four-letter Wiktionary junk: Zipf in [RARE, 2.5) with no WN/SUBTLEX — surnames (~stam);
     # at/above 2.5 keep the floor for neologisms (yeet).
     next if four_letter_alpha?(word) && zipf >= WORDFREQ_RARE_ZIPF && zipf < WIKT_FLOOR_4L_WEAK_ZIPF_BELOW
+    # Longer OOV headwords need dialogue-level Zipf (≥ common) for the existence floor — otherwise
+    # encyclopedic/proper-name web counts (*mende*, *baidu*) outrank subtitles with no WN anchor.
+    next if !wn_has_entry?(word) && zipf < WORDFREQ_COMMON_ZIPF && word.match?(/\A[a-z]{5,}\z/)
     next if short_initialism_shape?(word) && subtlex_hash[word] <= 0
     # 2-4 letter strings with strong wordfreq but no lexical anchor: skip floor so
     # IMAX/DVD-style tokens stay rare; Zipf < 3 keeps yeet

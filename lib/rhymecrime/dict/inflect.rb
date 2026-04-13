@@ -23,7 +23,7 @@ module Inflect
     return nil if suffix.nil?
 
     final = base_phonemes.last
-    final_bare = final.tr("0-2", "")
+    final_bare = Phoneme.bare_base(final)
 
     new_phonemes = case suffix
     when :s
@@ -76,83 +76,82 @@ module Inflect
     il = inflected.bytesize
     return if il < 2
 
-    cands = []
-    push = lambda do |b|
+    cands = Set.new
+    add_cand = lambda do |b|
       next if b.nil? || b.empty?
 
-      bl = b.bytesize
-      cands << b if bl < il
+      cands.add(b) if b.bytesize < il
     end
 
     # y → ies / ied / ier / iest
     if inflected.end_with?("iest") && il >= 5
       stem = inflected.byteslice(0, il - 4)
-      push.call(stem + "y") if stem.bytesize >= 1
+      add_cand.call(stem + "y") if stem.bytesize >= 1
     end
     %w[ies ied ier].each do |suf|
       next unless inflected.end_with?(suf) && il >= suf.bytesize + 1
 
       stem = inflected.byteslice(0, il - suf.bytesize)
-      push.call(stem + "y") if stem.bytesize >= 1
+      add_cand.call(stem + "y") if stem.bytesize >= 1
     end
 
     # silent trailing e → stem + ed / ing / er / est
     if inflected.end_with?("ed") && il >= 3
       stem = inflected.byteslice(0, il - 2)
-      push.call(stem + "e") if stem.bytesize >= 1
+      add_cand.call(stem + "e") if stem.bytesize >= 1
     end
     if inflected.end_with?("ing") && il >= 4
       stem = inflected.byteslice(0, il - 3)
-      push.call(stem + "e") if stem.bytesize >= 1
+      add_cand.call(stem + "e") if stem.bytesize >= 1
     end
     if inflected.end_with?("er") && il >= 3 && !inflected.end_with?("ier")
       stem = inflected.byteslice(0, il - 2)
-      push.call(stem + "e") if stem.bytesize >= 1
+      add_cand.call(stem + "e") if stem.bytesize >= 1
     end
     if inflected.end_with?("est") && il >= 4 && !inflected.end_with?("iest")
       stem = inflected.byteslice(0, il - 3)
-      push.call(stem + "e") if stem.bytesize >= 1
+      add_cand.call(stem + "e") if stem.bytesize >= 1
     end
 
     # consonant doubling undo (B + c + ed / ing / er / est)
     if inflected.end_with?("ed") && il >= 5 &&
         inflected.getbyte(il - 3) == inflected.getbyte(il - 4)
-      push.call(inflected.byteslice(0, il - 3))
+      add_cand.call(inflected.byteslice(0, il - 3))
     end
     if inflected.end_with?("ing") && il >= 6 &&
         inflected.getbyte(il - 4) == inflected.getbyte(il - 5)
-      push.call(inflected.byteslice(0, il - 4))
+      add_cand.call(inflected.byteslice(0, il - 4))
     end
     if inflected.end_with?("er") && il >= 5 && !inflected.end_with?("ier") &&
         inflected.getbyte(il - 3) == inflected.getbyte(il - 4)
-      push.call(inflected.byteslice(0, il - 3))
+      add_cand.call(inflected.byteslice(0, il - 3))
     end
     if inflected.end_with?("est") && il >= 6 && !inflected.end_with?("iest") &&
         inflected.getbyte(il - 4) == inflected.getbyte(il - 5)
-      push.call(inflected.byteslice(0, il - 4))
+      add_cand.call(inflected.byteslice(0, il - 4))
     end
 
     # direct suffix after base
     if inflected.end_with?("s") && il >= 2
-      push.call(inflected.byteslice(0, il - 1))
+      add_cand.call(inflected.byteslice(0, il - 1))
     end
     if inflected.end_with?("es") && il >= 3
-      push.call(inflected.byteslice(0, il - 2))
+      add_cand.call(inflected.byteslice(0, il - 2))
     end
     if inflected.end_with?("ed") && il >= 3
-      push.call(inflected.byteslice(0, il - 2))
+      add_cand.call(inflected.byteslice(0, il - 2))
     end
     if inflected.end_with?("ing") && il >= 4
-      push.call(inflected.byteslice(0, il - 3))
+      add_cand.call(inflected.byteslice(0, il - 3))
     end
     if inflected.end_with?("er") && il >= 3
-      push.call(inflected.byteslice(0, il - 2))
+      add_cand.call(inflected.byteslice(0, il - 2))
     end
     if inflected.end_with?("est") && il >= 4
-      push.call(inflected.byteslice(0, il - 3))
+      add_cand.call(inflected.byteslice(0, il - 3))
     end
 
-    cands.uniq.each do |b|
+    cands.each do |b|
       yield b if inflection_of_base?(b, inflected)
     end
 
@@ -235,7 +234,7 @@ module Inflect
   private
 
   # Returns :s, :ed, :ing, :er, :est, or nil. Shared by +derive+ and +inflection_of_base?+.
-  # Ordered for cheap rejects: length, y/silent-e (no +base+ allocations), then start_with? + rest.
+  # Ordered for cheap rejects: length, y/silent-e, then byte-wise rest (avoid stem+suffix string temps).
   def self.match_suffix_kind(base, inflected)
     bl = base.bytesize
     il = inflected.bytesize
@@ -244,47 +243,54 @@ module Inflect
     # --- y → ies / ied / ier / iest (does not start_with?(base)) ---
     if base.end_with?("y") && bl >= 2
       stem = base.byteslice(0, bl - 1)
-      case il
-      when bl + 2 # stem + "ies" / "ied" / "ier" all length stem+3 = (bl-1)+3 = bl+2
-        if inflected == stem + "ies"
-          return :s
-        elsif inflected == stem + "ied"
-          return :ed
-        elsif inflected == stem + "ier"
-          return :er
-        end
-      when bl + 3 # stem + "iest" = (bl-1)+4 = bl+3
-        return :est if inflected == stem + "iest"
+      if il == bl + 2 && inflected.start_with?(stem)
+        return :s if inflected.end_with?("ies")
+        return :ed if inflected.end_with?("ied")
+        return :er if inflected.end_with?("ier")
+      elsif il == bl + 3 && inflected.start_with?(stem) && inflected.end_with?("iest")
+        return :est
       end
     end
 
     # --- silent trailing e → stem + ed/ing/er/est ---
     if base.end_with?("e") && bl >= 2 && !base.end_with?("ee")
       stem = base.byteslice(0, bl - 1)
-      return :ed if inflected == stem + "ed"
-      return :ing if inflected == stem + "ing"
-      return :er if inflected == stem + "er"
-      return :est if inflected == stem + "est"
+      if inflected.start_with?(stem)
+        if il == bl + 1
+          return :ed if inflected.end_with?("ed")
+          return :er if inflected.end_with?("er")
+        elsif il == bl + 2
+          return :ing if inflected.end_with?("ing")
+          return :est if inflected.end_with?("est")
+        end
+      end
     end
 
     # --- direct suffix after base ---
     return nil unless inflected.start_with?(base)
-    rest = inflected.byteslice(bl, il - bl)
+
+    rest_len = il - bl
     # annualize+es→annualizees is not English; real plural is annualize+s (annualizes).
-    if rest == "es" && base.end_with?("e") && !base.end_with?("ee") && inflected == base + "es"
+    if rest_len == 2 &&
+        base.end_with?("e") && !base.end_with?("ee") &&
+        inflected.getbyte(bl) == 101 && inflected.getbyte(bl + 1) == 115 # "es"
       return nil
     end
-    case rest
-    when "s", "es"
-      return :s
-    when "ed"
-      return :ed
-    when "ing"
-      return :ing
-    when "er"
-      return :er
-    when "est"
-      return :est
+
+    case rest_len
+    when 1
+      return :s if inflected.getbyte(bl) == 115 # "s"
+    when 2
+      b0 = inflected.getbyte(bl)
+      b1 = inflected.getbyte(bl + 1)
+      if b0 == 101 && b1 == 115
+        return :s
+      end
+      return :ed if b0 == 101 && b1 == 100
+      return :er if b0 == 101 && b1 == 114
+    when 3
+      return :ing if inflected.end_with?("ing")
+      return :est if inflected.end_with?("est")
     end
 
     # --- consonant doubling: stop → stopped / stopping / stopper / stoppest ---

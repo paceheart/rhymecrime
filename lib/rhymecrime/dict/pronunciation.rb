@@ -51,7 +51,7 @@ class Pronunciation
       if (ph == "IH0" || ph == "IH1" || ph == "IH2") && prior_primary
         j = i + 1
         j += 1 while j < len && out[j] == "."
-        if j < len && out[j].tr("0-2", "") == "N"
+        if j < len && Phoneme.bare_base(out[j]) == "N"
           k = j + 1
           k += 1 while k < len && out[k] == "."
           if k >= len
@@ -68,7 +68,7 @@ class Pronunciation
         dwim_ih0 = if j >= len
                      true
                    else
-                     nb = out[j].tr("0-2", "")
+                     nb = Phoneme.bare_base(out[j])
                      !DWIMMED_SCHWA_PROTECTED_NEXT.include?(nb)
                    end
         if dwim_ih0
@@ -82,7 +82,16 @@ class Pronunciation
       i += 1
     end
     return self unless changed
-    has_primary_or_secondary = out.any? { |p| !p.syllable_boundary? && (p.include?("1") || p.include?("2")) }
+    has_primary_or_secondary = false
+    j = 0
+    while j < len
+      p = out[j]
+      if !p.syllable_boundary? && (p.include?("1") || p.include?("2"))
+        has_primary_or_secondary = true
+        break
+      end
+      j += 1
+    end
     unless has_primary_or_secondary
       if DICT_BUILD_VERBOSE
         puts "Protected \"#{to_s}\" from having its schwas dwimmed"
