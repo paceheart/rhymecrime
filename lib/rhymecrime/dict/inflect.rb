@@ -68,6 +68,97 @@ module Inflect
   # Yields spellings derivable from +base+ by the same surface rules as +match_suffix_kind+
   # (forward direction only). Used to propagate frequency from high-frequency bases without
   # O(n²) “every rare word × every base” scans.
+  # Yields base spellings +b+ such that +inflection_of_base?(b, inflected)+ (inverse of
+  # +each_derivable_form+). Bounded small set per word; used to avoid Phase 9 O(|hash|×|common|).
+  def self.each_candidate_base_for_inflected(inflected)
+    return enum_for(__method__, inflected) unless block_given?
+
+    il = inflected.bytesize
+    return if il < 2
+
+    cands = []
+    push = lambda do |b|
+      next if b.nil? || b.empty?
+
+      bl = b.bytesize
+      cands << b if bl < il
+    end
+
+    # y → ies / ied / ier / iest
+    if inflected.end_with?("iest") && il >= 5
+      stem = inflected.byteslice(0, il - 4)
+      push.call(stem + "y") if stem.bytesize >= 1
+    end
+    %w[ies ied ier].each do |suf|
+      next unless inflected.end_with?(suf) && il >= suf.bytesize + 1
+
+      stem = inflected.byteslice(0, il - suf.bytesize)
+      push.call(stem + "y") if stem.bytesize >= 1
+    end
+
+    # silent trailing e → stem + ed / ing / er / est
+    if inflected.end_with?("ed") && il >= 3
+      stem = inflected.byteslice(0, il - 2)
+      push.call(stem + "e") if stem.bytesize >= 1
+    end
+    if inflected.end_with?("ing") && il >= 4
+      stem = inflected.byteslice(0, il - 3)
+      push.call(stem + "e") if stem.bytesize >= 1
+    end
+    if inflected.end_with?("er") && il >= 3 && !inflected.end_with?("ier")
+      stem = inflected.byteslice(0, il - 2)
+      push.call(stem + "e") if stem.bytesize >= 1
+    end
+    if inflected.end_with?("est") && il >= 4 && !inflected.end_with?("iest")
+      stem = inflected.byteslice(0, il - 3)
+      push.call(stem + "e") if stem.bytesize >= 1
+    end
+
+    # consonant doubling undo (B + c + ed / ing / er / est)
+    if inflected.end_with?("ed") && il >= 5 &&
+        inflected.getbyte(il - 3) == inflected.getbyte(il - 4)
+      push.call(inflected.byteslice(0, il - 3))
+    end
+    if inflected.end_with?("ing") && il >= 6 &&
+        inflected.getbyte(il - 4) == inflected.getbyte(il - 5)
+      push.call(inflected.byteslice(0, il - 4))
+    end
+    if inflected.end_with?("er") && il >= 5 && !inflected.end_with?("ier") &&
+        inflected.getbyte(il - 3) == inflected.getbyte(il - 4)
+      push.call(inflected.byteslice(0, il - 3))
+    end
+    if inflected.end_with?("est") && il >= 6 && !inflected.end_with?("iest") &&
+        inflected.getbyte(il - 4) == inflected.getbyte(il - 5)
+      push.call(inflected.byteslice(0, il - 4))
+    end
+
+    # direct suffix after base
+    if inflected.end_with?("s") && il >= 2
+      push.call(inflected.byteslice(0, il - 1))
+    end
+    if inflected.end_with?("es") && il >= 3
+      push.call(inflected.byteslice(0, il - 2))
+    end
+    if inflected.end_with?("ed") && il >= 3
+      push.call(inflected.byteslice(0, il - 2))
+    end
+    if inflected.end_with?("ing") && il >= 4
+      push.call(inflected.byteslice(0, il - 3))
+    end
+    if inflected.end_with?("er") && il >= 3
+      push.call(inflected.byteslice(0, il - 2))
+    end
+    if inflected.end_with?("est") && il >= 4
+      push.call(inflected.byteslice(0, il - 3))
+    end
+
+    cands.uniq.each do |b|
+      yield b if inflection_of_base?(b, inflected)
+    end
+
+    nil
+  end
+
   def self.each_derivable_form(base)
     return if base.nil? || base.empty?
 

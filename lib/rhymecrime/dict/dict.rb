@@ -48,6 +48,7 @@ def skip_conceptnet_numberbatch_dict_exports?
 end
 
 def rebuild_rhymecrime_dictionaries()
+  clear_wordnet_lemma_cache!
   ensure_conceptnet_lemma_cache_for_build!
   cmudict = load_cmudict
   original_cmudict_headwords = cmudict.keys.each_with_object(Set.new) { |k, s| s.add(k) }

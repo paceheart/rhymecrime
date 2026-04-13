@@ -10,8 +10,19 @@ require_relative "utils_rhyme"
 # WordNet
 #
 
+# Memoize WordNet::Lemma.find_all per surface form. Dict rebuild clears this at entry so memory
+# does not grow unbounded across repeated builds in the same process.
+def clear_wordnet_lemma_cache!
+  @wordnet_lemma_find_all_cache = {}
+end
+
+def wn_lemma_find_all_cached(form)
+  cache = @wordnet_lemma_find_all_cache ||= {}
+  cache[form] ||= WordNet::Lemma.find_all(form)
+end
+
 def wn_all_proper?(word)
-  lemmas = WordNet::Lemma.find_all(word)
+  lemmas = wn_lemma_find_all_cached(word)
   lookup_word = word
   return false if lemmas.empty?
   found_any_word = false
@@ -49,7 +60,7 @@ def four_letter_alpha?(word)
 end
 
 def wn_synset_count(word)
-  lemmas = WordNet::Lemma.find_all(word)
+  lemmas = wn_lemma_find_all_cached(word)
   return 0 if lemmas.empty?
   lemmas.sum { |l| l.synsets.size }
 end
@@ -63,7 +74,7 @@ def wn_has_entry?(word)
   return false if w.empty?
   # WordNet lemmas are usually hyphenated (topsy-turvy); older call sites used underscores only and missed them.
   [w, hyphens_to_underscores(w), w.tr("_", "-")].uniq.any? do |c|
-    !WordNet::Lemma.find_all(c).empty?
+    !wn_lemma_find_all_cached(c).empty?
   end
 end
 
@@ -71,21 +82,152 @@ end
 # noun-only stems a bogus verbal -ing frequency (kitchening, crotching, jealousing).
 # Bases with no WordNet entry still return true so modern verbs (twerk) can inherit.
 def wn_base_has_verb?(base)
-  lemmas = WordNet::Lemma.find_all(base)
+  lemmas = wn_lemma_find_all_cached(base)
   return true if lemmas.empty?
   lemmas.any? { |l| l.pos == "v" }
 end
 
 def wn_base_has_adjective?(base)
-  lemmas = WordNet::Lemma.find_all(base)
+  lemmas = wn_lemma_find_all_cached(base)
   return true if lemmas.empty?
   lemmas.any? { |l| l.pos == "a" }
 end
 
 def wn_base_has_noun?(base)
-  lemmas = WordNet::Lemma.find_all(base)
+  lemmas = wn_lemma_find_all_cached(base)
   return true if lemmas.empty?
   lemmas.any? { |l| l.pos == "n" }
+end
+
+# WordNet noun lexicographer files where productive *+s* plurals are usually non-standard
+# (*nostalgias*, *chaoses*, *rices*) unless a lexicon lists the plural. Count-friendly files
+# (*noun.animal*, *noun.artifact*, …) are intentionally omitted — mixed lemmas need ≥1 such sense
+# to avoid an all–mass-dominant classification.
+WN_NOUN_LEXNAME_MASS_DOMINANT = Set.new(%w[
+  noun.attribute
+  noun.cognition
+  noun.feeling
+  noun.food
+  noun.motive
+  noun.possession
+  noun.state
+  noun.substance
+]).freeze
+
+# Princeton WordNet 3.x +lexnames+ table: two-digit file id → lexicographer file name (see lexnames(5WN)).
+# Used when +dict/lexnames+ is missing or unreadable so +wn_synset_noun_lexname+ still works.
+WN_LEX_FILENUM_TO_LEXNAME = {
+  "00" => "adj.all", "01" => "adj.pert", "02" => "adv.all", "03" => "noun.Tops", "04" => "noun.act",
+  "05" => "noun.animal", "06" => "noun.artifact", "07" => "noun.attribute", "08" => "noun.body",
+  "09" => "noun.cognition", "10" => "noun.communication", "11" => "noun.event", "12" => "noun.feeling",
+  "13" => "noun.food", "14" => "noun.group", "15" => "noun.location", "16" => "noun.motive",
+  "17" => "noun.object", "18" => "noun.person", "19" => "noun.phenomenon", "20" => "noun.plant",
+  "21" => "noun.possession", "22" => "noun.process", "23" => "noun.quantity", "24" => "noun.relation",
+  "25" => "noun.shape", "26" => "noun.state", "27" => "noun.substance", "28" => "noun.time",
+  "29" => "verb.body", "30" => "verb.change", "31" => "verb.cognition", "32" => "verb.communication",
+  "33" => "verb.competition", "34" => "verb.consumption", "35" => "verb.contact", "36" => "verb.creation",
+  "37" => "verb.emotion", "38" => "verb.motion", "39" => "verb.perception", "40" => "verb.possession",
+  "41" => "verb.social", "42" => "verb.stative", "43" => "verb.weather", "44" => "adj.ppl",
+}.freeze
+
+# Map data.* +lex_filenum+ (two-digit id) → lexicographer name. File format (Princeton): tab-separated
+# +filenum+, +lexname+, +syntactic_category+ (1=noun …) — not +lexname pos filenum+.
+def wn_noun_lex_filenum_to_lexname
+  @wn_noun_lex_filenum_to_lexname ||= begin
+    m = {}
+    root = WordNet::DB.path
+    %w[dict/lexnames lexnames].each do |rel|
+      path = File.join(root, rel)
+      next unless File.file?(path)
+
+      File.foreach(path, chomp: true, encoding: "UTF-8") do |line|
+        next if line.empty? || line.start_with?("#")
+        parts = line.split("\t")
+        parts = line.split if parts.size < 3
+        next if parts.size < 3
+
+        num, name, _ss_type = parts[0], parts[1], parts[2]
+        next if num.nil? || name.nil? || num.empty? || name.empty?
+
+        key = num.rjust(2, "0")
+        m[key] = name
+      end
+      break if m.size >= 40
+    end
+    m = WN_LEX_FILENUM_TO_LEXNAME.merge(m) if m.size < 40
+    m.freeze
+  end
+end
+
+def wn_synset_noun_lexname(synset)
+  return nil unless synset&.pos == "n"
+
+  map = wn_noun_lex_filenum_to_lexname
+  return nil if map.empty?
+
+  fn = synset.lex_filenum.to_s
+  map[fn.rjust(2, "0")] || map[fn]
+end
+
+# Lemma bases that WordNet’s +noun.exc+ marks with the same surface as singular and plural (*deer deer*,
+# *sheep sheep*, …). A bare *…+s+* spelling (*deers*, *sheeps*) is then a spurious regular plural for
+# frequency and morph inheritance unless handled elsewhere.
+def wn_noun_exc_invariant_plural_bases
+  @wn_noun_exc_invariant_plural_bases ||= begin
+    s = Set.new
+    root = WordNet::DB.path
+    %w[dict/noun.exc noun.exc].each do |rel|
+      path = File.join(root, rel)
+      next unless File.file?(path)
+
+      File.foreach(path, chomp: true, encoding: "UTF-8") do |line|
+        next if line.empty? || line.start_with?("#")
+        inf, lem = line.split
+        next unless inf && lem && inf == lem
+
+        s.add(lem)
+      end
+      break if s.any?
+    end
+    s.freeze
+  end
+end
+
+# All noun synsets for +word+, deduped, across WN spelling variants (hyphen / underscore).
+def wn_noun_synsets_unified(word)
+  forms = [word, hyphens_to_underscores(word), word.tr("_", "-")].uniq
+  seen = {}
+  forms.each do |f|
+    next unless wn_has_entry?(f)
+
+    wn_lemma_find_all_cached(f).each do |lem|
+      next unless lem.pos == "n"
+
+      lem.synsets.each do |s|
+        key = [s.pos, s.pos_offset]
+        seen[key] = s
+      end
+    end
+  end
+  seen.values
+end
+
+# True when every WordNet noun sense of +base+ sits in a mass-leaning lexicographer file, so Inflect *+s*
+# should not inherit via corpus alone (blocks *nostalgias* while keeping *apples*).
+def wn_noun_base_mass_dominant_for_productive_plural?(base)
+  return false unless wn_has_entry?(base)
+  return false unless wn_base_has_noun?(base)
+
+  syns = wn_noun_synsets_unified(base)
+  return false if syns.empty?
+
+  syns.each do |s|
+    ln = wn_synset_noun_lexname(s)
+    return false if ln.nil?
+    return false unless WN_NOUN_LEXNAME_MASS_DOMINANT.include?(ln)
+  end
+
+  true
 end
 
 # WordNet lemma +pos+ codes → strings stored with Kaikki data (part_of_speech.json).
@@ -99,7 +241,7 @@ WN_POS_TO_LEXICAL_POS = {
 
 # Kaikki-style POS tags WordNet lists for this spelling (coarse noun / verb / adj / adv).
 def wordnet_lexical_pos_set(word)
-  lemmas = WordNet::Lemma.find_all(word)
+  lemmas = wn_lemma_find_all_cached(word)
   return Set.new if lemmas.empty?
   out = Set.new
   lemmas.each do |lem|

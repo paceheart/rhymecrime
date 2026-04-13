@@ -12,6 +12,21 @@ def morph_part_of_speech_tags(pos_map, base)
   s.to_a
 end
 
+# *Deers* / *sheeps*: Inflect treats *base+s* as :s, but WordNet marks *deer*, *sheep*, … as invariant in +noun.exc+.
+def morph_spurious_plural_s_on_invariant_noun?(plural_word)
+  bases = wn_noun_exc_invariant_plural_bases
+  return false if bases.empty?
+
+  Inflect.each_candidate_base_for_inflected(plural_word) do |base|
+    next unless bases.include?(base)
+    next unless Inflect.inflection_of_base?(base, plural_word)
+    next unless Inflect.send(:match_suffix_kind, base, plural_word) == :s
+
+    return true if plural_word == base + "s"
+  end
+  false
+end
+
 # Kaikki listed this exact surface as an inflected form of +base+ (+collect_inflected_forms+).
 def wiktionary_surface_form_attested?(forms_map, base, inflected)
   pairs = forms_map[base]
@@ -261,6 +276,12 @@ end
 #
 # We do **not** use +WORDFREQ_RARE_ZIPF+ alone here: erroneous *+s* plurals (*sheeps* ~2.2) sit in the
 # 2.0–2.9 band from web text but lack subtitle use; SUBTLEX or common Zipf separates them from real plurals.
+#
+# WordNet **mass-dominant** nouns (+wn_noun_base_mass_dominant_for_productive_plural?+): every noun sense is in
+# a mass-leaning lexicographer file (attribute, feeling, food, motive, possession, state, substance). For those
+# bases, Inflect *+s* is allowed only when the **plural surface** itself is dialogue- or Zipf-strong — not when
+# Kaikki merely lists the form. That blocks *nostalgias* / *chaoses* / *goodwills* while *apples* (noun.plant)
+# still promotes via Wiktionary / SUBTLEX / Zipf as before.
 def morph_base_allows_plural_s?(base, pos_map, forms_map, plural_word, wordfreq_hash: nil, subtlex_hash: nil)
   tags = morph_part_of_speech_tags(pos_map, base)
   if tags.any?
@@ -268,8 +289,13 @@ def morph_base_allows_plural_s?(base, pos_map, forms_map, plural_word, wordfreq_
     return true if tags.include?("verb") && !tags.include?("noun")
     return false unless tags.include?("noun")
     return false if wn_has_entry?(base) && !wn_base_has_noun?(base)
+    return false if morph_spurious_plural_s_on_invariant_noun?(plural_word)
     if tags.include?("adj")
       return wiktionary_surface_form_attested?(forms_map, base, plural_word)
+    end
+    if wn_noun_base_mass_dominant_for_productive_plural?(base)
+      return (subtlex_hash && subtlex_hash[plural_word].to_i > 0) ||
+             (wordfreq_hash && (wordfreq_hash[plural_word] || 0).to_f >= WORDFREQ_COMMON_ZIPF)
     end
     return true if wiktionary_surface_form_attested?(forms_map, base, plural_word)
     if subtlex_hash && subtlex_hash[plural_word].to_i > 0
@@ -281,7 +307,7 @@ def morph_base_allows_plural_s?(base, pos_map, forms_map, plural_word, wordfreq_
 
     return false
   end
-  true
+  !morph_spurious_plural_s_on_invariant_noun?(plural_word)
 end
 
 # +$inflection_base_words+ (filled in +dict.rb+) maps Wiktionary/Kaikki surfaces to their lemma.
