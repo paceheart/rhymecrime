@@ -39,6 +39,18 @@ def dict_trace_preprocess_line?(original_line, line)
   TRACE_WORDS.any? { |w| line.include?(w) }
 end
 
+# +body+ must not include a leading "TRACE". Pass +word+ to print +TRACE(word)+ before the message;
+# pass nil or "" for an unscoped +TRACE+ line only.
+def dict_trace_format(word, body)
+  b = body.to_s
+  w = word.is_a?(String) && !word.empty? ? word : nil
+  w ? "TRACE(#{w}) #{b}" : "TRACE #{b}"
+end
+
+def dict_trace_puts(word, body)
+  puts dict_trace_format(word, body)
+end
+
 DICT_BUILD_VERBOSE = false
 
 CORPORA_ROOT = File.join(REPO_ROOT, "corpora")

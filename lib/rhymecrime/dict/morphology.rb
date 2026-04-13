@@ -33,7 +33,8 @@ def wiktionary_derivation_suffix_attested?(forms_map, base, suffix_kind)
 end
 
 # True if some Inflect-derived surface for +base+ with suffix +suffix_kind+ reaches RARE Zipf in Wordfreq.
-# Backs productive WN verbs when Kaikki omits participle rows (*catalog* / *cataloging* → *catalogging*).
+# With +morph_base_allows_verb_forms?+, lexeme-level allowance still requires per-surface Kaikki or Zipf
+# on the exact spelling (so *cataloging* in corpus does not promote *catalogging*).
 def corpus_inflection_suffix_zipf_attested?(wordfreq_hash, base, suffix_kind)
   return false if suffix_kind.nil? || wordfreq_hash.nil?
   Inflect.each_derivable_form(base) do |w|
@@ -161,7 +162,10 @@ def morph_base_allows_verb_forms?(base, inflected, pos_map, forms_map, zipf_inf,
       corpus_ok = corpus_inflection_suffix_zipf_attested?(wordfreq_hash, base, inflection_suffix_kind)
       return false unless kaikki_ok || corpus_ok
       return zipf_inf >= WORDFREQ_RARE_ZIPF if tags.include?("adj")
-      return true
+      # Lexeme allows *-ed/-ing* in principle, but each Inflect spelling must be Kaikki-listed or
+      # independently Zipf-attested — blocks *catalogging* when only *cataloging* has corpus/Kaikki support.
+      return wiktionary_surface_form_attested?(forms_map, base, inflected) ||
+        (zipf_inf || 0).to_f >= WORDFREQ_RARE_ZIPF
     end
     return true
   end
@@ -250,9 +254,14 @@ def morph_base_allows_comparative_er_est?(base, w, pos_map, base_first_pron, for
 end
 
 # Plural *:s*: Kaikki +noun+ when present; WordNet noun cross-check. When Kaikki lists both +adj+
-# and +noun+ on the same lemma, require a Kaikki form row for that plural (blocks *impromptus*
-# while keeping productive plurals for noun-only Kaikki rows like *gramophone*→*gramophones*).
-def morph_base_allows_plural_s?(base, pos_map, forms_map, plural_word)
+# and +noun+ on the same lemma, require a Kaikki form row for that plural (blocks *impromptus*).
+#
+# Pure noun lemmas: Inflect *+s* alone is not enough — require Kaikki listing for this plural **or**
+# dialogue presence (SUBTLEX FREQlow>0) **or** strong wordfreq (Zipf ≥ +WORDFREQ_COMMON_ZIPF+).
+#
+# We do **not** use +WORDFREQ_RARE_ZIPF+ alone here: erroneous *+s* plurals (*sheeps* ~2.2) sit in the
+# 2.0–2.9 band from web text but lack subtitle use; SUBTLEX or common Zipf separates them from real plurals.
+def morph_base_allows_plural_s?(base, pos_map, forms_map, plural_word, wordfreq_hash: nil, subtlex_hash: nil)
   tags = morph_part_of_speech_tags(pos_map, base)
   if tags.any?
     # Verb-only lemmas: treat trailing -s as 3sg (*twerks*), not a noun plural (*gooses* is noun+verb).
@@ -262,10 +271,27 @@ def morph_base_allows_plural_s?(base, pos_map, forms_map, plural_word)
     if tags.include?("adj")
       return wiktionary_surface_form_attested?(forms_map, base, plural_word)
     end
-    return true
+    return true if wiktionary_surface_form_attested?(forms_map, base, plural_word)
+    if subtlex_hash && subtlex_hash[plural_word].to_i > 0
+      return true
+    end
+    if wordfreq_hash && (wordfreq_hash[plural_word] || 0).to_f >= WORDFREQ_COMMON_ZIPF
+      return true
+    end
+
+    return false
   end
   true
 end
+
+# +$inflection_base_words+ (filled in +dict.rb+) maps Wiktionary/Kaikki surfaces to their lemma.
+# When +surface+ is recorded as an inflected form of a *different* headword, Phase 9/10 must not treat it
+# as an Inflect *stem* — forward rules would stack suffixes on participles (*cataloging*→*catalogings*).
+def morph_kaikki_lists_surface_as_inflected_nonlemma?(surface)
+  lex = $inflection_base_words[surface]
+  lex && lex != surface
+end
+
 # Syllabified pronunciation for +inflected_word+ from +base_word+'s first CMU pron, or nil.
 # Same final-cluster whitelist gate as merge_inflected_forms! (Phase 10/11 morph promotion).
 def morph_derived_syllabified_pronunciation(base_pron, base_word, inflected_word)
@@ -332,7 +358,7 @@ def merge_gdropped_in_apostrophe_forms!(cmudict, forms_map)
 
       cmudict[in_prime] = [syll]
       added += 1
-      puts "TRACE g-drop merge: #{in_prime} ← #{inflected_word} (base=#{base_word})" if dict_trace_word?(in_prime)
+      dict_trace_puts(in_prime, "g-drop merge: ← #{inflected_word} (base=#{base_word})") if dict_trace_word?(in_prime)
     end
   end
   puts "Generated #{added} g-dropped *in'* pronunciations from verbal *ing*" if added > 0

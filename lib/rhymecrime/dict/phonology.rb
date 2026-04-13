@@ -52,7 +52,8 @@ def preprocess_cmudict_line(line)
   pron = normalize_flat_arphabet_pronunciation(Pronunciation.new(parts))
   line = "#{word_token} #{pron.phonemes.join(" ")}"
   if dict_trace_preprocess_line?(original_line, line)
-    puts "TRACE Preprocessed #{original_line} to #{line}"
+    focus = TRACE_WORDS.find { |tw| original_line.downcase.include?(tw) || line.downcase.include?(tw) }
+    dict_trace_puts(focus, "Preprocessed #{original_line} to #{line}")
   end
   line
 end
@@ -195,12 +196,10 @@ def load_cmudict()
         end
         if word_ok
           push_pronunciation_unless_duplicate!(hash[word], pron)
-          if dict_trace_word?(word)
-            puts "TRACE Loaded #{word} flat as #{pron}"
-          end
+          dict_trace_puts(word, "Loaded flat as #{pron}") if dict_trace_word?(word)
         end
       else
-        puts "Ignoring word: #{word}" if dict_trace_word?(word)
+        dict_trace_puts(word, "Ignoring word (CMU cluster/filter rejected)") if dict_trace_word?(word)
       end
     else
       puts "Ignoring cmudict line: #{line}" if DICT_BUILD_VERBOSE

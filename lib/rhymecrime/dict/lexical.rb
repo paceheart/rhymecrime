@@ -28,9 +28,7 @@ end
 
 def wn_frequency(word)
   all_proper = wn_all_proper?(word)
-  if dict_trace_word?(word)
-    puts "TRACE wn_frequency: all_proper=#{all_proper}"
-  end
+  dict_trace_puts(word, "wn_frequency: all_proper=#{all_proper}") if dict_trace_word?(word)
   return 0, all_proper
 end
 
