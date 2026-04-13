@@ -177,10 +177,13 @@ def rebuild_rhymecrime_dictionaries()
   end
 
   common_n = 0
-  word_dict.each_value do |(freq, _)|
-    if freq > RARE_FREQ_MAX
-      common_n += 1
-    end
+  common_base_forms = Set.new
+  word_dict.each do |word, (freq, _)|
+    next unless freq > RARE_FREQ_MAX
+
+    common_n += 1
+    base = lemma_map.fetch(word, word)
+    common_base_forms.add(base)
   end
-  puts "word_dict: #{word_dict.size} entries (#{common_n} common)"
+  puts "word_dict: #{word_dict.size} entries (#{common_n} common, #{common_base_forms.size} common base forms)"
 end
