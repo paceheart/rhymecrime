@@ -28,7 +28,7 @@ end
 
 def wn_frequency(word)
   all_proper = wn_all_proper?(word)
-  if(word == TRACE_WORD)
+  if dict_trace_word?(word)
     puts "TRACE wn_frequency: all_proper=#{all_proper}"
   end
   return 0, all_proper

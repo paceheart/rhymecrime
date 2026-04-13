@@ -26,7 +26,7 @@ def related_words_ought_not_include(word1, word2, not_working_message: nil)
   test_name = "'Words related to #{word1}' ought not include '#{word2}'"
   it test_name do
     skip_if_not_working(not_working_message)
-    related_words = find_related_words(word1, false)
+    related_words = find_related_words(word1, false, false, nil)
     expect(related_words.include?(word2)).to eql(false), "Words related to '#{word1}' ought not include '#{word2}', but they do: #{related_words}"
   end
 end

@@ -51,7 +51,7 @@ def preprocess_cmudict_line(line)
   word_token = parts.shift
   pron = normalize_flat_arphabet_pronunciation(Pronunciation.new(parts))
   line = "#{word_token} #{pron.phonemes.join(" ")}"
-  if TRACE_WORD && line.include?(TRACE_WORD) && line != original_line
+  if dict_trace_preprocess_line?(original_line, line)
     puts "TRACE Preprocessed #{original_line} to #{line}"
   end
   line
@@ -195,12 +195,12 @@ def load_cmudict()
         end
         if word_ok
           push_pronunciation_unless_duplicate!(hash[word], pron)
-          if(word == TRACE_WORD)
+          if dict_trace_word?(word)
             puts "TRACE Loaded #{word} flat as #{pron}"
           end
         end
       else
-        puts "Ignoring word: #{word}" if word == TRACE_WORD
+        puts "Ignoring word: #{word}" if dict_trace_word?(word)
       end
     else
       puts "Ignoring cmudict line: #{line}" if DICT_BUILD_VERBOSE

@@ -27,7 +27,7 @@ CONCEPTNET_EDGES_PATH = generated_dict_path(CONCEPTNET_EDGES_FILENAME)
 NUMBERBATCH_VEC_PATH = generated_dict_path(NUMBERBATCH_VECTORS_FILENAME)
 USF_ASSOCIATIONS_PATH = generated_dict_path(USF_ASSOCIATIONS_FILENAME)
 
-SIMILAR_MAX = 500
+SIMILAR_MAX = 50000 # O_o
 
 # --- Tunable parameters (optimized via anneal.rb / parameter sweeps) ---
 
@@ -344,10 +344,14 @@ end
 # True iff the two headwords are judged topically related. Symmetric in +word1+ / +word2+:
 # similarity and ConceptNet edges are symmetric; gloss checks both directions; sense-vector
 # and morphy paths use max/min of the two directional cosines; USF two-hop tries both orders.
+#
+# Stop words (+stop_word?+) are never related to anything (including via gloss or USF).
 def thematically_related?(word1, word2, include_self=false)
   if ENV["RELATED_TRACE_THEMATIC"] == "1"
     warn "thematically_related? word1=#{word1.inspect} word2=#{word2.inspect} include_self=#{include_self.inspect}"
   end
+
+  return false if stop_word?(word1) || stop_word?(word2)
 
   base = similarity(word1, word2)
   return true if base >= $SIMILARITY_THRESHOLD
@@ -384,6 +388,8 @@ end
 # Order of checks matches +thematically_related?+ (first win is reported). +include_self+ is accepted for API
 # parity; it is not used by the predicate today.
 def why_thematically_related?(word1, word2, include_self = false)
+  return nil if stop_word?(word1) || stop_word?(word2)
+
   base = similarity(word1, word2)
   if base >= $SIMILARITY_THRESHOLD
     return "similarity: #{base} >= #{$SIMILARITY_THRESHOLD} (Numberbatch centiles + ConceptNet edge bonus)"
@@ -450,8 +456,9 @@ class RelatedWords
     # +max_candidates+ default +SIMILAR_MAX+ caps the list by Numberbatch-centile +similarity+ for UI / display.
     # Pass +nil+ for no cap (e.g. set_related / pair rhyming): truncation can drop words that are related via
     # gloss or sense vectors but rank below the cap on +similarity+ alone.
-    def find_thematically_related_words(word, include_self, include_rhymeless = true, max_candidates = SIMILAR_MAX)
-      words = find_all_thematically_related_words(word, include_rhymeless)
+    # When +common_only+ is true, only non-+rare?+ headwords from +words_we_care_about+ are candidates.
+    def find_thematically_related_words(word, include_self, include_rhymeless = true, common_only = false, max_candidates = SIMILAR_MAX)
+      words = find_all_thematically_related_words(word, include_rhymeless, common_only)
       words.push(word) if include_self
       if max_candidates && words.length > max_candidates
         words = words.sort_by { |w| -similarity(w, word) }
@@ -460,15 +467,15 @@ class RelatedWords
       words
     end
 
-    def find_all_thematically_related_words(word, include_rhymeless = true)
+    def find_all_thematically_related_words(word, include_rhymeless = true, common_only = false)
       @related_word_cache ||= {}
-      key = [word, include_rhymeless]
+      key = [word, include_rhymeless, common_only]
       return @related_word_cache[key] if @related_word_cache.key?(key)
 
       words = []
       debug "Finding words related to #{word}... "
-      words_we_care_about.each do |w|
-        if w != word && (include_rhymeless || has_rhyming_word?(word)) && thematically_related?(word, w)
+      words_we_care_about(include_rhymeless, common_only).each do |w|
+        if w != word && thematically_related?(word, w)
           words.push(w)
         end
       end

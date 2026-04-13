@@ -141,10 +141,16 @@ def word_we_care_about?(word)
   word_dict_includes_headword?(w)
 end
 
-def words_we_care_about
+# Lexicon headwords (+ optional +WORDS_NEEDED_FOR_TESTING+). When +include_rhymeless+ is false,
+# keep only words for which +has_rhyming_word?+ is true. When +common_only+ is true, drop +rare?+
+# headwords (+frequency+ at or below +RARE_FREQ_MAX+). Both predicates need +crime.rb+ loaded.
+def words_we_care_about(include_rhymeless = true, common_only = false)
   keys = word_dict.keys
   keys |= WORDS_NEEDED_FOR_TESTING if defined?(WORDS_NEEDED_FOR_TESTING)
-  keys.uniq
+  keys = keys.uniq
+  keys = keys.select { |w| has_rhyming_word?(w) } unless include_rhymeless
+  keys = keys.reject { |w| rare?(w) } if common_only
+  keys
 end
 
 # Returns UK spelling for a US (z) headword, or nil if not applicable.

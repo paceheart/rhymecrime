@@ -82,7 +82,7 @@ end
 # --- rarity.csv (spec/rarity_spec.rb) ---
 
 RARITY_CSV_KINDS = %w[
-  common common_ish rare rare_ish uncommon forbidden
+  common common_ish rare rare_ish uncommon forbidden forbidden_ish
   common_no_rhymes rare_no_rhymes have_rhymes
 ].freeze
 
@@ -133,6 +133,8 @@ def apply_rarity_csv_row(row)
     oughta_be_uncommon word, not_working_message: skip
   when "forbidden"
     oughta_be_forbidden word, not_working_message: skip
+  when "forbidden_ish"
+    oughta_be_forbidden_ish word, not_working_message: skip
   when "common_no_rhymes"
     oughta_be_common_but_has_no_rhymes word, not_working_message: skip
   when "rare_no_rhymes"

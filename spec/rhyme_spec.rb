@@ -203,6 +203,25 @@ describe 'RHYMES' do
     ought_not_rhyme 'inactive', 'hyperactive'
     ought_not_rhyme 'operate', 'teleoperate'
     ought_not_rhyme 'logical', 'teleological'
+    ought_not_rhyme 'enemy', 'archenemy'
+    ought_not_rhyme 'villain', 'archvillain'
+    oughta_rhyme 'attribution', 'distribution'
+    ought_not_rhyme 'distribution', 'redistribution'
+    ought_not_rhyme 'loading', 'unloading'
+    ought_not_rhyme 'loading', 'reloading'
+    ought_not_rhyme 'loading', 'offloading'
+    ought_not_rhyme 'fitted', 'refitted'
+    ought_not_rhyme 'join', 'enjoin'
+    ought_not_rhyme 'join', 'rejoin'
+    ought_not_rhyme 'upwind', 'downwind'
+    ought_not_rhyme 'find', 'upwind'
+    ought_not_rhyme 'game', 'pregame'
+    ought_not_rhyme 'game', 'postgame'
+    ought_not_rhyme 'space', 'hyperspace'
+    ought_not_rhyme 'atlantic', 'transatlantic'
+    ought_not_rhyme 'pacific', 'transpacific'
+    ought_not_rhyme 'legal', 'illegal'
+    ought_not_rhyme 'alcoholic', 'non-alcoholic'
   end
 
   context "spelling variants ought not count as rhymes" do
@@ -620,6 +639,25 @@ describe 'RHYMES' do
     oughta_rhyme 'leg', 'peg'
     oughta_rhyme 'loot', 'pursuit'
     oughta_rhyme 'reef', 'thief'
+    oughta_rhyme 'abducted', 'obstructed'
+    ought_not_rhyme 'aquatic', 'haddock'
+    oughta_rhyme 'haddock', 'thematic'
+    ought_not_rhyme 'aquatic', 'thematic'
+    ought_not_rhyme 'satyr', 'splatter'
+    oughta_rhyme 'satyr', 'later'
+    oughta_rhyme 'floating', 'loading'
+    could_go_either_way 'floating', 'offloading'
+    ought_not_rhyme 'laugher', 'rocker'
+    oughta_rhyme 'laugher', 'staffer'
+    oughta_rhyme 'attire', 'squire'
+    oughta_rhyme 'haunted', 'daunted'
+    oughta_rhyme 'haunted', 'undaunted'
+    ought_not_rhyme 'daunted', 'undaunted'
+    ought_not_rhyme 'official', 'unofficial'
+    ought_not_rhyme 'color', 'scholar'
+    oughta_rhyme 'collar', 'scholar'
+    ought_not_rhyme 'collar', 'color'
+    oughta_rhyme 'marauding', 'plotting'
   end
 
   context 'prereqs from similar_rhymes_spec: halloween' do
@@ -837,5 +875,15 @@ describe 'RHYMES' do
     ought_not_rhyme 'flour', 'flower'
     ought_not_rhyme 'realise', 'realize'
     ought_not_rhyme 'honor', 'honour'
+  end
+
+  context 'bad pronunciations' do
+    oughta_rhyme 'britches', 'snitches'
+    ought_not_rhyme 'breeches', 'snitches'
+    oughta_rhyme 'breeches', 'beaches'
+    ought_not_rhyme 'anal', 'bacchanal'
+    ought_not_rhyme 'anal', 'canal'
+    ought_not_rhyme 'fez', 'snes'
+    ought_not_rhyme 'froggy', 'swaggy'
   end
 end

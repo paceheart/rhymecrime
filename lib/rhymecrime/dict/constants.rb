@@ -3,28 +3,52 @@
 require_relative "utils_rhyme"
 require "rwordnet"
 
-# Trace one headword through dict-build (frequency, CMU ingest, rime, disconnect, …). Set env when running:
+# Trace headword(s) through dict-build (frequency, CMU ingest, rime, disconnect, …).
+# Multiple words: comma/space/semicolon-separated in +DICT_TRACE_WORDS+ or +TRACE_WORDS+.
+# Single-word legacy (used if the plural vars are unset):
 #   DICT_TRACE_WORD=kitchening ./bin/dict-build
-#   TRACE_WORD=kitchening ./bin/dict-build   # alias if DICT_TRACE_WORD unset
-_dict_trace = ENV["DICT_TRACE_WORD"].to_s.strip
-_dict_trace = ENV["TRACE_WORD"].to_s.strip if _dict_trace.empty?
-TRACE_WORD = _dict_trace.empty? ? nil : _dict_trace
+#   TRACE_WORD=kitchening ./bin/dict-build
+#
+# Examples:
+#   TRACE_WORDS="kitchening,puffin" ./bin/dict-build
+#   DICT_TRACE_WORDS="foo bar,baz" ./bin/dict-build
+_parse_trace_words = ->(str) { str.to_s.split(/[\s,;]+/).map(&:strip).reject(&:empty?) }
+
+_trace_multi = _parse_trace_words[ENV["DICT_TRACE_WORDS"]] + _parse_trace_words[ENV["TRACE_WORDS"]]
+_trace_multi = _trace_multi.uniq
+if _trace_multi.empty?
+  _one = ENV["DICT_TRACE_WORD"].to_s.strip
+  _one = ENV["TRACE_WORD"].to_s.strip if _one.empty?
+  _trace_multi = _one.empty? ? [] : [_one]
+end
+TRACE_WORDS = _trace_multi.freeze
+
+# Backward compat: first traced headword, or nil when none / when multiple (use +TRACE_WORDS+ or +dict_trace_word?+).
+TRACE_WORD = (TRACE_WORDS.size == 1) ? TRACE_WORDS[0] : nil
 
 def dict_trace_word?(word)
-  TRACE_WORD && word == TRACE_WORD
+  !TRACE_WORDS.empty? && TRACE_WORDS.include?(word)
 end
 
-# Phase 8 / 10 / 11: +base+ → +infl+ inflection row touches TRACE_WORD.
+# Phase 8 / 10 / 11: +base+ → +infl+ inflection row touches any traced headword.
 def dict_trace_morph?(base, infl)
-  TRACE_WORD && (TRACE_WORD == base || TRACE_WORD == infl)
+  return false if TRACE_WORDS.empty?
+
+  TRACE_WORDS.include?(base) || TRACE_WORDS.include?(infl)
 end
 
 # Phase 9: hash key +word+, common_words candidate +listed+, morph +base+ → +infl+.
 def dict_trace_phase9?(word, listed, base, infl)
-  return false unless TRACE_WORD
+  return false if TRACE_WORDS.empty?
 
-  tw = TRACE_WORD
-  tw == word || tw == listed || tw == base || tw == infl
+  TRACE_WORDS.include?(word) || TRACE_WORDS.include?(listed) || TRACE_WORDS.include?(base) || TRACE_WORDS.include?(infl)
+end
+
+# CMU line preprocessing: line changed and mentions a traced substring (token is first field).
+def dict_trace_preprocess_line?(original_line, line)
+  return false if TRACE_WORDS.empty? || line == original_line
+
+  TRACE_WORDS.any? { |w| line.include?(w) }
 end
 
 DICT_BUILD_VERBOSE = false

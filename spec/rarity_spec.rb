@@ -3,6 +3,7 @@
 # 98.3% success on the examples we care most about
 #
 # Examples live in spec/rarity.csv (context, word, kind, important, skip, notes) — loaded below.
+# +kind+ includes forbidden_ish (soft-priority forbidden; see +oughta_be_forbidden_ish+).
 # See spec/test_utils.rb (+load_and_define_rarity_test_cases_from_csv+).
 
 require_relative "test_utils"
@@ -116,6 +117,15 @@ def oughta_be_forbidden(word, not_working_message: nil)
   it test_name do
     skip_if_not_working(not_working_message)
     msg = "'#{word}' oughta be forbidden, but is #{rarity_category(word)} — #{rarity_status_line(word)}"
+    expect(rarity_category(word)).to eq(:forbidden), msg
+  end
+end
+
+# Lower priority than +oughta_be_forbidden+; tagged :rarity_ish (see +oughta_be_rare_ish+).
+def oughta_be_forbidden_ish(word, not_working_message: nil)
+  it "'#{word}' oughta be forbidden (ish)", :rarity_ish do
+    skip_if_not_working(not_working_message)
+    msg = "'#{word}' oughta be forbidden (ish), but is #{rarity_category(word)} — #{rarity_status_line(word)} (but it's not that big a deal)"
     expect(rarity_category(word)).to eq(:forbidden), msg
   end
 end

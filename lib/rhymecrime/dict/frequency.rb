@@ -81,7 +81,7 @@ def filter_word_dict(word_dict)
     freq, prons = entry
     if(!prons.empty? || freq > 0)
       filtered_word_dict[word] = entry
-      if(word == TRACE_WORD)
+      if dict_trace_word?(word)
         puts "TRACE freq #{freq} passed filters"
       end
     end
@@ -294,7 +294,7 @@ def compute_frequency(word, subtlex_hash, wordfreq_hash)
 
   freq = [subtlex_freq, wordfreq_boost].max
 
-  if word == TRACE_WORD
+  if dict_trace_word?(word)
     puts "TRACE compute_frequency: subtlex=#{subtlex_freq} zipf=#{zipf} in_wn=#{in_wordnet} lexical_anchor=#{lexically_anchored} wordfreq_boost=#{wordfreq_boost} (needs zipf≥#{WORDFREQ_COMMON_ZIPF} for boost) block_short_init=#{block_short_initialism_wordfreq} all_proper=#{wn_all_proper} => #{freq}"
   end
   return freq

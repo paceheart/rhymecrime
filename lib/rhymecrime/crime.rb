@@ -24,6 +24,7 @@ require 'json'
 require 'cgi'
 require_relative 'dict/utils_rhyme'
 require_relative 'dict/phoneme.rb'
+require_relative 'dict/inflect'
 require_relative 'dict/pronunciation.rb'
 require_relative "related"
 require "memery"
@@ -322,10 +323,10 @@ module Rhymecrime
     class << self
       include Memery
 
-      memoize def find_related_words(word, include_self, include_rhymeless = true, max_candidates = SIMILAR_MAX)
+      memoize def find_related_words(word, include_self, include_rhymeless = true, common_only = false, max_candidates = SIMILAR_MAX)
         words = []
         unless explicitly_forbidden?(word)
-          words = RelatedWords.find_thematically_related_words(word, include_self, include_rhymeless, max_candidates)
+          words = RelatedWords.find_thematically_related_words(word, include_self, include_rhymeless, common_only, max_candidates)
           words = filter_out_dispreferred_words(words, word)
         end
         words
@@ -334,8 +335,9 @@ module Rhymecrime
   end
 end
 
-def find_related_words(word, include_self, include_rhymeless = true, max_candidates = SIMILAR_MAX)
-  Rhymecrime::FindRelatedWordsMemo.find_related_words(word, include_self, include_rhymeless, max_candidates)
+# +common_only:+ when true, restrict candidates to non-+rare?+ headwords (+words_we_care_about(..., true)+).
+def find_related_words(word, include_self, include_rhymeless = true, max_candidates = SIMILAR_MAX, common_only: false)
+  Rhymecrime::FindRelatedWordsMemo.find_related_words(word, include_self, include_rhymeless, common_only, max_candidates)
 end
 
 def find_related_rhymes(rhyme, rel)
@@ -344,18 +346,90 @@ def find_related_rhymes(rhyme, rel)
   result = result.select { |w| thematically_related?(rhyme, w) }
 end
 
-$rhyming_tuple_cache = Hash.new()
-def find_rhyming_tuples(input_rel1)
-  if $rhyming_tuple_cache.key?(input_rel1)
-    return $rhyming_tuple_cache[input_rel1]
+# Inflect suffix kind from +base+ to +inflected+, or nil if not a recognized surface pattern.
+def inflection_suffix_kind_from_base(base, inflected)
+  return nil unless Inflect.inflection_of_base?(base, inflected)
+
+  Inflect.send(:match_suffix_kind, base, inflected)
+end
+
+# True if +later+ is an uninterestingly redundant inflection of +earlier+ (same tuple length and
+# each +later[i]+ is the same +Inflect+ suffix kind from +earlier[i]+, or +later+ is shorter and
+# every word matches a distinct earlier word with one shared suffix kind). +later+ must not be longer.
+def rhyming_tuple_suffix_redundant_with?(earlier, later)
+  return false if earlier.empty? || later.empty?
+  return false if earlier.size < later.size
+
+  if earlier.size == later.size
+    kinds = earlier.each_index.map { |i| inflection_suffix_kind_from_base(earlier[i], later[i]) }
+    return false if kinds.any?(&:nil?)
+
+    kinds.uniq.size == 1
   else
-    results = really_find_rhyming_tuples(input_rel1)
-    $rhyming_tuple_cache[input_rel1] = results
+    kind_lock = nil
+    used_idx = {}
+    later.each do |w|
+      matched_i = nil
+      matched_k = nil
+      earlier.each_with_index do |base, i|
+        next if used_idx[i]
+
+        k = inflection_suffix_kind_from_base(base, w)
+        next if k.nil?
+
+        matched_i = i
+        matched_k = k
+        break
+      end
+      return false if matched_i.nil?
+
+      if kind_lock.nil?
+        kind_lock = matched_k
+      elsif kind_lock != matched_k
+        return false
+      end
+      used_idx[matched_i] = true
+    end
+    true
+  end
+end
+
+# Drop tuples that differ from an earlier tuple only by parallel +Inflect+ suffixes (e.g. plural or
+# past tense of the same set). Tuples are sorted lexicographically before scanning so uninflected
+# spellings tend to be kept over inflected ones.
+#
+# Set +VERBOSE=1+ in the environment to print each pruned tuple (and the kept tuple it matched);
+# this is separate from +$debug_mode+ / +debug+, which remain very chatty elsewhere.
+def prune_suffix_redundant_rhyming_tuples(tuples)
+  verbose_prunes = ENV["VERBOSE"] == "1"
+  sorted = tuples.sort
+  kept = []
+  sorted.each do |tup|
+    keeper = kept.find { |ear| rhyming_tuple_suffix_redundant_with?(ear, tup) }
+    if keeper
+      if verbose_prunes
+        puts "pruned rhyming tuple (suffix-redundant): #{tup.join(' / ')}  [kept: #{keeper.join(' / ')}]"
+      end
+      next
+    end
+
+    kept << tup
+  end
+  kept
+end
+
+$rhyming_tuple_cache = Hash.new()
+def find_rhyming_tuples(input_rel1, common_only = false)
+  if $rhyming_tuple_cache.key?([input_rel1, common_only])
+    return $rhyming_tuple_cache[[input_rel1, common_only]]
+  else
+    results = really_find_rhyming_tuples(input_rel1, common_only)
+    $rhyming_tuple_cache[[input_rel1, common_only]] = results
     return results
   end
 end
 
-def really_find_rhyming_tuples(input_rel1)
+def really_find_rhyming_tuples(input_rel1, common_only = false)
   # Rhyming word sets that are related to INPUT_REL1.
   # Each element of the returned array is an array of words that rhyme with each other and are all related to INPUT_REL1.
   # Algorithm:
@@ -363,10 +437,11 @@ def really_find_rhyming_tuples(input_rel1)
   # For each word REL1 in RELATEDS1,
   #   Get all rhymes RHYME1 of REL1.
   #   If R is in RELATEDS1, compute R's rime and put RHYME1 in the bucket labeled by that rime.
-  # Return all buckets with two or more words in them.
+  # Return all buckets with two or more words in them, after +prune_suffix_redundant_rhyming_tuples+
+  # drops tuples that only parallel an earlier tuple's +Inflect+ suffixes (e.g. all plural or all past).
   related_rhymes = Hash.new {|h,k| h[k] = [] } # hash of arrays
   unless(explicitly_forbidden?(input_rel1))
-    relateds1 = find_related_words(input_rel1, true, true, nil)
+    relateds1 = find_related_words(input_rel1, true, false, nil, common_only: common_only)
     relateds1.each { |rel1|
       for rel1pron in pronunciations(rel1)
         rime = rel1pron.rime
@@ -388,10 +463,13 @@ def really_find_rhyming_tuples(input_rel1)
       tuples.push(relrhymes.sort!)
     end
   }
-  return tuples
+  # Alternate pronunciations can yield different +rime+ keys (e.g. OW_L_IY_AH_N vs OW_L_Y_AH_N) with the
+  # same sorted word set — dedupe before suffix pruning so output is not repeated line-for-line.
+  tuples.uniq!
+  prune_suffix_redundant_rhyming_tuples(tuples)
 end
 
-def find_rhyming_pairs(input_rel1, input_rel2)
+def find_rhyming_pairs(input_rel1, input_rel2, common_only = false)
   # Pairs of rhyming words where the first word is related to INPUT_REL1 and the second word is related to INPUT_REL2
   # Each element of the returned array is a pair of rhyming words [W1 W2] where W1 is related to INPUT_REL1 and W2 is related to INPUT_REL2
   # Algorithm:
@@ -402,8 +480,8 @@ def find_rhyming_pairs(input_rel1, input_rel2)
   #   If RHYME rhymes with REL1 and is related to INPUT_REL2, we win! "REL1 / RHYME" is a pair.
   related_rhymes = Hash.new {|h,k| h[k] = [] } # hash of arrays
   unless(explicitly_forbidden?(input_rel1) || explicitly_forbidden?(input_rel2))
-    relateds1 = find_related_words(input_rel1, true, true, nil)
-    relateds2 = find_related_words(input_rel2, true, true, nil).to_set
+    relateds1 = find_related_words(input_rel1, true, false, nil, common_only: common_only)
+    relateds2 = find_related_words(input_rel2, true, false, nil, common_only: common_only).to_set
     relateds1.each { |rel1|
       # rel1 is a word related to input_rel1. We're looking for rhyming pairs [rel1 rel2].
       debug "rhymes for #{rel1} (#{debug_info(rel1)}):<br>"

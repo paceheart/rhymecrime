@@ -75,7 +75,7 @@ def filter_cmudict(cmudict, rdict)
   total = 0
   for word, prons in cmudict
     filtered_cmudict[word] = Array.new # we still want entries for words with no pronunciations, though, in case they have frequency data
-    if(word == TRACE_WORD)
+    if dict_trace_word?(word)
       puts "TRACE prons = #{prons}"
     end
     for pron in prons
@@ -84,7 +84,7 @@ def filter_cmudict(cmudict, rdict)
       if(!rdict[rime].empty?)
         proncount += 1
         filtered_cmudict[word].push(pron)
-        if(word == TRACE_WORD)
+        if dict_trace_word?(word)
           puts "TRACE #{pron} passed filters because it rhymes with #{rdict[rime]}"
         end
       end
