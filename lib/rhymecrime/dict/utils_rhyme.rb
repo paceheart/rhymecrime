@@ -1277,9 +1277,11 @@ def load_word_dict()
   File.foreach(pathname, encoding: "UTF-8") do |line|
     next unless useful_line?(line)
 
-    word, freq, pronunciations_str = line.split(",")
-    word = word.desanitize
-    freq = freq.to_i
+    parts = line.chomp.split(",", 4)
+    word = parts[0].desanitize
+    freq = parts[1].to_i
+    pronunciations_str = parts[2] || ""
+    lemma_raw = parts[3]
     prons = Array.new
     pronunciation_strings = pronunciations_str.split("|")
     for pronstr in pronunciation_strings
@@ -1287,21 +1289,43 @@ def load_word_dict()
       pron = Pronunciation.new(phonemes)
       push_pronunciation_unless_duplicate!(prons, pron)
     end
-    word_info = [freq, prons]
+    lemma = (lemma_raw && !lemma_raw.strip.empty?) ? lemma_raw.strip.desanitize : word
+    word_info = [freq, prons, lemma]
     word_dict[word] = word_info
   end
   clear_spelling_variant_hyphen_caches!
+  $lemma_to_words = nil
+  $thematically_related_memo = nil
   word_dict
 end
 
-def save_word_dict(word_dict)
+def lemma(word)
+  entry = word_dict[word]
+  return word unless entry
+  entry[2] || word
+end
+
+# Reverse map: lemma → array of all word_dict headwords that share that lemma (including the lemma
+# itself when it is in word_dict). Built lazily on first access; cleared when word_dict is reloaded.
+$lemma_to_words = nil
+def lemma_to_words
+  return $lemma_to_words unless $lemma_to_words.nil?
+  $lemma_to_words = Hash.new { |h, k| h[k] = [] }
+  word_dict.each_key do |w|
+    base = lemma(w)
+    $lemma_to_words[base] << w
+  end
+  $lemma_to_words
+end
+
+def save_word_dict(word_dict, lemma_map = nil)
   ensure_generated_dict_dir!
   path = generated_dict_path_under_dict_dir(WORD_DICT_FILENAME)
   f = File.open(path, "w", encoding: "UTF-8")
   f.puts(WORD_DICT_HEADER)
   for word, word_info in word_dict
-    word = word.sanitize
-    f.print(word)
+    sanitized = word.sanitize
+    f.print(sanitized)
     f.print(',')
     frequency, prons = word_info
     f.print(frequency)
@@ -1313,6 +1337,13 @@ def save_word_dict(word_dict)
       end
       isFirstPron = false
       f.print(pron)
+    end
+    if lemma_map
+      lemma = lemma_map[word]
+      if lemma && lemma != word
+        f.print(',')
+        f.print(lemma.sanitize)
+      end
     end
     f.puts
   end

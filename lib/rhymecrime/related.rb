@@ -341,32 +341,28 @@ def similarity_threshold
   $SIMILARITY_THRESHOLD
 end
 
-# True iff the two headwords are judged topically related. Symmetric in +word1+ / +word2+:
-# similarity and ConceptNet edges are symmetric; gloss checks both directions; sense-vector
-# and morphy paths use max/min of the two directional cosines; USF two-hop tries both orders.
-#
-# Stop words (+stop_word?+) are never related to anything (including via gloss or USF).
-def thematically_related?(word1, word2, include_self=false)
-  if ENV["RELATED_TRACE_THEMATIC"] == "1"
-    warn "thematically_related? word1=#{word1.inspect} word2=#{word2.inspect} include_self=#{include_self.inspect}"
-  end
+# Memo keyed by sorted surface headword pair (see +thematically_related?+). Cleared when +load_word_dict+ runs.
+# Lemma-normalized keys would wrongly equate e.g. *swearing*/*pirate* with *swear*/*pirate* (related.csv regression).
+$thematically_related_memo = nil
 
-  return false if stop_word?(word1) || stop_word?(word2)
+# Uncached predicate on two headwords. Symmetric in +a+ / +b+.
+def thematically_related_pair_uncached?(a, b)
+  return false if stop_word?(a) || stop_word?(b)
 
-  base = similarity(word1, word2)
+  base = similarity(a, b)
   return true if base >= $SIMILARITY_THRESHOLD
 
-  return true if bidirectional_gloss_contains?(word1, word2)
+  return true if bidirectional_gloss_contains?(a, b)
 
-  if !stop_word?(word1) && !stop_word?(word2) && base >= $SENSE_VECTOR_MIN_BASE
-    d1, d2 = directional_sense_cosines(word1, word2)
+  if !stop_word?(a) && !stop_word?(b) && base >= $SENSE_VECTOR_MIN_BASE
+    d1, d2 = directional_sense_cosines(a, b)
     sv_max = [d1, d2].max
     sv_min = [d1, d2].min
-    both_have_senses = sense_vectors(word1).size > 0 && sense_vectors(word2).size > 0
+    both_have_senses = sense_vectors(a).size > 0 && sense_vectors(b).size > 0
     if both_have_senses
       return true if sv_max >= $SENSE_VECTOR_THRESHOLD && sv_min >= $SENSE_VECTOR_MIN_FLOOR
     elsif $SENSE_VECTOR_MORPHY_FLOOR > 0
-      morphy_result = morphy_directional_sense_cosines(word1, word2)
+      morphy_result = morphy_directional_sense_cosines(a, b)
       if morphy_result
         md1, md2 = morphy_result
         return true if [md1, md2].max >= $SENSE_VECTOR_THRESHOLD && [md1, md2].min >= $SENSE_VECTOR_MORPHY_FLOOR
@@ -377,11 +373,41 @@ def thematically_related?(word1, word2, include_self=false)
   if $USF_TWOHOP_BOOST > 0 &&
      base >= $USF_MIN_BASE &&
      (base + $USF_TWOHOP_BOOST) >= $SIMILARITY_THRESHOLD &&
-     usf_twohop_bridge_validated?(word1, word2)
+     usf_twohop_bridge_validated?(a, b)
     return true
   end
 
   false
+end
+
+# +a+ and +b+ are the two headwords in lexicographic order (+a+ <= +b+).
+def thematically_related_pair_memoized?(a, b)
+  memo = ($thematically_related_memo ||= {})
+  key = [a, b]
+  return memo[key] if memo.key?(key)
+
+  memo[key] = thematically_related_pair_uncached?(a, b)
+end
+
+# True iff the two headwords are judged topically related. Symmetric in +word1+ / +word2+:
+# similarity and ConceptNet edges are symmetric; gloss checks both directions; sense-vector
+# and morphy paths use max/min of the two directional cosines; USF two-hop tries both orders.
+#
+# Stop words (+stop_word?+) are never related to anything (including via gloss or USF).
+#
+# Sorts the two surface headwords lexicographically and consults a memo so +thematically_related?(a,b)+
+# and +thematically_related?(b,a)+ share one evaluation. Scoring always uses those surface forms, not
+# dictionary lemmas (lemmas differ from inflected vectors/gloss paths and hurt related.csv accuracy).
+def thematically_related?(word1, word2, include_self=false)
+  if ENV["RELATED_TRACE_THEMATIC"] == "1"
+    warn "thematically_related? word1=#{word1.inspect} word2=#{word2.inspect} include_self=#{include_self.inspect}"
+  end
+
+  return true if include_self && word1 == word2
+  return false if stop_word?(word1) || stop_word?(word2)
+
+  a, b = word1 <= word2 ? [word1, word2] : [word2, word1]
+  thematically_related_pair_memoized?(a, b)
 end
 
 # Same decision as +thematically_related?+, but returns a short reason string when true, or +nil+ when false.

@@ -111,6 +111,8 @@ WORD_DICT_HEADER = "# RhymeCrime's word info dictionary
 #
 # Each line is of the form:
 #
-# WORD,FREQUENCY,PRONUNCIATION1|PRONUNCIATION2...
+# WORD,FREQUENCY,PRONUNCIATION1|PRONUNCIATION2...[,LEMMA]
+#
+# LEMMA is the base/uninflected form (omitted when same as WORD).
 #
 #"
