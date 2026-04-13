@@ -36,6 +36,19 @@ def thematically_related_lemma_conflated_uncached?(w1, w2)
   thematically_related_pair_uncached?(a, b)
 end
 
+# Numberbatch table keys are base lemmas; +numberbatch_cosine+ expects lemmas. For diagnostics we still
+# want cosines that mix surface vs base keys without double-+lemma+.
+def numberbatch_cosine_raw_spellings(k1, k2)
+  nb = numberbatch_table
+  v1 = nb[hyphens_to_underscores(k1)]
+  v2 = nb[hyphens_to_underscores(k2)]
+  return 0.0 if v1.nil? || v2.nil?
+
+  dot = 0.0
+  v1.size.times { |i| dot += v1[i] * v2[i] }
+  dot
+end
+
 Dir.chdir(repo) do
   require "csv"
   require "rhymecrime/crime"
@@ -63,9 +76,9 @@ Dir.chdir(repo) do
 
     l1 = lemma(w1)
     l2 = lemma(w2)
-    c_ab = numberbatch_cosine(w1, w2)
-    c_lb = numberbatch_cosine(l1, w2)
-    c_al = numberbatch_cosine(w1, l2)
+    c_ab = numberbatch_cosine_raw_spellings(w1, w2)
+    c_lb = numberbatch_cosine_raw_spellings(l1, w2)
+    c_al = numberbatch_cosine_raw_spellings(w1, l2)
     c_ll = numberbatch_cosine(l1, l2)
 
     regressions << {

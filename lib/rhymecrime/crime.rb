@@ -441,13 +441,14 @@ def really_find_rhyming_tuples(input_rel1, common_only = false)
   # drops tuples that only parallel an earlier tuple's +Inflect+ suffixes (e.g. all plural or all past).
   related_rhymes = Hash.new {|h,k| h[k] = [] } # hash of arrays
   unless(explicitly_forbidden?(input_rel1))
-    relateds1 = find_related_words(input_rel1, true, false, nil, common_only: common_only)
-    relateds1.each { |rel1|
+    related_list = find_related_words(input_rel1, true, false, nil, common_only: common_only)
+    relateds1 = related_list.to_set
+    related_list.each { |rel1|
       for rel1pron in pronunciations(rel1)
         rime = rel1pron.rime
         debug "Rhymes for #{rel1} [#{rime}] #{debug_info(rel1)}:"
         find_rhyming_words_for_pronunciation(rel1pron, true).each { |rhyme1|
-          if(relateds1.include? rhyme1) # we only care about relateds of input_rel1
+          if relateds1.include?(rhyme1) # we only care about relateds of input_rel1
             rhyme1 = preferred_form(rhyme1) # push 'honor' instead of 'honour'. This will ensure we don't push both.
             related_rhymes[rime].push(rhyme1)
             debug " #{rhyme1} #{debug_info(rhyme1)}"

@@ -12,6 +12,8 @@
 #   3. WordNet gloss-vector sense embeddings + morphy fallback (secondary rescue)
 #   4. USF Free Association 2-hop (boost to base score via human association graph)
 #
+# Debug: RELATED_TRACE_MEMO=1 — log surface + lemma memo path (thematically_related? → hit/miss → uncached).
+#
 
 require 'json'
 require 'msgpack'
@@ -28,6 +30,10 @@ NUMBERBATCH_VEC_PATH = generated_dict_path(NUMBERBATCH_VECTORS_FILENAME)
 USF_ASSOCIATIONS_PATH = generated_dict_path(USF_ASSOCIATIONS_FILENAME)
 
 SIMILAR_MAX = 50000 # O_o
+
+def related_trace_memo?
+  ENV["RELATED_TRACE_MEMO"].to_s == "1"
+end
 
 # --- Tunable parameters (optimized via anneal.rb / parameter sweeps) ---
 
@@ -59,6 +65,7 @@ def conceptnet_edges
   $conceptnet_edges
 end
 
+# Expects dictionary-lemma spellings (see +similarity+). Keys match +save_conceptnet_edge_map!+ export.
 def conceptnet_edge_weight(word1, word2)
   key = [hyphens_to_underscores(word1), hyphens_to_underscores(word2)].sort.join("|")
   conceptnet_edges[key] || 0.0
@@ -96,8 +103,9 @@ def usf_twohop_bridge_validated?(word1, word2)
       next unless targets_b
       fsg2 = targets_b[b]
       next unless fsg2 && fsg2 >= 0.01
-      cos_ab = numberbatch_cosine(a, bridge)
-      cos_bb = numberbatch_cosine(bridge, b)
+      br = lemma(bridge)
+      cos_ab = numberbatch_cosine(a, br)
+      cos_bb = numberbatch_cosine(br, b)
       min_cos = [cos_ab, cos_bb].min
       return true if (min_cos * 100).round >= $USF_MIN_BRIDGE_COS
     end
@@ -126,6 +134,7 @@ def numberbatch_table
   nb.nil? ? numberbatch : nb
 end
 
+# Expects dictionary-lemma spellings (see +similarity+). Rows match +save_numberbatch_vectors!+ export.
 def numberbatch_cosine(word1, word2)
   nb = numberbatch_table
   v1 = nb[hyphens_to_underscores(word1)]
@@ -167,8 +176,10 @@ def validated_derivations(word)
 
   candidates.select do |d|
     next true if d == word
-    v1 = nb[hyphens_to_underscores(word)]
-    v2 = nb[hyphens_to_underscores(d)]
+    w_key = hyphens_to_underscores(word)
+    d_key = word_dict_includes_headword?(d) ? hyphens_to_underscores(lemma(d)) : hyphens_to_underscores(d)
+    v1 = nb[w_key]
+    v2 = nb[d_key]
     next false unless v1 && v2
     dot = 0.0
     v1.size.times { |i| dot += v1[i] * v2[i] }
@@ -218,7 +229,10 @@ def sense_vectors(word, max_senses = $SENSE_VECTOR_MAX_SENSES)
     lemma.synsets.each do |synset|
       break if count >= max_senses
       content_words = synset.gloss.downcase.scan(/[a-z]+/) - GLOSS_STOP_WORDS.to_a
-      embeds = content_words.filter_map { |w| nb[hyphens_to_underscores(w)] }
+      embeds = content_words.filter_map do |gw|
+        gk = word_dict_includes_headword?(gw) ? hyphens_to_underscores(lemma(gw)) : hyphens_to_underscores(gw)
+        nb[gk]
+      end
       next if embeds.size < 2
       dim = embeds.first.size
       avg = Array.new(dim, 0.0)
@@ -282,7 +296,10 @@ def sense_vectors_morphy(word, max_senses = $SENSE_VECTOR_MAX_SENSES)
       lemma.synsets.each do |synset|
         break if count >= max_senses
         content_words = synset.gloss.downcase.scan(/[a-z]+/) - GLOSS_STOP_WORDS.to_a
-        embeds = content_words.filter_map { |w| nb[hyphens_to_underscores(w)] }
+        embeds = content_words.filter_map do |gw|
+          gk = word_dict_includes_headword?(gw) ? hyphens_to_underscores(lemma(gw)) : hyphens_to_underscores(gw)
+          nb[gk]
+        end
         next if embeds.size < 2
         dim = embeds.first.size
         avg = Array.new(dim, 0.0)
@@ -341,15 +358,16 @@ def similarity_threshold
   $SIMILARITY_THRESHOLD
 end
 
-# Memo keyed by sorted surface headword pair (see +thematically_related?+). Cleared when +load_word_dict+ runs.
-# Lemma-normalized keys would wrongly equate e.g. *swearing*/*pirate* with *swear*/*pirate* (related.csv regression).
+# Memo keyed by sorted dictionary lemma pair (see +thematically_related?+). Cleared when +load_word_dict+ runs.
 $thematically_related_memo = nil
 
 # Uncached predicate on two headwords. Symmetric in +a+ / +b+.
 def thematically_related_pair_uncached?(a, b)
   return false if stop_word?(a) || stop_word?(b)
 
-  base = similarity(a, b)
+  puts "related? #{a} #{b}" if related_trace_memo?
+
+  base = lemmilarity(a, b)
   return true if base >= $SIMILARITY_THRESHOLD
 
   return true if bidirectional_gloss_contains?(a, b)
@@ -380,12 +398,16 @@ def thematically_related_pair_uncached?(a, b)
   false
 end
 
-# +a+ and +b+ are the two headwords in lexicographic order (+a+ <= +b+).
+# +a+ and +b+ are dictionary lemmas in lexicographic order (+a+ <= +b+); see +thematically_related?+.
 def thematically_related_pair_memoized?(a, b)
   memo = ($thematically_related_memo ||= {})
   key = [a, b]
-  return memo[key] if memo.key?(key)
+  if memo.key?(key)
+    puts "  cache hit #{a} #{b}" if related_trace_memo?
+    return memo[key]
+  end
 
+  puts "thematically_related_pair_uncached? #{a} #{b}" if related_trace_memo?
   memo[key] = thematically_related_pair_uncached?(a, b)
 end
 
@@ -395,47 +417,57 @@ end
 #
 # Stop words (+stop_word?+) are never related to anything (including via gloss or USF).
 #
-# Sorts the two surface headwords lexicographically and consults a memo so +thematically_related?(a,b)+
-# and +thematically_related?(b,a)+ share one evaluation. Scoring always uses those surface forms, not
-# dictionary lemmas (lemmas differ from inflected vectors/gloss paths and hurt related.csv accuracy).
+# Surfaces are mapped through +lemma+ (dict-build base column) before scoring and memoization, so
+# inflected pairs share work and align with base-form Numberbatch / ConceptNet exports.
 def thematically_related?(word1, word2, include_self=false)
   if ENV["RELATED_TRACE_THEMATIC"] == "1"
     warn "thematically_related? word1=#{word1.inspect} word2=#{word2.inspect} include_self=#{include_self.inspect}"
   end
 
-  return true if include_self && word1 == word2
+  return true if include_self && (word1 == word2 || lemma(word1) == lemma(word2))
   return false if stop_word?(word1) || stop_word?(word2)
 
-  a, b = word1 <= word2 ? [word1, word2] : [word2, word1]
+  puts "thematically_related? #{word1} #{word2}" if related_trace_memo?
+
+  l1 = lemma(word1)
+  l2 = lemma(word2)
+  a, b = l1 <= l2 ? [l1, l2] : [l2, l1]
+  puts "  -> lemma key #{a} #{b}" if related_trace_memo?
   thematically_related_pair_memoized?(a, b)
 end
 
 # Same decision as +thematically_related?+, but returns a short reason string when true, or +nil+ when false.
-# Order of checks matches +thematically_related?+ (first win is reported). +include_self+ is accepted for API
-# parity; it is not used by the predicate today.
+# Order of checks matches +thematically_related?+ (first win is reported). Uses +lemma+ for scoring like
+# +thematically_related?+; +include_self+ treats same headword or same lemma as self when true.
 def why_thematically_related?(word1, word2, include_self = false)
+  return "self: same headword" if include_self && word1 == word2
   return nil if stop_word?(word1) || stop_word?(word2)
+  return "self: same lexeme (lemma)" if include_self && lemma(word1) == lemma(word2)
 
-  base = similarity(word1, word2)
+  l1 = lemma(word1)
+  l2 = lemma(word2)
+  return nil if stop_word?(l1) || stop_word?(l2)
+
+  base = lemmilarity(l1, l2)
   if base >= $SIMILARITY_THRESHOLD
     return "similarity: #{base} >= #{$SIMILARITY_THRESHOLD} (Numberbatch centiles + ConceptNet edge bonus)"
   end
 
-  if bidirectional_gloss_contains?(word1, word2)
+  if bidirectional_gloss_contains?(l1, l2)
     return "gloss: bidirectional WordNet gloss/derivation containment"
   end
 
-  if !stop_word?(word1) && !stop_word?(word2) && base >= $SENSE_VECTOR_MIN_BASE
-    d1, d2 = directional_sense_cosines(word1, word2)
+  if !stop_word?(l1) && !stop_word?(l2) && base >= $SENSE_VECTOR_MIN_BASE
+    d1, d2 = directional_sense_cosines(l1, l2)
     sv_max = [d1, d2].max
     sv_min = [d1, d2].min
-    both_have_senses = sense_vectors(word1).size > 0 && sense_vectors(word2).size > 0
+    both_have_senses = sense_vectors(l1).size > 0 && sense_vectors(l2).size > 0
     if both_have_senses
       if sv_max >= $SENSE_VECTOR_THRESHOLD && sv_min >= $SENSE_VECTOR_MIN_FLOOR
         return "sense_vectors: directional max=#{sv_max} min=#{sv_min} (need max>=#{$SENSE_VECTOR_THRESHOLD} min>=#{$SENSE_VECTOR_MIN_FLOOR}; base similarity=#{base})"
       end
     elsif $SENSE_VECTOR_MORPHY_FLOOR > 0
-      morphy_result = morphy_directional_sense_cosines(word1, word2)
+      morphy_result = morphy_directional_sense_cosines(l1, l2)
       if morphy_result
         md1, md2 = morphy_result
         mx = [md1, md2].max
@@ -450,7 +482,7 @@ def why_thematically_related?(word1, word2, include_self = false)
   if $USF_TWOHOP_BOOST > 0 &&
      base >= $USF_MIN_BASE &&
      (base + $USF_TWOHOP_BOOST) >= $SIMILARITY_THRESHOLD &&
-     usf_twohop_bridge_validated?(word1, word2)
+     usf_twohop_bridge_validated?(l1, l2)
     boosted = base + $USF_TWOHOP_BOOST
     return "usf_twohop: base=#{base} + boost=#{$USF_TWOHOP_BOOST} => #{boosted} >= #{$SIMILARITY_THRESHOLD}, validated bridge"
   end
@@ -458,18 +490,22 @@ def why_thematically_related?(word1, word2, include_self = false)
   nil
 end
 
+# Numberbatch + ConceptNet centile score for two dictionary lemmas (no +lemma+ lookup).
+# Thematic scoring calls this directly; +similarity+ is the surface-headword wrapper for UI / ranking.
+def lemmilarity(l1, l2)
+  return 0 if stop_word?(l1) || stop_word?(l2)
+
+  cos = numberbatch_cosine(l1, l2)
+  edge_w = conceptnet_edge_weight(l1, l2)
+  edge_bonus = edge_w > 0 ? $CONCEPTNET_EDGE_BONUS : 0
+
+  (cos * 100).round + edge_bonus
+end
+
 def similarity(word1, word2)
   return 0 if stop_word?(word1) || stop_word?(word2)
 
-  # Primary signal: Numberbatch cosine (0.0..1.0 range, scaled to integer centiles)
-  cos = numberbatch_cosine(word1, word2)
-
-  # ConceptNet edge bonus: if a direct knowledge-graph edge exists, boost score
-  edge_w = conceptnet_edge_weight(word1, word2)
-  edge_bonus = edge_w > 0 ? $CONCEPTNET_EDGE_BONUS : 0
-
-  # Score in centiles (threshold 9 = cosine 0.09)
-  (cos * 100).round + edge_bonus
+  lemmilarity(lemma(word1), lemma(word2))
 end
 
 def print_similarity(word1, word2)

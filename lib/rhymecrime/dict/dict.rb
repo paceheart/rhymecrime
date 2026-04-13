@@ -172,8 +172,9 @@ def rebuild_rhymecrime_dictionaries()
   if skip_conceptnet_numberbatch_dict_exports?
     puts "Skipping ConceptNet edge map and Numberbatch vectors (RHYMECRIME_DICT_SKIP_CONCEPTNET_NUMBERBATCH is set)"
   else
-    save_conceptnet_edge_map!(word_dict.keys)
-    save_numberbatch_vectors!(word_dict.keys)
+    rel_bases = relatedness_export_base_headwords(word_dict.keys, lemma_map)
+    save_conceptnet_edge_map!(word_dict.keys, lemma_map)
+    save_numberbatch_vectors!(rel_bases)
   end
 
   common_n = 0

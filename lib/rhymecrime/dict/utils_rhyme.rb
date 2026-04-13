@@ -15,10 +15,11 @@ PART_OF_SPEECH_FILENAME = "part_of_speech.json"
 # Multi-spelling hyphen folds (in-laws/inlaws, …); built in dict.rb, loaded at runtime.
 HYPHEN_VARIANT_MAP_FILENAME = "hyphen_variant_map.json"
 # ConceptNet-derived edge weights for topical relatedness; built in dict.rb, loaded at runtime.
+# Keys are underscore-normalized dictionary *base* lemmas (inflected headwords are folded at export).
 CONCEPTNET_EDGES_FILENAME = "conceptnet_edges.json"
 # English lemmas on kept ConceptNet relations; built by bin/preprocess-conceptnet-lemma-cache → generated/.
 CONCEPTNET_LEMMA_CACHE_SUFFIX = ".en-kept-lemmas.txt.gz"
-# Numberbatch word vectors pre-filtered to word_dict keys; built in dict.rb, loaded at runtime.
+# Numberbatch word vectors pre-filtered to dictionary *base* headwords only; built in dict.rb.
 NUMBERBATCH_VECTORS_FILENAME = "numberbatch_vectors.msgpack"
 # USF cue→target association strengths (FSG); place under generated/ for runtime (e.g. built from corpora/usf/).
 USF_ASSOCIATIONS_FILENAME = "usf_associations.json"
@@ -439,6 +440,24 @@ def conceptnet_dict_includes_lemma?(dict_set, cn_lemma)
   dict_set.include?(cn_lemma) || dict_set.include?(cn_lemma.tr("_", "-"))
 end
 
+# Headwords that are their own relatedness-export key: excludes inflected forms (keys of +lemma_map+).
+def relatedness_export_base_headwords(all_headwords, lemma_map)
+  all_headwords.reject { |w| lemma_map.key?(w) }
+end
+
+# Map a ConceptNet /c/en/ lemma to the spelling we store in relatedness artifacts when it matches
+# our lexicon (otherwise returns +cn_lemma+ unchanged). Uses build-time +lemma_map+ like runtime +lemma+.
+def relatedness_canonical_spelling_for_conceptnet_lemma(cn_lemma, dict_set, lemma_map)
+  if dict_set.include?(cn_lemma)
+    return lemma_map[cn_lemma] || cn_lemma
+  end
+  hy = cn_lemma.tr("_", "-")
+  if dict_set.include?(hy)
+    return lemma_map[hy] || hy
+  end
+  cn_lemma
+end
+
 def conceptnet_assertions_gz_path
   env = ENV["CONCEPTNET_ASSERTIONS_GZ"]
   return env if env && !env.empty? && File.file?(env)
@@ -625,14 +644,14 @@ def conceptnet_headwords_intersecting(dict_set)
   end
 end
 
-def save_conceptnet_edge_map!(word_keys)
+def save_conceptnet_edge_map!(full_word_dict_keys, lemma_map)
   require 'zlib'
   gz_path = conceptnet_assertions_gz_path
   unless gz_path
     puts "Skipping ConceptNet edge map: no conceptnet-assertions*.csv.gz under #{File.join(REPO_ROOT, 'corpora')} or repo root (set CONCEPTNET_ASSERTIONS_GZ=/path/to/file.gz)"
     return
   end
-  dict_set = word_keys.to_set
+  dict_set = full_word_dict_keys.to_set
   edges = {}
   lines = 0
   keep = CONCEPTNET_KEEP_RELATION_INDEX
@@ -654,7 +673,12 @@ def save_conceptnet_edge_map!(word_keys)
       rescue
         1.0
       end
-      key = [w1, w2].sort.join("|")
+      c1 = relatedness_canonical_spelling_for_conceptnet_lemma(w1, dict_set, lemma_map)
+      c2 = relatedness_canonical_spelling_for_conceptnet_lemma(w2, dict_set, lemma_map)
+      u1 = hyphens_to_underscores(c1)
+      u2 = hyphens_to_underscores(c2)
+      next if u1 == u2
+      key = [u1, u2].sort.join("|")
       edges[key] = weight if weight > (edges[key] || 0)
     end
   end
