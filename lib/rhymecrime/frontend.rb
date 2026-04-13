@@ -3,7 +3,7 @@
 #
 
 # 'cgi' or 'text'
-OUTPUT_FORMAT = 'cgi'
+OUTPUT_FORMAT = "cgi"
 DEBUG_MODE = false
 
 #
@@ -13,57 +13,67 @@ DEBUG_MODE = false
 require_relative "crime"
 
 def cgi_puts(string)
-  if(OUTPUT_FORMAT == 'cgi')
+  if $html_output_buffer
+    $html_output_buffer << string.to_s << "\n"
+  elsif OUTPUT_FORMAT == "cgi"
     puts string
   end
 end
 
 def parse_cgi_input
-  cgi = CGI.new;
-  word1 = cgi['word1'].downcase;
-  word2 = cgi['word2'].downcase;
+  cgi = CGI.new
+  word1 = cgi["word1"].downcase
+  word2 = cgi["word2"].downcase
 
-  if(word1 == "" and word2 != "")
+  if word1 == "" && word2 != ""
     word1, word2 = word2, word1
   end
-  return word1, word2
+  [word1, word2]
 end
 
-def print_html_header(word1, word2, title="RhymeCrime", handler="rhyme.rb")
+def parse_query_words(word1, word2)
+  w1 = word1.to_s.downcase.strip
+  w2 = word2.to_s.downcase.strip
+  if w1 == "" && w2 != ""
+    w1, w2 = w2, w1
+  end
+  [w1, w2]
+end
+
+def print_html_header(word1, word2, title = "RhymeCrime", handler = "/")
   head = IO.read(File.join(REPO_ROOT, "assets", "header.html"), encoding: "UTF-8")
 
-  # tweak the title of the webpage to include the submitted word(s)
   clarifier = ""
-  if(word1 != "")
+  if word1 != ""
     clarifier = ": #{word1}"
-    if(word2 != "")
+    if word2 != ""
       clarifier += " / #{word2}"
     end
   end
-  head = head.gsub("<title>RhymeCrime</title>","<title>RhymeCrime#{clarifier}</title>")
+  head = head.gsub("<title>RhymeCrime</title>", "<title>#{title}#{clarifier}</title>")
   head = head.gsub("RhymeCrime", title)
-  head = head.gsub("rhyme.rb", handler)
+  head = head.gsub(%(action="/"), %(action="#{handler}"))
 
   cgi_puts head
   debug "DEBUG MODE"
 end
 
 def compute_and_print_html_middle(word1, word2)
-  goals = [ ]
-  widths = [ ]
+  goals = []
+  widths = []
 
-  if(word1 == "")
-    # vacuous: no goals means nothing will happen
-  elsif(word2 == "")
-    if(DEBUG_MODE)
-      goals = [ "rhymes", "related", "set_related" ]
+  if word1 == ""
+    # vacuous
+  elsif word2 == ""
+    if DEBUG_MODE
+      goals = ["rhymes", "related", "set_related"]
       widths = [25, 25, 44]
     else
-      goals = [ "rhymes", "set_related" ]
+      goals = ["rhymes", "set_related"]
       widths = [22, 75]
     end
   else
-    goals = [ "related_rhymes", "pair_related" ]
+    goals = ["related_rhymes", "pair_related"]
     widths = [45, 52]
   end
 
@@ -79,23 +89,22 @@ def print_html_column(goal, output, dregs, input_word1, type, header, width, is_
   cgi_puts "<td style='vertical-align: top; width:#{width}%;' label='#{goal}'>"
   print_html_column_data(output, dregs, input_word1, type, header)
   cgi_puts "</td>"
-  unless(is_last_column)
-    # 3% spacing between columns
-    cgi_puts "<td style='width:1%;'> </td>" # @todo fix width computation
+  unless is_last_column
+    cgi_puts "<td style='width:1%;'> </td>"
     cgi_puts "<td style='border-left: 2px solid; width:2%;'> </td>"
-  end  
+  end
 end
 
 def print_html_column_data(output, dregs, input_word1, type, header)
-  case type # :words, :tuples, :synsets, :bad_input, :error
+  case type
   when :words, :tuples, :synsets
     print_interesting_html_column_data(output, dregs, input_word1, header, type)
   when :bad_input
-    puts header
+    emit_line header
   when :error
-      puts "Unexpected error."
+    emit_line "Unexpected error."
   else
-      puts "Very unexpected error."
+    emit_line "Very unexpected error."
   end
 end
 
@@ -103,14 +112,14 @@ def print_interesting_html_column_data(output, dregs, input_word1, header, outpu
   cgi_puts header
   if output.empty?
     if dregs.empty?
-      puts "No matching results."
+      emit_line "No matching results."
     else
-      puts "No good results."
+      emit_line "No good results."
     end
   else
     print_output(output, input_word1, output_type)
   end
-  if(!dregs.empty?)
+  unless dregs.empty?
     cgi_puts "<br/><hr><p>For the desperate:</p>"
     print_output(dregs, input_word1, output_type)
   end
@@ -131,14 +140,26 @@ def print_html_footer
   cgi_puts IO.read(File.join(REPO_ROOT, "assets", "footer.html"), encoding: "UTF-8")
 end
 
-# RhymeCrime
-def compute_and_print_html
-  # CGI Input: word1, word2 (optional)
-  # Output: A bunch of stuff
-  word1, word2 = parse_cgi_input
-  print_html_header(word1, word2)
-  compute_and_print_html_middle(word1, word2)
+# Full HTML page (Sinatra / Lambda). Uses +$html_output_buffer+ so +cgi_print+ / +emit_*+ accumulate.
+def build_rhymecrime_page(word1, word2)
+  Rhymecrime::DynamoRuntime.clear_session_cache! if defined?(Rhymecrime::DynamoRuntime) && Rhymecrime::DataSource.dynamodb?
+  RelatedWords.instance_variable_set(:@related_word_cache, {}) if defined?(RelatedWords)
+  buf = +""
+  $html_output_buffer = buf
+  w1, w2 = parse_query_words(word1, word2)
+  print_html_header(w1, w2)
+  compute_and_print_html_middle(w1, w2)
   print_html_footer
+  buf
+ensure
+  $html_output_buffer = nil
+end
+
+# CGI: reads params from environment, prints to stdout.
+def compute_and_print_html
+  Rhymecrime::DynamoRuntime.clear_session_cache! if defined?(Rhymecrime::DynamoRuntime) && Rhymecrime::DataSource.dynamodb?
+  word1, word2 = parse_cgi_input
+  puts build_rhymecrime_page(word1, word2)
 end
 
 #
@@ -146,36 +167,37 @@ end
 #
 
 def similar_column_count
-  12 # @todo compute dynamically based on screen width
+  12
 end
 
 def print_similar_word(word, focal_word)
-  word = word.gsub(/\(.*\)/, '') # remove stuff in parentheses
+  word = word.gsub(/\(.*\)/, "")
   cgi_print "<td style='color: #{word_similarity_color(word, focal_word)}'>"
-  word = word.gsub('_', ' ')
-  print word
- cgi_print "</td>"
+  word = word.gsub("_", " ")
+  emit_text word
+  cgi_print "</td>"
 end
 
 def print_similar_words(similar_words, focal_word)
   success = !similar_words.empty?
-  if(success)
+  if success
     cgi_print "<table><tr>"
     i = 0
-    for word in similar_words.sort_by!{|w| -similarity(focal_word, w)}
-      if i > 0 && i % similar_column_count == 0
+    similar_words.sort_by! { |w| -similarity(focal_word, w) }
+    similar_words.each do |word|
+      if i > 0 && (i % similar_column_count).zero?
         cgi_print "</tr><tr>"
       end
       i += 1
       print_similar_word(word, focal_word)
-      if($display_word_frequencies)
-        print " (#{frequency(word)})"
+      if $display_word_frequencies
+        emit_text " (#{frequency(word)})"
       end
-      puts
-      end
+      emit_line
+    end
     cgi_print "</tr></table>"
   end
-  return success
+  success
 end
 
 def compute_and_print_html_similar_pair(word1, word2)
@@ -196,12 +218,21 @@ def compute_and_print_html_similar_middle(word1, word2)
   end
 end
 
-# Similar
-def compute_and_print_similar_html
-  # CGI Input: word1, word2 (optional)
-  # Output: A bunch of stuff
-  word1, word2 = parse_cgi_input
-  print_html_header(word1, word2, title="Thematic Similarity", handler="similar.rb")
-  compute_and_print_html_similar_middle(word1, word2)
+def build_similar_page(word1, word2)
+  Rhymecrime::DynamoRuntime.clear_session_cache! if defined?(Rhymecrime::DynamoRuntime) && Rhymecrime::DataSource.dynamodb?
+  RelatedWords.instance_variable_set(:@related_word_cache, {}) if defined?(RelatedWords)
+  buf = +""
+  $html_output_buffer = buf
+  w1, w2 = parse_query_words(word1, word2)
+  print_html_header(w1, w2, "Thematic Similarity", "/similar")
+  compute_and_print_html_similar_middle(w1, w2)
   print_html_footer
+  buf
+ensure
+  $html_output_buffer = nil
+end
+
+def compute_and_print_similar_html
+  word1, word2 = parse_cgi_input
+  puts build_similar_page(word1, word2)
 end

@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+echo "==> dict-build (skip with SKIP_DICT_BUILD=1)"
+if [[ "${SKIP_DICT_BUILD:-0}" != "1" ]]; then
+  ./bin/dict-build
+fi
+
+if [[ "${SKIP_PRECOMPUTE:-0}" == "1" ]]; then
+  echo "==> skip precompute (SKIP_PRECOMPUTE=1)"
+else
+  echo "==> precompute relatedness → generated/related_precompute.jsonl (long run; smoke: ruby bin/precompute-relatedness --max-cues=5 --dry-run)"
+  bundle exec ruby bin/precompute-relatedness
+fi
+
+echo "==> upload word + rime + related to DynamoDB"
+bundle exec ruby bin/upload-to-dynamodb
+
+echo "Done."

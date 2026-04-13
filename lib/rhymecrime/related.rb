@@ -534,6 +534,14 @@ class RelatedWords
       key = [word, include_rhymeless, common_only]
       return @related_word_cache[key] if @related_word_cache.key?(key)
 
+      if defined?(Rhymecrime::DataSource) && Rhymecrime::DataSource.dynamodb?
+        lemma_key = lemma(word)
+        words = Rhymecrime::DynamoRuntime.find_all_related_precomputed(lemma_key, include_rhymeless, common_only)
+        debug "Finding words related to #{word} (Dynamo, lemma=#{lemma_key})... #{words.length}\n"
+        @related_word_cache[key] = words
+        return words
+      end
+
       words = []
       debug "Finding words related to #{word}... "
       words_we_care_about(include_rhymeless, common_only).each do |w|
@@ -587,4 +595,12 @@ end
 
 def word_similarity_color(word1, word2)
   similarity_color(similarity(word1, word2))
+end
+
+def percent_similarity(word1, word2)
+  "#{similarity(word1, word2)}%"
+end
+
+def print_html_percent_similarity(word, focal_word)
+  cgi_print " <span style='color: #{word_similarity_color(word, focal_word)}'>(#{percent_similarity(word, focal_word)})</span>"
 end

@@ -6,3 +6,4 @@ corpora/*
 generated/*
 experiments/*
 tmp/*
+.aws-sam/

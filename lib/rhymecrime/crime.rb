@@ -1,8 +1,6 @@
 #!/usr/bin/env ruby
 # coding: utf-8
 
-Gem.paths = { 'GEM_PATH' => '/usr/local/rvm/gems/ruby-2.6.5/' }
-
 #
 # control parameters
 # Don't tweak these here, tweak them in frontend.rb
@@ -12,30 +10,66 @@ $output_format = 'cgi'
 $display_word_frequencies = false
 $display_word_similarities = false
 
+# When set to a String (e.g. by +build_rhymecrime_page+), HTML fragments append here instead of stdout.
+$html_output_buffer = nil
+
 #
 # Public interface: rhymecrime(word1, word2, goal, output_format='text', debug_mode=false)
 # see bin/rhyme.rb for documentation
-# 
+#
 
-require 'rwordnet'
-require 'net/http'
-require 'uri'
-require 'json'
-require 'cgi'
-require_relative 'dict/utils_rhyme'
-require_relative 'dict/phoneme.rb'
-require_relative 'dict/inflect'
-require_relative 'dict/pronunciation.rb'
-require_relative "related"
+require "rwordnet"
+require "net/http"
+require "uri"
+require "json"
+require "cgi"
+require_relative "data_source"
+require_relative "dict/utils_rhyme"
+require_relative "dict/phoneme.rb"
+require_relative "dict/inflect"
+require_relative "dict/pronunciation.rb"
 require "memery"
 
 #
-# utilities
+# utilities (defined before +related.rb+ so +cgi_print+ exists for helpers there)
 #
 
 def cgi_print(string)
-  if($output_format == 'cgi')
+  if $html_output_buffer
+    $html_output_buffer << string.to_s
+  elsif $output_format == "cgi"
     print string
+  end
+end
+
+def emit_text(string)
+  if $html_output_buffer
+    $html_output_buffer << string.to_s
+  else
+    print string
+  end
+end
+
+def emit_line(string = "")
+  if $html_output_buffer
+    $html_output_buffer << string.to_s << "\n"
+  else
+    puts string
+  end
+end
+
+require_relative "related"
+require_relative "dynamo_store" if Rhymecrime::DataSource.dynamodb?
+
+#
+# Lexicon: file-backed (+word_dict+) or DynamoDB (+Rhymecrime::DynamoRuntime+).
+#
+
+def lexicon_word_entry(word)
+  if Rhymecrime::DataSource.dynamodb?
+    Rhymecrime::DynamoRuntime.fetch_word(word)
+  else
+    word_dict[word]
   end
 end
 
@@ -85,6 +119,10 @@ def word_dict()
   # word => [frequency, pronunciations]
   # pronunciations = [pronunciation1, pronunciation2 ...]
   # pronunciation = [syllable1, syllable1, ...]
+  if Rhymecrime::DataSource.dynamodb?
+    $word_dict ||= {}
+    return $word_dict
+  end
   if $word_dict.nil?
     $word_dict = load_word_dict
   end
@@ -99,6 +137,10 @@ end
 $rdict = nil # rime (underscore ARPABET key) -> words hash
 def rdict
   # rime => [rhyming_word1 rhyming_word2 ...]
+  if Rhymecrime::DataSource.dynamodb?
+    $rdict ||= {}
+    return $rdict
+  end
   if $rdict.nil?
     $rdict = load_rime_dict_as_hash
   end
@@ -110,17 +152,17 @@ def load_rime_dict_as_hash()
 end
 
 def pronunciations(word)
-  word_info = word_dict[word]
-  if(word_info)
+  word_info = lexicon_word_entry(word)
+  if word_info
     return word_info[1]
   else
-    return [ ]
+    return []
   end
 end
 
 def frequency(word)
-  word_info = word_dict[word]
-  if(word_info)
+  word_info = lexicon_word_entry(word)
+  if word_info
     return word_info[0]
   else
     return 0
@@ -148,7 +190,11 @@ def part_of_speech_tags(word)
 end
 
 def rdict_lookup(rime)
-  rdict[rime] || [ ]
+  if Rhymecrime::DataSource.dynamodb?
+    Rhymecrime::DynamoRuntime.fetch_rime(rime)
+  else
+    rdict[rime] || []
+  end
 end
 
 def find_preferred_rhyming_words(word)
@@ -439,6 +485,10 @@ def really_find_rhyming_tuples(input_rel1, common_only = false)
   #   If R is in RELATEDS1, compute R's rime and put RHYME1 in the bucket labeled by that rime.
   # Return all buckets with two or more words in them, after +prune_suffix_redundant_rhyming_tuples+
   # drops tuples that only parallel an earlier tuple's +Inflect+ suffixes (e.g. all plural or all past).
+  if Rhymecrime::DataSource.dynamodb?
+    return really_find_rhyming_tuples_dynamo(input_rel1, common_only)
+  end
+
   related_rhymes = Hash.new {|h,k| h[k] = [] } # hash of arrays
   unless(explicitly_forbidden?(input_rel1))
     related_list = find_related_words(input_rel1, true, false, nil, common_only: common_only)
@@ -470,6 +520,43 @@ def really_find_rhyming_tuples(input_rel1, common_only = false)
   prune_suffix_redundant_rhyming_tuples(tuples)
 end
 
+def really_find_rhyming_tuples_dynamo(input_rel1, common_only = false)
+  related_rhymes = Hash.new { |h, k| h[k] = [] }
+  return [] if explicitly_forbidden?(input_rel1)
+
+  related_list = find_related_words(input_rel1, true, false, nil, common_only: common_only)
+  relateds1 = related_list.to_set
+  Rhymecrime::DynamoRuntime.batch_get_words(related_list.to_a)
+  rimes = related_list.flat_map { |rel| pronunciations(rel).map(&:rime) }.uniq
+  Rhymecrime::DynamoRuntime.batch_get_rimes(rimes)
+  rhyme_words = rimes.flat_map { |r| Rhymecrime::DynamoRuntime.fetch_rime(r) }.uniq
+  Rhymecrime::DynamoRuntime.batch_get_words(rhyme_words)
+
+  related_list.each do |rel1|
+    pronunciations(rel1).each do |rel1pron|
+      rime = rel1pron.rime
+      debug "Rhymes for #{rel1} [#{rime}] #{debug_info(rel1)}:"
+      find_rhyming_words_for_pronunciation(rel1pron, true).each do |rhyme1|
+        if relateds1.include?(rhyme1)
+          rhyme1 = preferred_form(rhyme1)
+          related_rhymes[rime].push(rhyme1)
+          debug " #{rhyme1} #{debug_info(rhyme1)}"
+        end
+      end
+    end
+  end
+
+  tuples = []
+  related_rhymes.each do |rime, relrhymes|
+    relrhymes.sort!.uniq!
+    if relrhymes.length > 1 && !all_identical_rhymes?(relrhymes)
+      tuples.push(relrhymes.sort!)
+    end
+  end
+  tuples.uniq!
+  prune_suffix_redundant_rhyming_tuples(tuples)
+end
+
 def find_rhyming_pairs(input_rel1, input_rel2, common_only = false)
   # Pairs of rhyming words where the first word is related to INPUT_REL1 and the second word is related to INPUT_REL2
   # Each element of the returned array is a pair of rhyming words [W1 W2] where W1 is related to INPUT_REL1 and W2 is related to INPUT_REL2
@@ -479,6 +566,10 @@ def find_rhyming_pairs(input_rel1, input_rel2, common_only = false)
   # For each word REL1 in RELATEDS1,
   #   Get all non-identical rhymes RHYME of REL1.
   #   If RHYME rhymes with REL1 and is related to INPUT_REL2, we win! "REL1 / RHYME" is a pair.
+  if Rhymecrime::DataSource.dynamodb?
+    return find_rhyming_pairs_dynamo(input_rel1, input_rel2, common_only)
+  end
+
   related_rhymes = Hash.new {|h,k| h[k] = [] } # hash of arrays
   unless(explicitly_forbidden?(input_rel1) || explicitly_forbidden?(input_rel2))
     relateds1 = find_related_words(input_rel1, true, false, nil, common_only: common_only)
@@ -506,6 +597,40 @@ def find_rhyming_pairs(input_rel1, input_rel2, common_only = false)
   return pairs
 end
 
+def find_rhyming_pairs_dynamo(input_rel1, input_rel2, common_only = false)
+  related_rhymes = Hash.new { |h, k| h[k] = [] }
+  return [] if explicitly_forbidden?(input_rel1) || explicitly_forbidden?(input_rel2)
+
+  relateds1 = find_related_words(input_rel1, true, false, nil, common_only: common_only)
+  relateds2 = find_related_words(input_rel2, true, false, nil, common_only: common_only).to_set
+  Rhymecrime::DynamoRuntime.batch_get_words((relateds1.to_a + relateds2.to_a).uniq)
+  rimes = relateds1.flat_map { |rel| pronunciations(rel).map(&:rime) }.uniq
+  Rhymecrime::DynamoRuntime.batch_get_rimes(rimes)
+  rhyme_words = rimes.flat_map { |r| Rhymecrime::DynamoRuntime.fetch_rime(r) }.uniq
+  Rhymecrime::DynamoRuntime.batch_get_words(rhyme_words)
+
+  relateds1.each do |rel1|
+    debug "rhymes for #{rel1} (#{debug_info(rel1)}):<br>"
+    find_rhyming_words(rel1, false).each do |rhyme|
+      if relateds2.include?(rhyme)
+        related_rhymes[rel1].push(rhyme)
+        debug " " + rhyme + " " + debug_info(rhyme)
+      end
+    end
+    debug "<br><br>"
+  end
+
+  pairs = []
+  related_rhymes.each do |relrhyme1, relrhyme2_list|
+    next if relrhyme2_list.empty?
+
+    relrhyme2_list.each do |relrhyme2|
+      pairs.push([relrhyme1, relrhyme2])
+    end
+  end
+  pairs
+end
+
 #
 # Display
 #
@@ -521,9 +646,9 @@ def print_synsets(synsets, input_word)
       end
       isFirst = false;
       cgi_print "<i>"
-      puts short_gloss(synset)
+      emit_line(short_gloss(synset))
       cgi_print "</i>"
-      puts
+      emit_line
       print_words(synonyms)
     end
   end
@@ -550,12 +675,12 @@ def print_tuple(tuple, focal_word=false)
     print_half_of_tuple(good_tuple, focal_word)
   else
     print_half_of_tuple(good_tuple, focal_word)
-    print " / "
+    emit_text " / "
     print_half_of_tuple(bad_tuple, focal_word)
   end
   cgi_print "</p></div>"
-  puts
-  STDOUT.flush
+  emit_line
+  STDOUT.flush unless $html_output_buffer
 end
   
 def print_half_of_tuple(tuple, focal_word=false)
@@ -563,7 +688,7 @@ def print_half_of_tuple(tuple, focal_word=false)
   i = 0
   tuple.each { |elem|
     if(i > 0)
-      print " / "
+      emit_text " / "
     end
     print_word(elem, focal_word)
     i += 1
@@ -589,11 +714,11 @@ def print_words(words, focal_word=false)
       cgi_print "<p class='output_p'>"
       print_word(word, focal_word)
       if($display_word_frequencies)
-        print " (#{frequency(word)})"
+        emit_text " (#{frequency(word)})"
       end
       cgi_print "</p>"
       cgi_print "</div>"
-      puts
+      emit_line
     }
   end
   return success
@@ -680,7 +805,7 @@ def print_word(word, focal_word=false)
   got_rhymes = !pronunciations(word).empty?
   if(got_rhymes)
     # @todo urlencode
-    cgi_print "<a href='rhyme.rb?word1=#{word}'>"
+    cgi_print "<a href='/?word1=#{word}'>"
   end
   ubiq = 255
   if(rare?(word))
@@ -688,7 +813,7 @@ def print_word(word, focal_word=false)
   end
   # cgi_print "<span style='color: rgb(#{ubiq}, #{ubiq}, #{ubiq});'>"
   word = word.gsub('_', ' ')
-  print word
+  emit_text word
   # cgi_print "</span>"
   if(got_rhymes)
     cgi_print "</a>"

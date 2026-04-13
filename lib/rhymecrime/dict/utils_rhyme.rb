@@ -11,6 +11,8 @@ require_relative "phoneme.rb"
 
 RIME_DICT_FILENAME = "rime_dict.txt"
 WORD_DICT_FILENAME = "word_dict.txt"
+# Thematic relatedness precompute for DynamoDB (JSONL: one {"pk","words"} per line); built by bin/precompute-relatedness.
+RELATED_PRECOMPUTE_JSONL_FILENAME = "related_precompute.jsonl"
 PART_OF_SPEECH_FILENAME = "part_of_speech.json"
 # Multi-spelling hyphen folds (in-laws/inlaws, …); built in dict.rb, loaded at runtime.
 HYPHEN_VARIANT_MAP_FILENAME = "hyphen_variant_map.json"
@@ -131,6 +133,10 @@ US_UK_IZE_SUFFIXES = [
 US_UK_IZE_ZONLY_EXCEPTIONS = %w[size seize capsize prize maize].freeze
 
 def word_dict_includes_headword?(w)
+  if defined?(Rhymecrime::DataSource) && Rhymecrime::DataSource.dynamodb?
+    return Rhymecrime::DynamoRuntime.headword?(w)
+  end
+
   defined?($word_dict) && $word_dict.is_a?(Hash) && !$word_dict.empty? && $word_dict.key?(w)
 end
 
@@ -1323,8 +1329,13 @@ def load_word_dict()
   word_dict
 end
 
+# Overridden in +crime.rb+ for DynamoDB mode (+lexicon_word_entry+).
+def lexicon_word_entry(word)
+  word_dict[word]
+end
+
 def lemma(word)
-  entry = word_dict[word]
+  entry = lexicon_word_entry(word)
   return word unless entry
   entry[2] || word
 end

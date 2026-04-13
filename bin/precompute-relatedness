@@ -1,0 +1,87 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# Pre-compute thematically related headword lists per distinct lemma of common (freq>4) words.
+# Computation uses only local generated/ files (no RHYMECRIME_DATA_SOURCE=dynamodb).
+# Always writes JSONL to generated/ (default: related_precompute.jsonl); upload with bin/upload-to-dynamodb.
+#
+#   ruby bin/precompute-relatedness
+#
+# Options:
+#   --output=PATH          Override output path (default: generated/related_precompute.jsonl)
+#   --dry-run              Compute only; print progress, do not write a file
+#   --max-cues=N           Only process first N lemmas (smoke test)
+#   --start-after=WORD     Skip lemmas until after this string (lexicographic)
+
+$LOAD_PATH.unshift File.expand_path("../lib", __dir__)
+
+ENV.delete("RHYMECRIME_DATA_SOURCE")
+
+require "json"
+require "optparse"
+require_relative "../lib/rhymecrime/dict/utils_rhyme"
+require_relative "../lib/rhymecrime/frontend"
+
+output_path = generated_dict_path(RELATED_PRECOMPUTE_JSONL_FILENAME)
+dry_run = false
+max_cues = nil
+start_after = nil
+
+OptionParser.new do |o|
+  o.on("--output=PATH", "JSONL output path") { |p| output_path = File.expand_path(p) }
+  o.on("--dry-run", "Compute only; do not write") { dry_run = true }
+  o.on("--max-cues=N", Integer) { |n| max_cues = n }
+  o.on("--start-after=WORD") { |w| start_after = w }
+end.parse!
+
+word_path = generated_dict_path(WORD_DICT_FILENAME)
+unless File.exist?(word_path)
+  warn "Missing #{word_path}"
+  exit 1
+end
+
+# lemma -> one representative common headword (prefer self-lemma)
+rep = {}
+File.foreach(word_path, encoding: "UTF-8") do |line|
+  next unless useful_line?(line)
+
+  parts = line.chomp.split(",", 4)
+  word = parts[0].desanitize
+  freq = parts[1].to_i
+  next if freq <= RARE_FREQ_MAX
+
+  lemma_raw = parts[3]
+  lem = (lemma_raw && !lemma_raw.strip.empty?) ? lemma_raw.strip.desanitize : word
+
+  rep[lem] ||= word
+  rep[lem] = lem if word == lem
+end
+
+lemmas = rep.keys.sort
+lemmas.select! { |l| l > start_after } if start_after
+lemmas = lemmas.first(max_cues) if max_cues
+
+puts "Precomputing #{lemmas.size} related# rows → #{dry_run ? '(dry-run, no file)' : output_path}"
+
+RelatedWords.instance_variable_set(:@related_word_cache, {})
+
+jsonl_io = nil
+jsonl_io = File.open(output_path, "w", encoding: "UTF-8") unless dry_run
+
+begin
+  lemmas.each_with_index do |lem, i|
+    cue = rep[lem]
+    words = RelatedWords.find_all_thematically_related_words(cue, false, false)
+    if (i % 50).zero?
+      puts "  [#{i}/#{lemmas.size}] #{lem} (cue=#{cue}) -> #{words.size} related"
+    end
+    next if dry_run
+
+    pk = "related##{lem}"
+    jsonl_io.puts(JSON.generate("pk" => pk, "words" => words))
+  end
+ensure
+  jsonl_io&.close
+end
+
+puts "Finished."

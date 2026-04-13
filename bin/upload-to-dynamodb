@@ -1,0 +1,116 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# Batch-write into DynamoDB (single-table design, pk partition key):
+#   - word_dict.txt  → word#…
+#   - rime_dict.txt  → rime#…
+#   - related_precompute.jsonl (from bin/precompute-relatedness) → related#…
+#
+#   RHYMECRIME_TABLE_NAME=rhymecrime AWS_REGION=us-east-1 ruby bin/upload-to-dynamodb
+#
+#   --skip-related     Do not upload related rows (omit if JSONL is missing)
+#   --related=PATH     Override path to JSONL (default: generated/related_precompute.jsonl)
+
+$LOAD_PATH.unshift File.expand_path("../lib", __dir__)
+
+require "json"
+require "optparse"
+require "aws-sdk-dynamodb"
+require_relative "../lib/rhymecrime/data_source"
+require_relative "../lib/rhymecrime/dict/utils_rhyme"
+
+skip_related = false
+related_path = generated_dict_path(RELATED_PRECOMPUTE_JSONL_FILENAME)
+
+OptionParser.new do |o|
+  o.on("--skip-related", "Skip uploading related# items from JSONL") { skip_related = true }
+  o.on("--related=PATH", "Path to related precompute JSONL") { |p| related_path = File.expand_path(p) }
+end.parse!
+
+table = Rhymecrime::DataSource.table_name
+region = ENV.fetch("AWS_REGION", "us-east-1")
+client = Aws::DynamoDB::Client.new(region: region)
+
+def put_batch(client, table, items)
+  items.each_slice(25) do |slice|
+    client.batch_write_item(
+      request_items: {
+        table => slice.map { |it| { put_request: { item: it } } }
+      }
+    )
+  end
+end
+
+word_path = generated_dict_path(WORD_DICT_FILENAME)
+rime_path = generated_dict_path(RIME_DICT_FILENAME)
+unless File.exist?(word_path) && File.exist?(rime_path)
+  warn "Missing #{word_path} or #{rime_path} — run ./bin/dict-build first."
+  exit 1
+end
+
+puts "Uploading word entries from #{word_path}..."
+word_items = []
+File.foreach(word_path, encoding: "UTF-8") do |line|
+  next unless useful_line?(line)
+
+  parts = line.chomp.split(",", 4)
+  word = parts[0].desanitize
+  freq = parts[1].to_i
+  prons = parts[2] || ""
+  lemma = parts[3]&.strip&.desanitize
+  lemma = word if lemma.nil? || lemma.empty?
+  word_items << {
+    "pk" => "word##{word}",
+    "freq" => freq,
+    "prons" => prons,
+    "lemma" => lemma
+  }
+end
+put_batch(client, table, word_items)
+puts "  #{word_items.size} word# items"
+
+puts "Uploading rime entries from #{rime_path}..."
+rime_items = []
+File.foreach(rime_path, encoding: "UTF-8") do |line|
+  next unless useful_line?(line)
+
+  tokens = line.split
+  key = tokens.shift.sanitize
+  words = tokens.map(&:desanitize)
+  rime_items << {
+    "pk" => "rime##{key}",
+    "words" => words
+  }
+end
+put_batch(client, table, rime_items)
+puts "  #{rime_items.size} rime# items"
+
+if skip_related
+  puts "Skipping related# items (--skip-related)."
+else
+  unless File.exist?(related_path)
+    warn "Missing #{related_path} — run bin/precompute-relatedness first, or pass --skip-related."
+    exit 1
+  end
+
+  puts "Uploading related entries from #{related_path}..."
+  related_items = []
+  File.foreach(related_path, encoding: "UTF-8") do |line|
+    line = line.strip
+    next if line.empty?
+
+    row = JSON.parse(line)
+    pk = row["pk"]
+    words = row["words"]
+    raise "line missing pk/words: #{line[0, 120]}" unless pk.is_a?(String) && words.is_a?(Array)
+
+    related_items << {
+      "pk" => pk,
+      "words" => words
+    }
+  end
+  put_batch(client, table, related_items)
+  puts "  #{related_items.size} related# items"
+end
+
+puts "Done."

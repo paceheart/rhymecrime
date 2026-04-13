@@ -1,0 +1,61 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: RhymeCrime Lambda + HTTP API + DynamoDB (Plan D)
+
+Globals:
+  Function:
+    Timeout: 29
+    MemorySize: 512
+    Runtime: ruby3.3
+    Architectures:
+      - x86_64
+
+Parameters:
+  TableName:
+    Type: String
+    Default: rhymecrime
+
+Resources:
+  RhymecrimeTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Ref TableName
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: pk
+          AttributeType: S
+      KeySchema:
+        - AttributeName: pk
+          KeyType: HASH
+
+  RhymecrimeFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: .
+      Handler: lambda_handler.handler
+      Environment:
+        Variables:
+          RHYMECRIME_DATA_SOURCE: dynamodb
+          RHYMECRIME_TABLE_NAME: !Ref TableName
+          TABLE_NAME: !Ref TableName
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref RhymecrimeTable
+      Events:
+        ApiRoot:
+          Type: HttpApi
+          Properties:
+            Path: /
+            Method: GET
+        ApiHealth:
+          Type: HttpApi
+          Properties:
+            Path: /health
+            Method: GET
+
+Outputs:
+  HttpApiUrl:
+    Description: HTTP API base URL (see also AWS Console → API Gateway)
+    Value: !GetAtt ServerlessHttpApi.ApiEndpoint
+  TableNameOut:
+    Value: !Ref RhymecrimeTable
