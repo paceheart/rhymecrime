@@ -304,10 +304,15 @@ def compute_frequency(word, subtlex_hash, wordfreq_hash)
   end
 
   # No WordNet lemma: tiny SUBTLEX FREQlow counts are often surname fragments or one-off lines — do not pair
-  # them with a strong Zipf score into a common bin (*anders*). Cap SUBTLEX-derived score the same way.
+  # them with a strong Zipf score into a common bin (*anders*). Always drop Zipf boost here; only clamp
+  # SUBTLEX when Zipf is strong (encyclopedic web) or zero (*yegg*), so dialogue-backed OOV headwords
+  # with mid Zipf (*flyby*, *getter*) can exceed the rare ceiling from SUBTLEX alone. Inflections of WN
+  # lemmas (*successors*) skip the clamp when Zipf is strong so they are not stuck at rare with a WN base.
   if !in_wordnet && sub_raw.positive? && sub_raw < SUBTLEX_OVERRIDE_PROPER_MIN
     wordfreq_boost = 0
-    subtlex_freq = [subtlex_freq, RARE_FREQ_MAX].min
+    if (zipf >= WORDFREQ_COMMON_ZIPF || zipf.zero?) && !wn_oov_subtlex_cap_skip_via_inflection_anchor?(word)
+      subtlex_freq = [subtlex_freq, RARE_FREQ_MAX].min
+    end
   end
 
   freq = [subtlex_freq, wordfreq_boost].max

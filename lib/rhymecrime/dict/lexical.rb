@@ -278,6 +278,33 @@ def wn_noun_base_feeling_plus_attribute_plural_needs_own_corpus?(base)
   uniq_lex.include?("noun.feeling") && uniq_lex.include?("noun.attribute")
 end
 
+# +word+ has no WordNet lemma but is an Inflect surface of a WordNet lemma. Used to skip the OOV
+# low-SUBTLEX +subtlex_freq+ ceiling when Zipf is strong (*successors*) without helping bare fragments
+# that are not morphologically tied to a lexicon head (*anders* has no such base).
+def wn_oov_subtlex_cap_skip_via_inflection_anchor?(word)
+  return false if wn_has_entry?(word)
+
+  Inflect.each_candidate_base_for_inflected(word) do |base|
+    next unless wn_has_entry?(base)
+    next unless Inflect.inflection_of_base?(base, word)
+
+    kind = Inflect.match_suffix_kind(base, word)
+    next if kind.nil?
+
+    if kind == :s
+      next if wn_noun_base_mass_dominant_for_productive_plural?(base)
+      next if wn_noun_base_feeling_plus_attribute_plural_needs_own_corpus?(base)
+    end
+
+    if %i[ed ing er est].include?(kind)
+      next unless wn_base_has_verb?(base) || wn_base_has_adjective?(base)
+    end
+
+    return true
+  end
+  false
+end
+
 # WordNet lemma +pos+ codes → strings stored with Kaikki data (part_of_speech.json).
 WN_POS_TO_LEXICAL_POS = {
   "n" => "noun",
