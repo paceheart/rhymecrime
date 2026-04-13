@@ -4,33 +4,21 @@ require_relative "utils_rhyme"
 require "rwordnet"
 
 # Trace headword(s) through dict-build (frequency, CMU ingest, rime, disconnect, …).
-# Multiple words: comma/space/semicolon-separated in +DICT_TRACE_WORDS+ or +TRACE_WORDS+.
-# Single-word legacy (used if the plural vars are unset):
-#   DICT_TRACE_WORD=kitchening ./bin/dict-build
-#   TRACE_WORD=kitchening ./bin/dict-build
+# Comma/space/semicolon-separated lists in +DICT_TRACE_WORDS+ and/or +TRACE_WORDS+ (merged and uniq’d).
 #
 # Examples:
+#   TRACE_WORDS=kitchening ./bin/dict-build
 #   TRACE_WORDS="kitchening,puffin" ./bin/dict-build
-#   DICT_TRACE_WORDS="foo bar,baz" ./bin/dict-build
+#   DICT_TRACE_WORDS="foo bar;baz" ./bin/dict-build
 _parse_trace_words = ->(str) { str.to_s.split(/[\s,;]+/).map(&:strip).reject(&:empty?) }
 
-_trace_multi = _parse_trace_words[ENV["DICT_TRACE_WORDS"]] + _parse_trace_words[ENV["TRACE_WORDS"]]
-_trace_multi = _trace_multi.uniq
-if _trace_multi.empty?
-  _one = ENV["DICT_TRACE_WORD"].to_s.strip
-  _one = ENV["TRACE_WORD"].to_s.strip if _one.empty?
-  _trace_multi = _one.empty? ? [] : [_one]
-end
-TRACE_WORDS = _trace_multi.freeze
-
-# Backward compat: first traced headword, or nil when none / when multiple (use +TRACE_WORDS+ or +dict_trace_word?+).
-TRACE_WORD = (TRACE_WORDS.size == 1) ? TRACE_WORDS[0] : nil
+TRACE_WORDS = (_parse_trace_words[ENV["DICT_TRACE_WORDS"]] + _parse_trace_words[ENV["TRACE_WORDS"]]).uniq.freeze
 
 def dict_trace_word?(word)
   !TRACE_WORDS.empty? && TRACE_WORDS.include?(word)
 end
 
-# Phase 8 / 10 / 11: +base+ → +infl+ inflection row touches any traced headword.
+# Phase 8 / 10 / 11: +base+ → +infl+ inflection row touches any word in +TRACE_WORDS+.
 def dict_trace_morph?(base, infl)
   return false if TRACE_WORDS.empty?
 
