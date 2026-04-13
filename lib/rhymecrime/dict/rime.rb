@@ -52,19 +52,22 @@ def word_dict_frequency_for_rime_bucket(word_dict, word)
   entry[0].to_i
 end
 
-# Drop rime lines where every word has frequency <= RARE_FREQ_MAX (see rare? in crime.rb).
-def delete_rare_only_rime_buckets!(rdict, word_dict)
+# Drop rime buckets with at most one common headword (frequency > +RARE_FREQ_MAX+): all-rare buckets,
+# one common among rares, or a lone common — so every remaining bucket has ≥2 common rhyme partners.
+def delete_rare_only_rime_buckets!(rdict, word_dict, log: true)
   removed = 0
+  before_n = rdict.length
   rdict.delete_if do |_rime, words|
     next false if words.nil? || words.empty?
-    all_rare = words.all? do |w|
-      word_dict_frequency_for_rime_bucket(word_dict, w) <= RARE_FREQ_MAX
-    end
-    removed += 1 if all_rare
-    all_rare
+    common_n = words.count { |w| word_dict_frequency_for_rime_bucket(word_dict, w) > RARE_FREQ_MAX }
+    drop = common_n <= 1
+    removed += 1 if drop
+    drop
   end
-  puts "#{rdict.length} out of #{rdict.length + removed} rime buckets remain after removing buckets containing only rare words" if removed > 0
-  rdict
+  if log && removed > 0
+    puts "#{rdict.length} out of #{before_n} rime buckets remain after removing buckets with at most one common headword"
+  end
+  removed
 end
 def filter_cmudict(cmudict, rdict)
   # filter out words that differ only in apostrophes, and pronunciations with no rhymes

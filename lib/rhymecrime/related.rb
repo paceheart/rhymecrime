@@ -145,6 +145,13 @@ def numberbatch_cosine(word1, word2)
   dot
 end
 
+# True if +lemma(word)+ has a row in the Numberbatch export (+save_numberbatch_vectors!+ keys, underscore-normalized).
+# Used to skip the O(n) relatedness scan when the cue cannot contribute a primary vector score.
+def dictionary_lemma_has_numberbatch_vector?(word)
+  l = lemma(word)
+  !numberbatch_table[hyphens_to_underscores(l)].nil?
+end
+
 # --- WordNet gloss containment (high-precision polysemy rescue) ---
 # Checks if word1 (or a validated derivational form) literally appears as a word
 # in any WordNet definition of word2, or vice versa.
@@ -540,6 +547,15 @@ class RelatedWords
         debug "Finding words related to #{word} (Dynamo, lemma=#{lemma_key})... #{words.length}\n"
         @related_word_cache[key] = words
         return words
+      end
+
+      unless dictionary_lemma_has_numberbatch_vector?(word)
+        if ENV["RHYMECRIME_WARN_OOV_NUMBERBATCH"] == "1"
+          warn "related: skipping full scan for '#{word}' (lemma '#{lemma(word)}' not in Numberbatch export)"
+        end
+        debug "Finding words related to #{word}... 0 (no Numberbatch vector for lemma)\n"
+        @related_word_cache[key] = []
+        return []
       end
 
       words = []

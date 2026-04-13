@@ -12,6 +12,10 @@
 #   --dry-run              Compute only; print progress, do not write a file
 #   --max-cues=N           Only process first N lemmas (smoke test)
 #   --start-after=WORD     Skip lemmas until after this string (lexicographic)
+#
+# OOV Numberbatch: headwords whose dictionary lemma has no row in generated/numberbatch_vectors.msgpack
+# skip the expensive full relatedness scan (see +dictionary_lemma_has_numberbatch_vector?+ in related.rb).
+# Set RHYMECRIME_WARN_OOV_NUMBERBATCH=1 to print a line to stderr for each such headword.
 
 $LOAD_PATH.unshift File.expand_path("../lib", __dir__)
 
@@ -61,19 +65,38 @@ lemmas = rep.keys.sort
 lemmas.select! { |l| l > start_after } if start_after
 lemmas = lemmas.first(max_cues) if max_cues
 
-puts "Precomputing #{lemmas.size} related# rows → #{dry_run ? '(dry-run, no file)' : output_path}"
+n = lemmas.size
+puts "Scanning #{n} lemmas → #{dry_run ? '(dry-run, no file)' : output_path} (JSONL only when ≥1 related word)"
 
 RelatedWords.instance_variable_set(:@related_word_cache, {})
 
 jsonl_io = nil
 jsonl_io = File.open(output_path, "w", encoding: "UTF-8") unless dry_run
 
+# Elapsed-average ETA: linear extrapolation from items completed so far.
+t0 = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+
 begin
   lemmas.each_with_index do |lem, i|
     cue = rep[lem]
     words = RelatedWords.find_all_thematically_related_words(cue, false, false)
+    next if words.empty?
+
     if (i % 50).zero?
-      puts "  [#{i}/#{lemmas.size}] #{lem} (cue=#{cue}) -> #{words.size} related"
+      done = i + 1
+      elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC) - t0
+      remaining = n - done
+      eta_suffix =
+        if remaining.positive? && done.positive? && elapsed.positive?
+          eta_sec = [(remaining.to_f * elapsed / done).round, 0].max
+          eh = eta_sec / 3600
+          em = (eta_sec % 3600) / 60
+          "~#{eh}h #{em}m remaining"
+        else
+          ""
+        end
+      paren = eta_suffix.empty? ? "" : " (#{eta_suffix})"
+      puts "  [#{i}/#{n}] #{lem}: #{words.size} related#{paren}"
     end
     next if dry_run
 

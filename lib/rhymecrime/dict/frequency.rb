@@ -98,6 +98,35 @@ def filter_word_dict(word_dict)
   return filtered_word_dict
 end
 
+# After +INCLUDE_RARE_WORDS+ strip: drop headwords not in +word_dict+ from +rdict+, then remove buckets with
+# ≤1 common partner until fixed point (singleton cohorts from the removal cascade).
+def stabilize_rdict_after_lexicon_trim!(word_dict, rdict)
+  loop do
+    before = [rdict.size, rdict.values.sum(&:size)]
+    prune_rdict_to_headwords!(rdict, word_dict.keys)
+    delete_rare_only_rime_buckets!(rdict, word_dict, log: false)
+    after = [rdict.size, rdict.values.sum(&:size)]
+    break if after == before
+  end
+end
+
+# Remove rare rows from +word_dict+ (default export) and re-sync +rdict+.
+def strip_rare_headwords_from_exported_lexicon!(word_dict, rdict)
+  removed = 0
+  word_dict.keys.each do |w|
+    freq, = word_dict[w]
+    next unless freq <= RARE_FREQ_MAX
+    word_dict.delete(w)
+    removed += 1
+  end
+  if removed > 0
+    puts "#{removed} rare headwords omitted from exported lexicon (set INCLUDE_RARE_WORDS=1 to keep them)"
+    stabilize_rdict_after_lexicon_trim!(word_dict, rdict)
+    puts "#{rdict.length} rime buckets after rare-lexicon trim"
+  end
+  word_dict
+end
+
 # Kaikki +wordfreq+ OOV rescue (idea 2b): forms in +forms_map+ whose +base+ has wordfreq Zipf ≥ +zipf_floor+.
 # Does not use Inflect forward derivation (idea 2a) — too many FPs.
 def kaikki_form_oov_rescue_headwords(forms_map, wordfreq_hash, zipf_floor, wiktionary_words = nil)
@@ -309,8 +338,9 @@ def compute_frequency(word, subtlex_hash, wordfreq_hash)
   # with mid Zipf (*flyby*, *getter*) can exceed the rare ceiling from SUBTLEX alone. Inflections of WN
   # lemmas (*successors*) skip the clamp when Zipf is strong so they are not stuck at rare with a WN base.
   if !in_wordnet && sub_raw.positive? && sub_raw < SUBTLEX_OVERRIDE_PROPER_MIN
-    wordfreq_boost = 0
-    if (zipf >= WORDFREQ_COMMON_ZIPF || zipf.zero?) && !wn_oov_subtlex_cap_skip_via_inflection_anchor?(word)
+    strong_modern = zipf >= WORDFREQ_OOV_STRONG_MODERN_ZIPF
+    wordfreq_boost = 0 unless strong_modern && zipf >= WORDFREQ_COMMON_ZIPF
+    if (zipf >= WORDFREQ_COMMON_ZIPF || zipf.zero?) && !strong_modern && !wn_oov_subtlex_cap_skip_via_inflection_anchor?(word)
       subtlex_freq = [subtlex_freq, RARE_FREQ_MAX].min
     end
   end
@@ -453,9 +483,9 @@ def add_frequency_info(cmudict, subtlex_hash, wordfreq_hash, wiktionary_words, p
     # Four-letter Wiktionary junk: Zipf in [RARE, 2.5) with no WN/SUBTLEX — surnames (~stam);
     # at/above 2.5 keep the floor for neologisms (yeet).
     next if four_letter_alpha?(word) && zipf >= WORDFREQ_RARE_ZIPF && zipf < WIKT_FLOOR_4L_WEAK_ZIPF_BELOW
-    # Longer OOV headwords need dialogue-level Zipf (≥ common) for the existence floor — otherwise
-    # encyclopedic/proper-name web counts (*mende*, *baidu*) outrank subtitles with no WN anchor.
-    next if !wn_has_entry?(word) && zipf < WORDFREQ_COMMON_ZIPF && word.match?(/\A[a-z]{5,}\z/)
+    # Longer OOV headwords need measurable Zipf for the existence floor — below COMMON to admit modern
+    # lemmas (*twerk*, *polyamory*) while still excluding bulk mid-band encyclopedic strings.
+    next if !wn_has_entry?(word) && zipf < WIKT_FLOOR_LONG_OOV_MIN_ZIPF && word.match?(/\A[a-z]{5,}\z/)
     next if short_initialism_shape?(word) && subtlex_hash[word] <= 0
     # 2-4 letter strings with strong wordfreq but no lexical anchor: skip floor so
     # IMAX/DVD-style tokens stay rare; Zipf < 3 keeps yeet
@@ -475,6 +505,9 @@ def add_frequency_info(cmudict, subtlex_hash, wordfreq_hash, wiktionary_words, p
   # Skip -ing → base when WordNet has the base but only as noun/adj/etc.: prevents
   # spurious "kitchening" inheriting from "kitchen" (FP-4). Verbal -ing still inherits
   # when the base has a verb lemma, or when the base is absent from WordNet (slang).
+  #
+  # Promote Kaikki-linked inflections stuck at 1..RARE_FREQ_MAX (compute_frequency rare ceiling), not only
+  # freq==0 — otherwise *blogs* / *blogging* stay rare while *blog* is common.
   inherited = 0
   $inflection_base_words.each do |inflected, base|
     tr = dict_trace_morph?(base, inflected)
@@ -486,8 +519,9 @@ def add_frequency_info(cmudict, subtlex_hash, wordfreq_hash, wiktionary_words, p
       dict_trace_puts(inflected, "Phase8 ← #{base}: skip (in rare_words.txt)") if tr
       next
     end
-    if hash[inflected][0] > 0
-      dict_trace_puts(inflected, "Phase8 ← #{base}: skip (freq already #{hash[inflected][0]})") if tr
+    infl_freq = hash[inflected][0]
+    if infl_freq > RARE_FREQ_MAX
+      dict_trace_puts(inflected, "Phase8 ← #{base}: skip (freq #{infl_freq} already > #{RARE_FREQ_MAX})") if tr
       next
     end
     # Do not copy frequency from hyphenated base to hyphenated inflection (hoity-toity → hoity-toities).
@@ -500,9 +534,14 @@ def add_frequency_info(cmudict, subtlex_hash, wordfreq_hash, wiktionary_words, p
       dict_trace_puts(inflected, "Phase8 ← #{base}: skip (base_freq=#{base_freq} ≤ #{RARE_FREQ_MAX})") if tr
       next
     end
+    if infl_freq >= base_freq
+      dict_trace_puts(inflected, "Phase8 ← #{base}: skip (infl_freq=#{infl_freq} ≥ base_freq=#{base_freq})") if tr
+      next
+    end
     wf_inf = wordfreq_hash[inflected]
-    if wf_inf && wf_inf >= WORDFREQ_COMMON_ZIPF
-      dict_trace_puts(inflected, "Phase8 ← #{base}: skip (Zipf #{wf_inf} ≥ #{WORDFREQ_COMMON_ZIPF})") if tr
+    # High Zipf can still be freq≤RARE after OOV SUBTLEX clamps (*blogging*); only skip when already common.
+    if wf_inf && wf_inf >= WORDFREQ_COMMON_ZIPF && infl_freq > RARE_FREQ_MAX
+      dict_trace_puts(inflected, "Phase8 ← #{base}: skip (Zipf #{wf_inf} ≥ #{WORDFREQ_COMMON_ZIPF} and infl already common)") if tr
       next
     end
     inflection_suffix_kind = Inflect.send(:match_suffix_kind, base, inflected)
@@ -522,8 +561,10 @@ def add_frequency_info(cmudict, subtlex_hash, wordfreq_hash, wiktionary_words, p
         next
       end
     end
-    if base_freq > RARE_FREQ_MAX && !common_words.include?(base) && !inflection_surface_reference_attested?(inflected, subtlex_hash, wordfreq_hash, cmudict_orig, ref_cn, ref_nb, ref_usf)
-      dict_trace_puts(inflected, "Phase8 ← #{base}: skip (not in wordfreq/SUBTLEX/WN/CMU/USF/CN/NB)") if tr
+    surf_ok = inflection_surface_reference_attested?(inflected, subtlex_hash, wordfreq_hash, cmudict_orig, ref_cn, ref_nb, ref_usf) ||
+      wiktionary_surface_form_attested?(forms_map, base, inflected)
+    if base_freq > RARE_FREQ_MAX && !common_words.include?(base) && !surf_ok
+      dict_trace_puts(inflected, "Phase8 ← #{base}: skip (not in wordfreq/SUBTLEX/WN/CMU/USF/CN/NB/Kaikki surface)") if tr
       next
     end
     hash[inflected][0] = base_freq
@@ -533,8 +574,8 @@ def add_frequency_info(cmudict, subtlex_hash, wordfreq_hash, wiktionary_words, p
   puts "#{inherited} inflected forms inherited frequency from base words" if inherited > 0
 
   # Phase 9: suffix inheritance from common_words.txt (Inflect spelling patterns).
-  # Phase 8 only fills entries with frequency 0; listed headwords still leave plurals / -ing, etc.
-  # in the rare bins (1..RARE_FREQ_MAX). Match forward (listed + suffix = word) or reverse (word + suffix = listed,
+  # Phase 8 lifts Kaikki-linked inflections through the rare bins; Phase 9 still handles list-driven cases.
+  # Match forward (listed + suffix = word) or reverse (word + suffix = listed,
   # e.g. regionalize… ← regionalized). Structural junk guards only; list headwords skip Kaikki verb
   # attestation (see +list_authoritative_base+ on +morph_base_allows_verb_forms?+). When +listed+ is in
   # common_words.txt, also skip +inflection_surface_reference_attested?+ so curated lemmas can lift OOV inflections.
@@ -712,16 +753,18 @@ def add_frequency_info(cmudict, subtlex_hash, wordfreq_hash, wiktionary_words, p
         dict_trace_puts(base, "Phase11: skip (stop/rare_words)") if tb
         next
       end
-      if base.bytesize < 5
-        dict_trace_puts(base, "Phase11: skip (too short)") if tb
+      base_zipf_pre = (wordfreq_hash[base] || 0).to_f
+      if base.bytesize < 5 && base_zipf_pre < WORDFREQ_COMMON_ZIPF
+        dict_trace_puts(base, "Phase11: skip (too short; Zipf #{base_zipf_pre} < #{WORDFREQ_COMMON_ZIPF})") if tb
         next
       end
       sub_raw = subtlex_hash[base] || 0
-      corpus_ok = sub_raw >= MORPH_CORPUS_SUBTLEX_MIN
+      # SUBTLEX floor *or* conversational web Zipf (*blog* is dialogue-light in SUBTLEX but Zipf≈4.7).
+      corpus_ok = sub_raw >= MORPH_CORPUS_SUBTLEX_MIN || base_zipf_pre >= WORDFREQ_COMMON_ZIPF
       lexical_plural_ok = wn_has_entry?(base) && !wn_base_has_verb?(base) &&
         sub_raw >= MORPH_LEXICAL_NOUN_PLURAL_SUBTLEX_MIN
       unless corpus_ok || lexical_plural_ok
-        dict_trace_puts(base, "Phase11: skip (sub_raw=#{sub_raw}; corpus_ok=#{corpus_ok} lexical_plural_ok=#{lexical_plural_ok})") if tb
+        dict_trace_puts(base, "Phase11: skip (sub_raw=#{sub_raw}; zipf=#{base_zipf_pre}; corpus_ok=#{corpus_ok} lexical_plural_ok=#{lexical_plural_ok})") if tb
         next
       end
       donor = bent[0] > RARE_FREQ_MAX ? bent[0] : 99
@@ -770,8 +813,10 @@ def add_frequency_info(cmudict, subtlex_hash, wordfreq_hash, wiktionary_words, p
             dict_trace_puts(w, "Phase11 ← #{base}: skip (:s branch, not in hash)") if tr
             next
           end
-          if wn_base_has_verb?(base)
-            dict_trace_puts(w, "Phase11 ← #{base}: skip (:s branch, base has verb)") if tr
+          # Verb-only bases: *-s* is 3sg (*twerks*), not a noun plural — +morph_base_allows_plural_s?+ already
+          # allows that path elsewhere. Noun+verb lemmas (*blog*) still get plural promotion when morph allows.
+          if wn_base_has_verb?(base) && !wn_base_has_noun?(base)
+            dict_trace_puts(w, "Phase11 ← #{base}: skip (:s branch, verb-only base)") if tr
             next
           end
           if hash[w][0] > RARE_FREQ_MAX

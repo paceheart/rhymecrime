@@ -28,6 +28,13 @@ describe 'Inflect' do
       expect(Inflect.inflection_of_base?('annualize', 'annualizes')).to eq(true)
       expect(Inflect.inflection_of_base?('annualize', 'annualizees')).to eq(false)
     end
+
+    it 'recognizes deadjectival -ly and -ful for lemma candidates' do
+      expect(Inflect.inflection_of_base?('flawless', 'flawlessly')).to eq(true)
+      expect(Inflect.inflection_of_base?('happy', 'happily')).to eq(true)
+      expect(Inflect.inflection_of_base?('gentle', 'gently')).to eq(true)
+      expect(Inflect.inflection_of_base?('delight', 'delightful')).to eq(true)
+    end
   end
 
   context 'plural -s (voiceless final -> S)' do

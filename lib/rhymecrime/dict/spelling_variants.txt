@@ -215,3 +215,4 @@ sirree siree
 fueled fuelled
 refueled refuelled
 jeweled jewelled
+skillful skilful

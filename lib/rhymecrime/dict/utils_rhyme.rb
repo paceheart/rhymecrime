@@ -392,10 +392,14 @@ def build_hyphen_multi_fold_map(explicit_word_keys = nil)
   out.freeze
 end
 
-def save_hyphen_variant_map!(word_keys)
-  map = build_hyphen_multi_fold_map(word_keys)
-  in_dict = word_keys.to_set
-  map = map.reject { |_fold, forms| forms.none? { |w| in_dict.include?(w) } }
+# +build_keys+: headwords used to discover fold groups (include rare spellings when those rows exist only
+#   for pairing hyphen/solid variants before +INCLUDE_RARE_WORDS+ export strip).
+# +exported_keys+: final lexicon; a fold is written only when at least one of its spellings remains exported.
+def save_hyphen_variant_map!(build_keys, exported_keys: nil)
+  exported_keys = build_keys if exported_keys.nil?
+  map = build_hyphen_multi_fold_map(build_keys)
+  in_export = exported_keys.to_set
+  map = map.reject { |_fold, forms| forms.none? { |w| in_export.include?(w) } }
   ensure_generated_dict_dir!
   path = generated_dict_path_under_dict_dir(HYPHEN_VARIANT_MAP_FILENAME)
   sorted = {}

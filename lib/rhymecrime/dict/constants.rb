@@ -51,6 +51,15 @@ def dict_trace_puts(word, body)
   puts dict_trace_format(word, body)
 end
 
+# Exported +word_dict+ / +rdict+ include rare headwords (frequency ≤ +RARE_FREQ_MAX+) only when set truthy.
+# Default false: after dict-build, rare rows are dropped and the rime index is re-pruned (smaller artifacts).
+# Rebuild with INCLUDE_RARE_WORDS=1 before running rarity specs that expect rare rows in +word_dict+.
+def include_rare_words_in_exported_lexicon?
+  v = ENV["INCLUDE_RARE_WORDS"]
+  return false if v.nil? || v.empty?
+  %w[1 true yes on].include?(v.downcase)
+end
+
 DICT_BUILD_VERBOSE = false
 
 CORPORA_ROOT = File.join(REPO_ROOT, "corpora")
@@ -65,6 +74,9 @@ SUBTLEX_PRESENCE_BONUS = 4
 
 WORDFREQ_FILENAME = File.join(REPO_ROOT, "generated", "wordfreq.tsv")
 WORDFREQ_COMMON_ZIPF = 3.0
+# OOV headwords with weak SUBTLEX (below +SUBTLEX_OVERRIDE_PROPER_MIN+): allow wordfreq boost when Zipf is
+# clearly conversational web, not just encyclopedic (*poly* ~3.6, *trans* ~4.4 vs surname-fragment band).
+WORDFREQ_OOV_STRONG_MODERN_ZIPF = 3.5
 WORDFREQ_RARE_ZIPF = 2.0
 # Kaikki inflections of a Wiktionary lemma: rescue at freq==0 disconnect when base Zipf is below
 # +WORDFREQ_RARE_ZIPF+ but still shows measurable corpus use (e.g. *throuple* ~1.3 → *throuples*).
@@ -84,6 +96,8 @@ MORPH_CORPUS_SUBTLEX_MIN = 40
 MORPH_LEXICAL_NOUN_PLURAL_SUBTLEX_MIN = 10
 # Phase 6: skip Wiktionary floor for 4-letter OOV tokens below this Zipf (*mobo* ~2.5); *yeet* ~2.51 stays eligible.
 WIKT_FLOOR_4L_WEAK_ZIPF_BELOW = 2.51
+# Phase 6: OOV lemmas length ≥5 need Zipf ≥ this for the existence floor (below COMMON; admits *twerk* / *polyamory*).
+WIKT_FLOOR_LONG_OOV_MIN_ZIPF = 2.2
 
 RIME_DICT_HEADER = "# RhymeCrime's rime dictionary
 # https://github.com/paceheart/rhymecrime
@@ -101,7 +115,8 @@ RIME_DICT_HEADER = "# RhymeCrime's rime dictionary
 # CMU Pronouncing Dictionary, with some manual tweaks and some
 # programmatic preprocessing as described in the dict/ Ruby sources.
 #
-# Singleton rimes are excluded. Buckets where every word is rare (frequency <= RARE_FREQ_MAX) are excluded.
+# Singleton rimes are excluded. Buckets with at most one common headword (frequency > RARE_FREQ_MAX) are excluded
+# (all-rare buckets, one common among rares, or a lone common) so rhyme cohorts always offer ≥2 common partners.
 #"
 
 WORD_DICT_HEADER = "# RhymeCrime's word info dictionary

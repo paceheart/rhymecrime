@@ -78,6 +78,134 @@ def wn_has_entry?(word)
   end
 end
 
+# rwordnet's Synset#relation follows pointer offsets as integers, which breaks Princeton WordNet 3.1
+# (8-digit synset ids with leading zeros). Read pointer targets from the dict data files instead.
+
+WN_DICT_DATA_FILE = {
+  "n" => "data.noun",
+  "v" => "data.verb",
+  "a" => "data.adj",
+  "s" => "data.adj",
+  "r" => "data.adv",
+}.freeze
+
+WN_DERIVATION_PTR_SYMBOLS = Set.new(%w[+ < \\])
+
+def wn_dict_data_path(pos_char)
+  fn = WN_DICT_DATA_FILE[pos_char]
+  return nil if fn.nil?
+
+  File.join(WordNet::DB.path, "dict", fn)
+end
+
+# Full synset line (header + gloss) for 8-digit +synset_offset+ in the data file for +pos_char+.
+def wn_synset_line_for_offset(pos_char, synset_offset)
+  path = wn_dict_data_path(pos_char)
+  return nil unless path && File.file?(path)
+
+  key = synset_offset.to_i.to_s.rjust(8, "0")
+  hit = nil
+  File.foreach(path) { |ln| (hit = ln) && break if ln.start_with?("#{key} ") }
+  hit
+end
+
+def wn_parse_synset_header_fields(header)
+  toks = header.split
+  return nil if toks.size < 4
+
+  _off, _lex, _ss, wc_s = toks.shift(4)
+  wc = wc_s.to_i
+  return nil if toks.size < wc * 2
+
+  words = []
+  wc.times do
+    words << toks.shift.downcase
+    toks.shift # lex_id
+  end
+  return nil if toks.empty?
+
+  pc = toks.shift.to_i
+  ptrs = []
+  pc.times do
+    return nil if toks.size < 4
+
+    ptrs << { sym: toks.shift, off: toks.shift, pos: toks.shift, src_tgt: toks.shift }
+  end
+  { words: words, ptrs: ptrs }
+end
+
+def wn_header_lists_lemma?(header, base)
+  st = wn_parse_synset_header_fields(header)
+  return false if st.nil?
+
+  want = [base.to_s.downcase, hyphens_to_underscores(base).downcase, base.to_s.tr("_", "-").downcase].uniq
+  st[:words].any? { |w| want.include?(w) }
+end
+
+# 1-hop derivation / participle / derived-from-adj pointers from any sense of +word+ to a synset
+# that lists +base+ as a member lemma.
+def wn_derivationally_related_to_base?(word, base)
+  w = word.to_s
+  b = base.to_s
+  return false if w.empty? || b.empty?
+
+  [w, hyphens_to_underscores(w), w.tr("_", "-")].uniq.each do |wv|
+    wn_lemma_find_all_cached(wv).each do |lem|
+      pos_char = lem.pos
+      lem.synset_offsets.each do |off_i|
+        line = wn_synset_line_for_offset(pos_char, off_i)
+        next unless line
+
+        hdr = line.split(" | ", 2).first
+        st = wn_parse_synset_header_fields(hdr)
+        next unless st
+
+        st[:ptrs].each do |p|
+          next unless WN_DERIVATION_PTR_SYMBOLS.include?(p[:sym])
+
+          tline = wn_synset_line_for_offset(p[:pos], p[:off])
+          next unless tline
+
+          th = tline.split(" | ", 2).first
+          return true if wn_header_lists_lemma?(th, b)
+        end
+      end
+    end
+  end
+  false
+end
+
+# Productive English -ly / -ful spelled per +Inflect+, with WordNet POS shape guards so *early*≠*ear*,
+# *only*≠*on*, *friendly* (noun)≠*friend*, etc.
+def wn_productive_affix_lemma_pair?(word, base)
+  kind = Inflect.send(:match_suffix_kind, base, word)
+  return false unless %i[ly ful].include?(kind)
+  return false unless Inflect.inflection_of_base?(base, word)
+
+  poses = wn_lemma_find_all_cached(word).map(&:pos).uniq.sort
+  return false if poses.empty?
+
+  case kind
+  when :ful
+    return false unless poses == ["a"]
+  when :ly
+    return false unless poses == ["a"] || poses == ["r"]
+  else
+    return false
+  end
+  true
+end
+
+# Regular/adj-participial *-ed* surfaces whose unique verbal morphy stem matches +base+ and Inflect
+# agrees (*deafened*→*deafen*). Requires a single morphy verb stem so *feed* (feed/fee) does not fire.
+def wn_ed_verb_stem_via_morphy?(word, base)
+  return false unless Inflect.send(:match_suffix_kind, base, word) == :ed
+  return false unless wn_base_has_verb?(base)
+
+  stems = (WordNet::Synset.morphy(word, "verb") rescue [])
+  stems.size == 1 && stems.first == base
+end
+
 # True if WordNet lists the base as a verb (any sense). Used to avoid Phase 8 giving
 # noun-only stems a bogus verbal -ing frequency (kitchening, crotching, jealousing).
 # Bases with no WordNet entry still return true so modern verbs (twerk) can inherit.

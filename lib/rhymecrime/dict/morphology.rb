@@ -176,7 +176,10 @@ def morph_base_allows_verb_forms?(base, inflected, pos_map, forms_map, zipf_inf,
       kaikki_ok = wiktionary_derivation_suffix_attested?(forms_map, base, inflection_suffix_kind)
       corpus_ok = corpus_inflection_suffix_zipf_attested?(wordfreq_hash, base, inflection_suffix_kind)
       return false unless kaikki_ok || corpus_ok
-      return zipf_inf >= WORDFREQ_RARE_ZIPF if tags.include?("adj")
+      # Deadjectival *-ing* (*greening*) when the lexeme has no verb row: require Zipf on the surface.
+      # Lemmas that are *also* verbs (*blog*, *vlog*, *twerk*) use the Kaikki surface / Zipf path below
+      # so *blogging* / *vlogged* can inherit when listed/attested without web-scale Zipf on the participle.
+      return zipf_inf >= WORDFREQ_RARE_ZIPF if tags.include?("adj") && !tags.include?("verb")
       # Lexeme allows *-ed/-ing* in principle, but each Inflect spelling must be Kaikki-listed or
       # independently Zipf-attested — blocks *catalogging* when only *cataloging* has corpus/Kaikki support.
       return wiktionary_surface_form_attested?(forms_map, base, inflected) ||
@@ -196,6 +199,12 @@ def silent_e_stem_plus_er?(base, w)
   bl = base.bytesize
   return false unless base.end_with?("e") && bl >= 2 && !base.end_with?("ee")
   w == base.byteslice(0, bl - 1) + "er"
+end
+
+def silent_e_stem_plus_est?(base, w)
+  bl = base.bytesize
+  return false unless base.end_with?("e") && bl >= 2 && !base.end_with?("ee")
+  w == base.byteslice(0, bl - 1) + "est"
 end
 
 # Blocks *happyer; allows *happier. Non-+y+: adjective (Kaikki or WN) with phonological / attestation
@@ -234,6 +243,13 @@ def morph_base_allows_comparative_er_est?(base, w, pos_map, base_first_pron, for
     return false
   end
 
+  # Silent-e *stem+est* on a verbal lemma (*waste*→*wastest*): require corpus or Kaikki; real superlatives
+  # (*finest*, *gentlest*) stay attested / Zipf-backed.
+  if inflection_suffix_kind == :est && silent_e_stem_plus_est?(base, w) && wn_base_has_verb?(base)
+    return wiktionary_surface_form_attested?(forms_map, base, w) ||
+      zipf_w.to_f >= WORDFREQ_RARE_ZIPF
+  end
+
   if inflection_suffix_kind == :er && silent_e_stem_plus_er?(base, w)
     tags = morph_part_of_speech_tags(pos_map, base)
     zip_ok = zipf_w >= WORDFREQ_RARE_ZIPF
@@ -256,14 +272,18 @@ def morph_base_allows_comparative_er_est?(base, w, pos_map, base_first_pron, for
   if tags.any?
     # Without a pronunciation we cannot count vowels; do not treat as monosyllable (avoids *impromptuer*
     # slipping through when the base has frequency but no surviving ARPABET row).
-    return true if base_first_pron && !base_first_pron.empty? && vc <= 1
+    # Lemma is both noun and adjective (*liege*, *nice*): do not bypass attestation on monosyllables
+    # (*lieger* / *liegest*); *nicer* / *nicest* remain Kaikki-attested.
+    noun_and_adj = tags.include?("noun") && tags.include?("adj")
+    return true if base_first_pron && !base_first_pron.empty? && vc <= 1 && !noun_and_adj
     return false unless attested
     # Attested comparatives from adjective-only (or non-verb) lemmas still need corpus support on
     # the surface itself; otherwise *impromptuer* inherits *impromptu*’s frequency (FP).
     return zipf_w >= WORDFREQ_RARE_ZIPF unless tags.include?("verb")
     true
   else
-    return true if base_first_pron && !base_first_pron.empty? && vc <= 2
+    return true if base_first_pron && !base_first_pron.empty? && vc <= 2 &&
+      !(wn_base_has_noun?(base) && wn_base_has_adjective?(base))
     attested
   end
 end
