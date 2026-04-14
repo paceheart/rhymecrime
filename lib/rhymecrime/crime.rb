@@ -189,6 +189,7 @@ def part_of_speech_tags(word)
   tags.is_a?(Array) ? tags : []
 end
 
+# Cohort for +rime+ from +rime_dict+ (dict-build keeps preferred headwords only; see +strip_dispreferred_headwords_from_rdict!+).
 def rdict_lookup(rime)
   if Rhymecrime::DataSource.dynamodb?
     Rhymecrime::DynamoRuntime.fetch_rime(rime)
@@ -313,14 +314,13 @@ def find_rhyming_words_for_pronunciation(pron, identical_ok=true)
   results = Array.new
   rime = pron.rime
   rsyllables = pron.rhyme_syllables_array
-  rdict_lookup(rime).each { |rhyme|
-    cand_prons = pronunciations(rhyme)
+  rdict_lookup(rime).each do |rhyme|
     if(!identical_ok && identical_rhyme?(rhyme, rsyllables, rime))
       debug "Filtered out identical rhyme: #{pron} / #{rhyme} (#{debug_info(rhyme)})"
     else
       results.push(rhyme)
     end
-  }
+  end
   return results || [ ]
 end
 
@@ -529,7 +529,7 @@ def really_find_rhyming_tuples_dynamo(input_rel1, common_only = false)
   Rhymecrime::DynamoRuntime.batch_get_words(related_list.to_a)
   rimes = related_list.flat_map { |rel| pronunciations(rel).map(&:rime) }.uniq
   Rhymecrime::DynamoRuntime.batch_get_rimes(rimes)
-  rhyme_words = rimes.flat_map { |r| Rhymecrime::DynamoRuntime.fetch_rime(r) }.uniq
+  rhyme_words = rimes.flat_map { |r| rdict_lookup(r) }.uniq
   Rhymecrime::DynamoRuntime.batch_get_words(rhyme_words)
 
   related_list.each do |rel1|
@@ -606,7 +606,7 @@ def find_rhyming_pairs_dynamo(input_rel1, input_rel2, common_only = false)
   Rhymecrime::DynamoRuntime.batch_get_words((relateds1.to_a + relateds2.to_a).uniq)
   rimes = relateds1.flat_map { |rel| pronunciations(rel).map(&:rime) }.uniq
   Rhymecrime::DynamoRuntime.batch_get_rimes(rimes)
-  rhyme_words = rimes.flat_map { |r| Rhymecrime::DynamoRuntime.fetch_rime(r) }.uniq
+  rhyme_words = rimes.flat_map { |r| rdict_lookup(r) }.uniq
   Rhymecrime::DynamoRuntime.batch_get_words(rhyme_words)
 
   relateds1.each do |rel1|

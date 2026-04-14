@@ -13,7 +13,8 @@
 #       → morphology — inflection policy + Kaikki-derived surface pronunciations
 #       → rime      — rime index build / merge / rare-bucket prune / filter_cmudict
 #       → frequency — SUBTLEX + wordfreq + compute_frequency + add_frequency_info + build_word_dict
-#         (build_word_dict merges pronunciations into rdict, prunes weak rime buckets, drops freq==0 orphans
+#         (build_word_dict merges pronunciations into rdict, strips dispreferred spellings from cohorts,
+#          prunes weak rime buckets, drops freq==0 orphans
 #          per disconnect: wordfreq TSV row ⇒ keep; strict OOV ⇒ Kaikki/SUBTLEX rescue only, not rhyme-alone)
 #          Rare headword omission for export runs in +rebuild_rhymecrime_dictionaries+ after hyphen-map keys snapshot.)
 #     this file     — rebuild_rhymecrime_dictionaries only
@@ -43,6 +44,9 @@ require_relative "frequency"
 
 $inflection_base_words = {}
 
+# Lazy path -> frozen Hash of 8-digit synset offset string -> full data-file line (+wn_synset_line_for_offset+).
+$wn_synset_line_index_by_path = nil
+
 def skip_conceptnet_numberbatch_dict_exports?
   v = ENV["RHYMECRIME_DICT_SKIP_CONCEPTNET_NUMBERBATCH"]
   v && !v.empty? && %w[1 true yes on].include?(v.downcase)
@@ -66,13 +70,13 @@ def wn_share_synset?(word, base)
   false
 end
 
-# Same-lexeme check for dict lemmas: shared synset; 1-hop WordNet derivation pointers (file-based,
-# 3.1-safe); productive -ly/-ful with POS guards; or unique verbal morphy stem for Inflect *-ed*.
+# Same-lexeme check for dict lemmas: shared synset; cheap suffix-specific checks; then 1-hop derivation
+# (file-based, 3.1-safe). Derivation is last and walks WN data for +word+ when earlier checks fail.
 def wn_accept_inflection_lemma_pair?(word, base)
   wn_share_synset?(word, base) ||
-    wn_derivationally_related_to_base?(word, base) ||
+    wn_ed_verb_stem_via_morphy?(word, base) ||
     wn_productive_affix_lemma_pair?(word, base) ||
-    wn_ed_verb_stem_via_morphy?(word, base)
+    wn_derivationally_related_to_base?(word, base)
 end
 
 # Build a hash mapping each word_dict headword to its base/lemma form.
@@ -85,62 +89,59 @@ end
 # Fallback: self-lemma (word is its own base).
 def compute_lemma_map(word_dict)
   lemma_map = {}
-  # WordNet checks are repeated across Kaikki bases and Inflect candidates; memoize per build.
-  wn_pair_memo = {}
-  wn_accept_cached = lambda do |w, b|
-    k = "#{w}\0#{b}"
-    wn_pair_memo.fetch(k) { wn_pair_memo[k] = wn_accept_inflection_lemma_pair?(w, b) }
-  end
-
-  word_dict.each_key do |word|
-    # Source A: Kaikki-derived base (Wiktionary explicitly lists the relationship).
-    # When the word has a WN entry, require +wn_accept_inflection_lemma_pair?+ — Kaikki can link
-    # archaic/dialectal inflections (crew→crow, feed→fee) that mislead the common-sense lemma.
-    kaikki_base = $inflection_base_words[word]
-    if kaikki_base && kaikki_base != word && word_dict.key?(kaikki_base)
-      if !wn_has_entry?(word) || wn_accept_cached.call(word, kaikki_base)
-        lemma_map[word] = kaikki_base
-        next
+  begin
+    word_dict.each_key do |word|
+      # Source A: Kaikki-derived base (Wiktionary explicitly lists the relationship).
+      # When the word has a WN entry, require +wn_accept_inflection_lemma_pair?+ — Kaikki can link
+      # archaic/dialectal inflections (crew→crow, feed→fee) that mislead the common-sense lemma.
+      kaikki_base = $inflection_base_words[word]
+      if kaikki_base && kaikki_base != word && word_dict.key?(kaikki_base)
+        if !wn_has_entry?(word) || wn_accept_inflection_lemma_pair?(word, kaikki_base)
+          lemma_map[word] = kaikki_base
+          next
+        end
       end
+
+      word_in_wn = wn_has_entry?(word)
+
+      # Source B: Inflect candidate bases present in word_dict (skip when no morphological suffix shape).
+      raw_bases = Inflect.raw_candidate_bases_for_inflected(word)
+      next if raw_bases.empty?
+
+      best_base = nil
+      best_freq = -1
+      raw_bases.each do |base|
+        next unless word_dict.key?(base)
+        next unless Inflect.inflection_of_base?(base, word)
+
+        kind = Inflect.send(:match_suffix_kind, base, word)
+        next if kind.nil?
+
+        # -er/-est words with their own WordNet entry are standalone (singer, faster)
+        if (kind == :er || kind == :est) && word_in_wn
+          best_base = nil
+          break
+        end
+
+        # If word is in WordNet, base must share a synset (crew≠crow, ring≠re, thing≠the).
+        # If word is NOT in WordNet, base must at least be in WordNet (tran, sacre, etc. are not).
+        if word_in_wn
+          next unless wn_accept_inflection_lemma_pair?(word, base)
+        else
+          next unless wn_has_entry?(base)
+        end
+
+        base_freq = word_dict[base][0]
+        if best_base.nil? || base_freq > best_freq || (base_freq == best_freq && base.length < best_base.length)
+          best_base = base
+          best_freq = base_freq
+        end
+      end
+
+      lemma_map[word] = best_base if best_base && best_base != word
     end
-
-    word_in_wn = wn_has_entry?(word)
-
-    # Source B: Inflect candidate bases present in word_dict (skip when no morphological suffix shape).
-    raw_bases = Inflect.raw_candidate_bases_for_inflected(word)
-    next if raw_bases.empty?
-
-    best_base = nil
-    best_freq = -1
-    raw_bases.each do |base|
-      next unless word_dict.key?(base)
-      next unless Inflect.inflection_of_base?(base, word)
-
-      kind = Inflect.send(:match_suffix_kind, base, word)
-      next if kind.nil?
-
-      # -er/-est words with their own WordNet entry are standalone (singer, faster)
-      if (kind == :er || kind == :est) && word_in_wn
-        best_base = nil
-        break
-      end
-
-      # If word is in WordNet, base must share a synset (crew≠crow, ring≠re, thing≠the).
-      # If word is NOT in WordNet, base must at least be in WordNet (tran, sacre, etc. are not).
-      if word_in_wn
-        next unless wn_accept_cached.call(word, base)
-      else
-        next unless wn_has_entry?(base)
-      end
-
-      base_freq = word_dict[base][0]
-      if best_base.nil? || base_freq > best_freq || (base_freq == best_freq && base.length < best_base.length)
-        best_base = base
-        best_freq = base_freq
-      end
-    end
-
-    lemma_map[word] = best_base if best_base && best_base != word
+  ensure
+    $wn_synset_line_index_by_path = nil
   end
 
   self_n = word_dict.size - lemma_map.size
@@ -207,5 +208,18 @@ def rebuild_rhymecrime_dictionaries()
     base = lemma_map.fetch(word, word)
     common_base_forms.add(base)
   end
-  puts "word_dict: #{word_dict.size} entries (#{common_n} common, #{common_base_forms.size} common base forms)"
+  pref_common_base_n = 0
+  pref_common_base_with_rhymes_n = 0
+  common_base_forms.each do |base|
+    next unless word_common_preferred_headword?(base, word_dict)
+
+    pref_common_base_n += 1
+    _freq, prons = word_dict[base]
+    pref_common_base_with_rhymes_n += 1 if headword_has_nonidentical_rhyme_partner?(base, prons, rdict, word_dict)
+  end
+  puts "word_dict: #{word_dict.size} entries"
+  puts "  - #{common_n} common"
+  puts "  - #{common_base_forms.size} common base forms"
+  puts "  - #{pref_common_base_n} preferred common base forms"
+  puts "  - #{pref_common_base_with_rhymes_n} preferred common base forms with rhymes"
 end

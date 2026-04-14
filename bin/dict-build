@@ -10,6 +10,8 @@
 # Faster rebuilds while iterating (skips slow ConceptNet + Numberbatch exports; leaves prior generated files):
 #   RHYMECRIME_DICT_SKIP_CONCEPTNET_NUMBERBATCH=1 ./bin/dict-build
 #
+# CPU sampling profile (StackProf): ./bin/dict-build-profile — see script header for STACKPROF_* env vars.
+#
 # ConceptNet lemma cache (generated/*.en-kept-lemmas.txt.gz) is built by setup.sh after downloading
 # assertions, or automatically at the start of dict-build if missing/stale. Optional manual refresh:
 #   ./bin/preprocess-conceptnet-lemma-cache

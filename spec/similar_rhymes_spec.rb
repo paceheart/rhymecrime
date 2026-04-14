@@ -423,8 +423,7 @@ end
 #
 
 def related_rhymes?(input_rhyme, input_related, output)
-  # Generate words that rhyme with input_related and are related to input_related.
-  # Is OUTPUT one of them?
+  # Words that rhyme with input_rhyme and are related to input_related — is OUTPUT one of them?
   # e.g. 'please', 'cats', 'siamese'
   find_related_rhymes(input_rhyme, input_related).include?(output)
 end

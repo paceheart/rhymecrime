@@ -208,7 +208,8 @@ def filter_word_dict_disconnected!(word_dict, rdict, subtlex_hash, wordfreq_hash
           if cohort.nil? || cohort.empty?
             dict_trace_puts(w, "disconnect: rime=#{pron.rime} has no rdict bucket (dropped as singleton/rare-only cohort earlier) — explains has_rhyme=false vs filter_cmudict message")
           else
-            others = cohort.reject { |x| x == w }
+            w_pf = preferred_form_in_build_lexicon(w, word_dict)
+            others = cohort.reject { |x| x == w_pf }
             dict_trace_puts(w, "disconnect: rime=#{pron.rime} bucket=#{cohort.size} others=#{others.take(10).inspect}#{' …' if others.size > 10}")
           end
         end
@@ -242,6 +243,7 @@ def filter_word_dict_disconnected!(word_dict, rdict, subtlex_hash, wordfreq_hash
     total_removed += removed
     prune_rdict_to_headwords!(rdict, word_dict.keys)
     delete_rare_only_rime_buckets!(rdict, word_dict)
+    delete_common_identical_only_rime_buckets!(rdict, word_dict)
     break if removed == 0 || rounds >= 12
   end
   if total_removed > 0
@@ -861,7 +863,9 @@ def build_word_dict(cmudict, rdict, subtlex_hash, wordfreq_hash, wiktionary_word
   word_dict = add_frequency_info(cmudict, subtlex_hash, wordfreq_hash, wiktionary_words, pos_map, forms_map, kaikki_verb_morph, original_cmudict_headwords)
   word_dict = filter_word_dict(word_dict)
   merge_word_dict_pronunciations_into_rdict!(rdict, word_dict)
+  strip_dispreferred_headwords_from_rdict!(rdict, word_dict)
   delete_rare_only_rime_buckets!(rdict, word_dict)
+  delete_common_identical_only_rime_buckets!(rdict, word_dict)
   filter_word_dict_disconnected!(word_dict, rdict, subtlex_hash, wordfreq_hash, pos_map, forms_map, original_cmudict_headwords, wiktionary_words)
   word_dict
 end

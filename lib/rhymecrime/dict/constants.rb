@@ -107,7 +107,8 @@ RIME_DICT_HEADER = "# RhymeCrime's rime dictionary
 # programmatic preprocessing as described in the dict/ Ruby sources.
 #
 # Singleton rimes are excluded. Buckets where every word is rare (frequency <= RARE_FREQ_MAX) are excluded.
-# Buckets with exactly one common word and any rare partners are excluded.
+# Buckets with exactly one common *preferred* headword (see preferred_form / spelling_variants) and other partners are excluded.
+# Unless INCLUDE_IDENTICAL_RHYMES is set, buckets where every pair of common headwords rhymes only identically are excluded.
 #"
 
 WORD_DICT_HEADER = "# RhymeCrime's word info dictionary

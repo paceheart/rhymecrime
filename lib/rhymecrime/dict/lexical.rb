@@ -14,6 +14,7 @@ require_relative "utils_rhyme"
 # does not grow unbounded across repeated builds in the same process.
 def clear_wordnet_lemma_cache!
   @wordnet_lemma_find_all_cache = {}
+  $wn_synset_line_index_by_path = nil
 end
 
 def wn_lemma_find_all_cached(form)
@@ -72,6 +73,7 @@ end
 def wn_has_entry?(word)
   w = word.to_s
   return false if w.empty?
+
   # WordNet lemmas are usually hyphenated (topsy-turvy); older call sites used underscores only and missed them.
   [w, hyphens_to_underscores(w), w.tr("_", "-")].uniq.any? do |c|
     !wn_lemma_find_all_cached(c).empty?
@@ -98,15 +100,33 @@ def wn_dict_data_path(pos_char)
   File.join(WordNet::DB.path, "dict", fn)
 end
 
+# One full scan per WordNet data file, then O(1) lookup. Global +$wn_synset_line_index_by_path+
+# is cleared in +clear_wordnet_lemma_cache!+ and after +compute_lemma_map+ (see dict.rb).
+
+def build_wn_synset_line_index(path)
+  idx = {}
+  File.foreach(path, encoding: "UTF-8") do |ln|
+    next if ln.bytesize < 9
+
+    off = ln.byteslice(0, 8)
+    next unless ln.getbyte(8) == 0x20 && off.match?(/\A\d{8}\z/)
+
+    idx[off] = ln
+  end
+  idx.freeze
+end
+
+def wn_synset_line_index_for_path(path)
+  ($wn_synset_line_index_by_path ||= {})[path] ||= build_wn_synset_line_index(path)
+end
+
 # Full synset line (header + gloss) for 8-digit +synset_offset+ in the data file for +pos_char+.
 def wn_synset_line_for_offset(pos_char, synset_offset)
   path = wn_dict_data_path(pos_char)
   return nil unless path && File.file?(path)
 
   key = synset_offset.to_i.to_s.rjust(8, "0")
-  hit = nil
-  File.foreach(path) { |ln| (hit = ln) && break if ln.start_with?("#{key} ") }
-  hit
+  wn_synset_line_index_for_path(path)[key]
 end
 
 def wn_parse_synset_header_fields(header)
@@ -142,12 +162,11 @@ def wn_header_lists_lemma?(header, base)
   st[:words].any? { |w| want.include?(w) }
 end
 
-# 1-hop derivation / participle / derived-from-adj pointers from any sense of +word+ to a synset
-# that lists +base+ as a member lemma.
-def wn_derivationally_related_to_base?(word, base)
+# All member lemmas (lowercase) in synsets reached by 1-hop derivation pointers from any sense of +word+.
+def wn_derivation_target_lemmas_for_word(word)
+  names = Set.new
   w = word.to_s
-  b = base.to_s
-  return false if w.empty? || b.empty?
+  return names if w.empty?
 
   [w, hyphens_to_underscores(w), w.tr("_", "-")].uniq.each do |wv|
     wn_lemma_find_all_cached(wv).each do |lem|
@@ -167,12 +186,36 @@ def wn_derivationally_related_to_base?(word, base)
           next unless tline
 
           th = tline.split(" | ", 2).first
-          return true if wn_header_lists_lemma?(th, b)
+          stt = wn_parse_synset_header_fields(th)
+          next unless stt
+
+          stt[:words].each { |lw| names.add(lw) }
         end
       end
     end
   end
-  false
+  names
+end
+
+def wn_derivation_target_hit?(targets, base)
+  return false if targets.nil? || targets.empty?
+
+  b = base.to_s
+  return false if b.empty?
+
+  want = [b.downcase, hyphens_to_underscores(b).downcase, b.tr("_", "-").downcase].uniq
+  want.any? { |x| targets.include?(x) }
+end
+
+# 1-hop derivation / participle / derived-from-adj pointers from any sense of +word+ to a synset
+# that lists +base+ as a member lemma.
+def wn_derivationally_related_to_base?(word, base)
+  w = word.to_s
+  b = base.to_s
+  return false if w.empty? || b.empty?
+
+  targets = wn_derivation_target_lemmas_for_word(w)
+  wn_derivation_target_hit?(targets, b)
 end
 
 # Productive English -ly / -ful spelled per +Inflect+, with WordNet POS shape guards so *early*≠*ear*,

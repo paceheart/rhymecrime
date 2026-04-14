@@ -46,42 +46,128 @@ def merge_word_dict_pronunciations_into_rdict!(rdict, word_dict)
   rdict
 end
 
+# Drop alternate spellings / US–UK / hyphen dispreferred surfaces so +rime_dict+ lists only
+# +preferred_form_in_build_lexicon+ headwords (matches runtime +preferred_form+ policy).
+def strip_dispreferred_headwords_from_rdict!(rdict, word_dict, log: true)
+  dropped = 0
+  before_n = rdict.values.sum(&:size)
+  rdict.each do |_rime, words|
+    next if words.nil? || words.empty?
+
+    words.reject! do |w|
+      next false unless word_dict.key?(w)
+
+      dis = preferred_form_in_build_lexicon(w, word_dict) != w
+      dropped += 1 if dis
+      dis
+    end
+  end
+  rdict.reject! { |_rime, words| words.nil? || words.length <= 1 }
+  if log && dropped > 0
+    after_n = rdict.values.sum(&:size)
+    puts "#{rdict.length} rime buckets (#{after_n} headwords) after removing #{dropped} dispreferred cohort entries (#{before_n} before)"
+  end
+  dropped
+end
+
 def word_dict_frequency_for_rime_bucket(word_dict, word)
   entry = word_dict[word]
   return 0 if entry.nil?
   entry[0].to_i
 end
 
-# True when the bucket has exactly one common headword (frequency > +RARE_FREQ_MAX+) and at least one rare.
-# Pairs of two (or more) common rhymes are kept (*yum* / *plum* when both are common).
-def rime_bucket_one_common_with_any_rare?(words, word_dict)
+def word_common_preferred_headword?(word, word_dict)
+  return false unless word_dict.key?(word)
+  return false unless word_dict_frequency_for_rime_bucket(word_dict, word) > RARE_FREQ_MAX
+
+  preferred_form_in_build_lexicon(word, word_dict) == word
+end
+
+# True when the bucket has exactly one **common preferred** headword (+preferred_form+ / spelling variants /
+# US-UK / hyphen policy, frequency > +RARE_FREQ_MAX+). Mirrors the old “exactly one common” prune but
+# ignores alternate spellings that map to another headword as preferred (e.g. *colour* when *color* is preferred).
+# Buckets with two or more common preferred rhymes are kept (*yum* / *plum*).
+def rime_bucket_one_common_preferred_with_any_rare?(words, word_dict)
   return false if words.nil? || words.length < 2
 
-  common = 0
+  common_pref = 0
   words.each do |w|
-    common += 1 if word_dict_frequency_for_rime_bucket(word_dict, w) > RARE_FREQ_MAX
+    common_pref += 1 if word_common_preferred_headword?(w, word_dict)
   end
-  common == 1
+  common_pref == 1
 end
 
 # Drop rime buckets where **every** headword is rare (frequency ≤ +RARE_FREQ_MAX+), or where there is
-# exactly **one** common headword and any number of rare partners (artifact size / avoid one common + clutter).
+# exactly **one** common **preferred** headword (artifact size / avoid one strong anchor + clutter).
 def delete_rare_only_rime_buckets!(rdict, word_dict, log: true)
   removed = 0
   before_n = rdict.length
   rdict.delete_if do |_rime, words|
     next false if words.nil? || words.empty?
     all_rare = words.all? { |w| word_dict_frequency_for_rime_bucket(word_dict, w) <= RARE_FREQ_MAX }
-    one_common_mixed = rime_bucket_one_common_with_any_rare?(words, word_dict)
-    drop = all_rare || one_common_mixed
+    one_common_pref_mixed = rime_bucket_one_common_preferred_with_any_rare?(words, word_dict)
+    drop = all_rare || one_common_pref_mixed
     removed += 1 if drop
     drop
   end
   if log && removed > 0
-    puts "#{rdict.length} out of #{before_n} rime buckets remain after removing rare-only and one-common+mixed buckets"
+    puts "#{rdict.length} out of #{before_n} rime buckets remain after removing rare-only and one-common-preferred+mixed buckets"
   end
   removed
 end
+
+def rime_bucket_common_headwords(words, word_dict)
+  words.select { |w| word_dict_frequency_for_rime_bucket(word_dict, w) > RARE_FREQ_MAX }
+end
+
+# True if +a+ and +b+ have some pairing of pronunciations for +rime+ that counts as a non-identical rhyme.
+def rime_common_pair_nonidentical_for_rime?(a, b, rime, word_dict)
+  pr_a = word_dict[a]&.dig(1)
+  pr_b = word_dict[b]&.dig(1)
+  return false if pr_a.nil? || pr_b.nil?
+
+  pr_a.each do |pa|
+    next unless pa.rime == rime
+    return true unless headword_identical_rhyme?(b, pa.rhyme_syllables_array, rime, word_dict)
+  end
+  pr_b.each do |pb|
+    next unless pb.rime == rime
+    return true unless headword_identical_rhyme?(a, pb.rhyme_syllables_array, rime, word_dict)
+  end
+  false
+end
+
+# True when there are ≥2 common headwords and every unordered pair rhymes only identically for this +rime+.
+def rime_bucket_all_common_pairs_identical_only?(rime, words, word_dict)
+  common = rime_bucket_common_headwords(words, word_dict)
+  return false if common.size < 2
+
+  common.combination(2) do |a, b|
+    return false if rime_common_pair_nonidentical_for_rime?(a, b, rime, word_dict)
+  end
+  true
+end
+
+# After rare/mixed pruning: drop buckets where all common–common rhyme links are identical (+identical_ok=false+
+# would find no partner within the common subset). Skipped when +INCLUDE_IDENTICAL_RHYMES+ is true.
+def delete_common_identical_only_rime_buckets!(rdict, word_dict, log: true)
+  return 0 if INCLUDE_IDENTICAL_RHYMES
+
+  removed = 0
+  before_n = rdict.length
+  rdict.delete_if do |rime, words|
+    next false if words.nil? || words.empty?
+    next false unless rime_bucket_all_common_pairs_identical_only?(rime, words, word_dict)
+
+    removed += 1
+    true
+  end
+  if log && removed > 0
+    puts "#{rdict.length} out of #{before_n} rime buckets remain after removing common-identical-only buckets (INCLUDE_IDENTICAL_RHYMES is off)"
+  end
+  removed
+end
+
 def filter_cmudict(cmudict, rdict)
   # filter out words that differ only in apostrophes, and pronunciations with no rhymes
   filtered_cmudict = Hash.new
@@ -120,6 +206,7 @@ end
 def headword_has_nonidentical_rhyme_partner?(word, prons, rdict, word_dict)
   return false if prons.nil? || prons.empty?
 
+  word_pf = preferred_form_in_build_lexicon(word, word_dict)
   seen = {}
   prons.each do |pron|
     rime = pron.rime
@@ -130,7 +217,7 @@ def headword_has_nonidentical_rhyme_partner?(word, prons, rdict, word_dict)
 
     seen[key] = true
     (rdict[rime] || []).each do |other|
-      next if other == word
+      next if preferred_form_in_build_lexicon(other, word_dict) == word_pf
       next if headword_identical_rhyme?(other, rs, rime, word_dict)
       return true
     end

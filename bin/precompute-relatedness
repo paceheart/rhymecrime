@@ -1,7 +1,10 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 
-# Pre-compute thematically related headword lists per distinct lemma of common (freq>4) words.
+# Pre-compute thematically related headword lists per distinct lemma (same cue set as dict-build’s
+# “preferred common base forms with rhymes” line: common lemma headword, +preferred_form+ surface,
+# +headword_has_nonidentical_rhyme_partner?+). Skips ~35k lemma keys down to ~20k cues vs scanning
+# every common lemma row from the CSV alone.
 # Computation uses only local generated/ files (no RHYMECRIME_DATA_SOURCE=dynamodb).
 # Always writes JSONL to generated/ (default: related_precompute.jsonl); upload with bin/upload-to-dynamodb.
 #
@@ -25,6 +28,7 @@ require "json"
 require "optparse"
 require_relative "../lib/rhymecrime/dict/utils_rhyme"
 require_relative "../lib/rhymecrime/frontend"
+require_relative "../lib/rhymecrime/dict/rime"
 
 output_path = generated_dict_path(RELATED_PRECOMPUTE_JSONL_FILENAME)
 dry_run = false
@@ -61,11 +65,20 @@ File.foreach(word_path, encoding: "UTF-8") do |line|
   rep[lem] = lem if word == lem
 end
 
-lemmas = rep.keys.sort
+wd = word_dict
+rd = rdict
+before_n = rep.size
+lemmas = rep.keys.select do |lem|
+  next false unless wd.key?(lem)
+
+  word_common_preferred_headword?(lem, wd) &&
+    headword_has_nonidentical_rhyme_partner?(lem, wd[lem]&.dig(1), rd, wd)
+end.sort
 lemmas.select! { |l| l > start_after } if start_after
 lemmas = lemmas.first(max_cues) if max_cues
 
 n = lemmas.size
+puts "Precompute cues: #{n} preferred common lemmas with rhymes (#{before_n} distinct common lemmas in word_dict before filter)"
 puts "Scanning #{n} lemmas → #{dry_run ? '(dry-run, no file)' : output_path} (JSONL only when ≥1 related word)"
 
 RelatedWords.instance_variable_set(:@related_word_cache, {})
@@ -78,8 +91,7 @@ t0 = Process.clock_gettime(Process::CLOCK_MONOTONIC)
 
 begin
   lemmas.each_with_index do |lem, i|
-    cue = rep[lem]
-    words = RelatedWords.find_all_thematically_related_words(cue, false, false)
+    words = RelatedWords.find_all_thematically_related_words(lem, false, true)
     next if words.empty?
 
     if (i % 50).zero?

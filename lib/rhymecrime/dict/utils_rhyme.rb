@@ -28,6 +28,21 @@ USF_ASSOCIATIONS_FILENAME = "usf_associations.json"
 # Word-frequency rare ceiling: treat as rare when frequency is at or below this (see rare? in crime.rb).
 RARE_FREQ_MAX = 4
 
+# Rime dict build: when false (default), drop buckets where every pair of common headwords (freq>RARE_FREQ_MAX)
+# rhymes only in the identical sense for this rime. Set INCLUDE_IDENTICAL_RHYMES=1 to keep those buckets.
+INCLUDE_IDENTICAL_RHYMES = begin
+  v = ENV["INCLUDE_IDENTICAL_RHYMES"]
+  v && !v.empty? && %w[1 true yes on].include?(v.downcase)
+end
+
+# +debug+ comes from runtime (e.g. pace_utils via crime); dict-build loads this file alone.
+# Do not use +respond_to?(:debug)+ — it can be true without a callable +debug+ on +main+ in some loads.
+def dict_utils_debug(msg)
+  return unless defined?(debug) == "method"
+
+  debug(msg)
+end
+
 # Outputs of dict.rb (dictionary compiler); not hand-edited. Absolute paths under <repo>/generated/.
 REPO_ROOT = File.expand_path("../../..", __dir__)
 GENERATED_DIR = File.join(REPO_ROOT, "generated")
@@ -862,7 +877,7 @@ end
 def preferred_form(word)
   vf = variants[word]
   if vf
-    debug "The preferred form of '#{word}' is '#{vf[0]}'" unless vf[0] == word
+    dict_utils_debug "The preferred form of '#{word}' is '#{vf[0]}'" unless vf[0] == word
     return vf[0]
   end
   morph = us_uk_morphology_pair(word)
@@ -872,6 +887,16 @@ def preferred_form(word)
   forms = hyphen_multi_fold_map[spelling_variant_hyphen_fold(word)]
   return word if forms.nil? || forms.length < 2
   preferred_among_hyphen_equivalents(forms)
+end
+
+# Like +preferred_form+, but US/UK / hyphen resolution consults +word_dict+ (the build-time hash) via
+# +$word_dict+ so rime-bucket pruning sees the correct preferred surface before export.
+def preferred_form_in_build_lexicon(word, word_dict)
+  previous = $word_dict
+  $word_dict = word_dict
+  preferred_form(word)
+ensure
+  $word_dict = previous
 end
 
 def all_forms(word)
@@ -1250,10 +1275,10 @@ def load_string_hash(filename)
       key = key.sanitize
       hash[key] = tokens.map { |str| str.desanitize }
     else
-      debug "Ignoring #{filename} line: #{line}"
+      dict_utils_debug "Ignoring #{filename} line: #{line}"
     end
   end
-  debug "Loaded #{hash.length} entries from #{filename}"
+  dict_utils_debug "Loaded #{hash.length} entries from #{filename}"
   hash
 end
 def save_string_hash(hash, filename, header="")
