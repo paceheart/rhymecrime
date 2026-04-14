@@ -69,16 +69,11 @@ module Inflect
     !match_suffix_kind(base, inflected).nil?
   end
 
-  # Yields spellings derivable from +base+ by the same surface rules as +match_suffix_kind+
-  # (forward direction only). Used to propagate frequency from high-frequency bases without
-  # O(n²) “every rare word × every base” scans.
-  # Yields base spellings +b+ such that +inflection_of_base?(b, inflected)+ (inverse of
-  # +each_derivable_form+). Bounded small set per word; used to avoid Phase 9 O(|hash|×|common|).
-  def self.each_candidate_base_for_inflected(inflected)
-    return enum_for(__method__, inflected) unless block_given?
-
+  # Possible morphological bases for +inflected+ before +inflection_of_base?+ filtering (small set).
+  # Empty when no English suffix pattern applies — skips expensive WordNet work in +compute_lemma_map+.
+  def self.raw_candidate_bases_for_inflected(inflected)
     il = inflected.bytesize
-    return if il < 2
+    return Set.new if il < 2
 
     cands = Set.new
     add_cand = lambda do |b|
@@ -175,6 +170,20 @@ module Inflect
     if inflected.end_with?("est") && il >= 4
       add_cand.call(inflected.byteslice(0, il - 3))
     end
+
+    cands
+  end
+
+  # Yields spellings derivable from +base+ by the same surface rules as +match_suffix_kind+
+  # (forward direction only). Used to propagate frequency from high-frequency bases without
+  # O(n²) “every rare word × every base” scans.
+  # Yields base spellings +b+ such that +inflection_of_base?(b, inflected)+ (inverse of
+  # +each_derivable_form+). Bounded small set per word; used to avoid Phase 9 O(|hash|×|common|).
+  def self.each_candidate_base_for_inflected(inflected)
+    return enum_for(__method__, inflected) unless block_given?
+
+    cands = raw_candidate_bases_for_inflected(inflected)
+    return if cands.empty?
 
     cands.each do |b|
       yield b if inflection_of_base?(b, inflected)

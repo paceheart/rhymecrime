@@ -51,15 +51,6 @@ def dict_trace_puts(word, body)
   puts dict_trace_format(word, body)
 end
 
-# Exported +word_dict+ / +rdict+ include rare headwords (frequency ≤ +RARE_FREQ_MAX+) only when set truthy.
-# Default false: after dict-build, rare rows are dropped and the rime index is re-pruned (smaller artifacts).
-# Rebuild with INCLUDE_RARE_WORDS=1 before running rarity specs that expect rare rows in +word_dict+.
-def include_rare_words_in_exported_lexicon?
-  v = ENV["INCLUDE_RARE_WORDS"]
-  return false if v.nil? || v.empty?
-  %w[1 true yes on].include?(v.downcase)
-end
-
 DICT_BUILD_VERBOSE = false
 
 CORPORA_ROOT = File.join(REPO_ROOT, "corpora")
@@ -115,8 +106,8 @@ RIME_DICT_HEADER = "# RhymeCrime's rime dictionary
 # CMU Pronouncing Dictionary, with some manual tweaks and some
 # programmatic preprocessing as described in the dict/ Ruby sources.
 #
-# Singleton rimes are excluded. Buckets with at most one common headword (frequency > RARE_FREQ_MAX) are excluded
-# (all-rare buckets, one common among rares, or a lone common) so rhyme cohorts always offer ≥2 common partners.
+# Singleton rimes are excluded. Buckets where every word is rare (frequency <= RARE_FREQ_MAX) are excluded.
+# Buckets with exactly one common word and any rare partners are excluded.
 #"
 
 WORD_DICT_HEADER = "# RhymeCrime's word info dictionary

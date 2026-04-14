@@ -392,8 +392,7 @@ def build_hyphen_multi_fold_map(explicit_word_keys = nil)
   out.freeze
 end
 
-# +build_keys+: headwords used to discover fold groups (include rare spellings when those rows exist only
-#   for pairing hyphen/solid variants before +INCLUDE_RARE_WORDS+ export strip).
+# +build_keys+: headwords used to discover fold groups (include rare spellings when pairing hyphen/solid variants).
 # +exported_keys+: final lexicon; a fold is written only when at least one of its spellings remains exported.
 def save_hyphen_variant_map!(build_keys, exported_keys: nil)
   exported_keys = build_keys if exported_keys.nil?

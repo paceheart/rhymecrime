@@ -98,35 +98,6 @@ def filter_word_dict(word_dict)
   return filtered_word_dict
 end
 
-# After +INCLUDE_RARE_WORDS+ strip: drop headwords not in +word_dict+ from +rdict+, then remove buckets with
-# ≤1 common partner until fixed point (singleton cohorts from the removal cascade).
-def stabilize_rdict_after_lexicon_trim!(word_dict, rdict)
-  loop do
-    before = [rdict.size, rdict.values.sum(&:size)]
-    prune_rdict_to_headwords!(rdict, word_dict.keys)
-    delete_rare_only_rime_buckets!(rdict, word_dict, log: false)
-    after = [rdict.size, rdict.values.sum(&:size)]
-    break if after == before
-  end
-end
-
-# Remove rare rows from +word_dict+ (default export) and re-sync +rdict+.
-def strip_rare_headwords_from_exported_lexicon!(word_dict, rdict)
-  removed = 0
-  word_dict.keys.each do |w|
-    freq, = word_dict[w]
-    next unless freq <= RARE_FREQ_MAX
-    word_dict.delete(w)
-    removed += 1
-  end
-  if removed > 0
-    puts "#{removed} rare headwords omitted from exported lexicon (set INCLUDE_RARE_WORDS=1 to keep them)"
-    stabilize_rdict_after_lexicon_trim!(word_dict, rdict)
-    puts "#{rdict.length} rime buckets after rare-lexicon trim"
-  end
-  word_dict
-end
-
 # Kaikki +wordfreq+ OOV rescue (idea 2b): forms in +forms_map+ whose +base+ has wordfreq Zipf ≥ +zipf_floor+.
 # Does not use Inflect forward derivation (idea 2a) — too many FPs.
 def kaikki_form_oov_rescue_headwords(forms_map, wordfreq_hash, zipf_floor, wiktionary_words = nil)
@@ -301,7 +272,9 @@ def compute_frequency(word, subtlex_hash, wordfreq_hash)
     end
   end
 
-  return 0 if wn_all_proper
+  # WordNet synset strings are title-cased; demonyms and many names still appear lowercase in SUBTLEX /
+  # wordfreq. Only zero unattested surface forms (no subtitle hits and Zipf below the rare band).
+  return 0 if wn_all_proper && sub_raw.zero? && zipf < WORDFREQ_RARE_ZIPF
 
   # e.g. atm: WordNet lemma + high Zipf but almost no lowercase subtitle hits — encyclopedic initialism.
   weak_lexical_anchor = short_initialism_shape?(word) && in_wordnet && sub_raw < SUBTLEX_OVERRIDE_PROPER_MIN && zipf >= WORDFREQ_COMMON_ZIPF
@@ -309,14 +282,19 @@ def compute_frequency(word, subtlex_hash, wordfreq_hash)
   lexically_anchored = in_wordnet && !weak_lexical_anchor
 
   subtlex_freq = subtlex_frequency(word, subtlex_hash)
-  if zipf > 0 && zipf < WORDFREQ_RARE_ZIPF && subtlex_freq > RARE_FREQ_MAX
+  # Low wordfreq Zipf with strong SUBTLEX is often a real headword in subtitles but rare in wordfreq's web mix.
+  # Apply this clamp only when there is no WordNet anchor; WN lemmas (e.g. *entomb*) should keep dialogue SUBTLEX.
+  if !lexically_anchored && zipf > 0 && zipf < WORDFREQ_RARE_ZIPF && subtlex_freq > RARE_FREQ_MAX
     subtlex_freq = RARE_FREQ_MAX
   end
 
   # Without a lexical anchor, high Zipf often reflects encyclopedic/person-name hits; do not let
   # SUBTLEX alone push past the rare threshold (e.g. nam ~ Viet Nam fragments in subtitles).
   if !lexically_anchored && zipf >= WORDFREQ_COMMON_ZIPF
-    subtlex_freq = [subtlex_freq, RARE_FREQ_MAX].min
+    # 2–3-letter OOV with sustained SUBTLEX FREQlow (e.g. *yum*) is dialogue, not an initialism artifact.
+    unless short_initialism_shape?(word) && sub_raw >= SUBTLEX_OVERRIDE_PROPER_MIN
+      subtlex_freq = [subtlex_freq, RARE_FREQ_MAX].min
+    end
   end
 
   block_short_initialism_wordfreq = acronym_shape_wordfreq_only?(word) && subtlex_freq == 0 && !in_wordnet

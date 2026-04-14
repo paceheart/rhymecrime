@@ -14,8 +14,6 @@
 #
 # See http://rubydoc.info/gems/rspec-core/RSpec/Core/Configuration
 $LOAD_PATH.unshift File.expand_path("../lib", __dir__)
-# Default ./bin/dict-build omits rare headwords from generated/word_dict.txt. Rarity specs need:
-#   INCLUDE_RARE_WORDS=1 ./bin/dict-build
 require "rhymecrime/crime"
 
 # Skip an example when +not_working_message+ is truthy (except +false+).

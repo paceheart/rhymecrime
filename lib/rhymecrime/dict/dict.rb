@@ -85,13 +85,20 @@ end
 # Fallback: self-lemma (word is its own base).
 def compute_lemma_map(word_dict)
   lemma_map = {}
+  # WordNet checks are repeated across Kaikki bases and Inflect candidates; memoize per build.
+  wn_pair_memo = {}
+  wn_accept_cached = lambda do |w, b|
+    k = "#{w}\0#{b}"
+    wn_pair_memo.fetch(k) { wn_pair_memo[k] = wn_accept_inflection_lemma_pair?(w, b) }
+  end
+
   word_dict.each_key do |word|
     # Source A: Kaikki-derived base (Wiktionary explicitly lists the relationship).
     # When the word has a WN entry, require +wn_accept_inflection_lemma_pair?+ — Kaikki can link
     # archaic/dialectal inflections (crew→crow, feed→fee) that mislead the common-sense lemma.
     kaikki_base = $inflection_base_words[word]
     if kaikki_base && kaikki_base != word && word_dict.key?(kaikki_base)
-      if !wn_has_entry?(word) || wn_accept_inflection_lemma_pair?(word, kaikki_base)
+      if !wn_has_entry?(word) || wn_accept_cached.call(word, kaikki_base)
         lemma_map[word] = kaikki_base
         next
       end
@@ -99,11 +106,16 @@ def compute_lemma_map(word_dict)
 
     word_in_wn = wn_has_entry?(word)
 
-    # Source B: Inflect candidate bases present in word_dict
+    # Source B: Inflect candidate bases present in word_dict (skip when no morphological suffix shape).
+    raw_bases = Inflect.raw_candidate_bases_for_inflected(word)
+    next if raw_bases.empty?
+
     best_base = nil
     best_freq = -1
-    Inflect.each_candidate_base_for_inflected(word) do |base|
+    raw_bases.each do |base|
       next unless word_dict.key?(base)
+      next unless Inflect.inflection_of_base?(base, word)
+
       kind = Inflect.send(:match_suffix_kind, base, word)
       next if kind.nil?
 
@@ -116,7 +128,7 @@ def compute_lemma_map(word_dict)
       # If word is in WordNet, base must share a synset (crew≠crow, ring≠re, thing≠the).
       # If word is NOT in WordNet, base must at least be in WordNet (tran, sacre, etc. are not).
       if word_in_wn
-        next unless wn_accept_inflection_lemma_pair?(word, base)
+        next unless wn_accept_cached.call(word, base)
       else
         next unless wn_has_entry?(base)
       end
@@ -174,7 +186,6 @@ def rebuild_rhymecrime_dictionaries()
   rdict = build_rime_dict(cmudict)
   word_dict = build_word_dict(cmudict, rdict, subtlex_hash, wordfreq_hash, wiktionary_words, pos_map, forms_map, kaikki_verb_morph, original_cmudict_headwords)
   hyphen_fold_build_keys = word_dict.keys
-  strip_rare_headwords_from_exported_lexicon!(word_dict, rdict) unless include_rare_words_in_exported_lexicon?
   lemma_map = compute_lemma_map(word_dict)
   save_string_hash(rdict, generated_dict_path_under_dict_dir(RIME_DICT_FILENAME), RIME_DICT_HEADER)
   save_word_dict(word_dict, lemma_map)

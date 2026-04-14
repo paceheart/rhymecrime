@@ -52,20 +52,33 @@ def word_dict_frequency_for_rime_bucket(word_dict, word)
   entry[0].to_i
 end
 
-# Drop rime buckets with at most one common headword (frequency > +RARE_FREQ_MAX+): all-rare buckets,
-# one common among rares, or a lone common — so every remaining bucket has ≥2 common rhyme partners.
+# True when the bucket has exactly one common headword (frequency > +RARE_FREQ_MAX+) and at least one rare.
+# Pairs of two (or more) common rhymes are kept (*yum* / *plum* when both are common).
+def rime_bucket_one_common_with_any_rare?(words, word_dict)
+  return false if words.nil? || words.length < 2
+
+  common = 0
+  words.each do |w|
+    common += 1 if word_dict_frequency_for_rime_bucket(word_dict, w) > RARE_FREQ_MAX
+  end
+  common == 1
+end
+
+# Drop rime buckets where **every** headword is rare (frequency ≤ +RARE_FREQ_MAX+), or where there is
+# exactly **one** common headword and any number of rare partners (artifact size / avoid one common + clutter).
 def delete_rare_only_rime_buckets!(rdict, word_dict, log: true)
   removed = 0
   before_n = rdict.length
   rdict.delete_if do |_rime, words|
     next false if words.nil? || words.empty?
-    common_n = words.count { |w| word_dict_frequency_for_rime_bucket(word_dict, w) > RARE_FREQ_MAX }
-    drop = common_n <= 1
+    all_rare = words.all? { |w| word_dict_frequency_for_rime_bucket(word_dict, w) <= RARE_FREQ_MAX }
+    one_common_mixed = rime_bucket_one_common_with_any_rare?(words, word_dict)
+    drop = all_rare || one_common_mixed
     removed += 1 if drop
     drop
   end
   if log && removed > 0
-    puts "#{rdict.length} out of #{before_n} rime buckets remain after removing buckets with at most one common headword"
+    puts "#{rdict.length} out of #{before_n} rime buckets remain after removing rare-only and one-common+mixed buckets"
   end
   removed
 end
