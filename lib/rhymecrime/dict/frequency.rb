@@ -47,11 +47,12 @@ end
 # SUBTLEX FREQlow, WordNet lemma, pre-merge CMU headword, USF cue/target, ConceptNet lemma cache,
 # Numberbatch embedding list). Used to block morph phases from copying base_freq>RARE_FREQ_MAX onto
 # surfaces that exist only via Kaikki/Inflect (e.g. *necrophilias*).
-def inflection_surface_reference_attested?(w, subtlex_hash, wordfreq_hash, original_cmudict_headwords, cn_vocab, nb_token_set, usf_word_set)
+def inflection_surface_reference_attested?(w, subtlex_hash, wordfreq_hash, original_cmudict_headwords, cn_vocab, nb_token_set, usf_word_set, neol_words: nil)
   return true if wordfreq_hash.key?(w)
   return true if (subtlex_hash[w] || 0).to_i > 0
   return true if wn_has_entry?(w)
   return true if original_cmudict_headwords.include?(w)
+  return true if neol_words&.include?(w)
   return true if usf_word_set.include?(w)
 
   u = hyphens_to_underscores(w)
@@ -275,8 +276,8 @@ def compute_frequency(word, subtlex_hash, wordfreq_hash)
   end
 
   # WordNet synset strings are title-cased; demonyms and many names still appear lowercase in SUBTLEX /
-  # wordfreq. Only zero unattested surface forms (no subtitle hits and Zipf below the rare band).
-  return 0 if wn_all_proper && sub_raw.zero? && zipf < WORDFREQ_RARE_ZIPF
+  # wordfreq. All-proper with zero SUBTLEX is encyclopedic-only (high Zipf reflects Wikipedia, not usage).
+  return 0 if wn_all_proper && sub_raw.zero?
 
   # e.g. atm: WordNet lemma + high Zipf but almost no lowercase subtitle hits — encyclopedic initialism.
   weak_lexical_anchor = short_initialism_shape?(word) && in_wordnet && sub_raw < SUBTLEX_OVERRIDE_PROPER_MIN && zipf >= WORDFREQ_COMMON_ZIPF
@@ -332,7 +333,7 @@ def compute_frequency(word, subtlex_hash, wordfreq_hash)
 end
 
 # Phase 9: try to lift +word+ to donor freq via +listed+ (common_words.txt), forward or reverse Inflect match.
-def phase9_inherit_once!(word, listed, forward, hash, rare_words, common_words, pos_map, forms_map, kaikki_verb_morph, subtlex_hash, wordfreq_hash, cmudict_orig, ref_cn, ref_nb, ref_usf)
+def phase9_inherit_once!(word, listed, forward, hash, rare_words, common_words, pos_map, forms_map, kaikki_verb_morph, subtlex_hash, wordfreq_hash, cmudict_orig, ref_cn, ref_nb, ref_usf, neol_words)
   entry = hash[word]
   return false unless entry
   return false if entry[0] > RARE_FREQ_MAX
@@ -368,6 +369,10 @@ def phase9_inherit_once!(word, listed, forward, hash, rare_words, common_words, 
     dict_trace_puts(infl, "Phase9 ← #{base} (listed=#{listed}): skip (plural :s not allowed)") if tr
     return false
   end
+  if (inflection_suffix_kind == :ed || inflection_suffix_kind == :ing) && base.end_with?("ing")
+    dict_trace_puts(infl, "Phase9 ← #{base} (listed=#{listed}): skip (#{inflection_suffix_kind} on -ing base)") if tr
+    return false
+  end
   list_auth = common_words.include?(base)
   if (inflection_suffix_kind == :ed || inflection_suffix_kind == :ing) && !morph_base_allows_verb_forms?(base, infl, pos_map, forms_map, wf_infl, wordfreq_hash, list_authoritative_base: list_auth, kaikki_verb_morph: kaikki_verb_morph)
     dict_trace_puts(infl, "Phase9 ← #{base} (listed=#{listed}): skip (verb forms blocked; suffix=#{inflection_suffix_kind} list_auth=#{list_auth} zipf=#{wf_infl})") if tr
@@ -382,8 +387,8 @@ def phase9_inherit_once!(word, listed, forward, hash, rare_words, common_words, 
   end
   listed_freq = hash.key?(listed) ? hash[listed][0] : 0
   donor = listed_freq > RARE_FREQ_MAX ? listed_freq : 99
-  if donor > RARE_FREQ_MAX && !common_words.include?(listed) && !inflection_surface_reference_attested?(word, subtlex_hash, wordfreq_hash, cmudict_orig, ref_cn, ref_nb, ref_usf)
-    dict_trace_puts(word, "Phase9 ← base=#{base} (listed=#{listed}): skip (surface not in wordfreq/SUBTLEX/WN/CMU/USF/CN/NB)") if tr
+  if donor > RARE_FREQ_MAX && !common_words.include?(listed) && !neol_words.include?(base) && !neol_words.include?(listed) && !inflection_surface_reference_attested?(word, subtlex_hash, wordfreq_hash, cmudict_orig, ref_cn, ref_nb, ref_usf, neol_words: neol_words)
+    dict_trace_puts(word, "Phase9 ← base=#{base} (listed=#{listed}): skip (surface not in wordfreq/SUBTLEX/WN/CMU/USF/CN/NB/neol)") if tr
     return false
   end
   entry[0] = donor
@@ -449,6 +454,23 @@ def add_frequency_info(cmudict, subtlex_hash, wordfreq_hash, wiktionary_words, p
   end
   puts "#{common_extra} extra words added from common_words.txt" if common_extra > 0
 
+  # Phase 5b: modern neologisms from neol2016 (12dicts) + supplement.
+  # Neither list is a complete inventory of inflections, so the union serves as attestation
+  # for morphological expansion in Phases 8-11 (e.g. +yeeted+ from +yeet+).
+  neol_words = load_word_list_set(NEOL2016_FILENAME)
+  neol_words.merge(load_word_list_set(NEOL_SUPPLEMENT_FILENAME))
+  neol_promoted = 0
+  neol_words.each do |word|
+    if hash.key?(word)
+      next if hash[word][0] > RARE_FREQ_MAX
+      hash[word][0] = 98
+    else
+      hash[word] = [98, []]
+    end
+    neol_promoted += 1
+  end
+  puts "#{neol_promoted} words promoted/added from neol2016 + supplement" if neol_promoted > 0
+
   # Phase 6: Wiktionary floor for modern words absent from all traditional corpora, e.g. throuple, yeet.
   # Require Zipf >= RARE to avoid junk words
   floor_applied = 0
@@ -510,6 +532,10 @@ def add_frequency_info(cmudict, subtlex_hash, wordfreq_hash, wiktionary_words, p
       next
     end
     base_freq = hash.key?(base) ? hash[base][0] : 0
+    if base_freq >= 999999
+      dict_trace_puts(inflected, "Phase8 ← #{base}: skip (stop word donor)") if tr
+      next
+    end
     if base_freq <= RARE_FREQ_MAX
       dict_trace_puts(inflected, "Phase8 ← #{base}: skip (base_freq=#{base_freq} ≤ #{RARE_FREQ_MAX})") if tr
       next
@@ -541,10 +567,11 @@ def add_frequency_info(cmudict, subtlex_hash, wordfreq_hash, wiktionary_words, p
         next
       end
     end
-    surf_ok = inflection_surface_reference_attested?(inflected, subtlex_hash, wordfreq_hash, cmudict_orig, ref_cn, ref_nb, ref_usf) ||
-      wiktionary_surface_form_attested?(forms_map, base, inflected)
+    surf_ok = inflection_surface_reference_attested?(inflected, subtlex_hash, wordfreq_hash, cmudict_orig, ref_cn, ref_nb, ref_usf, neol_words: neol_words) ||
+      wiktionary_surface_form_attested?(forms_map, base, inflected) ||
+      neol_words.include?(base)
     if base_freq > RARE_FREQ_MAX && !common_words.include?(base) && !surf_ok
-      dict_trace_puts(inflected, "Phase8 ← #{base}: skip (not in wordfreq/SUBTLEX/WN/CMU/USF/CN/NB/Kaikki surface)") if tr
+      dict_trace_puts(inflected, "Phase8 ← #{base}: skip (not in wordfreq/SUBTLEX/WN/CMU/USF/CN/NB/neol/Kaikki surface)") if tr
       next
     end
     hash[inflected][0] = base_freq
@@ -580,7 +607,7 @@ def add_frequency_info(cmudict, subtlex_hash, wordfreq_hash, wiktionary_words, p
           dict_trace_puts(w, "Phase9: skip row (in rare_words.txt)") if dict_trace_word?(w)
           next
         end
-        next unless phase9_inherit_once!(w, listed, true, hash, rare_words, common_words, pos_map, forms_map, kaikki_verb_morph, subtlex_hash, wordfreq_hash, cmudict_orig, ref_cn, ref_nb, ref_usf)
+        next unless phase9_inherit_once!(w, listed, true, hash, rare_words, common_words, pos_map, forms_map, kaikki_verb_morph, subtlex_hash, wordfreq_hash, cmudict_orig, ref_cn, ref_nb, ref_usf, neol_words)
         claimed[w] = true
         round += 1
         cw_inherited += 1
@@ -598,7 +625,7 @@ def add_frequency_info(cmudict, subtlex_hash, wordfreq_hash, wiktionary_words, p
           dict_trace_puts(w, "Phase9: skip row (in rare_words.txt)") if dict_trace_word?(w)
           next
         end
-        next unless phase9_inherit_once!(w, listed, false, hash, rare_words, common_words, pos_map, forms_map, kaikki_verb_morph, subtlex_hash, wordfreq_hash, cmudict_orig, ref_cn, ref_nb, ref_usf)
+        next unless phase9_inherit_once!(w, listed, false, hash, rare_words, common_words, pos_map, forms_map, kaikki_verb_morph, subtlex_hash, wordfreq_hash, cmudict_orig, ref_cn, ref_nb, ref_usf, neol_words)
         claimed[w] = true
         round += 1
         cw_inherited += 1
@@ -667,6 +694,10 @@ def add_frequency_info(cmudict, subtlex_hash, wordfreq_hash, wiktionary_words, p
         wf = wordfreq_hash[w] || 0
         if inflection_suffix_kind == :s && !morph_base_allows_plural_s?(base, pos_map, forms_map, w, wordfreq_hash: wordfreq_hash, subtlex_hash: subtlex_hash)
           dict_trace_puts(w, "Phase10 ← #{base}: skip (plural :s not allowed)") if tr
+          next
+        end
+        if (inflection_suffix_kind == :ed || inflection_suffix_kind == :ing) && base.end_with?("ing")
+          dict_trace_puts(w, "Phase10 ← #{base}: skip (#{inflection_suffix_kind} on -ing base)") if tr
           next
         end
         if (inflection_suffix_kind == :ed || inflection_suffix_kind == :ing) && !morph_base_allows_verb_forms?(base, w, pos_map, forms_map, wf, wordfreq_hash, kaikki_verb_morph: kaikki_verb_morph)
@@ -744,7 +775,9 @@ def add_frequency_info(cmudict, subtlex_hash, wordfreq_hash, wiktionary_words, p
       end
       sub_raw = subtlex_hash[base] || 0
       # SUBTLEX floor *or* conversational web Zipf (*blog* is dialogue-light in SUBTLEX but Zipf≈4.7).
-      corpus_ok = sub_raw >= MORPH_CORPUS_SUBTLEX_MIN || base_zipf_pre >= WORDFREQ_COMMON_ZIPF
+      # Curated neol bases also qualify so modern lemmas (*doomscroll*) spread to their inflections.
+      corpus_ok = sub_raw >= MORPH_CORPUS_SUBTLEX_MIN || base_zipf_pre >= WORDFREQ_COMMON_ZIPF ||
+        neol_words.include?(base)
       lexical_plural_ok = wn_has_entry?(base) && !wn_base_has_verb?(base) &&
         sub_raw >= MORPH_LEXICAL_NOUN_PLURAL_SUBTLEX_MIN
       unless corpus_ok || lexical_plural_ok
@@ -773,6 +806,10 @@ def add_frequency_info(cmudict, subtlex_hash, wordfreq_hash, wiktionary_words, p
           dict_trace_puts(w, "Phase11 ← #{base}: skip (plural :s not allowed)") if tr
           next
         end
+        if (inflection_suffix_kind == :ed || inflection_suffix_kind == :ing) && base.end_with?("ing")
+          dict_trace_puts(w, "Phase11 ← #{base}: skip (#{inflection_suffix_kind} on -ing base)") if tr
+          next
+        end
         if (inflection_suffix_kind == :ed || inflection_suffix_kind == :ing) && !morph_base_allows_verb_forms?(base, w, pos_map, forms_map, wf, wordfreq_hash, kaikki_verb_morph: kaikki_verb_morph)
           dict_trace_puts(w, "Phase11 ← #{base}: skip (verb forms blocked; suffix=#{inflection_suffix_kind} zipf=#{wf})") if tr
           next
@@ -787,14 +824,15 @@ def add_frequency_info(cmudict, subtlex_hash, wordfreq_hash, wiktionary_words, p
           dict_trace_puts(w, "Phase11 ← #{base}: skip (Zipf #{wf} ≥ #{WORDFREQ_COMMON_ZIPF})") if tr
           next
         end
-        surf_attested = inflection_surface_reference_attested?(w, subtlex_hash, wordfreq_hash, cmudict_orig, ref_cn, ref_nb, ref_usf)
+        surf_attested = inflection_surface_reference_attested?(w, subtlex_hash, wordfreq_hash, cmudict_orig, ref_cn, ref_nb, ref_usf, neol_words: neol_words) ||
+          neol_words.include?(base)
         base_zipf = wordfreq_hash[base] || 0
         if donor > RARE_FREQ_MAX && base_zipf < WORDFREQ_COMMON_ZIPF && !surf_attested
-          dict_trace_puts(w, "Phase11 ← #{base}: skip (not in wordfreq/SUBTLEX/WN/CMU/USF/CN/NB; base Zipf #{base_zipf} < #{WORDFREQ_COMMON_ZIPF})") if tr
+          dict_trace_puts(w, "Phase11 ← #{base}: skip (not in wordfreq/SUBTLEX/WN/CMU/USF/CN/NB/neol; base Zipf #{base_zipf} < #{WORDFREQ_COMMON_ZIPF})") if tr
           next
         end
         if inflection_suffix_kind == :s
-          unless hash.key?(w)
+          unless hash.key?(w) || neol_words.include?(base)
             dict_trace_puts(w, "Phase11 ← #{base}: skip (:s branch, not in hash)") if tr
             next
           end
@@ -804,7 +842,7 @@ def add_frequency_info(cmudict, subtlex_hash, wordfreq_hash, wiktionary_words, p
             dict_trace_puts(w, "Phase11 ← #{base}: skip (:s branch, verb-only base)") if tr
             next
           end
-          if hash[w][0] > RARE_FREQ_MAX
+          if hash.key?(w) && hash[w][0] > RARE_FREQ_MAX
             dict_trace_puts(w, "Phase11 ← #{base}: skip (:s branch, freq already high)") if tr
             next
           end
@@ -812,10 +850,14 @@ def add_frequency_info(cmudict, subtlex_hash, wordfreq_hash, wiktionary_words, p
             dict_trace_puts(w, "Phase11 ← #{base}: skip (:s branch, corpus gates)") if tr
             next
           end
-          hash[w][0] = donor
-          if hash[w][1].empty?
-            promo = morph_derived_prons_for_promotion(base_prons, base, w)
-            hash[w][1] = promo unless promo.empty?
+          if hash.key?(w)
+            hash[w][0] = donor
+            if hash[w][1].empty?
+              promo = morph_derived_prons_for_promotion(base_prons, base, w)
+              hash[w][1] = promo unless promo.empty?
+            end
+          else
+            hash[w] = [donor, morph_derived_prons_for_promotion(base_prons, base, w)]
           end
           dict_trace_puts(w, "Phase11 ← #{base}: set freq=#{donor} (:s plural path)") if tr
         elsif corpus_ok
