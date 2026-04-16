@@ -88,19 +88,18 @@ rows.each_with_index do |row, i|
 
   puts [
     "F:",
-    "#{context.inspect}",
     "#{word.inspect}",
-    "expected=#{kind}",
-    "actual=#{actual}",
+    "#{actual}, oughta be #{kind}",
     "score=#{score}",
-    "(line #{i + 2})"
+    "(line #{i + 2})",
+    "#{context}"
   ].join(" ")
 end
 
 pct = total_weight.positive? ? (100.0 * weighted_score / total_weight) : 0.0
 
 puts
-puts format("Weighted accuracy: %.2f%%", pct)
+puts format("Weighted accuracy: %.1f%%", pct)
 puts format(
   "  (weighted score %.4f / weight %.0f over %d category rows; %d exact, %d partial/zero)",
   weighted_score,

@@ -13,16 +13,19 @@ def morph_part_of_speech_tags(pos_map, base)
 end
 
 # *Deers* / *sheeps*: Inflect treats *base+s* as :s, but WordNet marks *deer*, *sheep*, … as invariant in +noun.exc+.
+# Extended to cover bases whose noun.exc plural is irregular and non-+s+ (*ox* → *oxen*, *child* → *children*,
+# *goose* → *geese*): *oxes* / *childs* / *gooses* are spurious regular plurals in that case.
 def morph_spurious_plural_s_on_invariant_noun?(plural_word)
-  bases = wn_noun_exc_invariant_plural_bases
-  return false if bases.empty?
+  invariant = wn_noun_exc_invariant_plural_bases
+  irregular = wn_noun_exc_irregular_non_s_plural_bases
+  return false if invariant.empty? && irregular.empty?
 
   Inflect.each_candidate_base_for_inflected(plural_word) do |base|
-    next unless bases.include?(base)
+    next unless invariant.include?(base) || irregular.include?(base)
     next unless Inflect.inflection_of_base?(base, plural_word)
     next unless Inflect.send(:match_suffix_kind, base, plural_word) == :s
 
-    return true if plural_word == base + "s"
+    return true if plural_word == base + "s" || plural_word == base + "es"
   end
   false
 end
@@ -238,6 +241,17 @@ def morph_base_allows_comparative_er_est?(base, w, pos_map, base_first_pron, for
       tags_y = morph_part_of_speech_tags(pos_map, base)
       adj_y = tags_y.any? ? tags_y.include?("adj") : wn_base_has_adjective?(base)
       return false unless adj_y
+      # Kaikki adj tag without WordNet confirmation (base is OOV in WN, or WN has the base
+      # without an adj sense): the adj sense is typically dialectal/marginal and Kaikki
+      # sometimes lists dialectal comparatives (*thingy*→*thingier*) with no corpus footprint.
+      # +wn_base_has_adjective?+ is default-lenient (returns true for OOV bases) so we use
+      # +wn_has_entry?+ to gate it. Require BOTH Kaikki attestation AND surface Zipf.
+      kaikki_adj_unconfirmed = tags_y.include?("adj") &&
+        !(wn_has_entry?(base) && wn_base_has_adjective?(base))
+      if tags_y.any? && kaikki_adj_unconfirmed
+        return false unless wiktionary_surface_form_attested?(forms_map, base, w)
+        return zipf_w >= WORDFREQ_RARE_ZIPF
+      end
       return true
     end
     return false
@@ -275,12 +289,26 @@ def morph_base_allows_comparative_er_est?(base, w, pos_map, base_first_pron, for
     # Lemma is both noun and adjective (*liege*, *nice*): do not bypass attestation on monosyllables
     # (*lieger* / *liegest*); *nicer* / *nicest* remain Kaikki-attested.
     noun_and_adj = tags.include?("noun") && tags.include?("adj")
-    return true if base_first_pron && !base_first_pron.empty? && vc <= 1 && !noun_and_adj
+    # Monosyllable adj shortcut used to bypass Kaikki attestation for silent-e comparatives
+    # (*safe*→*safer*). But Kaikki-only adj-tagged bases with no verb/noun tag (*liege*=["adj"])
+    # slipped unattested comparatives through; require either Kaikki attestation or surface
+    # Zipf so *lieger* (zipf=0, no forms row) fails while *safer*/*nicer* still pass.
+    if base_first_pron && !base_first_pron.empty? && vc <= 1 && !noun_and_adj
+      return true if attested || zipf_w >= WORDFREQ_RARE_ZIPF
+    end
     return false unless attested
-    # Attested comparatives from adjective-only (or non-verb) lemmas still need corpus support on
-    # the surface itself; otherwise *impromptuer* inherits *impromptu*’s frequency (FP).
-    return zipf_w >= WORDFREQ_RARE_ZIPF unless tags.include?("verb")
-    true
+    # Kaikki adj without WN adj confirmation (OOV-in-WN or WN-present-without-adj): require
+    # surface Zipf on top of Kaikki attestation. Blocks phantom comparatives for bases whose
+    # adj sense is dialectal/marginal.
+    kaikki_adj_unconfirmed = tags.include?("adj") &&
+      !(wn_has_entry?(base) && wn_base_has_adjective?(base))
+    if kaikki_adj_unconfirmed
+      return zipf_w >= WORDFREQ_RARE_ZIPF
+    end
+    # Surface Zipf evidence required for all other Kaikki-attested comparatives; blocks
+    # phantom comparatives Kaikki lists for archaic/marginal senses even when the base has
+    # verb+noun+adj tags.
+    zipf_w >= WORDFREQ_RARE_ZIPF
   else
     return true if base_first_pron && !base_first_pron.empty? && vc <= 2 &&
       !(wn_base_has_noun?(base) && wn_base_has_adjective?(base))
@@ -303,6 +331,27 @@ end
 # the form. That blocks *nostalgias* / *chaoses* / *goodwills* and keeps *indifferences* from inheriting a
 # common base tier while *apples* (noun.plant) still promotes via Wiktionary / SUBTLEX / Zipf as before.
 def morph_base_allows_plural_s?(base, pos_map, forms_map, plural_word, wordfreq_hash: nil, subtlex_hash: nil)
+  # Kaikki-attested plural of an otherwise adj/verb-coded base whose plural has corpus evidence
+  # (*observables* zipf 2.11, *malignancies* zipf 2.53, *biopics* zipf 1.88): trust Wiktionary's
+  # attestation of the exact plural surface. Requires corpus evidence (wordfreq Zipf ≥ RARE or
+  # SUBTLEX dialogue trickle) so mass-noun spurious plurals Kaikki lists but real corpora don't
+  # attest (*informations*, *advices*) are still blocked.
+  if wiktionary_surface_form_attested?(forms_map, base, plural_word) &&
+     !morph_spurious_plural_s_on_invariant_noun?(plural_word)
+    wf_p = (wordfreq_hash && wordfreq_hash[plural_word]) || 0
+    sub_p = (subtlex_hash && subtlex_hash[plural_word]) || 0
+    tags_b = morph_part_of_speech_tags(pos_map, base)
+    # Adj-tagged base (often adj-primary with a marginal noun sense, e.g. *ambient*, *thick*):
+    # slangy/conversational plurals can register as subtitle noise even when Kaikki lists the form
+    # as a plural. Demand Zipf ≥ RARE on the plural surface so we only promote productive nominal
+    # plurals (*blacks* wf>4, *goods* wf>5) and not casual usages (*ambients* wf=1.36, *thicks* wf=1.05).
+    if tags_b.any? && tags_b.include?("adj")
+      return true if wf_p >= WORDFREQ_RARE_ZIPF
+    else
+      return true if wf_p >= WORDFREQ_RARE_ZIPF || sub_p > 0
+    end
+  end
+
   tags = morph_part_of_speech_tags(pos_map, base)
   if tags.any?
     # Verb-only lemmas: treat trailing -s as 3sg (*twerks*), not a noun plural (*gooses* is noun+verb).
@@ -311,7 +360,11 @@ def morph_base_allows_plural_s?(base, pos_map, forms_map, plural_word, wordfreq_
     return false if wn_has_entry?(base) && !wn_base_has_noun?(base)
     return false if morph_spurious_plural_s_on_invariant_noun?(plural_word)
     if tags.include?("adj")
-      return wiktionary_surface_form_attested?(forms_map, base, plural_word)
+      # Kaikki listing alone is not enough for adj-tagged bases: add a plural-surface Zipf floor
+      # (*ambients*/1.36, *thicks*/1.05 fail; productive adj→noun plurals like *blacks*/*goods* pass).
+      return false unless wiktionary_surface_form_attested?(forms_map, base, plural_word)
+      wf_p = (wordfreq_hash && wordfreq_hash[plural_word]) || 0
+      return wf_p >= WORDFREQ_RARE_ZIPF
     end
     if wn_noun_base_mass_dominant_for_productive_plural?(base) ||
        wn_noun_base_feeling_plus_attribute_plural_needs_own_corpus?(base)

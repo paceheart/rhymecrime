@@ -40,33 +40,46 @@ def empty_kaikki_verb_morphology
 end
 
 # Load kaikki.org filtered JSONL.
-# Returns [pron_hash, forms_map, pos_map, kaikki_verb_morph]
+# Returns [pron_hash, forms_map, pos_map, kaikki_verb_morph, kaikki_capitalized_only]
 #   pron_hash: { word => [Pronunciation, ...] }  (same format as load_cmudict)
 #   forms_map: { base_word => [[inflected_form, base_word], ...] }
 #   pos_map: { word => Set<String> } union of Kaikki "pos" per lemma (Layer A ∩ WordNet in dict.rb)
 #   kaikki_verb_morph: Hash with :past_surfaces (Set), :lemmas_with_present_participle (Set),
 #     :verb_paradigm_forms (lemma => Set of attested inflected surfaces), and
 #     :non_lemma_surfaces_in_pp_paradigm (Set) for morph gating.
+#   kaikki_capitalized_only: Set<String> of lowercased headwords that never appeared with a
+#     lowercase headword in Kaikki (proper-noun signal for the Wiktionary floor / compute_frequency).
 def load_wiktionary
   path = WIKTIONARY_DATA_PATH
   unless File.exist?(path)
     puts "Wiktionary data not found at #{path}; skipping."
     m = empty_kaikki_verb_morphology
-    return [{}, {}, {}, m]
+    return [{}, {}, {}, m, Set.new]
   end
 
   pron_hash = Hash.new { |h, k| h[k] = [] }
   forms_map = Hash.new { |h, k| h[k] = [] }
   pos_map = {}
   verb_morph = empty_kaikki_verb_morphology
+  kaikki_has_capitalized = Set.new
+  kaikki_has_lowercase = Set.new
   total = 0; converted = 0; skipped = 0
 
   Zlib::GzipReader.open(path, encoding: 'UTF-8') do |gz|
     gz.each_line do |line|
       obj = JSON.parse(line) rescue next
 
-      word = obj["word"].to_s.downcase.strip
+      word_raw = obj["word"].to_s.strip
+      word = word_raw.downcase
       next if word.empty? || word.match?(/\d/) || word.start_with?("'") || word.include?(" ")
+
+      # Record case of the headword before any pos-based skipping: "name"-tagged and capitalized
+      # "noun" entries (Modena, Batavia, Cabot, Srebrenica) are the proper-noun signal we want.
+      if word_raw == word
+        kaikki_has_lowercase.add(word)
+      else
+        kaikki_has_capitalized.add(word)
+      end
 
       pos = obj["pos"].to_s
       next if pos == "name"
@@ -112,7 +125,9 @@ def load_wiktionary
 
   puts "Wiktionary: #{total} entries with pronunciation, #{converted} converted, #{skipped} skipped"
   puts "Wiktionary: #{pron_hash.size} unique words, #{forms_map.size} words with inflected forms"
-  [pron_hash, forms_map, pos_map, verb_morph]
+  kaikki_capitalized_only = kaikki_has_capitalized - kaikki_has_lowercase
+  puts "Wiktionary: #{kaikki_capitalized_only.size} headwords only ever capitalized (proper-noun signal)"
+  [pron_hash, forms_map, pos_map, verb_morph, kaikki_capitalized_only]
 end
 
 def pick_ga_sounds(sounds)

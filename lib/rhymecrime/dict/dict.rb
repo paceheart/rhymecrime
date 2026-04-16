@@ -180,7 +180,7 @@ def rebuild_rhymecrime_dictionaries()
   cmudict = load_cmudict
   original_cmudict_headwords = cmudict.keys.each_with_object(Set.new) { |k, s| s.add(k) }
   wordfreq_hash = load_wordfreq
-  wiktionary_prons, forms_map, pos_map, kaikki_verb_morph = load_wiktionary
+  wiktionary_prons, forms_map, pos_map, kaikki_verb_morph, kaikki_capitalized_only = load_wiktionary
   wiktionary_headwords = wiktionary_prons.keys
   apply_lexical_pos_layer_a!(pos_map)
   wn_seed_pos_map_for_cmudict_gaps!(pos_map, cmudict)
@@ -191,7 +191,7 @@ def rebuild_rhymecrime_dictionaries()
   wiktionary_prons = nil
   merge_inflected_forms!(cmudict, forms_map)
   merge_gdropped_in_apostrophe_forms!(cmudict, forms_map)
-  subtlex_hash = load_subtlex
+  subtlex_hash, subtlex_total_hash = load_subtlex
   # Track which words are inflected forms for frequency inheritance
   forms_map.each do |base_word, form_pairs|
     form_pairs.each do |inflected_word, base|
@@ -210,7 +210,7 @@ def rebuild_rhymecrime_dictionaries()
   hyp_cmudict_edge = delete_headwords_with_edge_hyphen!(cmudict)
   puts "Removed #{hyp_cmudict_edge} cmudict headwords with a leading or trailing '-'" if hyp_cmudict_edge > 0
   rdict = build_rime_dict(cmudict)
-  word_dict = build_word_dict(cmudict, rdict, subtlex_hash, wordfreq_hash, wiktionary_words, pos_map, forms_map, kaikki_verb_morph, original_cmudict_headwords)
+  word_dict = build_word_dict(cmudict, rdict, subtlex_hash, subtlex_total_hash, wordfreq_hash, wiktionary_words, pos_map, forms_map, kaikki_verb_morph, original_cmudict_headwords, kaikki_capitalized_only)
   hyphen_fold_build_keys = word_dict.keys
   lemma_map = compute_lemma_map(word_dict)
   save_string_hash(rdict, generated_dict_path_under_dict_dir(RIME_DICT_FILENAME), RIME_DICT_HEADER)

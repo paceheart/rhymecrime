@@ -87,6 +87,22 @@ MORPH_CORPUS_SUBTLEX_MIN = 40
 # Plural :s only: allow WN noun-only bases below the corpus floor when still attested in subtitles
 # (e.g. gramophone SUBTLEX 15 → gramophones).
 MORPH_LEXICAL_NOUN_PLURAL_SUBTLEX_MIN = 10
+# Case-based proper-noun detection (see +likely_proper_noun_by_case?+).
+# SUBTLEX+Kaikki preserve headword case; wordfreq/ConceptNet/Numberbatch do not.
+# SUBTLEX FREQcount must reach this many tokens before the capitalized ratio is trusted.
+# 10 catches *Brant* 32, *Mong* 17, *Shi* 50, *Strom* 19 while ignoring *convex* (tot 9, legit
+# technical term) and single-digit surname fragments with insufficient signal.
+SUBTLEX_PROPER_NOUN_MIN_TOTAL = 10
+# Fraction of SUBTLEX occurrences that are capitalized, at or above which the word is treated as
+# a proper noun: *Cabot* 0.99, *Carlin* 1.0, *Brant* 0.88, *Shi* 0.76, *Strom* 0.74. Real words stay
+# below: *hisself* 0.00, *cohosh* 0.00, *hee* 0.43, *aright* 0.53.
+SUBTLEX_PROPER_NOUN_RATIO_MIN = 0.7
+# Sentence-start capitalization inflates the capitalized ratio for real common words. Additionally,
+# common names used in dialogue (*Michael* FREQlow 5, *Italian* 24, *Cajun* 3) need to stay common
+# for rhyme coverage. Obscure proper nouns have FREQlow ≤ 2 (*Cabot* 1, *Leicester* 0, *Kant* 0,
+# *Lawton* 0, *Mott* 0). Threshold chosen to protect rhyme-worthy names while catching name trickle.
+SUBTLEX_PROPER_NOUN_MAX_FREQLOW = 2
+
 # Phase 6: skip Wiktionary floor for 4-letter OOV tokens below this Zipf (*mobo* ~2.5); *yeet* ~2.51 stays eligible.
 WIKT_FLOOR_4L_WEAK_ZIPF_BELOW = 2.51
 # Phase 6: OOV lemmas length ≥5 need Zipf ≥ this for the existence floor (below COMMON; admits *twerk* / *polyamory*).

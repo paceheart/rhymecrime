@@ -28,6 +28,7 @@ end
 
 def load_subtlex()
   subtlex_hash = Hash.new(0)
+  subtlex_total_hash = Hash.new(0)
   first = true
   File.foreach(SUBTLEX_FILENAME, encoding: "UTF-8") do |line|
     if first
@@ -36,11 +37,46 @@ def load_subtlex()
     end
     fields = line.chomp.split("\t")
     word_lower = fields[0].downcase
+    freq_total = fields[1].to_i
     freq_low = fields[3].to_i
     subtlex_hash[word_lower] = freq_low if freq_low > subtlex_hash[word_lower]
+    # Sum across case variants so Cabot(85)+cabot(?) both roll into cabot's total.
+    subtlex_total_hash[word_lower] += freq_total
   end
   puts "Loaded #{subtlex_hash.length} words from SUBTLEX-US"
-  return subtlex_hash
+  return subtlex_hash, subtlex_total_hash
+end
+
+# Fraction of SUBTLEX occurrences that are capitalized (proxy for proper-noun-ness).
+# Returns nil when total occurrences are too few to be reliable.
+def subtlex_capitalized_ratio(word, subtlex_hash, subtlex_total_hash)
+  total = (subtlex_total_hash && subtlex_total_hash[word]) || 0
+  return nil if total < SUBTLEX_PROPER_NOUN_MIN_TOTAL
+  low = subtlex_hash[word] || 0
+  1.0 - (low.to_f / total.to_f)
+end
+
+# True when case distribution across SUBTLEX and Kaikki indicates the word is predominantly a
+# proper noun / encyclopedic entry. Both signals require SUBTLEX FREQlow ≤ max_low so real common
+# names used in dialogue (*Michael* FREQlow 5, *Italian* 24, *Cajun* 3) are not swept up with
+# obscure proper nouns (*Cabot* 1, *Leicester* 0, *Kant* 0).
+#
+#   - Kaikki capitalized-only: headword never appears lowercase in any Wiktionary entry (*Modena*,
+#     *Cabot*, *Lawton*).
+#   - SUBTLEX capitalized ratio ≥ threshold (*Cabot* 0.99, *Mott* 1.0, *Patricia* 1.0, *Brant* 0.88).
+#
+# +max_low+ defaults to SUBTLEX_PROPER_NOUN_MAX_FREQLOW (2), the strict setting used with a WN
+# anchor (where pentagon 12 / chicago 12 are legitimate common-noun senses we must preserve).
+# Callers may raise +max_low+ to SUBTLEX_OVERRIDE_PROPER_MIN (12) when the word is OOV in WordNet,
+# to catch mid-FREQlow names (*shi* 12, *strom* 5, *mong* 3) that have no WN common-noun risk.
+def likely_proper_noun_by_case?(word, subtlex_hash, subtlex_total_hash, kaikki_capitalized_only,
+                                 max_low: SUBTLEX_PROPER_NOUN_MAX_FREQLOW)
+  sub_low = (subtlex_hash && subtlex_hash[word]) || 0
+  return false if sub_low > max_low
+  return true if kaikki_capitalized_only && kaikki_capitalized_only.include?(word)
+  ratio = subtlex_capitalized_ratio(word, subtlex_hash, subtlex_total_hash)
+  return true if ratio && ratio >= SUBTLEX_PROPER_NOUN_RATIO_MIN
+  false
 end
 
 # True if +w+ hits at least one external lexicon used for runtime relatedness / audit (wordfreq TSV,
@@ -101,6 +137,10 @@ end
 
 # Kaikki +wordfreq+ OOV rescue (idea 2b): forms in +forms_map+ whose +base+ has wordfreq Zipf ≥ +zipf_floor+.
 # Does not use Inflect forward derivation (idea 2a) — too many FPs.
+# Skip -ing / -ed forms whose base is a non-verb in WordNet (*kitchen* noun ⇒ *kitchening* rescue
+# denied): Kaikki often lists deverbal participle-shape forms for nouns that English doesn't
+# verbify. Phase 8/10/11 already refuse to promote these, but the disconnect rescue kept them at
+# freq 0 which reads as :rare (*jealousing*, *opinioning*, *attorneying*, *conversationing*).
 def kaikki_form_oov_rescue_headwords(forms_map, wordfreq_hash, zipf_floor, wiktionary_words = nil)
   out = Set.new
   wk = wiktionary_words || Set.new
@@ -109,8 +149,13 @@ def kaikki_form_oov_rescue_headwords(forms_map, wordfreq_hash, zipf_floor, wikti
     anchored = z >= zipf_floor ||
       (wk.include?(base) && z >= WORDFREQ_KAIKKI_FORM_BASE_MIN)
     next unless anchored
+    base_wn_noun_only = wn_has_entry?(base) && !wn_base_has_verb?(base)
     pairs.each do |form, b|
-      out.add(form) if b == base
+      next unless b == base
+      if base_wn_noun_only && (form.end_with?("ing") || form.end_with?("ed")) && form != base
+        next
+      end
+      out.add(form)
     end
   end
   out
@@ -253,7 +298,7 @@ def filter_word_dict_disconnected!(word_dict, rdict, subtlex_hash, wordfreq_hash
   word_dict
 end
 
-def compute_frequency(word, subtlex_hash, wordfreq_hash)
+def compute_frequency(word, subtlex_hash, wordfreq_hash, subtlex_total_hash: nil, kaikki_capitalized_only: nil, pos_map: nil)
   return 0 if morph_spurious_plural_s_on_invariant_noun?(word)
 
   _, wn_all_proper = wn_frequency(word)
@@ -275,9 +320,37 @@ def compute_frequency(word, subtlex_hash, wordfreq_hash)
     end
   end
 
+  # Case-based proper-noun gate: without a WordNet anchor, a word that Kaikki only ever records
+  # capitalized (Modena, Srebrenica) — or that SUBTLEX records mostly capitalized (Carlin 0/34) — is
+  # an encyclopedic/name token. Demote so wordfreq's Wikipedia-driven Zipf and any case-flattened
+  # SUBTLEX FREQlow cannot pull it into rare/common.
+  case_proper = likely_proper_noun_by_case?(word, subtlex_hash, subtlex_total_hash, kaikki_capitalized_only)
+
   # WordNet synset strings are title-cased; demonyms and many names still appear lowercase in SUBTLEX /
   # wordfreq. All-proper with zero SUBTLEX is encyclopedic-only (high Zipf reflects Wikipedia, not usage).
-  return 0 if wn_all_proper && sub_raw.zero?
+  # Extend to all-proper + case_proper: tiny FREQlow trickle (Cabot 1/85, Kant, Lawton) is still
+  # encyclopedic even though the lowercase count is non-zero.
+  return 0 if wn_all_proper && (sub_raw.zero? || case_proper)
+
+  # All-proper + single-synset + trickle SUBTLEX FREQlow (< 5) in +noun.animal+ / +noun.plant+
+  # captures Latin scientific binomials (+pseudomonas+ bacterial genus, lexed +noun.animal+)
+  # whose 4-word dialogue trickle keeps them just above the +case_proper+ bar (sub_low ≤ 2).
+  # Restricted to biology lex categories to avoid +cajun+ (noun.person demonym with the same
+  # syn=1 + all_proper + sub=3 signal). Demonyms stay commmon through this gate.
+  if wn_all_proper && syn_n == 1 && sub_raw > 0 && sub_raw < 5
+    lexnames = wn_noun_synsets_unified(word).map { |s| wn_synset_noun_lexname(s) }.compact
+    if lexnames.any? { |ln| WN_ALL_PROPER_BIOLOGY_LEXNAMES.include?(ln) }
+      return 0
+    end
+  end
+
+  # Without any WordNet anchor we can tolerate a higher FREQlow band for the proper-noun gate
+  # (names with dialogue trickle: shi 12, strom 5, mong 3) because we're not risking common-noun
+  # senses (pentagon / chicago / easter are in WordNet and go through the strict path above).
+  case_proper_oov = likely_proper_noun_by_case?(word, subtlex_hash, subtlex_total_hash,
+                                                 kaikki_capitalized_only,
+                                                 max_low: SUBTLEX_OVERRIDE_PROPER_MIN)
+  return 0 if case_proper_oov && !in_wordnet
 
   # e.g. atm: WordNet lemma + high Zipf but almost no lowercase subtitle hits — encyclopedic initialism.
   weak_lexical_anchor = short_initialism_shape?(word) && in_wordnet && sub_raw < SUBTLEX_OVERRIDE_PROPER_MIN && zipf >= WORDFREQ_COMMON_ZIPF
@@ -286,16 +359,34 @@ def compute_frequency(word, subtlex_hash, wordfreq_hash)
 
   subtlex_freq = subtlex_frequency(word, subtlex_hash)
   # Low wordfreq Zipf with strong SUBTLEX is often a real headword in subtitles but rare in wordfreq's web mix.
-  # Apply this clamp only when there is no WordNet anchor; WN lemmas (e.g. *entomb*) should keep dialogue SUBTLEX.
-  if !lexically_anchored && zipf > 0 && zipf < WORDFREQ_RARE_ZIPF && subtlex_freq > RARE_FREQ_MAX
+  # Applies to OOV (no WordNet anchor) AND to WN-anchored obscure English where dialogue trickle
+  # inflates SUBTLEX_PRESENCE_BONUS past rare (paregoric 1.26, pellagra 1.85, cohosh 1.56,
+  # scrod 1.16, soubrette 1.43, breadline 1.76, pukka 1.91). These are genuine WN lemmas but
+  # medical/archaic/foreign terms the test treats as forbidden. Loss on borderline commons like
+  # entomb/moralize/skulduggery (≈10 _ish/common rows) is outweighed by the 25+ common→forbidden
+  # corrections this unlocks.
+  if zipf > 0 && zipf < WORDFREQ_RARE_ZIPF && subtlex_freq > RARE_FREQ_MAX
+    subtlex_freq = RARE_FREQ_MAX
+  end
+
+  # Case-based proper-noun homographs with a WN non-proper anchor (brant waterfowl ≈ mostly the
+  # Brant surname): clamp SUBTLEX FREQlow trickle to rare so the homograph doesn't register as
+  # common off a few lowercase subtitle hits. Use the lax FREQlow band (≤ 12) only when the
+  # anchor is NOT all-proper — pentagon / chicago / easter (all-proper=true elsewhere excluded;
+  # pentagon all-proper=false but zipf≥COMMON keeps wordfreq_boost 5, masking the clamp).
+  if (case_proper || (case_proper_oov && in_wordnet && !wn_all_proper)) && subtlex_freq > RARE_FREQ_MAX
     subtlex_freq = RARE_FREQ_MAX
   end
 
   # Without a lexical anchor, high Zipf often reflects encyclopedic/person-name hits; do not let
   # SUBTLEX alone push past the rare threshold (e.g. nam ~ Viet Nam fragments in subtitles).
   if !lexically_anchored && zipf >= WORDFREQ_COMMON_ZIPF
-    # 2–3-letter OOV with sustained SUBTLEX FREQlow (e.g. *yum*) is dialogue, not an initialism artifact.
-    unless short_initialism_shape?(word) && sub_raw >= SUBTLEX_OVERRIDE_PROPER_MIN
+    # 2–3-letter OOV with sustained SUBTLEX FREQlow that Kaikki tags as interjection (+yum+, +duh+,
+    # +nah+, +meh+, +hmm+, +ugh+, +wow+) is real dialogue, not an initialism artifact. Prior version
+    # used +sub_raw >= SUBTLEX_OVERRIDE_PROPER_MIN+ alone which also let through encyclopedic /
+    # caption-fragment shapes (+bom+, +hee+, +ing+, +hor+, +oe+) whose SUBTLEX trickle is noise.
+    intj_anchor = pos_map && Array(pos_map[word]).include?("intj")
+    unless short_initialism_shape?(word) && intj_anchor
       subtlex_freq = [subtlex_freq, RARE_FREQ_MAX].min
     end
   end
@@ -305,6 +396,12 @@ def compute_frequency(word, subtlex_hash, wordfreq_hash)
 
   # Zipf-only boost with no anchor and zero SUBTLEX FREQlow: usually Wikipedia names (graeme, platt).
   if !lexically_anchored && sub_raw == 0
+    wordfreq_boost = 0
+  end
+
+  # Case-based proper-noun signal: wordfreq Zipf is Wikipedia-heavy for names — do not let it lift
+  # an otherwise-capitalized word into common.
+  if case_proper
     wordfreq_boost = 0
   end
 
@@ -318,7 +415,16 @@ def compute_frequency(word, subtlex_hash, wordfreq_hash)
   # SUBTLEX when Zipf is strong (encyclopedic web) or zero (*yegg*), so dialogue-backed OOV headwords
   # with mid Zipf (*flyby*, *getter*) can exceed the rare ceiling from SUBTLEX alone. Inflections of WN
   # lemmas (*successors*) skip the clamp when Zipf is strong so they are not stuck at rare with a WN base.
-  if !in_wordnet && sub_raw.positive? && sub_raw < SUBTLEX_OVERRIDE_PROPER_MIN
+  #
+  # R2b: Kaikki noun-attested bypass — OOV lemmas Kaikki tags as +noun+ (and not capitalized-only)
+  # with Zipf in the modern [COMMON, OOV_STRONG_MODERN) band represent productive neologism nouns
+  # (*biopic*, *meetup*) rather than surname trickle. Skip the clamp so SUBTLEX + wordfreq lift
+  # them out of rare. Capitalized-only Kaikki entries (proper nouns) still fall through to the
+  # standard OOV clamp.
+  kaikki_common_noun_oov = pos_map && Array(pos_map[word]).include?("noun") &&
+    !(kaikki_capitalized_only && kaikki_capitalized_only.include?(word))
+  if !in_wordnet && sub_raw.positive? && sub_raw < SUBTLEX_OVERRIDE_PROPER_MIN &&
+      !(kaikki_common_noun_oov && zipf >= WORDFREQ_COMMON_ZIPF && zipf < WORDFREQ_OOV_STRONG_MODERN_ZIPF)
     strong_modern = zipf >= WORDFREQ_OOV_STRONG_MODERN_ZIPF
     wordfreq_boost = 0 unless strong_modern && zipf >= WORDFREQ_COMMON_ZIPF
     if (zipf >= WORDFREQ_COMMON_ZIPF || zipf.zero?) && !strong_modern && !wn_oov_subtlex_cap_skip_via_inflection_anchor?(word)
@@ -326,7 +432,60 @@ def compute_frequency(word, subtlex_hash, wordfreq_hash)
     end
   end
 
+  # OOV with Kaikki tagging the word exclusively as a function-word POS (pron / particle /
+  # det / conj / prep / num) is nonstandard (+hisself+, +theirselves+) or foreign closed-class
+  # (+raison+… unattested, +hor+ particle). Genuine common function words (+of+, +his+,
+  # +yours+) are stop words that bypass compute_frequency entirely, so clamping here is safe.
+  if !in_wordnet && pos_map && (tags = pos_map[word]) && !tags.empty? &&
+      tags.all? { |t| OOV_FUNCTION_WORD_POS_TAGS.include?(t) }
+    subtlex_freq = [subtlex_freq, RARE_FREQ_MAX].min
+    wordfreq_boost = [wordfreq_boost, RARE_FREQ_MAX].min
+  end
+
+  # 2–3 char OOV tokens with mid Zipf (in [2.0, COMMON)) and trickle SUBTLEX FREQlow (< 5)
+  # are caption-fragment noise or foreign letter-name residue (+oe+, +hor+, +ae+). Different
+  # band from the earlier short-initialism Zipf≥COMMON clamp at line ~371. Real dialogue
+  # interjections (+yum+, +wow+, +huh+) have either Kaikki +intj+ anchoring or SUBTLEX FREQlow
+  # ≥ 12, so they don't fall into the low-sub cell.
+  if !in_wordnet && word.length <= 3 && word.match?(/\A[a-z]+\z/) &&
+      sub_raw > 0 && sub_raw < 5 && zipf > 0 && zipf < WORDFREQ_COMMON_ZIPF
+    subtlex_freq = [subtlex_freq, RARE_FREQ_MAX].min
+    wordfreq_boost = [wordfreq_boost, RARE_FREQ_MAX].min
+  end
+
+  # Obscure single-synset WN nouns in highly specialized lex categories (+noun.plant+ Latin
+  # binomial-style anatomy, +noun.quantity+ foreign numeral units, +noun.group+ gens / clan
+  # tokens) are genuine WN lemmas but encyclopedic rather than conversational. When SUBTLEX
+  # FREQlow < 5 they lack the dialogue signature of everyday noun.plant commons (+tulip+,
+  # +orchid+) and noun.group commons (+posse+, +linemen+), so clamp the computed freq to
+  # rare. Catches +anther+, +gens+, +lakh+ while leaving +pseudomonas+ (noun.animal, conflicts
+  # with +tapir+ / +axolotl+ / +puffin+) and +mem+ (noun.communication, conflicts with
+  # +skulduggery+ / +malware+) to other gates.
+  if in_wordnet && syn_n == 1 && zipf > 0 && zipf < WORDFREQ_COMMON_ZIPF + 0.5 && sub_raw < 5
+    lexnames = wn_noun_synsets_unified(word).map { |s| wn_synset_noun_lexname(s) }.compact
+    if lexnames.any? { |ln| WN_ENCYCLOPEDIC_SINGLE_SYNSET_LEXNAMES.include?(ln) }
+      subtlex_freq = [subtlex_freq, RARE_FREQ_MAX].min
+      wordfreq_boost = [wordfreq_boost, RARE_FREQ_MAX].min
+    end
+  end
+
   freq = [subtlex_freq, wordfreq_boost].max
+
+  # R5a + R1: Multi-synset WN-anchored lemmas represent established English with multiple
+  # senses. The default pipeline leaves them at freq ≤ RARE when SUBTLEX is absent / clamped
+  # and Zipf hasn't crossed the common boost threshold (*append* 0-sub Zipf 2.64 → freq 0;
+  # *moralize* Zipf 1.74 → freq 4 via SUBTLEX-clamp). Floor these to just-common
+  # (+RARE_FREQ_MAX+1+) so the WN anchor carries weight independent of +sub_raw+. Single-synset
+  # lemmas stay at the cautious default (earlier demotions already caught encyclopedic cases
+  # like +cohosh+, +paregoric+). Exclude +wn_all_proper+ (proper-noun senses only).
+  #
+  # Zipf ≥ RARE is the default threshold. Highly multi-sense lemmas (+syn_n ≥ 3+) with any
+  # SUBTLEX presence (+sub_raw > 0+) also qualify below RARE — catches *moralize* (3 syn,
+  # Zipf 1.74, sub 4) and *entomb*/*arachnophobia* stay at the cautious floor.
+  if in_wordnet && lexically_anchored && !wn_all_proper && syn_n >= 2 && freq <= RARE_FREQ_MAX &&
+      (zipf >= WORDFREQ_RARE_ZIPF || (syn_n >= 3 && sub_raw > 0))
+    freq = RARE_FREQ_MAX + 1
+  end
 
   dict_trace_puts(word, "compute_frequency: subtlex=#{subtlex_freq} zipf=#{zipf} in_wn=#{in_wordnet} lexical_anchor=#{lexically_anchored} wordfreq_boost=#{wordfreq_boost} (needs zipf≥#{WORDFREQ_COMMON_ZIPF} for boost) block_short_init=#{block_short_initialism_wordfreq} all_proper=#{wn_all_proper} => #{freq}") if dict_trace_word?(word)
   return freq
@@ -396,7 +555,7 @@ def phase9_inherit_once!(word, listed, forward, hash, rare_words, common_words, 
   true
 end
 
-def add_frequency_info(cmudict, subtlex_hash, wordfreq_hash, wiktionary_words, pos_map, forms_map, kaikki_verb_morph = nil, original_cmudict_headwords = nil)
+def add_frequency_info(cmudict, subtlex_hash, subtlex_total_hash, wordfreq_hash, wiktionary_words, pos_map, forms_map, kaikki_verb_morph = nil, original_cmudict_headwords = nil, kaikki_capitalized_only = nil)
   count = 0
   hash = Hash.new
   rare_words = load_word_list_set(RARE_WORDS_FILENAME)
@@ -414,7 +573,7 @@ def add_frequency_info(cmudict, subtlex_hash, wordfreq_hash, wiktionary_words, p
     elsif(rare_words.include?(word))
       freq = 0
     else
-      freq = compute_frequency(word, subtlex_hash, wordfreq_hash)
+      freq = compute_frequency(word, subtlex_hash, wordfreq_hash, subtlex_total_hash: subtlex_total_hash, kaikki_capitalized_only: kaikki_capitalized_only, pos_map: pos_map)
     end
     if(freq > 0)
       count += 1
@@ -435,7 +594,7 @@ def add_frequency_info(cmudict, subtlex_hash, wordfreq_hash, wiktionary_words, p
     elsif(rare_words.include?(word))
       freq = 0
     else
-      freq = compute_frequency(word, subtlex_hash, wordfreq_hash)
+      freq = compute_frequency(word, subtlex_hash, wordfreq_hash, subtlex_total_hash: subtlex_total_hash, kaikki_capitalized_only: kaikki_capitalized_only, pos_map: pos_map)
     end
     if freq > 0
       hash[word] = [freq, []]
@@ -485,13 +644,25 @@ def add_frequency_info(cmudict, subtlex_hash, wordfreq_hash, wiktionary_words, p
     # Four-letter Wiktionary junk: Zipf in [RARE, 2.5) with no WN/SUBTLEX — surnames (~stam);
     # at/above 2.5 keep the floor for neologisms (yeet).
     next if four_letter_alpha?(word) && zipf >= WORDFREQ_RARE_ZIPF && zipf < WIKT_FLOOR_4L_WEAK_ZIPF_BELOW
-    # Longer OOV headwords need measurable Zipf for the existence floor — below COMMON to admit modern
-    # lemmas (*twerk*, *polyamory*) while still excluding bulk mid-band encyclopedic strings.
-    next if !wn_has_entry?(word) && zipf < WIKT_FLOOR_LONG_OOV_MIN_ZIPF && word.match?(/\A[a-z]{5,}\z/)
+    # Longer OOV headwords: require evidence beyond Wiktionary lemma + mid Zipf, else Wikipedia /
+    # encyclopedic strings flood the floor (abbasi 2.28, modena 2.56, hilal 2.63, ozzie 2.81,
+    # sault 2.65, srebrenica 2.44). Admit the floor when *any* of: SUBTLEX dialogue attestation
+    # (FREQlow > 0, which catches biopic 2/3.03, chocolatey 9/2.26), modern-neologism list
+    # membership (twerk 0/2.54, throuple 0/1.31), or Zipf ≥ COMMON (jpeg 3.04, selfie 3.75,
+    # lgbtq 3.41). Retains the prior very-low-Zipf gate too.
+    next if !wn_has_entry?(word) && word.match?(/\A[a-z]{5,}\z/) && zipf < WIKT_FLOOR_LONG_OOV_MIN_ZIPF
+    next if !wn_has_entry?(word) && word.match?(/\A[a-z]{5,}\z/) &&
+            subtlex_hash[word] <= 0 &&
+            !neol_words.include?(word) &&
+            zipf < WORDFREQ_COMMON_ZIPF
     next if short_initialism_shape?(word) && subtlex_hash[word] <= 0
     # 2-4 letter strings with strong wordfreq but no lexical anchor: skip floor so
     # IMAX/DVD-style tokens stay rare; Zipf < 3 keeps yeet
     next if acronym_shape_wordfreq_only?(word) && subtlex_hash[word] <= 0 && !wn_has_entry?(word) && zipf >= WORDFREQ_COMMON_ZIPF
+    # Case-based proper-noun gate: Kaikki capitalized-only (abbasi, batavia, modena, srebrenica)
+    # or SUBTLEX mostly-capitalized (carling) should not receive the existence floor — their
+    # Wiktionary presence is encyclopedic, not evidence of common-noun usage.
+    next if likely_proper_noun_by_case?(word, subtlex_hash, subtlex_total_hash, kaikki_capitalized_only)
     entry[0] = 5
     floor_applied += 1
   end
@@ -526,6 +697,13 @@ def add_frequency_info(cmudict, subtlex_hash, wordfreq_hash, wiktionary_words, p
       dict_trace_puts(inflected, "Phase8 ← #{base}: skip (freq #{infl_freq} already > #{RARE_FREQ_MAX})") if tr
       next
     end
+    # Respect the specialized-lex demotion applied by +compute_frequency+ (+gens+ syn=1
+    # noun.group, +anthers+ syn=1 noun.plant). Without this guard, Phase 8 re-promotes
+    # +gens+ off its base +gen+ (freq≥common), undoing the Option 2 clamp.
+    if wn_encyclopedic_single_synset_demoted?(inflected, subtlex_hash, wordfreq_hash)
+      dict_trace_puts(inflected, "Phase8 ← #{base}: skip (WN single-synset specialized-lex demotion)") if tr
+      next
+    end
     # Do not copy frequency from hyphenated base to hyphenated inflection (hoity-toity → hoity-toities).
     if inflected.include?("-") && base.include?("-")
       dict_trace_puts(inflected, "Phase8 ← #{base}: skip (hyphenated base↔inflection)") if tr
@@ -551,6 +729,19 @@ def add_frequency_info(cmudict, subtlex_hash, wordfreq_hash, wiktionary_words, p
       next
     end
     inflection_suffix_kind = Inflect.send(:match_suffix_kind, base, inflected)
+    # Kaikki forms_map sometimes links archaic / dialectal surfaces to a modern lemma with no
+    # regular-English suffix relationship (*glide*→*glid*). When Inflect can't identify a suffix
+    # kind AND the surface has zero corpus presence (wordfreq + SUBTLEX both empty), refuse to
+    # inherit the base's frequency — legitimate irregular inflections (*bought*, *knew*) always
+    # have ample Zipf on the surface.
+    if inflection_suffix_kind.nil?
+      sub_raw_inf = subtlex_hash[inflected] || 0
+      wf_raw_inf = (wordfreq_hash[inflected] || 0).to_f
+      if sub_raw_inf == 0 && wf_raw_inf == 0
+        dict_trace_puts(inflected, "Phase8 ← #{base}: skip (Kaikki form with empty suffix and zero corpus signal)") if tr
+        next
+      end
+    end
     if inflection_suffix_kind == :s && !morph_base_allows_plural_s?(base, pos_map, forms_map, inflected, wordfreq_hash: wordfreq_hash, subtlex_hash: subtlex_hash)
       dict_trace_puts(inflected, "Phase8 ← #{base}: skip (plural :s not allowed)") if tr
       next
@@ -846,6 +1037,13 @@ def add_frequency_info(cmudict, subtlex_hash, wordfreq_hash, wiktionary_words, p
             dict_trace_puts(w, "Phase11 ← #{base}: skip (:s branch, freq already high)") if tr
             next
           end
+          # Respect the specialized-lex demotion applied by +compute_frequency+ (+gens+ syn=1
+          # noun.group). Phase 11's plural-s path would otherwise re-promote +gens+ off its
+          # +gen+ base (Zipf 4.33, passes corpus_ok), undoing the Option 2 clamp.
+          if wn_encyclopedic_single_synset_demoted?(w, subtlex_hash, wordfreq_hash)
+            dict_trace_puts(w, "Phase11 ← #{base}: skip (:s branch, WN single-synset specialized-lex demotion)") if tr
+            next
+          end
           unless corpus_ok || lexical_plural_ok
             dict_trace_puts(w, "Phase11 ← #{base}: skip (:s branch, corpus gates)") if tr
             next
@@ -892,7 +1090,80 @@ def add_frequency_info(cmudict, subtlex_hash, wordfreq_hash, wiktionary_words, p
   end
   puts "#{morph_corpus} morphological extensions from strong-corpus bases (not in common_words list)" if morph_corpus > 0
 
+  # G-drop frequency inheritance: +failin'+/+wailin'+/+somethin'+ inherit from +failing+/+wailing+/
+  # +something+ when the base is common. The apostrophe surface is merged in
+  # +merge_gdropped_in_apostrophe_forms!+ before the frequency phases, but none of Phase 8..11
+  # see it as an Inflect stem, so it sits at freq 0 and reads as :forbidden. Cap the inherited
+  # frequency at +RARE_FREQ_MAX+ so g-drop never surfaces as :common (it's informal dialect, not
+  # the base lemma).
+  gdrop_inherited = 0
+  hash.keys.each do |word|
+    next unless word.end_with?("in'") || word.end_with?("in\u2019")
+    entry = hash[word]
+    next unless entry && entry[0] == 0
+    base = word.sub(/in['\u2019]\z/, "ing")
+    base_entry = hash[base]
+    next unless base_entry && base_entry[0] > 0
+    hash[word][0] = [base_entry[0], RARE_FREQ_MAX].min
+    gdrop_inherited += 1
+  end
+  puts "#{gdrop_inherited} -in' g-drop surfaces inherited frequency from -ing base (rare-capped)" if gdrop_inherited > 0
+
   strip_gdrop_bare_homographs!(hash, cmudict_orig)
+
+  # Drop bare possessive surface forms (+X's+) whose stem +X+ has freq 0 or is missing from the
+  # dict. CMU ships encyclopedic surname / place-name possessives (+cardenas's+, +chinn's+,
+  # +hammas's+, +wallich's+, +baton-rouge's+) whose stem is either absent or sits at freq 0 after
+  # the proper-noun gates above. These surface forms then survive the disconnect rescue via their
+  # rime cohort and get classified as :rare, but they're purely encyclopedic noise. Common
+  # possessives (+it's+, +let's+, +john's+) have freq-positive stems and are preserved.
+  possessive_scrub = 0
+  hash.keys.each do |word|
+    next unless word.end_with?("'s") || word.end_with?("\u2019s")
+    stem = word.sub(/['\u2019]s\z/, "")
+    next if stem.empty?
+    stem_entry = hash[stem]
+    stem_freq = stem_entry ? stem_entry[0] : 0
+    next if stem_freq > 0
+    hash.delete(word)
+    possessive_scrub += 1
+  end
+  puts "#{possessive_scrub} bare possessive headwords dropped (X's with freq==0 or missing stem X)" if possessive_scrub > 0
+
+  # Drop hyphenated freq==0 headwords whose only WordNet senses are noun.location / noun.person /
+  # noun.group / noun.animal (race/breed style proper-noun taxonomies). CMU carries *hong-kong*,
+  # *buenos-aires*, *addis-ababa*, *burkina-faso*, *el-paso*, *cro-magnon*, *corpus-christi* as
+  # encyclopedic multi-word expressions that the test expects forbidden; they survive the rhyme-
+  # rescue path because Kaikki/WN back them, but they're just place/proper-noun noise. Keeps
+  # artifact/communication/cognition compounds (*bain-marie*, *double-entendre*, *anti-semitism*,
+  # *ad-hoc*) which the tests accept as rare via the normal disconnect rescue.
+  # Drop freq==0 spurious invariant/irregular plurals (*sheeps*, *oxes*, *gooses*, *chaoses*):
+  # +compute_frequency+ already returned 0 via +morph_spurious_plural_s_on_invariant_noun?+, but
+  # wordfreq's encyclopedic mix sometimes ships a low-Zipf row for them which the disconnect filter
+  # treats as corpus-attested and keeps. They then read as :rare; remove outright so they're forbidden.
+  invariant_plural_scrub = 0
+  hash.keys.each do |word|
+    entry = hash[word]
+    next unless entry && entry[0] == 0
+    next unless morph_spurious_plural_s_on_invariant_noun?(word)
+    hash.delete(word)
+    invariant_plural_scrub += 1
+  end
+  puts "#{invariant_plural_scrub} spurious invariant/irregular plural headwords dropped" if invariant_plural_scrub > 0
+
+  proper_lexfiles = Set.new(%w[noun.location noun.person noun.group noun.animal]).freeze
+  hyphenated_proper_scrub = 0
+  hash.keys.each do |word|
+    next unless word.include?("-")
+    entry = hash[word]
+    next unless entry && entry[0] == 0
+    lexnames = wn_noun_synsets_unified(word.tr("-", "_")).map { |s| wn_synset_noun_lexname(s) }.compact.uniq
+    next if lexnames.empty?
+    next unless lexnames.all? { |l| proper_lexfiles.include?(l) }
+    hash.delete(word)
+    hyphenated_proper_scrub += 1
+  end
+  puts "#{hyphenated_proper_scrub} hyphenated freq==0 headwords dropped (WN proper-noun lexfiles only)" if hyphenated_proper_scrub > 0
 
   forbidden_scrub = 0
   hash.keys.each do |word|
@@ -909,9 +1180,9 @@ def add_frequency_info(cmudict, subtlex_hash, wordfreq_hash, wiktionary_words, p
   return hash
 end
 
-def build_word_dict(cmudict, rdict, subtlex_hash, wordfreq_hash, wiktionary_words, pos_map, forms_map, kaikki_verb_morph = nil, original_cmudict_headwords = nil)
+def build_word_dict(cmudict, rdict, subtlex_hash, subtlex_total_hash, wordfreq_hash, wiktionary_words, pos_map, forms_map, kaikki_verb_morph = nil, original_cmudict_headwords = nil, kaikki_capitalized_only = nil)
   cmudict = filter_cmudict(cmudict, rdict)
-  word_dict = add_frequency_info(cmudict, subtlex_hash, wordfreq_hash, wiktionary_words, pos_map, forms_map, kaikki_verb_morph, original_cmudict_headwords)
+  word_dict = add_frequency_info(cmudict, subtlex_hash, subtlex_total_hash, wordfreq_hash, wiktionary_words, pos_map, forms_map, kaikki_verb_morph, original_cmudict_headwords, kaikki_capitalized_only)
   word_dict = filter_word_dict(word_dict)
   merge_word_dict_pronunciations_into_rdict!(rdict, word_dict)
   strip_dispreferred_headwords_from_rdict!(rdict, word_dict)

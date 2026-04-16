@@ -382,6 +382,59 @@ def wn_noun_exc_invariant_plural_bases
   end
 end
 
+# Small, conservative list of noun-only irregular plurals where +base+s+ / +base+es+ is spurious
+# and the base doesn't double as a common verb lemma. Drawn from WordNet +noun.exc+ but hand-filtered
+# to avoid blocking verb 3rd-person-singulars (*knifes*, *leafs*, *wifes*) and legitimate nominal
+# alternates (*mouses* for computer mice, *appendixes* in medical usage).
+WN_NOUN_IRREGULAR_NON_S_PLURAL_BASES = Set.new(%w[
+  child goose ox tooth foot man woman person brother louse
+]).freeze
+
+# WordNet noun lex-filenames whose single-synset members tend to be encyclopedic / specialist
+# rather than conversational English (Latin botanical anatomy, foreign numeric units, clan /
+# gens group labels). When a single-synset WN lemma sits in one of these categories and has
+# almost no SUBTLEX dialogue trickle, it's an encyclopedic token even though WordNet / wordfreq
+# give it headword-level anchors (+anther+, +gens+, +lakh+). Noun.animal and noun.communication
+# are intentionally excluded: they collide with common animal names (+tapir+ / +axolotl+ /
+# +puffin+) and idiom commons (+skulduggery+ / +malware+).
+WN_ENCYCLOPEDIC_SINGLE_SYNSET_LEXNAMES = Set.new(%w[
+  noun.plant noun.quantity noun.group
+]).freeze
+
+# Kaikki POS tags that designate closed-class function words. An OOV headword tagged
+# exclusively with these is nonstandard (+hisself+) or foreign-closed-class (+hor+ particle,
+# +raison+ fragments); genuine function-word commons (+of+, +his+, +yours+) are +stop_word?+
+# entries that bypass compute_frequency entirely.
+OOV_FUNCTION_WORD_POS_TAGS = Set.new(%w[
+  pron particle det conj prep num article postp
+]).freeze
+
+# WordNet noun lex-categories covering biological taxonomy. Used with +wn_all_proper+ and
+# +syn_n == 1+ to demote Latin scientific binomials whose SUBTLEX FREQlow is a 1–4 count
+# fragment rather than sustained dialogue. +cajun+ (noun.person) has the same all_proper +
+# single-synset + low-sub profile but is a conversational demonym, so +noun.person+ stays out.
+WN_ALL_PROPER_BIOLOGY_LEXNAMES = Set.new(%w[
+  noun.animal noun.plant
+]).freeze
+
+# True when +word+ matches the WN single-synset + specialized-lex + thin-SUBTLEX profile that
+# +compute_frequency+ proactively demotes to rare. Used by Phase 8 to refuse plural/inflection
+# inheritance that would undo the demotion (e.g. +gens+ → +gen+ base inherit).
+def wn_encyclopedic_single_synset_demoted?(word, subtlex_hash, wordfreq_hash)
+  return false unless wn_has_entry?(word)
+  return false unless wn_synset_count(word) == 1
+  zipf = wordfreq_hash[word] || 0
+  return false unless zipf > 0 && zipf < WORDFREQ_COMMON_ZIPF + 0.5
+  sub_raw = subtlex_hash[word] || 0
+  return false unless sub_raw < 5
+  lexnames = wn_noun_synsets_unified(word).map { |s| wn_synset_noun_lexname(s) }.compact
+  lexnames.any? { |ln| WN_ENCYCLOPEDIC_SINGLE_SYNSET_LEXNAMES.include?(ln) }
+end
+
+def wn_noun_exc_irregular_non_s_plural_bases
+  WN_NOUN_IRREGULAR_NON_S_PLURAL_BASES
+end
+
 # All noun synsets for +word+, deduped, across WN spelling variants (hyphen / underscore).
 def wn_noun_synsets_unified(word)
   forms = [word, hyphens_to_underscores(word), word.tr("_", "-")].uniq
