@@ -67,8 +67,13 @@ center {
     color: #16aabb;
 }
 
-a {
+a,
+a:visited,
+a:hover,
+a:active,
+a:focus {
     color: #22dce1;
+    text-decoration: none;
 }
 
 a:visited {
