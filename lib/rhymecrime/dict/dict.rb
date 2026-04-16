@@ -86,7 +86,7 @@ end
 # For Source B, if the word has a WordNet entry then the candidate base must pass
 # +wn_accept_inflection_lemma_pair?+ (shared synset, 1-hop derivation pointers, guarded -ly/-ful,
 # or unique verbal morphy for Inflect *-ed*). This blocks false stems like crew→crow when no link matches.
-# Fallback: self-lemma (word is its own base).
+# Fallback: self-lemma (word is its own base). Finally +apply_lemma_base_overrides!+ (see lemma_base_overrides.txt).
 def compute_lemma_map(word_dict)
   lemma_map = {}
   begin
@@ -144,9 +144,34 @@ def compute_lemma_map(word_dict)
     $wn_synset_line_index_by_path = nil
   end
 
+  apply_lemma_base_overrides!(lemma_map, word_dict)
+
   self_n = word_dict.size - lemma_map.size
   puts "Lemma map: #{lemma_map.size} inflected → base, #{self_n} self-lemmas"
   lemma_map
+end
+
+def load_lemma_base_overrides
+  path = File.join(__dir__, "lemma_base_overrides.txt")
+  return {} unless File.exist?(path)
+
+  h = {}
+  File.foreach(path, chomp: true, encoding: "UTF-8") do |line|
+    line = line.strip
+    next if line.empty? || line.start_with?("#")
+
+    inf, base = line.split(/\s+/, 2)
+    h[inf] = base if inf && base && !base.empty?
+  end
+  h
+end
+
+def apply_lemma_base_overrides!(lemma_map, word_dict)
+  load_lemma_base_overrides.each do |inf, base|
+    next unless word_dict.key?(inf) && word_dict.key?(base)
+
+    lemma_map[inf] = base
+  end
 end
 
 def rebuild_rhymecrime_dictionaries()

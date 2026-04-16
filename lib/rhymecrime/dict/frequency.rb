@@ -733,6 +733,10 @@ def add_frequency_info(cmudict, subtlex_hash, wordfreq_hash, wiktionary_words, p
         dict_trace_puts(base, "Phase11: skip (stop/rare_words)") if tb
         next
       end
+      if morph_kaikki_lists_surface_as_inflected_nonlemma?(base)
+        dict_trace_puts(base, "Phase11: skip (Kaikki form of #{$inflection_base_words[base]}, not an Inflect stem)") if tb
+        next
+      end
       base_zipf_pre = (wordfreq_hash[base] || 0).to_f
       if base.bytesize < 5 && base_zipf_pre < WORDFREQ_COMMON_ZIPF
         dict_trace_puts(base, "Phase11: skip (too short; Zipf #{base_zipf_pre} < #{WORDFREQ_COMMON_ZIPF})") if tb
@@ -783,8 +787,9 @@ def add_frequency_info(cmudict, subtlex_hash, wordfreq_hash, wiktionary_words, p
           dict_trace_puts(w, "Phase11 ← #{base}: skip (Zipf #{wf} ≥ #{WORDFREQ_COMMON_ZIPF})") if tr
           next
         end
+        surf_attested = inflection_surface_reference_attested?(w, subtlex_hash, wordfreq_hash, cmudict_orig, ref_cn, ref_nb, ref_usf)
         base_zipf = wordfreq_hash[base] || 0
-        if donor > RARE_FREQ_MAX && base_zipf < WORDFREQ_COMMON_ZIPF && !inflection_surface_reference_attested?(w, subtlex_hash, wordfreq_hash, cmudict_orig, ref_cn, ref_nb, ref_usf)
+        if donor > RARE_FREQ_MAX && base_zipf < WORDFREQ_COMMON_ZIPF && !surf_attested
           dict_trace_puts(w, "Phase11 ← #{base}: skip (not in wordfreq/SUBTLEX/WN/CMU/USF/CN/NB; base Zipf #{base_zipf} < #{WORDFREQ_COMMON_ZIPF})") if tr
           next
         end
@@ -826,6 +831,10 @@ def add_frequency_info(cmudict, subtlex_hash, wordfreq_hash, wiktionary_words, p
             end
             dict_trace_puts(w, "Phase11 ← #{base}: set freq=#{donor} suffix=#{inflection_suffix_kind} (existing row)") if tr
           else
+            unless surf_attested
+              dict_trace_puts(w, "Phase11 ← #{base}: skip (new row, not attested in any reference corpus)") if tr
+              next
+            end
             hash[w] = [donor, morph_derived_prons_for_promotion(base_prons, base, w)]
             dict_trace_puts(w, "Phase11 ← #{base}: new row freq=#{donor} suffix=#{inflection_suffix_kind}") if tr
           end

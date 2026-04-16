@@ -464,6 +464,25 @@ def prune_suffix_redundant_rhyming_tuples(tuples)
   kept
 end
 
+# Related headwords for tuple/pair construction: common (freq > +RARE_FREQ_MAX+) and preferred surface
+# (+preferred_form_in_build_lexicon+ when +word_dict+ is populated, else +preferred_form+).
+def word_common_preferred_for_tuple_or_pair?(w)
+  entry = lexicon_word_entry(w)
+  return false unless entry
+  return false if entry[0].to_i <= RARE_FREQ_MAX
+
+  wd = word_dict
+  if wd.is_a?(Hash) && !wd.empty? && wd.key?(w)
+    preferred_form_in_build_lexicon(w, wd) == w
+  else
+    preferred_form(w) == w
+  end
+end
+
+def filter_related_words_to_common_preferred(words)
+  words.select { |w| word_common_preferred_for_tuple_or_pair?(w) }
+end
+
 $rhyming_tuple_cache = Hash.new()
 def find_rhyming_tuples(input_rel1, common_only = false)
   if $rhyming_tuple_cache.key?([input_rel1, common_only])
@@ -491,7 +510,9 @@ def really_find_rhyming_tuples(input_rel1, common_only = false)
 
   related_rhymes = Hash.new {|h,k| h[k] = [] } # hash of arrays
   unless(explicitly_forbidden?(input_rel1))
-    related_list = find_related_words(input_rel1, true, false, nil, common_only: common_only)
+    related_list = filter_related_words_to_common_preferred(
+      find_related_words(input_rel1, true, false, nil, common_only: true)
+    )
     relateds1 = related_list.to_set
     related_list.each { |rel1|
       for rel1pron in pronunciations(rel1)
@@ -517,14 +538,16 @@ def really_find_rhyming_tuples(input_rel1, common_only = false)
   # Alternate pronunciations can yield different +rime+ keys (e.g. OW_L_IY_AH_N vs OW_L_Y_AH_N) with the
   # same sorted word set — dedupe before suffix pruning so output is not repeated line-for-line.
   tuples.uniq!
-  prune_suffix_redundant_rhyming_tuples(tuples)
+  prune_suffix_redundant_rhyming_tuples(tuples).reject { |tup| tup.nil? || tup.size < 2 }
 end
 
 def really_find_rhyming_tuples_dynamo(input_rel1, common_only = false)
   related_rhymes = Hash.new { |h, k| h[k] = [] }
   return [] if explicitly_forbidden?(input_rel1)
 
-  related_list = find_related_words(input_rel1, true, false, nil, common_only: common_only)
+  related_list = filter_related_words_to_common_preferred(
+    find_related_words(input_rel1, true, false, nil, common_only: true)
+  )
   relateds1 = related_list.to_set
   Rhymecrime::DynamoRuntime.batch_get_words(related_list.to_a)
   rimes = related_list.flat_map { |rel| pronunciations(rel).map(&:rime) }.uniq
@@ -554,7 +577,7 @@ def really_find_rhyming_tuples_dynamo(input_rel1, common_only = false)
     end
   end
   tuples.uniq!
-  prune_suffix_redundant_rhyming_tuples(tuples)
+  prune_suffix_redundant_rhyming_tuples(tuples).reject { |tup| tup.nil? || tup.size < 2 }
 end
 
 def find_rhyming_pairs(input_rel1, input_rel2, common_only = false)
@@ -572,8 +595,12 @@ def find_rhyming_pairs(input_rel1, input_rel2, common_only = false)
 
   related_rhymes = Hash.new {|h,k| h[k] = [] } # hash of arrays
   unless(explicitly_forbidden?(input_rel1) || explicitly_forbidden?(input_rel2))
-    relateds1 = find_related_words(input_rel1, true, false, nil, common_only: common_only)
-    relateds2 = find_related_words(input_rel2, true, false, nil, common_only: common_only).to_set
+    relateds1 = filter_related_words_to_common_preferred(
+      find_related_words(input_rel1, true, false, nil, common_only: true)
+    )
+    relateds2 = filter_related_words_to_common_preferred(
+      find_related_words(input_rel2, true, false, nil, common_only: true)
+    ).to_set
     relateds1.each { |rel1|
       # rel1 is a word related to input_rel1. We're looking for rhyming pairs [rel1 rel2].
       debug "rhymes for #{rel1} (#{debug_info(rel1)}):<br>"
@@ -601,8 +628,12 @@ def find_rhyming_pairs_dynamo(input_rel1, input_rel2, common_only = false)
   related_rhymes = Hash.new { |h, k| h[k] = [] }
   return [] if explicitly_forbidden?(input_rel1) || explicitly_forbidden?(input_rel2)
 
-  relateds1 = find_related_words(input_rel1, true, false, nil, common_only: common_only)
-  relateds2 = find_related_words(input_rel2, true, false, nil, common_only: common_only).to_set
+  relateds1 = filter_related_words_to_common_preferred(
+    find_related_words(input_rel1, true, false, nil, common_only: true)
+  )
+  relateds2 = filter_related_words_to_common_preferred(
+    find_related_words(input_rel2, true, false, nil, common_only: true)
+  ).to_set
   Rhymecrime::DynamoRuntime.batch_get_words((relateds1.to_a + relateds2.to_a).uniq)
   rimes = relateds1.flat_map { |rel| pronunciations(rel).map(&:rime) }.uniq
   Rhymecrime::DynamoRuntime.batch_get_rimes(rimes)

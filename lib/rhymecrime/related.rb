@@ -522,6 +522,61 @@ end
 # Enumerates RhymeCrime headwords and returns those topically related to +word+.
 class RelatedWords
   class << self
+    # +generated/related_precompute.jsonl+ (+bin/precompute-relatedness+): lemma -> related headwords
+    # (built with +include_rhymeless+ false, +common_only+ true). At runtime we re-filter like Dynamo
+    # (+dynamo_store.rb+ +find_all_related_precomputed+) so callers with other flags still behave correctly.
+    def related_precompute_by_lemma
+      return @related_precompute_by_lemma if instance_variable_defined?(:@related_precompute_by_lemma)
+
+      @related_precompute_by_lemma = {}
+      path = generated_dict_path(RELATED_PRECOMPUTE_JSONL_FILENAME)
+      unless File.exist?(path)
+        return @related_precompute_by_lemma
+      end
+
+      n = 0
+      File.foreach(path, encoding: "UTF-8") do |line|
+        line = line.strip
+        next if line.empty?
+
+        obj = JSON.parse(line)
+        pk = obj["pk"].to_s
+        next unless pk.start_with?("related#")
+
+        lem = pk.delete_prefix("related#")
+        words = obj["words"]
+        next unless words.is_a?(Array)
+
+        @related_precompute_by_lemma[lem] = words.map(&:to_s)
+        n += 1
+      end
+      puts "loaded #{n} precomputed related lemmas from #{path}" if n.positive?
+      @related_precompute_by_lemma
+    rescue JSON::ParserError => e
+      warn "related: skip precompute load (#{path}): #{e.message}"
+      @related_precompute_by_lemma = {}
+    end
+
+    def filter_precomputed_related_word_list(raw, include_rhymeless, common_only)
+      return [] if raw.nil? || raw.empty?
+      unless defined?(lexicon_word_entry) && defined?(rdict_lookup)
+        return raw.dup
+      end
+
+      raw.select do |w|
+        entry = lexicon_word_entry(w)
+        next false unless entry
+
+        next false if common_only && entry[0].to_i <= RARE_FREQ_MAX
+
+        if include_rhymeless
+          true
+        else
+          entry[1].any? { |pron| !pron.rime.to_s.empty? && !rdict_lookup(pron.rime).empty? }
+        end
+      end
+    end
+
     # +max_candidates+ default +SIMILAR_MAX+ caps the list by Numberbatch-centile +similarity+ for UI / display.
     # Pass +nil+ for no cap (e.g. set_related / pair rhyming): truncation can drop words that are related via
     # gloss or sense vectors but rank below the cap on +similarity+ alone.
@@ -547,6 +602,18 @@ class RelatedWords
         debug "Finding words related to #{word} (Dynamo, lemma=#{lemma_key})... #{words.length}\n"
         @related_word_cache[key] = words
         return words
+      end
+
+      pc = related_precompute_by_lemma
+      if !pc.empty?
+        lemma_key = lemma(word)
+        raw = pc[lemma_key]
+        if raw
+          words = filter_precomputed_related_word_list(raw, include_rhymeless, common_only)
+          debug "Finding words related to #{word} (precompute, lemma=#{lemma_key})... #{words.length}\n"
+          @related_word_cache[key] = words
+          return words
+        end
       end
 
       unless dictionary_lemma_has_numberbatch_vector?(word)

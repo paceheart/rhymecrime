@@ -319,6 +319,7 @@ describe 'RHYMES' do
     # --- Classic T/D minimal pairs (intervocalic; GA flap neutralization) ---
     oughta_rhyme 'party', 'hardy' # R before T; flap often applies (party ~ hardy in songs)
     ought_not_rhyme 'water', 'wader'
+    ought_not_rhyme 'water', 'hoarder' # only in Maryland'
     ought_not_rhyme 'totally', 'dally'
     ought_not_rhyme 'pitted', 'padded'
     oughta_rhyme 'ladder', 'clatter'
@@ -611,7 +612,8 @@ describe 'RHYMES' do
   context 'non-binary rhymes' do
     oughta_rhyme 'latex', 'paychecks', not_working_message: true
     oughta_rhyme 'pitiful', 'biddable', not_working_message: "genderfluid plus T -> D"
-    oughta_rhyme 'cello', 'concerto', not_working_message: true
+    oughta_rhyme 'cello', 'concerto', not_working_message: true # no because of the r
+    oughta_rhyme 'cello', 'hell no'
     oughta_rhyme 'symphony', 'timpani', not_working_message: true
     oughta_rhyme 'bounty', 'brown tea', not_working_message: true
   end

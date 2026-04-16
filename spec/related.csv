@@ -1,810 +1,82 @@
 word1,word2,oughta be related?,notes
-grave,death,1,basic
-tree,leaf,1,basic
-tree,forest,1,basic
-mow,lawn,1,basic
-death,bled,1,examples from the documentation
-death,dead,1,examples from the documentation
-death,dread,1,examples from the documentation
-sex,fuck,1,obscene words are permitted
-food,the,0,stop words ought not show up as related to anything
-mow,mows,1,morphological variants oughta be related but not words that are merely orthographically similar
-mow,mowed,1,morphological variants oughta be related but not words that are merely orthographically similar
-mow,mower,1,morphological variants oughta be related but not words that are merely orthographically similar
-mow,mowing,1,morphological variants oughta be related but not words that are merely orthographically similar
-mow,moll,0,morphological variants oughta be related but not words that are merely orthographically similar
-mow,mosh,0,morphological variants oughta be related but not words that are merely orthographically similar
-tree,trees,1,morphological variants oughta be related but not words that are merely orthographically similar
-tree,treetop,1,morphological variants oughta be related but not words that are merely orthographically similar
-tree,treetops,1,morphological variants oughta be related but not words that are merely orthographically similar
-tree,treece,0,morphological variants oughta be related but not words that are merely orthographically similar
-tree,treese,0,morphological variants oughta be related but not words that are merely orthographically similar
-tree,treesh,0,morphological variants oughta be related but not words that are merely orthographically similar
-math,mathematics,1,morphological variants oughta be related but not words that are merely orthographically similar
-pirate,ship,1,
-pirate,cache,1,
-pirate,lash,1,
-pirate,cove,1,
-pirate,trove,1,
-pirate,handsome,1,
-pirate,ransom,1,
-pirate,wench,1,
-pirate,gang,1,
-pirate,hang,1,
-pirate,plank,1,
-pirate,peg,1,
-pirate,leg,1,
-pirate,daring,1,
-pirate,swearing,1,
-pirate,hacker,1,
-pirate,cracker,1,
-pirate,sea,1,
-pirate,dvd,1,
-pirate,gold,1,
-pirate,bold,1,
-pirate,buccaneer,1,
-pirate,peer-to-peer,1,
-pirate,commandeer,1,
-pirate,crew,1,
-pirate,tattoo,1,
-pirate,reef,1,
-pirate,thief,1,
-pirate,coast,1,
-pirate,ghost,1,
-pirate,loot,1,
-pirate,pursuit,1,
-pirate,rum,1,
-pirate,saber,1,
-pirate,scurvy,1,
-pirate,doubloons,1,
-pirate,pew,0,
-pirate,roc,1,ish
-pirate,miko,0,
-pirate,mrs.,0,
-pirate,needlework,0,
-pirate,popcorn,0,
-pirate,galaxy,0,
-pirate,ebony,0,
-pirate,ballerina,0,
-pirate,bungee,0,
-pirate,homemade,0,
-pirate,pimping,0,
-pirate,prehistoric,0,
-pirate,reindeer,0,
-pirate,adipose,0,
-pirate,asexual,0,
-pirate,doodle,0,
-pirate,frisbee,0,
-pirate,isaac,0,
-pirate,laser,0,
-pirate,homophobic,0,
-pirate,pedantic,0,
-halloween,pumpkin,1,
-halloween,bat,1,
-halloween,cat,1,
-halloween,fairy,1,
-halloween,scary,1,
-halloween,fright,1,
-halloween,night,1,
-halloween,cider,1,
-halloween,spider,1,
-halloween,decoration,1,
-halloween,costume,1,
-halloween,ira,0,prereq: halloween ought_not day+ira
-halloween,lindsay,0,
-halloween,lindsey,0,
-halloween,nicki,0,
-halloween,pauline,0,
-cat,kitty,1,
-cat,kitten,1,
-cat,meow,1,
-cat,dog,1,
-cat,whisker,1,
-cat,whiskers,1,
-cat,cats,1,
-cat,pet,1,
-cat,purr,1,
-cat,feline,1,
-cat,tuxedo,1,
-cat,skin,1,there's more than one way
-cat,neutered,1,
-cat,spay,1,
-cat,lynx,1,
-cat,bobcat,1,
-cat,lion,1,
-cat,tiger,1,
-cat,cougar,1,
-cat,jaguar,1,
-cat,wildcat,1,
-cat,fur,1,
-cat,cute,1,
-cat,litter,1,
-cat,tail,1,
-cat,fancier,1,
-cat,fanciers,1,
-cat,eye,1,
-cat,fleas,1,
-cat,bite,1,
-cat,stray,1,
-cat,biscuit,1,
-cat,paw,1,
-cat,ear,1,
-cat,ears,1,
-cat,tree,1,
-cat,puss,1,
-cat,pussy,1,
-cat,object,0,
-cat,objects,0,
-cat,item,0,
-cat,items,0,
-cat,thing,0,
-cat,things,0,
-cat,verb,0,
-cat,justice,0,
-cat,hunker,0,
-cat,chunk,0,
-cat,knack,0,
-cat,zucchini,0,
-cat,astronomy,0,
-cat,undertow,0,
-cat,tool,0,
-cat,duck,0,ish - cats and birds are loosely thematically related
-cat,rhombus,0,
-cat,fandango,0,
-cat,rancid,0,
-cat,melancholy,0,
-cat,woe,0,
-cat,malice,0,
-cat,sever,0,
-crime,heist,1,
-crime,organized,1,
-crime,burglar,1,
-crime,burglary,1,
-crime,rob,1,
-crime,robber,1,
-crime,robbery,1,
-crime,felon,1,
-crime,felony,1,
-crime,loot,1,
-crime,fight,1,
-crime,jail,1,
-crime,bank,1,
-crime,murder,1,
-crime,thief,1,
-crime,theft,1,
-crime,blackmail,1,
-crime,gun,1,
-crime,homicide,1,
-crime,trespassing,1,
-crime,vice,1,
-crime,justice,1,
-crime,acquit,1,
-crime,acquitted,1,
-crime,commit,1,
-crime,committed,1,
-crime,arrest,1,
-crime,confessed,1,
-crime,sleuth,1,
-crime,truth,1,
-crime,drugs,1,
-crime,thugs,1,
-crime,denial,1,
-crime,trial,1,
-crime,job,1,
-crime,mob,1,
-crime,sentence,1,
-crime,repentance,1,
-crime,skulduggery,1,
-crime,thuggery,1,
-crime,dishonesty,1,
-crime,plea,1,
-crime,malice,1,
-crime,person,0,
-crime,fungus,0,
-crime,soybean,0,
-crime,legume,0,
-crime,scallion,0,
-crime,grain,0,
-crime,pasta,0,
-crime,animation,0,
-crime,baseball,0,
-crime,chassis,0,
-crime,poodle,0,
-crime,etymology,0,
-crime,intonation,0,
-crime,meningitis,0,
-crime,ontology,0,
-crime,penicillin,0,
-crime,thing,0,
-crime,object,0,
-crime,transistors,0,
-crime,sky,0,
-crime,gas,0,ish prereq: crime ought_not gas+mass
-crime,mass,0,ish prereq: crime ought_not gas+mass
-crime,lake,0,prereq: crime ought_not lake+quake
-crime,quake,0,prereq: crime ought_not lake+quake
-crime,sci-fi,0,
-crime,word,0,prereq: crime ought_not nerd+word
-pasta,champagne,1,
-pasta,grain,1,
-pasta,italian,1,
-pasta,scallion,1,
-pasta,animation,0,
-pasta,bank,0,
-pasta,baseball,0,
-pasta,chassis,0,
-pasta,dog,0,
-pasta,poodle,0,
-pasta,etymology,0,
-pasta,intonation,0,
-pasta,intuition,0,
-pasta,meningitis,0,
-pasta,ontology,0,
-pasta,penicillin,0,
-pasta,stocks,0,
-pasta,thing,0,
-pasta,object,0,
-pasta,transistors,0,
-pasta,rhombus,0,
-pasta,fandango,0,
-pasta,justice,0,
-pasta,melancholy,0,
-pasta,frolic,0,
-pasta,woe,0,
-pasta,malice,0,
-pasta,sever,0,
-star,sun,1,
-star,galaxy,1,
-star,celebrity,1,
-star,guest,1,
-star,solar,1,
-star,planet,1,
-star,stellar,1,
-star,constellation,1,
-star,twinkle,1,
-star,sparkle,1,
-star,asterisk,1,
-star,gold,1,
-star,light,1,
-star,lord,1,Peter Quill
-star,astronomy,1,
-star,astronomer,1,
-star,astrophysics,1,
-star,duck,0,
-star,rhombus,0,ish - both geometric shapes
-star,fandango,0,ish - fandango is a movie ticket app and star has the sense of movie star
-star,rancid,0,
-star,justice,0,
-star,melancholy,0,
-star,frolic,0,
-star,woe,0,
-star,malice,0,
-star,sever,0,
-music,baroque,1,
-music,folk,1,
-music,beat,1,
-music,sheet,1,
-music,cantata,1,
-music,sonata,1,
-music,noise,1,
-music,funk,1,
-music,punk,1,
-music,sing,1,
-music,swing,1,
-music,orchestration,1,
-music,vibration,1,
-music,sonic,1,
-music,harmonic,1,
-music,piece,1,
-music,release,1,
-music,recital,1,
-music,title,1,
-music,piano,1,
-music,soprano,1,
-music,violins,1,
-music,winds,1,
-music,flute,1,
-music,lute,1,
-music,tango,1,
-music,session,1,
-music,progression,1,
-music,croon,1,
-music,tune,1,
-music,crooner,1,
-music,tuner,1,
-music,ears,1,
-music,spheres,1,
-music,bridal,1,
-music,idol,1,
-music,audition,1,
-music,composition,1,
-music,chord,1,
-music,record,1,
-music,clarinet,1,
-music,minuet,1,
-music,accidental,1,
-music,instrumental,1,
-music,sings,1,
-music,strings,1,
-music,glissando,1,'glissando' is related to 'musical' so we just have to get from 'music' to 'musical'
-music,viola,1,
-music,hemiola,1,
-music,overtone,1,
-music,xylophone,1,
-music,wave,1,
-music,rave,1,
-music,repeat,1,
-music,jingle,1,
-music,single,1,
-music,bar,1,
-music,repertoire,1,
-music,bars,1,
-music,score,1,
-music,scores,1,
-music,bass,1,
-music,harp,1,
-music,sharp,1,
-music,flat,1,
-music,show,1,
-music,arpeggio,1,
-music,mix,1,
-music,drumsticks,1,
-music,mandolin,1,
-music,cello,1,
-music,rest,1,
-music,expressed,1,
-music,fortissimo,1,
-music,pianissimo,1,
-music,gong,1,
-music,song,1,
-music,duet,1,
-music,quartet,1,
-music,quintet,1,
-music,choral,1,
-music,tonal,1,
-music,recorded,1,
-music,prerecorded,1,
-music,notation,1,
-music,brass,1,
-music,trombone,1,
-music,base,0,
-music,coral,0,
-music,duck,0,
-music,rhombus,0,
-music,rancid,0,
-music,justice,0,
-music,sever,0,
-water,gush,1,
-water,flush,1,
-water,drink,1,
-water,sink,1,
-water,pee,1,
-water,sea,1,
-water,supply,1,
-water,wade,1,
-water,tide,1,
-water,dam,1,
-water,swam,1,
-water,bay,1,
-water,spray,1,
-water,steam,1,
-water,stream,1,
-water,eau,1,
-water,flow,1,
-water,sweat,1,
-water,wet,1,
-water,cool,1,
-water,pool,1,
-water,drain,1,
-water,rain,1,
-water,marine,1,
-water,saline,1,
-water,dip,1,
-water,sip,1,
-water,ice,1,
-water,duck,1,
-water,rhombus,0,
-water,fandango,0,
-water,rancid,0,
-water,melancholy,0,
-water,frolic,0,
-water,woe,0,
-water,malice,0,
-water,sever,0,
-prayers,blessed,1,
-prayers,request,1,
-prayers,appeal,1,
-prayers,kneel,1,
-prayers,exhortations,1,
-prayers,meditations,1,
-prayers,pew,1,
-prayers,plea,1,
-prayers,healing,1,
-prayers,kneeling,1,
-prayers,priest,1,
-prayers,justice,1,
-prayers,duck,0,
-prayers,rhombus,0,
-prayers,fandango,0,
-prayers,rancid,0,
-prayers,melancholy,0,
-prayers,frolic,0,
-prayers,malice,0,
-prayers,sever,0,
-bread,yeast,1,
-bread,duck,1,
-bread,rhombus,0,
-bread,fandango,0,
-bread,justice,0,
-bread,melancholy,0,
-bread,frolic,0,
-bread,woe,0,
-bread,malice,1,ish - there's a bible verse that makes these be related
-bread,sever,0,
-geometry,rhombus,1,
-geometry,quadrilateral,1,
-geometry,triangle,1,
-geometry,math,1,
-geometry,mathematics,1,
-geometry,proof,1,
-geometry,bisect,1,
-geometry,angle,1,
-geometry,theta,1,
-geometry,compass,1,
-geometry,construction,1,
-geometry,geometric,1,
-geometry,prism,1,
-geometry,sacred,1,
-geometry,survey,1,
-geometry,measure,1,
-geometry,line,1,
-geometry,point,1,
-geometry,cube,1,
-geometry,volume,1,
-geometry,area,1,
-geometry,fandango,0,
-geometry,justice,0,
-geometry,melancholy,0,
-geometry,frolic,0,
-geometry,woe,0,
-geometry,malice,0,
-geometry,sever,0,
-melancholy,woe,1,uncommon words
-melancholy,frolic,0,uncommon words
-rhombus,pianissimo,0,uncommon words
-rhombus,frolic,0,uncommon words
-rhombus,woe,0,uncommon words
-fortissimo,pianissimo,1,uncommon words
-rhombus,quadrilateral,1,uncommon words
-thing,object,1,very common words
-thing,item,1,very common words
-thing,cat,0,a very common word and a common word
-thing,pasta,0,a very common word and a common word
-thing,crime,0,a very common word and a common word
-word,etymology,1,a very common word and an uncommon word
-person,human,1,
-person,personal,1,
-person,people,1,
-person,missing,1,
-person,first,1,
-person,second,1,
-person,third,1,
-person,someone,1,
-person,anyone,1,
-person,nobody,1,
-person,adult,1,
-person,child,1,
-person,woman,1,
-person,man,1,
-person,self,1,
-person,individual,1,
-person,entity,1,
-person,geometry,0,
-person,math,0,
-person,fortissimo,0,
-person,malice,0,
-person,woe,0,
-person,sever,0,
-person,appeal,0,
-person,proof,0,
-person,rhombus,0,
-person,duck,0,
-person,rancid,0,
-person,harp,0,
-person,coral,0,
-person,supply,0,
-person,steam,0,
-person,stream,0,
-person,drain,0,
-person,ice,0,
-person,penicillin,0,
-person,scallion,0,
-person,transistors,0,
-person,undertow,0,
-person,vice,0,
-person,loot,0,
-person,fungus,0,
-person,chassis,0,
-person,neutered,0,
-person,paw,0,
-person,zucchini,0,
-magic,chants,1,
-magic,trance,1,
-medical,medicine,1,
-medical,disease,1,
-medical,expertise,1,
-medical,fees,1,
-medical,ccs,1,
-medicine,disease,1,
-medicine,expertise,1,
-medicine,fees,1,
-medicine,ccs,1,
-music,key,1,polysemy: musical key vs door key
-music,scale,1,polysemy: musical scale vs fish scale
-music,staff,1,polysemy: musical staff vs employees
-music,bridge,1,polysemy: musical bridge vs structure
-music,movement,1,polysemy: symphony movement vs physical movement
-music,natural,1,ish - natural note vs nature
-music,march,1,march music / military march
-music,suite,0,ish - musical suite
-music,tempo,1,musical term
-music,pitch,1,polysemy: musical pitch vs throw
-music,chamber,1,chamber music
-music,measure,1,polysemy: musical measure vs measurement
-music,note,1,musical note
-music,dance,1,thematically associated
-music,silence,1,antonym / thematic contrast
-music,lyric,1,clearly related
-music,rhythm,1,clearly related
-music,melody,1,clearly related
-pirate,map,1,treasure map
-pirate,flag,1,Jolly Roger
-pirate,patch,1,eyepatch
-pirate,parrot,1,cultural association
-pirate,hook,1,Captain Hook
-pirate,anchor,1,ship's anchor
-pirate,cannon,1,ship's cannon
-pirate,island,1,pirate island
-pirate,barrel,1,rum barrel
-pirate,plunder,1,clearly related
-pirate,mast,1,ship part
-pirate,compass,1,nautical navigation
-pirate,mutiny,1,nautical
-pirate,bounty,1,bounty on pirates
-pirate,buried,1,buried treasure
-crime,witness,1,crime witness
-crime,evidence,1,crime evidence
-crime,motive,1,crime motive
-crime,alibi,1,legal term
-crime,suspect,1,crime suspect
-crime,detective,1,crime detection
-crime,scene,1,crime scene
-crime,punishment,1,crime and punishment
-crime,innocent,1,legal antonym
-crime,corrupt,1,thematically related
-crime,launder,1,money laundering
-crime,gang,1,organized crime
-medicine,prescription,1,medical term
-medicine,dosage,1,medical term
-medicine,symptom,1,medical term
-medicine,diagnosis,1,medical term
-medicine,surgery,1,medical procedure
-medicine,nurse,1,medical profession
-medicine,pill,1,form of medicine
-medicine,remedy,1,near-synonym
-medicine,stethoscope,1,medical instrument
-medicine,ward,1,ish - hospital ward polysemy
-geometry,parallel,1,geometric term
-geometry,perpendicular,1,geometric term
-geometry,symmetry,1,geometric property
-geometry,radius,1,geometric term
-geometry,arc,1,polysemy: geometric arc vs story arc
-geometry,plane,1,polysemy: geometric plane vs airplane
-geometry,degree,1,polysemy: geometric degree vs academic degree
-geometry,tangent,1,polysemy: geometric vs going off on a tangent
-star,north,1,North Star
-star,shooting,1,shooting star
-star,david,1,ish - Star of David
-star,wish,1,wish upon a star
-star,chart,1,star chart / astrology
-star,bright,1,stars are bright
-star,hollywood,1,Hollywood star
-star,gaze,1,stargazing
-person,place,0,ish
-person,character,1,polysemy: fictional character vs personality
-person,body,1,person's body
-person,stranger,1,ish - a stranger is a person
-light,feather,1,light as a feather
-light,dark,1,antonym pair
-light,bulb,1,light bulb
-light,candle,1,produces light
-bar,pub,1,synonym
-bar,chocolate,1,chocolate bar
-bar,exam,1,bar exam
-bar,stool,1,barstool
-bat,ball,1,sports pair
-bat,cave,1,bat cave
-bat,vampire,1,vampire bats
-bank,river,1,riverbank
-bank,money,1,money in the bank
-bank,vault,1,bank vault
-spring,water,1,spring water
-spring,coil,1,spring (coil)
-spring,bloom,1,spring (season)
-club,golf,1,golf club
-club,nightlife,1,nightclub
-crane,construction,1,construction crane
-crane,origami,1,paper crane
-apple,computer,1,ish - Apple brand cultural
-apple,pie,1,apple pie
-apple,seed,1,apple seed
-diamond,ring,1,diamond ring
-diamond,baseball,1,diamond (baseball field)
-diamond,card,1,suit of cards
-wave,ocean,1,ocean wave
-wave,goodbye,1,wave goodbye
-cell,phone,1,cell phone
-cell,prison,1,prison cell
-cell,biology,1,biology cell
-train,station,1,train station
-train,exercise,1,training
-fire,smoke,1,clearly associated
-fire,hydrant,1,fire hydrant
-fire,escape,1,fire escape
-wedding,veil,1,wedding veil
-wedding,bouquet,1,wedding bouquet
-school,chalk,1,school chalk
-school,bully,1,school bully
-winter,hibernate,1,seasonal association
-garden,weed,1,garden weed
-light,pirate,0,
-light,crime,0,
-light,geometry,0,
-light,pasta,0,
-light,prayer,0,
-light,surgery,0,
-light,penguin,0,
-light,mortgage,0,
-light,algebra,0,
-bar,geometry,0,
-bar,medicine,0,
-bar,pirate,1,ish
-bar,penguin,0,
-bar,algebra,1,ish - X bar in algebraic notation
-bar,microscope,0,
-bat,pirate,0,
-bat,geometry,0,
-bat,medicine,0,
-bat,recipe,0,
-bat,volcano,0,
-bat,telescope,0,
-bank,pirate,0,
-bank,geometry,0,
-bank,halloween,0,
-bank,algebra,0,
-bank,penguin,0,
-bank,telescope,0,
-spring,pirate,0,
-spring,crime,0,
-spring,geometry,0,
-spring,algebra,0,
-spring,microscope,0,
-club,pirate,0,
-club,geometry,0,
-club,medicine,0,
-club,algebra,0,
-club,penguin,1,Club Penguin
-crane,pirate,0,
-crane,crime,0,
-crane,medicine,0,
-crane,algebra,0,
-crane,penguin,0,
-apple,pirate,0,
-apple,crime,0,
-apple,geometry,0,
-apple,algebra,0,
-apple,penguin,0,
-apple,volcano,0,
-diamond,pirate,1,ish - pirates and gems/treasure
-diamond,crime,1,diamond heist
-diamond,medicine,0,
-diamond,penguin,0,
-diamond,algebra,0,
-wave,pirate,1,pirates and ocean waves
-wave,crime,1,crime wave
-wave,geometry,0,
-wave,algebra,0,
-wave,penguin,1,ish - penguins are water birds
-cell,pirate,0,
-cell,geometry,0,
-cell,halloween,0,
-cell,algebra,0,
-cell,penguin,0,
-train,pirate,0,
-train,geometry,0,
-train,halloween,0,
-train,algebra,0,
-train,penguin,0,
-fire,pirate,0,
-fire,geometry,0,
-fire,medicine,0,
-fire,algebra,0,
-fire,penguin,0,
-ice,penguin,1,
-wedding,pirate,0,
-wedding,crime,0,
-wedding,geometry,0,
-wedding,algebra,0,
-wedding,penguin,0,
-school,pirate,0,
-school,crime,1,ish - school crime
-school,halloween,0,ish - halloween is a school holiday
-school,algebra,1,
-school,penguin,0,
-garden,pirate,0,
-garden,crime,0,
-garden,geometry,0,
-garden,algebra,0,
-garden,penguin,0,
-winter,pirate,0,
-winter,crime,0,
-winter,geometry,0,
-winter,algebra,0,
-winter,penguin,1,ish - penguins live in cold
-music,penguin,0,
-music,algebra,1,ish - music is math
-music,volcano,0,
-music,mortgage,0,
-music,telescope,0,
-pirate,algebra,0,
-pirate,mortgage,0,
-pirate,microscope,0,
-pirate,penguin,0,
-pirate,volcano,0,
-crime,algebra,0,
-crime,penguin,0,
-crime,volcano,0,
-crime,telescope,0,
-crime,microscope,0,
-geometry,penguin,0,
-geometry,volcano,0,
-geometry,mortgage,0,
-star,algebra,0,
-star,penguin,0,
-star,volcano,0,
-star,mortgage,0,
-person,volcano,0,
-person,algebra,0,
-person,penguin,0,
-person,telescope,0,
-cat,algebra,0,
-cat,volcano,0,
-cat,mortgage,0,
-cat,penguin,0,ish - cats and birds are loosely thematically related
-cat,telescope,0,
-cat,fancy,1,
-hospital,ward,1,
-pirate,cornea,0,
-pirate,pupil,0,
-pirate,iris,0,
-pirate,whip,1,ish - lash/whip/flogging association
 abbreviation,music,1,ish prereq: music/abbreviation+notation
 abomination,evil,1,prereq: food+evil/starvation+abomination
 addressed,prayers,1,prereq: prayers/addressed+blessed
 apocalypse,evil,1,prereq: food+evil/chips+apocalypse
+apple,algebra,0,
+apple,computer,1,ish - Apple brand cultural
+apple,crime,0,
+apple,geometry,0,
+apple,penguin,0,
+apple,pie,1,apple pie
+apple,pirate,0,
+apple,seed,1,apple seed
+apple,volcano,0,
 ashen,dark,1,prereq: food+dark/ration+ashen
 avant-garde,hard,0,prereq: avant-garde+music/hard+bard
 backtrack,exploration,1,prereq: exploration/cul-de-sac+backtrack
 bane,evil,1,prereq: food+evil/grain+bane
+bank,algebra,0,
+bank,geometry,0,
+bank,halloween,0,
+bank,money,1,money in the bank
+bank,penguin,0,
+bank,pirate,0,
+bank,river,1,riverbank
+bank,telescope,0,
+bank,vault,1,bank vault
+bar,algebra,1,ish - X bar in algebraic notation
+bar,chocolate,1,chocolate bar
+bar,exam,1,bar exam
+bar,geometry,0,
+bar,medicine,0,
+bar,microscope,0,
+bar,penguin,0,
+bar,pirate,1,ish
+bar,pub,1,synonym
+bar,stool,1,barstool
 bard,music,1,prereq: avant-garde+music/hard+bard
+bat,ball,1,sports pair
+bat,cave,1,bat cave
+bat,geometry,0,
+bat,medicine,0,
+bat,pirate,0,
+bat,recipe,0,
+bat,telescope,0,
+bat,vampire,1,vampire bats
+bat,volcano,0,
 bi,gay,1,prereq: gay+food/bi+pie
 black,dark,1,prereq: food+dark/snack+black
 bleak,dark,1,prereq: food+dark/leek+bleak
 blessed,heaven,1,prereq: crime+heaven/confessed+blessed
 blood,water,1,prereq: water/blood+flood
 bow,music,1,prereq: music/flow+bow
+brain,beam,0,
+brain,brick,0,
+brain,chimera,0,
+brain,cloud,0,
+brain,clouds,0,
+brain,dolphin,0,ish
+brain,dumb,1,
+brain,fish,0,ish
+brain,ice,1,
+brain,smart,1,
+brain,snow,1,
+brain,squeamish,0,ish
+brain,think,1,
+brain,zinc,0,
+bread,duck,1,
+bread,fandango,0,
 bread,feast,1,prereq: bread/feast+yeast
 bread,food,1,prereq: food+evil/bread+undead
+bread,frolic,0,
+bread,justice,0,
+bread,malice,1,ish - there's a bible verse that makes these be related
+bread,melancholy,0,
+bread,rhombus,0,
+bread,sever,0,
+bread,woe,0,
+bread,yeast,1,
 broom,halloween,1,prereq: halloween/broom+costume
 buffet,food,1,prereq: food+dark/buffet+gray
 bumbling,clumsy,1,prereq: clumsy/bumbling+fumbling
@@ -815,21 +87,245 @@ carbon,react,1,prereq: carbon/extract+react
 carbon,sequester,1,prereq: carbon/ester+sequester
 carbon,sink,1,prereq: carbon/sink+zinc
 carbon,zinc,1,prereq: carbon/sink+zinc
+cat,algebra,0,
+cat,astronomy,0,
+cat,biscuit,1,
+cat,bite,1,
+cat,bobcat,1,
+cat,cats,1,
+cat,chunk,0,
+cat,cougar,1,
+cat,cute,1,
+cat,dog,1,
+cat,duck,0,ish - cats and birds are loosely thematically related
+cat,ear,1,
+cat,ears,1,
+cat,eye,1,
+cat,fancier,1,
+cat,fanciers,1,
+cat,fancy,1,
+cat,fandango,0,
+cat,feline,1,
+cat,fleas,1,
+cat,fur,1,
+cat,hunker,0,
+cat,item,0,
+cat,items,0,
+cat,jaguar,1,
+cat,justice,0,
+cat,kitten,1,
+cat,kitty,1,
+cat,knack,0,
+cat,lion,1,
+cat,litter,1,
+cat,lynx,1,
+cat,malice,0,
+cat,melancholy,0,
+cat,meow,1,
+cat,mortgage,0,
+cat,neutered,1,
+cat,object,0,
+cat,objects,0,
+cat,paw,1,
+cat,penguin,0,ish - cats and birds are loosely thematically related
+cat,pet,1,
+cat,purr,1,
+cat,puss,1,
+cat,pussy,1,
+cat,rancid,0,
+cat,rhombus,0,
+cat,sever,0,
+cat,skin,1,there's more than one way
+cat,spay,1,
+cat,stray,1,
+cat,tail,1,
+cat,telescope,0,
+cat,thing,0,
+cat,things,0,
+cat,tiger,1,
+cat,tool,0,
+cat,tree,1,
+cat,tuxedo,1,
+cat,undertow,0,
+cat,verb,0,
+cat,volcano,0,
+cat,whisker,1,
+cat,whiskers,1,
+cat,wildcat,1,
+cat,woe,0,
+cat,zucchini,0,
 cats,siamese,1,prereq: please+cats -> siamese
 celebration,halloween,1,prereq: halloween/celebration+decoration
+cell,algebra,0,
+cell,biology,1,biology cell
+cell,geometry,0,
+cell,halloween,0,
+cell,penguin,0,
+cell,phone,1,cell phone
+cell,pirate,0,
+cell,prison,1,prison cell
 chewed,food,1,prereq: food+evil/chewed+rude
 chips,food,1,prereq: food+evil/chips+apocalypse
 clam,pasta,1,prereq: pasta/clam+ham
+club,algebra,0,
+club,geometry,0,
+club,golf,1,golf club
+club,medicine,0,
+club,nightlife,1,nightclub
+club,penguin,1,Club Penguin
+club,pirate,0,
 clumsy,drop,1,prereq: clumsy/drop+flop
 clumsy,excuse,1,prereq: clumsy/excuse+shoes
 clumsy,flop,1,prereq: clumsy/drop+flop
 clumsy,fumbling,1,prereq: clumsy/bumbling+fumbling
 clumsy,shoes,1,prereq: clumsy/excuse+shoes
 clumsy,stumbling,1,prereq: clumsy/bumbling+stumbling
+coke,anthracite,1,
+coke,beam,0,
+coke,brick,0,
+coke,candy,0,ish
+coke,cat,0,
+coke,cheer,0,
+coke,chimera,0,
+coke,cloud,0,
+coke,clouds,0,
+coke,coal,1,
+coke,cocaine,1,
+coke,cola,1,
+coke,computer,0,
+coke,crime,0,
+coke,dog,0,
+coke,dolphin,0,
+coke,duck,0,
+coke,dumb,0,
+coke,evil,0,
+coke,fish,0,
+coke,fork,0,ish
+coke,frolic,0,
+coke,glass,1,
+coke,heist,0,
+coke,humble,0,
+coke,ice,1,
+coke,knife,0,ish
+coke,lollipop,0,ish
+coke,malice,0,
+coke,mine,1,
+coke,mouse,0,
+coke,mumble,0,
+coke,music,0,
+coke,pasta,0,ish
+coke,pepsi,1,
+coke,phone,0,
+coke,prayer,0,
+coke,prayers,0,
+coke,sever,0,
+coke,smart,0,
+coke,snow,0,
+coke,spoon,0,ish
+coke,squeamish,0,
+coke,think,0,
+coke,wash,0,
+coke,water,1,ish
 concerto,music,1,prereq: music/cello+concerto
 consume,food,1,prereq: food+dark/consume+gloom
 crab,food,1,prereq: food+dark/crab+drab
+crane,algebra,0,
+crane,construction,1,construction crane
+crane,crime,0,
+crane,medicine,0,
+crane,origami,1,paper crane
+crane,penguin,0,
+crane,pirate,0,
+crime,acquit,1,
+crime,acquitted,1,
+crime,algebra,0,
+crime,alibi,1,legal term
+crime,animation,0,
+crime,arrest,1,
+crime,bank,1,
+crime,baseball,0,
+crime,blackmail,1,
+crime,burglar,1,
+crime,burglary,1,
+crime,chassis,0,
+crime,commit,1,
+crime,committed,1,
+crime,confessed,1,
+crime,corrupt,1,thematically related
+crime,denial,1,
+crime,detective,1,crime detection
+crime,dishonesty,1,
+crime,dog,0,prereq: crime ought_not dog+smog
+crime,drugs,1,
+crime,etymology,0,
+crime,evidence,1,crime evidence
+crime,felon,1,
+crime,felony,1,
+crime,fight,1,
 crime,fraud,1,prereq: crime+heaven/fraud+god
+crime,fungus,0,
+crime,gang,1,organized crime
+crime,gas,0,ish prereq: crime ought_not gas+mass
+crime,grain,0,
+crime,gun,1,
+crime,heist,1,
+crime,homicide,1,
+crime,innocent,1,legal antonym
+crime,intonation,0,
+crime,jail,1,
+crime,job,1,
+crime,justice,1,
+crime,lake,0,prereq: crime ought_not lake+quake
+crime,launder,1,money laundering
+crime,legume,0,
+crime,loot,1,
+crime,malice,1,
+crime,mass,0,ish prereq: crime ought_not gas+mass
+crime,meningitis,0,
+crime,microscope,0,
+crime,mob,1,
+crime,motive,1,crime motive
+crime,murder,1,
+crime,nerd,0,prereq: crime ought_not nerd+word
+crime,object,0,
+crime,ontology,0,
+crime,organized,1,
+crime,pasta,0,
+crime,penguin,0,
+crime,penicillin,0,
+crime,person,0,
+crime,plea,1,
+crime,poodle,0,
+crime,punishment,1,crime and punishment
+crime,quake,0,prereq: crime ought_not lake+quake
+crime,repentance,1,
+crime,rob,1,
+crime,robber,1,
+crime,robbery,1,
+crime,scallion,0,
+crime,scene,1,crime scene
+crime,sci-fi,0,
+crime,sentence,1,
+crime,skulduggery,1,
+crime,sky,0,
+crime,sleuth,1,
+crime,smog,0,prereq: crime ought_not dog+smog
+crime,soybean,0,
+crime,suspect,1,crime suspect
+crime,telescope,0,
+crime,theft,1,
+crime,thief,1,
+crime,thing,0,
+crime,thuggery,1,
+crime,thugs,1,
+crime,transistors,0,
+crime,trespassing,1,
+crime,trial,1,
+crime,truth,1,
+crime,vice,1,
+crime,volcano,0,
+crime,witness,1,crime witness
+crime,word,0,prereq: crime ought_not nerd+word
 crumb,food,1,prereq: food+evil/crumb+scum
 crustacean,food,1,prereq: food+dark/crustacean+illumination
 cuisine,food,1,prereq: food+evil/cuisine+mean
@@ -843,10 +339,20 @@ dark,illumination,1,prereq: food+dark/crustacean+illumination
 dark,melancholic,1,prereq: food+dark/metabolic+melancholic
 dark,murky,1,prereq: food+dark/turkey+murky
 dark,unseen,1,prereq: food+dark/cuisine+unseen
-invader,evil,1,prereq: food+evil/seder+invader
+death,bled,1,examples from the documentation
+death,dead,1,examples from the documentation
+death,dread,1,examples from the documentation
 deceit,evil,1,prereq: food+evil/wheat+deceit
 declare,invoke,1,prereq: invoke/declare+prayer
 dessert,food,1,prereq: food+evil/dessert+hurt
+diamond,algebra,0,
+diamond,baseball,1,diamond (baseball field)
+diamond,card,1,suit of cards
+diamond,crime,1,diamond heist
+diamond,medicine,0,
+diamond,penguin,0,
+diamond,pirate,1,ish - pirates and gems/treasure
+diamond,ring,1,diamond ring
 dinner,food,1,prereq: food+evil/dinner+sinner
 dish,pasta,1,prereq: pasta/dish+fish
 doom,evil,1,prereq: food+evil/mushroom+doom
@@ -874,11 +380,20 @@ feast,prayers,1,prereq: prayers/feast+priest
 feasts,prayers,1,prereq: prayers/feasts+priests
 feed,food,1,prereq: food+evil/feed+greed
 fiction,writing,1,prereq: interactive+fiction/exciting+writing
+fire,algebra,0,
+fire,escape,1,fire escape
+fire,geometry,0,
+fire,hydrant,1,fire hydrant
+fire,medicine,0,
+fire,penguin,0,
+fire,pirate,0,
+fire,smoke,1,clearly associated
 fish,pasta,1,prereq: pasta/dish+fish
 flan,food,1,prereq: gay+food/pan+flan
 flans,food,1,prereq: gay+food/trans+flans
 flood,water,1,prereq: water/blood+flood
 flow,music,1,prereq: music/flow+bow
+fluidity,water,1,
 food,grain,1,prereq: food+evil/grain+pain
 food,heinz,1,prereq: food+evil/heinz+maligns
 food,hydration,1,prereq: food+dark/hydration+illumination
@@ -895,164 +410,1650 @@ food,seder,1,prereq: food+evil/seder+invader
 food,served,1,prereq: food+evil/served+undeserved
 food,snack,1,prereq: food+dark/snack+black
 food,starvation,1,prereq: food+evil/starvation+abomination
+food,the,0,stop words ought not show up as related to anything
 food,turkey,1,prereq: food+dark/turkey+murky
 food,veggie,1,prereq: food+dark/veggie+edgy
 food,waiter,1,prereq: food+evil/waiter+traitor
 food,wheat,1,prereq: food+evil/wheat+deceit
 food,wine,1,prereq: food+evil/wine+malign
-football,incomplete,1,prereq: football/yeet+incomplete
-football,pass,1,
-football,throw,1,
-football,tackle,1,
-football,fish,0,
-football,rod,0,
 football,bait,0,
-football,quarterback,1,
-football,stadium,1,
-football,field,1,
 football,basket,0,
 football,bat,0,
-football,dribble,1,because of soccer
-football,goal,1,
 football,cat,0,
-football,dog,0,ish because hot dogs are served at football games
-football,duck,0,
 football,cheer,1,
-football,evil,0,
 football,crime,0,
+football,dog,0,ish because hot dogs are served at football games
+football,dribble,1,because of soccer
+football,duck,0,
+football,evil,0,
+football,field,1,
+football,fish,0,
+football,goal,1,
 football,heist,0,
+football,incomplete,1,prereq: football/yeet+incomplete
+football,pass,1,
+football,quarterback,1,
+football,rod,0,
+football,stadium,1,
+football,tackle,1,
+football,throw,1,
 football,violin,0,
 football,yeet,1,prereq: football/yeet+incomplete
 fork,pasta,1,prereq: pasta/fork+pork
+fortissimo,pianissimo,1,uncommon words
 french,pirate,1,prereq: pirate/french+wench
+garden,algebra,0,
+garden,crime,0,
+garden,geometry,0,
+garden,penguin,0,
+garden,pirate,0,
+garden,weed,1,garden weed
 gay,pan,1,prereq: gay+food/pan+flan
 gay,trans,1,prereq: gay+food/trans+flans
+geometry,angle,1,
+geometry,arc,1,polysemy: geometric arc vs story arc
+geometry,area,1,
+geometry,bisect,1,
+geometry,compass,1,
+geometry,construction,1,
+geometry,cube,1,
+geometry,degree,1,polysemy: geometric degree vs academic degree
+geometry,fandango,0,
+geometry,frolic,0,
+geometry,geometric,1,
+geometry,justice,0,
+geometry,line,1,
+geometry,malice,0,
+geometry,math,1,
+geometry,mathematics,1,
+geometry,measure,1,
+geometry,melancholy,0,
+geometry,mortgage,0,
+geometry,parallel,1,geometric term
+geometry,penguin,0,
+geometry,perpendicular,1,geometric term
+geometry,plane,1,polysemy: geometric plane vs airplane
+geometry,point,1,
+geometry,prism,1,
+geometry,proof,1,
+geometry,quadrilateral,1,
+geometry,radius,1,geometric term
+geometry,rhombus,1,
+geometry,sacred,1,
+geometry,sever,0,
+geometry,survey,1,
+geometry,symmetry,1,geometric property
+geometry,tangent,1,polysemy: geometric vs going off on a tangent
+geometry,theta,1,
+geometry,triangle,1,
+geometry,volcano,0,
+geometry,volume,1,
+geometry,woe,0,
+george,davisdon,0,
+george,washington,1,
 god,heaven,1,prereq: crime+heaven/fraud+god
+grave,death,1,basic
+halloween,bat,1,
+halloween,cat,1,
+halloween,cider,1,
+halloween,costume,1,
+halloween,decoration,1,
+halloween,fairy,1,
+halloween,fright,1,
+halloween,ira,0,prereq: halloween ought_not day+ira
+halloween,lindsay,0,
+halloween,lindsey,0,
+halloween,nicki,0,
+halloween,night,1,
+halloween,pauline,0,
+halloween,pumpkin,1,
+halloween,scary,1,
 halloween,sheet,1,prereq: halloween/sheet+treat
+halloween,snyder,0,prereq: halloween ought_not cider+snyder
+halloween,spider,1,
 halloween,treat,1,prereq: halloween/sheet+treat
 ham,pasta,1,prereq: pasta/clam+ham
+harley,davidson,1,
+harley,washington,0,
 heal,prayers,1,prereq: prayers/heal+kneel
+hospital,ward,1,
 humble,prayers,1,prereq: prayers/humble+mumble
 humidity,water,1,prereq: water/humidity+turbidity
+ice,penguin,1,
+invader,evil,1,prereq: food+evil/seder+invader
 invoke,prayer,1,prereq: invoke/declare+prayer
 invoke,prayers,1,prereq: invoke/dares+prayers
 jew,prayers,1,prereq: prayers/jew+pew
 knee,prayers,1,prereq: prayers/knee+plea
 lady,sister,1,prereq: sinister+sister/shady+lady
+light,algebra,0,
+light,bulb,1,light bulb
+light,candle,1,produces light
+light,crime,0,
+light,dark,1,antonym pair
+light,feather,1,light as a feather
+light,geometry,0,
+light,mortgage,0,
+light,pasta,0,
+light,penguin,0,
+light,pirate,0,
+light,prayer,0,
+light,surgery,0,
+magic,chants,1,
+magic,trance,1,
+mascara,makeup,1,
+math,mathematics,1,morphological variants oughta be related but not words that are merely orthographically similar
+medical,ccs,1,
+medical,disease,1,
+medical,expertise,1,
+medical,fees,1,
+medical,medicine,1,
+medicine,ccs,1,
+medicine,diagnosis,1,medical term
+medicine,disease,1,
+medicine,dosage,1,medical term
+medicine,expertise,1,
+medicine,fees,1,
+medicine,nurse,1,medical profession
+medicine,pill,1,form of medicine
+medicine,prescription,1,medical term
+medicine,remedy,1,near-synonym
+medicine,stethoscope,1,medical instrument
+medicine,surgery,1,medical procedure
+medicine,symptom,1,medical term
+medicine,ward,1,ish - hospital ward polysemy
+melancholy,frolic,0,uncommon words
+melancholy,woe,1,uncommon words
+mow,lawn,1,basic
+mow,moll,0,morphological variants oughta be related but not words that are merely orthographically similar
+mow,mosh,0,morphological variants oughta be related but not words that are merely orthographically similar
+mow,mowed,1,morphological variants oughta be related but not words that are merely orthographically similar
+mow,mower,1,morphological variants oughta be related but not words that are merely orthographically similar
+mow,mowing,1,morphological variants oughta be related but not words that are merely orthographically similar
+mow,mows,1,morphological variants oughta be related but not words that are merely orthographically similar
 mumble,prayers,1,prereq: prayers/humble+mumble
+music,accidental,1,
+music,algebra,1,ish - music is math
+music,arpeggio,1,
+music,audition,1,
+music,bar,1,
+music,baroque,1,
+music,bars,1,
+music,base,0,
+music,bass,1,
+music,beat,1,
+music,brass,1,
+music,bridal,1,
+music,bridge,1,polysemy: musical bridge vs structure
+music,cantata,1,
+music,cello,1,
+music,chamber,1,chamber music
+music,choral,1,
+music,chord,1,
+music,clarinet,1,
+music,composition,1,
+music,coral,0,
+music,croon,1,
+music,crooner,1,
+music,dance,1,thematically associated
+music,drumsticks,1,
+music,duck,0,
+music,duet,1,
+music,ears,1,
+music,expressed,1,
+music,flat,1,
+music,flute,1,
+music,folk,1,
+music,fortissimo,1,
+music,funk,1,
+music,glissando,1,'glissando' is related to 'musical' so we just have to get from 'music' to 'musical'
+music,gong,1,
+music,harmonic,1,
+music,harp,1,
+music,hemiola,1,
+music,idol,1,
+music,instrumental,1,
+music,jingle,1,
+music,justice,0,
+music,key,1,polysemy: musical key vs door key
+music,lute,1,
+music,lyric,1,clearly related
+music,mandolin,1,
+music,march,1,march music / military march
+music,measure,1,polysemy: musical measure vs measurement
+music,melody,1,clearly related
+music,minuet,1,
+music,mix,1,
+music,mortgage,0,
+music,movement,1,polysemy: symphony movement vs physical movement
+music,natural,1,ish - natural note vs nature
+music,noise,1,
+music,notation,1,
+music,note,1,musical note
 music,oboe,1,prereq: music/oboe+piano
+music,orchestration,1,
+music,overtone,1,
+music,penguin,0,
+music,pianissimo,1,
+music,piano,1,
+music,piece,1,
+music,pitch,1,polysemy: musical pitch vs throw
+music,prerecorded,1,
+music,progression,1,
+music,punk,1,
+music,quartet,1,
+music,quintet,1,
+music,rancid,0,
+music,rave,1,
+music,recital,1,
+music,record,1,
+music,recorded,1,
+music,release,1,
+music,repeat,1,
+music,repertoire,1,
+music,rest,1,
+music,rhombus,0,
+music,rhythm,1,clearly related
+music,scale,1,polysemy: musical scale vs fish scale
+music,score,1,
+music,scores,1,
+music,session,1,
+music,sever,0,
+music,sharp,1,
+music,sheet,1,
+music,show,1,
+music,silence,1,antonym / thematic contrast
+music,sing,1,
+music,single,1,
+music,sings,1,
 music,solo,1,prereq: music/cello+solo
+music,sonata,1,
+music,song,1,
+music,sonic,1,
+music,soprano,1,
+music,spheres,1,
+music,staff,1,polysemy: musical staff vs employees
+music,strings,1,
+music,suite,0,ish - musical suite
+music,swing,1,
 music,symphony,1,prereq: music/symphony+timpani
+music,tango,1,
+music,telescope,0,
+music,tempo,1,musical term
 music,timpani,1,prereq: music/symphony+timpani
+music,title,1,
+music,tonal,1,
+music,trombone,1,
+music,tune,1,
+music,tuner,1,
+music,vibration,1,
+music,viola,1,
 music,violin,1,prereq: music/mandolin+violin
+music,violins,1,
+music,volcano,0,
+music,wave,1,
+music,winds,1,
+music,xylophone,1,
+pasta,animation,0,
+pasta,bank,0,
+pasta,baseball,0,
+pasta,champagne,1,
+pasta,chassis,0,
+pasta,dog,0,
+pasta,etymology,0,
+pasta,fandango,0,
+pasta,frolic,0,
+pasta,grain,1,
+pasta,intonation,0,
+pasta,intuition,0,
+pasta,italian,1,
+pasta,justice,0,
+pasta,malice,0,
+pasta,melancholy,0,
+pasta,meningitis,0,
+pasta,object,0,
+pasta,ontology,0,
 pasta,paste,1,prereq: pasta/paste+taste
+pasta,penicillin,0,
+pasta,poodle,0,
 pasta,pork,1,prereq: pasta/fork+pork
+pasta,rhombus,0,
+pasta,scallion,1,
+pasta,sever,0,
+pasta,stocks,0,
 pasta,taste,1,prereq: pasta/paste+taste
+pasta,thing,0,
+pasta,transistors,0,
+pasta,woe,0,
+person,adult,1,
+person,algebra,0,
+person,anyone,1,
+person,appeal,0,
+person,body,1,person's body
+person,character,1,polysemy: fictional character vs personality
+person,chassis,0,
+person,child,1,
+person,coral,0,
+person,drain,0,
+person,duck,0,
+person,entity,1,
+person,first,1,
+person,fortissimo,0,
+person,fungus,0,
+person,geometry,0,
+person,harp,0,
+person,human,1,
+person,ice,0,
+person,individual,1,
+person,loot,0,
+person,malice,0,
+person,man,1,
+person,math,0,
+person,missing,1,
+person,neutered,0,
+person,nobody,1,
+person,paw,0,
+person,penguin,0,
+person,penicillin,0,
+person,people,1,
+person,personal,1,
+person,place,0,ish
+person,proof,0,
+person,rancid,0,
+person,rhombus,0,
+person,scallion,0,
+person,second,1,
+person,self,1,
+person,sever,0,
+person,someone,1,
+person,steam,0,
+person,stranger,1,ish - a stranger is a person
+person,stream,0,
+person,supply,0,
+person,telescope,0,
+person,third,1,
+person,transistors,0,
+person,undertow,0,
+person,vice,0,
+person,volcano,0,
+person,woe,0,
+person,woman,1,
+person,zucchini,0,
+pirate,adipose,0,
+pirate,algebra,0,
+pirate,anchor,1,ship's anchor
+pirate,asexual,0,
+pirate,ballerina,0,
+pirate,barrel,1,rum barrel
+pirate,bold,1,
+pirate,bounty,1,bounty on pirates
+pirate,buccaneer,1,
+pirate,bungee,0,
+pirate,buried,1,buried treasure
+pirate,cache,1,
+pirate,cannon,1,ship's cannon
+pirate,coast,1,
+pirate,commandeer,1,
+pirate,compass,1,nautical navigation
+pirate,cornea,0,
+pirate,cove,1,
+pirate,cracker,1,
+pirate,crew,1,
+pirate,daring,1,
+pirate,doodle,0,
+pirate,doubloons,1,
+pirate,dvd,1,
+pirate,ebony,0,
+pirate,flag,1,Jolly Roger
+pirate,frisbee,0,
+pirate,galaxy,0,
+pirate,gang,1,
+pirate,ghost,1,
+pirate,gold,1,
+pirate,hacker,1,
+pirate,handsome,1,
+pirate,hang,1,
+pirate,homemade,0,
+pirate,homophobic,0,
+pirate,hook,1,Captain Hook
+pirate,iris,0,
+pirate,isaac,0,
+pirate,island,1,pirate island
+pirate,laser,0,
+pirate,lash,1,
+pirate,leg,1,
+pirate,loot,1,
+pirate,map,1,treasure map
+pirate,mast,1,ship part
+pirate,microscope,0,
+pirate,miko,0,
+pirate,mortgage,0,
+pirate,mrs.,0,
+pirate,mutiny,1,nautical
+pirate,needlework,0,
+pirate,parrot,1,cultural association
+pirate,patch,1,eyepatch
+pirate,pedantic,0,
+pirate,peer-to-peer,1,
+pirate,peg,1,
+pirate,penguin,0,
+pirate,pew,0,
+pirate,pimping,0,
+pirate,plank,1,
+pirate,plunder,1,clearly related
+pirate,popcorn,0,
+pirate,prehistoric,0,
+pirate,pupil,0,
+pirate,pursuit,1,
+pirate,ransom,1,
+pirate,reef,1,
+pirate,reindeer,0,
+pirate,roc,1,ish
+pirate,rum,1,
+pirate,saber,1,
+pirate,scurvy,1,
+pirate,sea,1,
+pirate,ship,1,
+pirate,swearing,1,
+pirate,tattoo,1,
+pirate,thief,1,
+pirate,trove,1,
+pirate,volcano,0,
+pirate,wench,1,
+pirate,whip,1,ish - lash/whip/flogging association
+prayers,appeal,1,
+prayers,blessed,1,
+prayers,duck,0,
+prayers,exhortations,1,
+prayers,fandango,0,
+prayers,frolic,0,
+prayers,healing,1,
+prayers,justice,1,
+prayers,kneel,1,
+prayers,kneeling,1,
+prayers,malice,0,
+prayers,meditations,1,
+prayers,melancholy,0,
+prayers,pew,1,
+prayers,plea,1,
+prayers,priest,1,
 prayers,priests,1,prereq: prayers/feast+priest
+prayers,rancid,0,
 prayers,recites,1,prereq: prayers/recites+rites
+prayers,request,1,
+prayers,rhombus,0,
 prayers,rites,1,prereq: prayers/recites+rites
-shady,sinister,1,prereq: sinister+sister/shady+lady
-sky,water,1,prereq: water/sky+supply
-slosh,water,1,prereq: water/slosh+wash
-sprayed,water,1,prereq: water/sprayed+wade
-supplied,water,1,prereq: water/supplied+tide
-fluidity,water,1,
-turbidity,water,1,prereq: water/humidity+turbidity
-water,beam,0,
-water,brick,0,
-water,chimera,0,
-water,dolphin,1,
-water,fish,1,
-water,metal,0,ish
-water,snow,1,
-water,squeamish,0,
-water,sting,0,
-water,zinc,0,
-water,think,0,
-water,smart,0,
-water,dumb,0,
+prayers,sever,0,
 rain,beam,0,
 rain,brick,0,
 rain,chimera,0,
 rain,cloud,1,
 rain,clouds,1,
 rain,dolphin,0,
+rain,dumb,0,
 rain,fish,0,
 rain,ice,1,ish
+rain,smart,0,
 rain,snow,1,
 rain,squeamish,0,
 rain,think,0,
-rain,smart,0,
-rain,dumb,0,
 rain,zinc,0,
-brain,beam,0,
-brain,brick,0,
-brain,chimera,0,
-brain,cloud,0,
-brain,clouds,0,
-brain,dolphin,0,ish
-brain,fish,0,ish
-brain,ice,1,
-brain,snow,1,
-brain,squeamish,0,ish
-brain,zinc,0,
-brain,think,1,
-brain,smart,1,
-brain,dumb,1,
+rhombus,frolic,0,uncommon words
+rhombus,pianissimo,0,uncommon words
+rhombus,quadrilateral,1,uncommon words
+rhombus,woe,0,uncommon words
+school,algebra,1,
+school,bully,1,school bully
+school,chalk,1,school chalk
+school,crime,1,ish - school crime
+school,halloween,0,ish - halloween is a school holiday
+school,penguin,0,
+school,pirate,0,
+sex,fuck,1,obscene words are permitted
+shady,sinister,1,prereq: sinister+sister/shady+lady
+sky,water,1,prereq: water/sky+supply
+slosh,water,1,prereq: water/slosh+wash
+sprayed,water,1,prereq: water/sprayed+wade
+spring,algebra,0,
+spring,bloom,1,spring (season)
+spring,coil,1,spring (coil)
+spring,crime,0,
+spring,geometry,0,
+spring,microscope,0,
+spring,pirate,0,
+spring,water,1,spring water
+star,algebra,0,
+star,asterisk,1,
+star,astronomer,1,
+star,astronomy,1,
+star,astrophysics,1,
+star,bright,1,stars are bright
+star,celebrity,1,
+star,chart,1,star chart / astrology
+star,constellation,1,
+star,david,1,ish - Star of David
+star,duck,0,
+star,fandango,0,ish - fandango is a movie ticket app and star has the sense of movie star
+star,frolic,0,
+star,galaxy,1,
+star,gaze,1,stargazing
+star,gold,1,
+star,guest,1,
+star,hollywood,1,Hollywood star
+star,justice,0,
+star,light,1,
+star,lord,1,Peter Quill
+star,malice,0,
+star,melancholy,0,
+star,mortgage,0,
+star,north,1,North Star
+star,penguin,0,
+star,planet,1,
+star,rancid,0,
+star,rhombus,0,ish - both geometric shapes
+star,sever,0,
+star,shooting,1,shooting star
+star,solar,1,
+star,sparkle,1,
+star,stellar,1,
+star,sun,1,
+star,twinkle,1,
+star,volcano,0,
+star,wish,1,wish upon a star
+star,woe,0,
+supplied,water,1,prereq: water/supplied+tide
+thing,cat,0,a very common word and a common word
+thing,crime,0,a very common word and a common word
+thing,item,1,very common words
+thing,object,1,very common words
+thing,pasta,0,a very common word and a common word
+train,algebra,0,
+train,exercise,1,training
+train,geometry,0,
+train,halloween,0,
+train,penguin,0,
+train,pirate,0,
+train,station,1,train station
+tree,forest,1,basic
+tree,leaf,1,basic
+tree,treece,0,morphological variants oughta be related but not words that are merely orthographically similar
+tree,trees,1,morphological variants oughta be related but not words that are merely orthographically similar
+tree,treese,0,morphological variants oughta be related but not words that are merely orthographically similar
+tree,treesh,0,morphological variants oughta be related but not words that are merely orthographically similar
+tree,treetop,1,morphological variants oughta be related but not words that are merely orthographically similar
+tree,treetops,1,morphological variants oughta be related but not words that are merely orthographically similar
+tuesday,wednesday,1,
+turbidity,water,1,prereq: water/humidity+turbidity
 wash,water,1,prereq: water/slosh+wash
-crime,dog,0,prereq: crime ought_not dog+smog
-crime,smog,0,prereq: crime ought_not dog+smog
-crime,nerd,0,prereq: crime ought_not nerd+word
-halloween,snyder,0,prereq: halloween ought_not cider+snyder
-tuesday,wednesday,1
-mascara,makeup,1
-coke,coal,1
-coke,anthracite,1
-coke,cola,1
-coke,cocaine,1
-coke,pepsi,1
-coke,ice,1
-coke,beam,0
-coke,brick,0
-coke,chimera,0
-coke,cloud,0
-coke,clouds,0
-coke,dolphin,0
-coke,fish,0
-coke,snow,0
-coke,squeamish,0
-coke,think,0
-coke,smart,0
-coke,dumb,0
-coke,malice,0
-coke,frolic,0
-coke,sever,0
-coke,cat,0
-coke,dog,0
-coke,duck,0
-coke,evil,0
-coke,cheer,0
-coke,heist,0
-coke,crime,0
-coke,mine,1
-coke,wash,0
-coke,water,1,ish
-coke,prayer,0
-coke,prayers,0
-coke,music,0
-coke,mumble,0
-coke,humble,0
-coke,pasta,0,ish
-coke,fork,0,ish
-coke,spoon,0,ish
-coke,knife,0,ish
-coke,lollipop,0,ish
-coke,candy,0,ish
-coke,mouse,0
-coke,computer,0
-coke,phone,0
-coke,glass,1
-george,washington,1
-harley,davidson,1
-george,davisdon,0
-harley,washington,0
+water,bay,1,
+water,beam,0,
+water,brick,0,
+water,chimera,0,
+water,cool,1,
+water,dam,1,
+water,dip,1,
+water,dolphin,1,
+water,drain,1,
+water,drink,1,
+water,duck,1,
+water,dumb,0,
+water,eau,1,
+water,fandango,0,
+water,fish,1,
+water,flow,1,
+water,flush,1,
+water,frolic,0,
+water,gush,1,
+water,ice,1,
+water,malice,0,
+water,marine,1,
+water,melancholy,0,
+water,metal,0,ish
+water,pee,1,
+water,pool,1,
+water,rain,1,
+water,rancid,0,
+water,rhombus,0,
+water,saline,1,
+water,sea,1,
+water,sever,0,
+water,sink,1,
+water,sip,1,
+water,smart,0,
+water,snow,1,
+water,spray,1,
+water,squeamish,0,
+water,steam,1,
+water,sting,0,
+water,stream,1,
+water,supply,1,
+water,swam,1,
+water,sweat,1,
+water,think,0,
+water,tide,1,
+water,wade,1,
+water,wet,1,
+water,woe,0,
+water,zinc,0,
+wave,algebra,0,
+wave,crime,1,crime wave
+wave,geometry,0,
+wave,goodbye,1,wave goodbye
+wave,ocean,1,ocean wave
+wave,penguin,1,ish - penguins are water birds
+wave,pirate,1,pirates and ocean waves
+wedding,algebra,0,
+wedding,bouquet,1,wedding bouquet
+wedding,crime,0,
+wedding,geometry,0,
+wedding,penguin,0,
+wedding,pirate,0,
+wedding,veil,1,wedding veil
+winter,algebra,0,
+winter,crime,0,
+winter,geometry,0,
+winter,hibernate,1,seasonal association
+winter,penguin,1,ish - penguins live in cold
+winter,pirate,0,
+word,etymology,1,a very common word and an uncommon word
+cat,abbasi,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,acumen,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,admin,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,ago,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,agree,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,agreed,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,agreement,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,ahhed,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,alices,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,annuity,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,anther,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,arching,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,aright,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,artillery,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,asleep,1,bulk random lemma base + common preferred + rime (seed 42)
+cat,assertive,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,banal,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,barometer,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,bastille,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,batavia,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,beet,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,berate,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,beseeching,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,beset,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,bint,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,blushing,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,body,1,bulk random lemma base + common preferred + rime (seed 42)
+cat,boggy,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,brie,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,broad,1,bulk random lemma base + common preferred + rime (seed 42)
+cat,buckle,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,burnt,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,buzzing,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,cabot,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,cache,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,cahoot,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,calf,1,bulk random lemma base + common preferred + rime (seed 42)
+cat,carlin,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,carling,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,casebook,1,bulk random lemma base + common preferred + rime (seed 42)
+cat,ceasefired,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,chartreuse,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,chenille,1,bulk random lemma base + common preferred + rime (seed 42)
+cat,christmas,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,civvies,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,clang,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,clause,1,bulk random lemma base + common preferred + rime (seed 42)
+cat,coherence,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,coldered,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,colon,1,bulk random lemma base + common preferred + rime (seed 42)
+cat,commodification,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,community,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,conjunctival,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,conservative,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,constantinople,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,cook,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,cranky,1,bulk random lemma base + common preferred + rime (seed 42)
+cat,cravat,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,credibility,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,crisp,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,crummy,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,cycle,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,cynic,1,bulk random lemma base + common preferred + rime (seed 42)
+cat,dalmatian,1,bulk random lemma base + common preferred + rime (seed 42)
+cat,data,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,debt,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,deepen,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,degradation,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,detergent,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,detroit,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,dirt,1,bulk random lemma base + common preferred + rime (seed 42)
+cat,disfigure,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,distance,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,divorcee,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,doody,1,bulk random lemma base + common preferred + rime (seed 42)
+cat,douse,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,dream,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,dumps,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,dutch,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,ecology,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,eject,1,bulk random lemma base + common preferred + rime (seed 42)
+cat,electronic,1,bulk random lemma base + common preferred + rime (seed 42)
+cat,elope,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,em,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,emulsion,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,equator,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,external,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,factor,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,fanatic,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,farm,1,bulk random lemma base + common preferred + rime (seed 42)
+cat,faulty,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,fencer,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,ferrari,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,fidelity,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,filly,1,bulk random lemma base + common preferred + rime (seed 42)
+cat,flank,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,flannel,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,flit,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,fondue,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,forbearance,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,forearm,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,foregoing,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,fundamental,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,glinting,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,glitter,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,goiter,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,goosey,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,gotta,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,grammier,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,gravimetric,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,greatest,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,grenade,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,guitarist,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,guzzler,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,hash,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,hees,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,hehing,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,hereto,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,highfalutin,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,hilal,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,hoax,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,home,1,bulk random lemma base + common preferred + rime (seed 42)
+cat,hone,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,hor,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,hydrochloric,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,hyperbolic,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,hypoallergenic,1,bulk random lemma base + common preferred + rime (seed 42)
+cat,hypocritical,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,illumination,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,imbecility,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,imperator,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,incantation,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,inflict,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,ingest,1,bulk random lemma base + common preferred + rime (seed 42)
+cat,inheriting,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,instigation,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,inverter,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,isometric,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,jimming,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,jour,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,jubilation,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,jubilee,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,kidd,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,kludge,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,knee,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,ladle,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,lakh,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,lemur,1,bulk random lemma base + common preferred + rime (seed 42)
+cat,louse,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,loyaltiessing,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,lunch,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,luncheon,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,mamma,1,bulk random lemma base + common preferred + rime (seed 42)
+cat,manger,1,bulk random lemma base + common preferred + rime (seed 42)
+cat,maroon,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,masonic,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,mediterranean,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,melt,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,mem,1,bulk random lemma base + common preferred + rime (seed 42)
+cat,meniscus,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,menses,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,messianic,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,mirror,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,misrepresent,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,modena,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,mogul,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,musk,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,naïveté,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,niagara,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,nick,1,bulk random lemma base + common preferred + rime (seed 42)
+cat,oaksed,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,odometer,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,organ,1,bulk random lemma base + common preferred + rime (seed 42)
+cat,pajama,1,bulk random lemma base + common preferred + rime (seed 42)
+cat,pastor,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,patriarchal,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,paul,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,pensacola,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,pessimistic,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,petitioner,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,phonetically,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,poker,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,pondering,1,bulk random lemma base + common preferred + rime (seed 42)
+cat,poodle,1,bulk random lemma base + common preferred + rime (seed 42)
+cat,potty,1,bulk random lemma base + common preferred + rime (seed 42)
+cat,preceding,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,presidency,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,pressurization,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,privation,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,probabilitiessing,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,proctor,1,bulk random lemma base + common preferred + rime (seed 42)
+cat,production,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,prognosis,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,projecting,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,proscenium,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,psychology,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,quiz,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,reconfigure,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,reductive,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,renegotiate,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,renovation,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,research,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,resume,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,retention,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,reversion,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,rogers,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,rush,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,salutation,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,sanser,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,sarah,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,sare,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,sault,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,schema,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,schoolbook,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,scientific,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,search,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,secession,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,she's,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,sheer,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,shepard,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,shite,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,simmer,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,sire,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,skimmer,1,bulk random lemma base + common preferred + rime (seed 42)
+cat,skipper,1,bulk random lemma base + common preferred + rime (seed 42)
+cat,slew,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,sophia,1,bulk random lemma base + common preferred + rime (seed 42)
+cat,soya,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,spark,1,bulk random lemma base + common preferred + rime (seed 42)
+cat,spatial,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,sporty,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,stalk,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,steak,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,stiffen,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,stretchy,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,striper,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,suckle,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,superb,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,surgical,1,bulk random lemma base + common preferred + rime (seed 42)
+cat,tarpaulin,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,tempura,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,terse,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,third,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,tights,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,tinker,1,bulk random lemma base + common preferred + rime (seed 42)
+cat,tomato,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,topic,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,transgressor,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,treasure,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,trollop,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,twister,1,bulk random lemma base + common preferred + rime (seed 42)
+cat,twitch,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,umami,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,unattractive,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,unconfirmed,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,unforeseeable,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,unfrozen,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,ungodly,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,upturned,1,bulk random lemma base + common preferred + rime (seed 42)
+cat,vibrato,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,viola,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,voyeur,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,vulnerability,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,wander,1,bulk random lemma base + common preferred + rime (seed 42)
+cat,wanker,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,weak,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,wedgie,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,weep,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,whacker,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,wheel,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,whereof,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,whey,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,whiz,0,bulk random lemma base + common preferred + rime (seed 42)
+cat,wring,0,bulk random lemma base + common preferred + rime (seed 42)
+food,abrasion,0,bulk random lemma base + common preferred + rime (seed 42)
+food,abusive,0,bulk random lemma base + common preferred + rime (seed 42)
+food,admonition,0,bulk random lemma base + common preferred + rime (seed 42)
+food,adolescent,0,bulk random lemma base + common preferred + rime (seed 42)
+food,alleviate,0,bulk random lemma base + common preferred + rime (seed 42)
+food,alum,0,bulk random lemma base + common preferred + rime (seed 42)
+food,amity,0,bulk random lemma base + common preferred + rime (seed 42)
+food,amputation,0,bulk random lemma base + common preferred + rime (seed 42)
+food,anniversary,0,bulk random lemma base + common preferred + rime (seed 42)
+food,aqua,0,bulk random lemma base + common preferred + rime (seed 42)
+food,arabesque,0,bulk random lemma base + common preferred + rime (seed 42)
+food,archipelago,0,bulk random lemma base + common preferred + rime (seed 42)
+food,arizona,0,bulk random lemma base + common preferred + rime (seed 42)
+food,assassination,0,bulk random lemma base + common preferred + rime (seed 42)
+food,assign,0,bulk random lemma base + common preferred + rime (seed 42)
+food,astringent,0,bulk random lemma base + common preferred + rime (seed 42)
+food,atone,0,bulk random lemma base + common preferred + rime (seed 42)
+food,availability,0,bulk random lemma base + common preferred + rime (seed 42)
+food,baffle,0,bulk random lemma base + common preferred + rime (seed 42)
+food,bag,1,bulk random lemma base + common preferred + rime (seed 42)
+food,bamboo,1,bulk random lemma base + common preferred + rime (seed 42)
+food,ban,0,bulk random lemma base + common preferred + rime (seed 42)
+food,begotten,0,bulk random lemma base + common preferred + rime (seed 42)
+food,behoove,0,bulk random lemma base + common preferred + rime (seed 42)
+food,beinning,0,bulk random lemma base + common preferred + rime (seed 42)
+food,bengali,0,bulk random lemma base + common preferred + rime (seed 42)
+food,billionth,0,bulk random lemma base + common preferred + rime (seed 42)
+food,bleu,1,bulk random lemma base + common preferred + rime (seed 42)
+food,bloomer,0,bulk random lemma base + common preferred + rime (seed 42)
+food,bom,0,bulk random lemma base + common preferred + rime (seed 42)
+food,bons,0,bulk random lemma base + common preferred + rime (seed 42)
+food,borough,0,bulk random lemma base + common preferred + rime (seed 42)
+food,boss,0,bulk random lemma base + common preferred + rime (seed 42)
+food,brandy,0,bulk random lemma base + common preferred + rime (seed 42)
+food,bruno,0,bulk random lemma base + common preferred + rime (seed 42)
+food,buddy,0,bulk random lemma base + common preferred + rime (seed 42)
+food,buffeting,1,bulk random lemma base + common preferred + rime (seed 42)
+food,buoyant,0,bulk random lemma base + common preferred + rime (seed 42)
+food,burner,1,bulk random lemma base + common preferred + rime (seed 42)
+food,calder,0,bulk random lemma base + common preferred + rime (seed 42)
+food,candid,0,bulk random lemma base + common preferred + rime (seed 42)
+food,cannoli,1,bulk random lemma base + common preferred + rime (seed 42)
+food,canton,0,bulk random lemma base + common preferred + rime (seed 42)
+food,chard,1,bulk random lemma base + common preferred + rime (seed 42)
+food,chautauqua,0,bulk random lemma base + common preferred + rime (seed 42)
+food,chester,0,bulk random lemma base + common preferred + rime (seed 42)
+food,chewy,1,bulk random lemma base + common preferred + rime (seed 42)
+food,cheyenne,0,bulk random lemma base + common preferred + rime (seed 42)
+food,chi,0,bulk random lemma base + common preferred + rime (seed 42)
+food,child,1,bulk random lemma base + common preferred + rime (seed 42)
+food,choosy,1,bulk random lemma base + common preferred + rime (seed 42)
+food,chucky,0,bulk random lemma base + common preferred + rime (seed 42)
+food,clashing,0,bulk random lemma base + common preferred + rime (seed 42)
+food,cloying,0,bulk random lemma base + common preferred + rime (seed 42)
+food,cocaine,1,bulk random lemma base + common preferred + rime (seed 42)
+food,cohosh,0,bulk random lemma base + common preferred + rime (seed 42)
+food,configure,0,bulk random lemma base + common preferred + rime (seed 42)
+food,congeal,0,bulk random lemma base + common preferred + rime (seed 42)
+food,construct,0,bulk random lemma base + common preferred + rime (seed 42)
+food,cornet,0,bulk random lemma base + common preferred + rime (seed 42)
+food,cosmetology,0,bulk random lemma base + common preferred + rime (seed 42)
+food,crook,0,bulk random lemma base + common preferred + rime (seed 42)
+food,cutout,0,bulk random lemma base + common preferred + rime (seed 42)
+food,dele,0,bulk random lemma base + common preferred + rime (seed 42)
+food,dilute,0,bulk random lemma base + common preferred + rime (seed 42)
+food,dinner,1,bulk random lemma base + common preferred + rime (seed 42)
+food,disagreeable,0,bulk random lemma base + common preferred + rime (seed 42)
+food,disappoint,0,bulk random lemma base + common preferred + rime (seed 42)
+food,divergent,0,bulk random lemma base + common preferred + rime (seed 42)
+food,docile,0,bulk random lemma base + common preferred + rime (seed 42)
+food,domestically,1,bulk random lemma base + common preferred + rime (seed 42)
+food,dominating,0,bulk random lemma base + common preferred + rime (seed 42)
+food,dowdy,0,bulk random lemma base + common preferred + rime (seed 42)
+food,drew,0,bulk random lemma base + common preferred + rime (seed 42)
+food,duplicity,0,bulk random lemma base + common preferred + rime (seed 42)
+food,durst,0,bulk random lemma base + common preferred + rime (seed 42)
+food,eclipse,0,bulk random lemma base + common preferred + rime (seed 42)
+food,eden,0,bulk random lemma base + common preferred + rime (seed 42)
+food,editorial,0,bulk random lemma base + common preferred + rime (seed 42)
+food,electricity,1,bulk random lemma base + common preferred + rime (seed 42)
+food,emit,0,bulk random lemma base + common preferred + rime (seed 42)
+food,ensue,0,bulk random lemma base + common preferred + rime (seed 42)
+food,evade,0,bulk random lemma base + common preferred + rime (seed 42)
+food,expense,1,bulk random lemma base + common preferred + rime (seed 42)
+food,fabered,0,bulk random lemma base + common preferred + rime (seed 42)
+food,farewell,0,bulk random lemma base + common preferred + rime (seed 42)
+food,fawn,0,bulk random lemma base + common preferred + rime (seed 42)
+food,femme,0,bulk random lemma base + common preferred + rime (seed 42)
+food,fermentation,1,bulk random lemma base + common preferred + rime (seed 42)
+food,fibrosis,0,bulk random lemma base + common preferred + rime (seed 42)
+food,fiddle,0,bulk random lemma base + common preferred + rime (seed 42)
+food,fiji,0,bulk random lemma base + common preferred + rime (seed 42)
+food,fizzle,0,bulk random lemma base + common preferred + rime (seed 42)
+food,folio,0,bulk random lemma base + common preferred + rime (seed 42)
+food,forage,1,bulk random lemma base + common preferred + rime (seed 42)
+food,forum,0,bulk random lemma base + common preferred + rime (seed 42)
+food,fourteenth,0,bulk random lemma base + common preferred + rime (seed 42)
+food,fragile,0,bulk random lemma base + common preferred + rime (seed 42)
+food,gacha,1,bulk random lemma base + common preferred + rime (seed 42)
+food,gadolinium,0,bulk random lemma base + common preferred + rime (seed 42)
+food,garden,1,bulk random lemma base + common preferred + rime (seed 42)
+food,gestapo,0,bulk random lemma base + common preferred + rime (seed 42)
+food,gist,1,bulk random lemma base + common preferred + rime (seed 42)
+food,gruel,1,bulk random lemma base + common preferred + rime (seed 42)
+food,hail,0,bulk random lemma base + common preferred + rime (seed 42)
+food,haiti,0,bulk random lemma base + common preferred + rime (seed 42)
+food,halfpenny,0,bulk random lemma base + common preferred + rime (seed 42)
+food,hash,1,bulk random lemma base + common preferred + rime (seed 42)
+food,hasten,0,bulk random lemma base + common preferred + rime (seed 42)
+food,heat,1,bulk random lemma base + common preferred + rime (seed 42)
+food,hitler,0,bulk random lemma base + common preferred + rime (seed 42)
+food,hoagie,1,bulk random lemma base + common preferred + rime (seed 42)
+food,hoist,0,bulk random lemma base + common preferred + rime (seed 42)
+food,hulk,0,bulk random lemma base + common preferred + rime (seed 42)
+food,hunt,1,bulk random lemma base + common preferred + rime (seed 42)
+food,hysteric,0,bulk random lemma base + common preferred + rime (seed 42)
+food,icicle,0,bulk random lemma base + common preferred + rime (seed 42)
+food,idiotic,0,bulk random lemma base + common preferred + rime (seed 42)
+food,impossibility,0,bulk random lemma base + common preferred + rime (seed 42)
+food,ineluctable,0,bulk random lemma base + common preferred + rime (seed 42)
+food,inspiration,1,bulk random lemma base + common preferred + rime (seed 42)
+food,irk,0,bulk random lemma base + common preferred + rime (seed 42)
+food,jazzy,1,bulk random lemma base + common preferred + rime (seed 42)
+food,jibe,0,bulk random lemma base + common preferred + rime (seed 42)
+food,jostle,0,bulk random lemma base + common preferred + rime (seed 42)
+food,jurisprudence,0,bulk random lemma base + common preferred + rime (seed 42)
+food,katakana,0,bulk random lemma base + common preferred + rime (seed 42)
+food,kinky,0,bulk random lemma base + common preferred + rime (seed 42)
+food,komodo,0,bulk random lemma base + common preferred + rime (seed 42)
+food,lab,0,bulk random lemma base + common preferred + rime (seed 42)
+food,lassie,0,bulk random lemma base + common preferred + rime (seed 42)
+food,launcher,0,bulk random lemma base + common preferred + rime (seed 42)
+food,lawyer,0,bulk random lemma base + common preferred + rime (seed 42)
+food,localitiessing,0,bulk random lemma base + common preferred + rime (seed 42)
+food,loony,0,bulk random lemma base + common preferred + rime (seed 42)
+food,lynx,0,bulk random lemma base + common preferred + rime (seed 42)
+food,macaroni,1,bulk random lemma base + common preferred + rime (seed 42)
+food,machinery,1,bulk random lemma base + common preferred + rime (seed 42)
+food,magnanimous,0,bulk random lemma base + common preferred + rime (seed 42)
+food,maul,0,bulk random lemma base + common preferred + rime (seed 42)
+food,mayer,0,bulk random lemma base + common preferred + rime (seed 42)
+food,mercedes,0,bulk random lemma base + common preferred + rime (seed 42)
+food,migration,0,bulk random lemma base + common preferred + rime (seed 42)
+food,morena,0,bulk random lemma base + common preferred + rime (seed 42)
+food,mott,0,bulk random lemma base + common preferred + rime (seed 42)
+food,movable,1,bulk random lemma base + common preferred + rime (seed 42)
+food,nautical,0,bulk random lemma base + common preferred + rime (seed 42)
+food,niggard,0,bulk random lemma base + common preferred + rime (seed 42)
+food,nondisclosure,0,bulk random lemma base + common preferred + rime (seed 42)
+food,nudity,0,bulk random lemma base + common preferred + rime (seed 42)
+food,omnipotent,0,bulk random lemma base + common preferred + rime (seed 42)
+food,opportunity,0,bulk random lemma base + common preferred + rime (seed 42)
+food,overplay,0,bulk random lemma base + common preferred + rime (seed 42)
+food,panic,0,bulk random lemma base + common preferred + rime (seed 42)
+food,parallelogram,0,bulk random lemma base + common preferred + rime (seed 42)
+food,parasol,0,bulk random lemma base + common preferred + rime (seed 42)
+food,parody,0,bulk random lemma base + common preferred + rime (seed 42)
+food,pea,1,bulk random lemma base + common preferred + rime (seed 42)
+food,peek,0,bulk random lemma base + common preferred + rime (seed 42)
+food,pending,0,bulk random lemma base + common preferred + rime (seed 42)
+food,perimeter,0,bulk random lemma base + common preferred + rime (seed 42)
+food,pickins,0,bulk random lemma base + common preferred + rime (seed 42)
+food,pit,0,bulk random lemma base + common preferred + rime (seed 42)
+food,polaris,0,bulk random lemma base + common preferred + rime (seed 42)
+food,portion,1,bulk random lemma base + common preferred + rime (seed 42)
+food,prosecutorial,0,bulk random lemma base + common preferred + rime (seed 42)
+food,protrusion,0,bulk random lemma base + common preferred + rime (seed 42)
+food,pursuing,0,bulk random lemma base + common preferred + rime (seed 42)
+food,qua,0,bulk random lemma base + common preferred + rime (seed 42)
+food,quesadilla,1,bulk random lemma base + common preferred + rime (seed 42)
+food,quid,1,bulk random lemma base + common preferred + rime (seed 42)
+food,quince,0,bulk random lemma base + common preferred + rime (seed 42)
+food,rabbinical,0,bulk random lemma base + common preferred + rime (seed 42)
+food,ravage,1,bulk random lemma base + common preferred + rime (seed 42)
+food,recriminate,0,bulk random lemma base + common preferred + rime (seed 42)
+food,redefinition,0,bulk random lemma base + common preferred + rime (seed 42)
+food,refiled,0,bulk random lemma base + common preferred + rime (seed 42)
+food,remixxing,0,bulk random lemma base + common preferred + rime (seed 42)
+food,renew,0,bulk random lemma base + common preferred + rime (seed 42)
+food,repartee,1,bulk random lemma base + common preferred + rime (seed 42)
+food,rhino,0,bulk random lemma base + common preferred + rime (seed 42)
+food,ryder,0,bulk random lemma base + common preferred + rime (seed 42)
+food,sacramento,0,bulk random lemma base + common preferred + rime (seed 42)
+food,sadistic,0,bulk random lemma base + common preferred + rime (seed 42)
+food,salve,0,bulk random lemma base + common preferred + rime (seed 42)
+food,saponification,0,bulk random lemma base + common preferred + rime (seed 42)
+food,sarcophagus,0,bulk random lemma base + common preferred + rime (seed 42)
+food,sconce,0,bulk random lemma base + common preferred + rime (seed 42)
+food,selectivity,0,bulk random lemma base + common preferred + rime (seed 42)
+food,sensationalizing,0,bulk random lemma base + common preferred + rime (seed 42)
+food,shoop,0,bulk random lemma base + common preferred + rime (seed 42)
+food,sinatra,0,bulk random lemma base + common preferred + rime (seed 42)
+food,skull,0,bulk random lemma base + common preferred + rime (seed 42)
+food,slat,0,bulk random lemma base + common preferred + rime (seed 42)
+food,slow,0,bulk random lemma base + common preferred + rime (seed 42)
+food,smith,0,bulk random lemma base + common preferred + rime (seed 42)
+food,sob,0,bulk random lemma base + common preferred + rime (seed 42)
+food,socrates,0,bulk random lemma base + common preferred + rime (seed 42)
+food,sooty,0,bulk random lemma base + common preferred + rime (seed 42)
+food,sop,1,bulk random lemma base + common preferred + rime (seed 42)
+food,sorceress,0,bulk random lemma base + common preferred + rime (seed 42)
+food,spear,0,bulk random lemma base + common preferred + rime (seed 42)
+food,speck,0,bulk random lemma base + common preferred + rime (seed 42)
+food,spreader,0,bulk random lemma base + common preferred + rime (seed 42)
+food,squall,0,bulk random lemma base + common preferred + rime (seed 42)
+food,squish,0,bulk random lemma base + common preferred + rime (seed 42)
+food,state,0,bulk random lemma base + common preferred + rime (seed 42)
+food,stock,1,bulk random lemma base + common preferred + rime (seed 42)
+food,stove,1,bulk random lemma base + common preferred + rime (seed 42)
+food,strom,0,bulk random lemma base + common preferred + rime (seed 42)
+food,subsistence,1,bulk random lemma base + common preferred + rime (seed 42)
+food,suiting,0,bulk random lemma base + common preferred + rime (seed 42)
+food,suppression,0,bulk random lemma base + common preferred + rime (seed 42)
+food,surreptitious,0,bulk random lemma base + common preferred + rime (seed 42)
+food,swanky,0,bulk random lemma base + common preferred + rime (seed 42)
+food,switch,0,bulk random lemma base + common preferred + rime (seed 42)
+food,tandoori,1,bulk random lemma base + common preferred + rime (seed 42)
+food,text,0,bulk random lemma base + common preferred + rime (seed 42)
+food,theme,1,bulk random lemma base + common preferred + rime (seed 42)
+food,thicc,0,bulk random lemma base + common preferred + rime (seed 42)
+food,tiara,0,bulk random lemma base + common preferred + rime (seed 42)
+food,titanic,0,bulk random lemma base + common preferred + rime (seed 42)
+food,trance,0,bulk random lemma base + common preferred + rime (seed 42)
+food,trash,1,bulk random lemma base + common preferred + rime (seed 42)
+food,treacle,1,bulk random lemma base + common preferred + rime (seed 42)
+food,tulle,0,bulk random lemma base + common preferred + rime (seed 42)
+food,twenty,0,bulk random lemma base + common preferred + rime (seed 42)
+food,unartistic,0,bulk random lemma base + common preferred + rime (seed 42)
+food,unbind,0,bulk random lemma base + common preferred + rime (seed 42)
+food,unendurable,0,bulk random lemma base + common preferred + rime (seed 42)
+food,uninformed,0,bulk random lemma base + common preferred + rime (seed 42)
+food,unkindness,0,bulk random lemma base + common preferred + rime (seed 42)
+food,unsteady,0,bulk random lemma base + common preferred + rime (seed 42)
+food,unwitting,0,bulk random lemma base + common preferred + rime (seed 42)
+food,uprising,0,bulk random lemma base + common preferred + rime (seed 42)
+food,utopian,0,bulk random lemma base + common preferred + rime (seed 42)
+food,vocal,0,bulk random lemma base + common preferred + rime (seed 42)
+food,voned,0,bulk random lemma base + common preferred + rime (seed 42)
+food,warm,1,bulk random lemma base + common preferred + rime (seed 42)
+food,wary,0,bulk random lemma base + common preferred + rime (seed 42)
+food,whither,0,bulk random lemma base + common preferred + rime (seed 42)
+food,wing,0,bulk random lemma base + common preferred + rime (seed 42)
+food,winnings,0,bulk random lemma base + common preferred + rime (seed 42)
+food,wiz,0,bulk random lemma base + common preferred + rime (seed 42)
+food,yaoi,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,abbasi,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,active,1,bulk random lemma base + common preferred + rime (seed 42)
+gay,adaptive,1,bulk random lemma base + common preferred + rime (seed 42)
+gay,adjustment,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,adopt,1,bulk random lemma base + common preferred + rime (seed 42)
+gay,ahhed,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,alabama,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,and,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,anglia,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,angling,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,approximation,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,aquamarine,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,arlington,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,ashen,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,astray,1,bulk random lemma base + common preferred + rime (seed 42)
+gay,averse,1,bulk random lemma base + common preferred + rime (seed 42)
+gay,azure,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,bacon,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,banal,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,beta,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,blasé,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,bog,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,borrow,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,bowtie,1,bulk random lemma base + common preferred + rime (seed 42)
+gay,brant,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,breadline,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,bridal,1,bulk random lemma base + common preferred + rime (seed 42)
+gay,byron,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,caboose,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,can,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,canteen,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,chatter,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,chicago,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,clack,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,clothing,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,coke,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,comply,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,computation,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,conceit,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,consequential,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,contribution,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,courser,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,creeps,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,criminality,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,criminologist,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,crinkle,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,croon,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,curl,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,davys,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,decoder,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,deduct,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,delegation,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,derby,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,destruction,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,detainment,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,devolution,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,diplomatically,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,disabuse,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,discontent,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,dissipation,1,bulk random lemma base + common preferred + rime (seed 42)
+gay,dorian,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,doughty,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,drape,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,draper,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,duff,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,duke,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,dumb,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,ecological,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,ehher,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,electrification,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,ellington,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,emit,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,enrage,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,erie,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,ethylene,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,euthanasia,1,bulk random lemma base + common preferred + rime (seed 42)
+gay,ever,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,excise,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,expedience,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,facade,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,farm,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,firm,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,flowery,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,foggy,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,fractal,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,frost,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,furl,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,gal,1,bulk random lemma base + common preferred + rime (seed 42)
+gay,gate,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,gens,1,bulk random lemma base + common preferred + rime (seed 42)
+gay,geologist,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,gert,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,glad,1,bulk random lemma base + common preferred + rime (seed 42)
+gay,gobble,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,grain,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,guerilla,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,guide,1,bulk random lemma base + common preferred + rime (seed 42)
+gay,halloween,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,hasty,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,heiress,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,hesed,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,hipster,1,bulk random lemma base + common preferred + rime (seed 42)
+gay,homey,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,homie,1,bulk random lemma base + common preferred + rime (seed 42)
+gay,hooky,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,horn,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,hotterred,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,hysteric,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,hysterics,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,identitiessed,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,imbecility,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,impressionism,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,inattention,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,inductor,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,ing,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,inside,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,inveterate,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,jackie,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,jog,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,jones,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,jordan,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,joyce,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,kell,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,kine,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,kinesiology,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,knack,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,korean,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,lawton,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,layoff,1,bulk random lemma base + common preferred + rime (seed 42)
+gay,leaving,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,lithuania,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,liza,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,lode,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,loony,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,lynn,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,magician,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,malformed,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,marquise,1,bulk random lemma base + common preferred + rime (seed 42)
+gay,mechanical,1,bulk random lemma base + common preferred + rime (seed 42)
+gay,menu,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,messy,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,misadventure,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,mong,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,moog,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,moot,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,mortify,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,native,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,navigational,1,bulk random lemma base + common preferred + rime (seed 42)
+gay,naysayer,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,noah,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,nodding,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,noise,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,novel,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,oe,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,onstage,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,ophthalmology,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,pallor,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,pandemonium,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,phonetically,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,plunder,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,plunge,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,pollock,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,prairie,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,primp,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,privy,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,prussia,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,psychosis,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,pupal,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,quasi,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,quitter,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,rafts,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,razzmatazz,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,ream,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,reciprocity,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,refuse,1,bulk random lemma base + common preferred + rime (seed 42)
+gay,reintroduce,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,renown,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,renter,1,bulk random lemma base + common preferred + rime (seed 42)
+gay,reroute,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,respawn,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,resplendent,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,restore,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,reviving,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,runner,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,sack,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,safe,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,sare,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,school,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,scientific,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,scrod,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,seat,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,secretion,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,seller,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,sender,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,sheet,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,siesta,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,sincere,1,bulk random lemma base + common preferred + rime (seed 42)
+gay,single,1,bulk random lemma base + common preferred + rime (seed 42)
+gay,sizable,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,slide,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,smoggy,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,solemn,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,spend,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,splash,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,spurn,1,bulk random lemma base + common preferred + rime (seed 42)
+gay,srebrenica,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,still,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,stint,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,stranger,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,strip,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,stud,1,bulk random lemma base + common preferred + rime (seed 42)
+gay,subvert,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,susceptibility,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,toot,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,tract,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,translational,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,traumatize,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,treasure,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,trent,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,trimester,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,truculent,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,tweeter,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,undefiled,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,undiplomatic,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,unemotional,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,unpaid,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,unskilled,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,urdu,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,utilitiessed,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,venezuela,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,verify,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,vietnam,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,warren,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,wart,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,while,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,winery,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,would've,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,wreak,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,yiddish,0,bulk random lemma base + common preferred + rime (seed 42)
+gay,yumest,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,accent,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,altogether,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,ancestral,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,anne,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,ans,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,antecedent,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,apologetic,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,ascent,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,asthmatic,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,attention,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,aversion,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,babylonian,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,beaut,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,begotten,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,believe,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,beneficent,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,billionth,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,bipartisan,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,bloke,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,bohemia,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,bone,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,booker,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,brilliant,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,bronx,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,brussel,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,bryan,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,buffet,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,canst,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,chering,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,chimpanzee,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,chloe,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,choke,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,claret,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,cleave,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,clime,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,cocker,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,collinned,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,conn,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,connotation,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,consolidation,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,consultant,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,conus,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,couple,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,creek,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,crybaby,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,damages,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,dannied,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,darren,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,defendant,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,deleterious,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,denounce,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,deprave,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,derail,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,dismember,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,distributor,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,dominant,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,dove,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,dualistic,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,duckling,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,dummer,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,ebola,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,eiffel,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,elect,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,embrace,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,embrasure,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,enemy,1,bulk random lemma base + common preferred + rime (seed 42)
+pirate,essence,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,ethiopia,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,expel,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,fasciitis,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,finery,1,bulk random lemma base + common preferred + rime (seed 42)
+pirate,fixer,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,flush,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,forbearance,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,frantically,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,frock,1,bulk random lemma base + common preferred + rime (seed 42)
+pirate,fulfilled,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,gamey,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,genetic,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,gong,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,gotta,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,governmental,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,grifter,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,headfirst,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,hemostasis,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,herewith,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,heron,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,hie,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,hisself,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,hose,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,hound,1,bulk random lemma base + common preferred + rime (seed 42)
+pirate,hush,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,hyding,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,hymen,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,ichthyology,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,immense,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,immobile,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,impartial,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,impartiality,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,impasse,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,indeed,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,individualistic,1,bulk random lemma base + common preferred + rime (seed 42)
+pirate,ing,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,insurgency,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,intermix,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,isn't,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,jewish,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,judicious,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,jury,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,kant,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,kindle,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,labor,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,lasting,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,leicester,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,lemming,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,lich,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,lilt,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,literati,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,looker,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,lowery,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,marsala,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,mayer,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,ming,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,miracle,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,modena,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,modest,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,molt,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,morale,1,bulk random lemma base + common preferred + rime (seed 42)
+pirate,mystic,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,navy,1,bulk random lemma base + common preferred + rime (seed 42)
+pirate,needs,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,nervous,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,nestling,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,nimble,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,nobody,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,oceanographic,1,bulk random lemma base + common preferred + rime (seed 42)
+pirate,oodles,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,oratory,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,origami,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,ouches,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,overhead,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,oxy,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,ozzie,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,pagan,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,pais,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,paregoric,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,parish,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,patel,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,pellagra,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,peritoneum,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,perry,1,bulk random lemma base + common preferred + rime (seed 42)
+pirate,politician,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,polycystic,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,precede,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,prixxed,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,prize,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,prominent,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,pseudomonas,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,psychiatric,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,pukka,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,punt,1,bulk random lemma base + common preferred + rime (seed 42)
+pirate,puny,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,pursue,1,bulk random lemma base + common preferred + rime (seed 42)
+pirate,quadrennial,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,quisling,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,quitter,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,raison,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,randalling,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,reconnoiter,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,redevelop,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,reentry,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,removable,1,bulk random lemma base + common preferred + rime (seed 42)
+pirate,replant,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,retiring,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,rote,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,ruse,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,scintillating,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,scribe,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,scrubber,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,sectarian,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,seek,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,series,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,serrano,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,señora,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,shanti,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,shemale,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,shi,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,simulacrum,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,simulation,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,single,1,bulk random lemma base + common preferred + rime (seed 42)
+pirate,skelly,1,bulk random lemma base + common preferred + rime (seed 42)
+pirate,slam,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,slicer,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,sloane,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,snit,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,sock,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,solo,1,bulk random lemma base + common preferred + rime (seed 42)
+pirate,soporific,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,soubrette,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,spleen,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,spoiler,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,squalor,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,stage,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,stalls,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,standby,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,stenography,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,stepson,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,stole,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,suggestible,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,suite,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,supposition,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,surtout,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,swank,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,sweatsuit,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,tinkle,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,tiring,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,tock,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,tremble,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,tusk,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,twill,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,twinkling,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,twirler,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,unappreciated,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,underestimate,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,unheard,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,unidentified,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,unrecognizable,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,urban,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,urologist,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,van,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,vang,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,vapid,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,vault,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,walk,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,wanna,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,warren,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,wattle,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,where's,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,withhold,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,wrought,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,yang,0,bulk random lemma base + common preferred + rime (seed 42)
+pirate,yer,0,bulk random lemma base + common preferred + rime (seed 42)
