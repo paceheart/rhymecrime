@@ -12,8 +12,9 @@
 repo = File.expand_path("..", __dir__)
 $LOAD_PATH.unshift File.join(repo, "lib")
 
-def ish_case?(notes)
-  notes.to_s.match?(/\bish\b/i)
+def ish_kind?(kind)
+  k = kind.to_s.strip
+  k == "related_ish" || k == "unrelated_ish"
 end
 
 def sorted_surface(w1, w2)
@@ -58,13 +59,14 @@ Dir.chdir(repo) do
 
   regressions = []
   rows.each_with_index do |r, i|
-    exp = case r["oughta be related?"].to_s.strip
-          when "1" then true
-          when "0" then false
+    kind = r["oughta be related?"].to_s.strip
+    exp = case kind
+          when "related", "related_ish" then true
+          when "unrelated", "unrelated_ish" then false
           else next
           end
     next unless exp
-    next if ish_case?(r["notes"])
+    next if ish_kind?(kind)
 
     w1 = r["word1"].to_s.strip
     w2 = r["word2"].to_s.strip

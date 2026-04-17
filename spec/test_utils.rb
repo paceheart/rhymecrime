@@ -1,15 +1,23 @@
 require 'csv'
 require "rhymecrime/pace_utils"
 
-def zerone_string_to_boolean(str)
-  str = str.strip
-  if str == "0"
-    return false
-  elsif str == "1"
-    return true
-  else
-    raise "zerone_string_to_boolean called on a non-zerone string: " + str
+# Valid values for the +oughta be related?+ column in spec/related.csv. Rows marked +whatever+ are
+# ignored by the spec / weighted accuracy script because either answer is acceptable. Rows marked
+# +*_ish+ represent weak-signal cases (originally encoded as a +ish+ marker in the +notes+ column).
+RELATEDNESS_KINDS = %w[related related_ish unrelated unrelated_ish whatever].freeze
+
+def relatedness_expected_boolean(kind)
+  case kind.to_s.strip
+  when "related", "related_ish" then true
+  when "unrelated", "unrelated_ish" then false
+  when "whatever" then nil
+  else raise "unknown relatedness kind #{kind.inspect}"
   end
+end
+
+def relatedness_kind_ish?(kind)
+  k = kind.to_s.strip
+  k == "related_ish" || k == "unrelated_ish"
 end
 
 $cases = nil
@@ -19,8 +27,7 @@ end
 
 # word1, word2, oughta be related?, notes
 def load_relatedness_test_cases
-  CSV::Converters[:boolean] = ->(value) { zerone_string_to_boolean(value) rescue value }
-  cases = CSV.parse(File.read("spec/related.csv", encoding: 'UTF-8'), headers:true, converters: :boolean) or raise "Could not read/parse related.csv"
+  cases = CSV.parse(File.read("spec/related.csv", encoding: 'UTF-8'), headers: true) or raise "Could not read/parse related.csv"
   for c in cases
     repair_relatedness_test_case(c)
   end
@@ -42,15 +49,17 @@ def validate_relatedness_test_case(c)
   word?(word1) or raise "Malformed word1 '#{word1}' in #{c}"
   word2 = c['word2']
   word?(word2) or raise "Malformed word2 '#{word2}' in #{c}"
-  related = c['oughta be related?']
-  boolean?(related) or raise "Malformed oughta_be_related? '#{related}' in #{c}"
+  kind = c['oughta be related?'].to_s.strip
+  RELATEDNESS_KINDS.include?(kind) or raise "Malformed oughta_be_related? '#{kind}' in #{c} (expected one of #{RELATEDNESS_KINDS.join(', ')})"
   notes = c['notes']
   notes.is_a?(String) or raise "Malformed notes '#{notes}' in #{c}"
 end
 
 def define_relatedness_test_case(c)
+  kind = c["oughta be related?"].to_s.strip
+  return if kind == "whatever"
   context c["notes"] do
-    if c["oughta be related?"]
+    if relatedness_expected_boolean(kind)
       oughta_be_related c["word1"], c["word2"]
     else
       ought_not_be_related c["word1"], c["word2"]
@@ -63,7 +72,8 @@ def load_and_define_relatedness_test_cases
 end
 
 def relatedness_test_passes?(test_case)
-  expected = test_case['oughta be related?']
+  expected = relatedness_expected_boolean(test_case['oughta be related?'])
+  return true if expected.nil?
   actual = thematically_related?(test_case["word1"], test_case["word2"], false)
   debug expected == actual ? "." : "F"
   return expected == actual

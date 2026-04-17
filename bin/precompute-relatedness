@@ -77,6 +77,13 @@ end.sort
 lemmas.select! { |l| l > start_after } if start_after
 lemmas = lemmas.first(max_cues) if max_cues
 
+# Stop words are related to every other word (see +thematically_related?+), so their
+# precompute entry would be the full candidate list — ~20k headwords per stop word.
+# The runtime in +RelatedWords.find_all_thematically_related_words+ short-circuits
+# stop-word lookups to +words_we_care_about+ directly, so no JSONL entry is needed.
+stopword_lemmas, lemmas = lemmas.partition { |l| stop_word?(l) }
+puts "Skipping #{stopword_lemmas.size} stop-word lemmas (runtime short-circuits to words_we_care_about): #{stopword_lemmas.inspect}" if stopword_lemmas.any?
+
 n = lemmas.size
 puts "Precompute cues: #{n} preferred common lemmas with rhymes (#{before_n} distinct common lemmas in word_dict before filter)"
 puts "Scanning #{n} lemmas → #{dry_run ? '(dry-run, no file)' : output_path} (JSONL only when ≥1 related word)"

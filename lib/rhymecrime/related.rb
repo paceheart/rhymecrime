@@ -39,11 +39,18 @@ end
 
 $SIMILARITY_THRESHOLD = 10
 $CONCEPTNET_EDGE_BONUS = 7
-$SENSE_VECTOR_THRESHOLD = 9
+$SENSE_VECTOR_THRESHOLD = 10
 $SENSE_VECTOR_MIN_FLOOR = 5
 $SENSE_VECTOR_MORPHY_FLOOR = 13
 $SENSE_VECTOR_MIN_BASE = 6
 $SENSE_VECTOR_MAX_SENSES = 4
+# Asymmetric sense-vector bypass: when one direction is very strong (e.g. one word's
+# WordNet definitions clearly describe the other) the reverse direction is often
+# diluted by polysemy. Accept as related when +sv_max >= ASYMMETRIC_MAX+ and
+# +sv_min >= ASYMMETRIC_MIN+, as long as the regular +SENSE_VECTOR_MIN_BASE+ gate
+# is satisfied. The non-zero +ASYMMETRIC_MIN+ keeps pure noise out.
+$SENSE_VECTOR_ASYMMETRIC_MAX = 18
+$SENSE_VECTOR_ASYMMETRIC_MIN = 1
 $USF_TWOHOP_BOOST = 10
 $USF_MIN_BRIDGE_COS = 8
 # Skip USF graph work when primary score is below this (0 = same as pre-filter behavior).
@@ -370,7 +377,12 @@ $thematically_related_memo = nil
 
 # Uncached predicate on two headwords. Symmetric in +a+ / +b+.
 def thematically_related_pair_uncached?(a, b)
-  return false if stop_word?(a) || stop_word?(b)
+  # Stop words (e.g. +and+, +the+, +out+, +can+) are treated as related to every other
+  # word: they're contentless glue that legitimately appears next to anything, and in
+  # our test set their "gotcha" rows (e.g. +food+/+canned+, +gay+/+out+) expect
+  # related=true. Short-circuiting keeps the downstream signal functions from seeing
+  # stop-word arguments they were never designed for.
+  return true if stop_word?(a) || stop_word?(b)
 
   puts "related? #{a} #{b}" if related_trace_memo?
 
@@ -379,13 +391,14 @@ def thematically_related_pair_uncached?(a, b)
 
   return true if bidirectional_gloss_contains?(a, b)
 
-  if !stop_word?(a) && !stop_word?(b) && base >= $SENSE_VECTOR_MIN_BASE
+  if base >= $SENSE_VECTOR_MIN_BASE
     d1, d2 = directional_sense_cosines(a, b)
     sv_max = [d1, d2].max
     sv_min = [d1, d2].min
     both_have_senses = sense_vectors(a).size > 0 && sense_vectors(b).size > 0
     if both_have_senses
       return true if sv_max >= $SENSE_VECTOR_THRESHOLD && sv_min >= $SENSE_VECTOR_MIN_FLOOR
+      return true if sv_max >= $SENSE_VECTOR_ASYMMETRIC_MAX && sv_min >= $SENSE_VECTOR_ASYMMETRIC_MIN
     elsif $SENSE_VECTOR_MORPHY_FLOOR > 0
       morphy_result = morphy_directional_sense_cosines(a, b)
       if morphy_result
@@ -422,7 +435,8 @@ end
 # similarity and ConceptNet edges are symmetric; gloss checks both directions; sense-vector
 # and morphy paths use max/min of the two directional cosines; USF two-hop tries both orders.
 #
-# Stop words (+stop_word?+) are never related to anything (including via gloss or USF).
+# Stop words (+stop_word?+) are treated as related to every other word — they're
+# contentless glue that legitimately appears next to anything.
 #
 # Surfaces are mapped through +lemma+ (dict-build base column) before scoring and memoization, so
 # inflected pairs share work and align with base-form Numberbatch / ConceptNet exports.
@@ -432,7 +446,7 @@ def thematically_related?(word1, word2, include_self=false)
   end
 
   return true if include_self && (word1 == word2 || lemma(word1) == lemma(word2))
-  return false if stop_word?(word1) || stop_word?(word2)
+  return true if stop_word?(word1) || stop_word?(word2)
 
   puts "thematically_related? #{word1} #{word2}" if related_trace_memo?
 
@@ -448,12 +462,14 @@ end
 # +thematically_related?+; +include_self+ treats same headword or same lemma as self when true.
 def why_thematically_related?(word1, word2, include_self = false)
   return "self: same headword" if include_self && word1 == word2
-  return nil if stop_word?(word1) || stop_word?(word2)
+  return "stop_word: #{word1.inspect} is a stop word (related to everything)" if stop_word?(word1)
+  return "stop_word: #{word2.inspect} is a stop word (related to everything)" if stop_word?(word2)
   return "self: same lexeme (lemma)" if include_self && lemma(word1) == lemma(word2)
 
   l1 = lemma(word1)
   l2 = lemma(word2)
-  return nil if stop_word?(l1) || stop_word?(l2)
+  return "stop_word: #{l1.inspect} (lemma of #{word1.inspect}) is a stop word" if stop_word?(l1)
+  return "stop_word: #{l2.inspect} (lemma of #{word2.inspect}) is a stop word" if stop_word?(l2)
 
   base = lemmilarity(l1, l2)
   if base >= $SIMILARITY_THRESHOLD
@@ -472,6 +488,9 @@ def why_thematically_related?(word1, word2, include_self = false)
     if both_have_senses
       if sv_max >= $SENSE_VECTOR_THRESHOLD && sv_min >= $SENSE_VECTOR_MIN_FLOOR
         return "sense_vectors: directional max=#{sv_max} min=#{sv_min} (need max>=#{$SENSE_VECTOR_THRESHOLD} min>=#{$SENSE_VECTOR_MIN_FLOOR}; base similarity=#{base})"
+      end
+      if sv_max >= $SENSE_VECTOR_ASYMMETRIC_MAX && sv_min >= $SENSE_VECTOR_ASYMMETRIC_MIN
+        return "sense_vectors_asymmetric: directional max=#{sv_max} min=#{sv_min} (need max>=#{$SENSE_VECTOR_ASYMMETRIC_MAX} min>=#{$SENSE_VECTOR_ASYMMETRIC_MIN}; base similarity=#{base})"
       end
     elsif $SENSE_VECTOR_MORPHY_FLOOR > 0
       morphy_result = morphy_directional_sense_cosines(l1, l2)
@@ -595,6 +614,17 @@ class RelatedWords
       @related_word_cache ||= {}
       key = [word, include_rhymeless, common_only]
       return @related_word_cache[key] if @related_word_cache.key?(key)
+
+      # Stop words (+stop_word?+) are related to every other word; short-circuit to
+      # +words_we_care_about+ rather than a per-pair scan / precompute lookup, which
+      # is both wasteful and (for Dynamo / JSONL) not populated for stop-word keys
+      # (see +bin/precompute-relatedness+, which skips them).
+      if stop_word?(word) || stop_word?(lemma(word))
+        words = words_we_care_about(include_rhymeless, common_only).reject { |w| w == word }
+        debug "Finding words related to #{word} (stop word, all candidates)... #{words.length}\n"
+        @related_word_cache[key] = words
+        return words
+      end
 
       if defined?(Rhymecrime::DataSource) && Rhymecrime::DataSource.dynamodb?
         lemma_key = lemma(word)
