@@ -220,6 +220,21 @@ def usf_associations
   $usf_associations
 end
 
+# Direct (1-hop) USF forward-association strengths between a lemma pair. Returns
+# +[forward, reverse]+: +forward+ is the strength when +word1+ was the cue and
+# +word2+ appeared as a target, +reverse+ is the symmetric case. Zero in each
+# direction when no direct link exists. Complements +usf_twohop_bridge_validated?+:
+# 2-hop needs validation because intermediate bridges can be spurious, but a direct
+# link from human free-association participants is unambiguous evidence of mental
+# association and typically a much stronger relatedness signal.
+def usf_direct_association_strengths(word1, word2)
+  ua = usf_associations
+  return [0.0, 0.0] if ua.empty?
+  fwd = (ua[word1] && ua[word1][word2]) || 0.0
+  rev = (ua[word2] && ua[word2][word1]) || 0.0
+  [fwd.to_f, rev.to_f]
+end
+
 def usf_twohop_bridge_validated?(word1, word2)
   ua = usf_associations
   # Neither endpoint is a USF cue → no word→bridge forward star to search.
@@ -704,6 +719,22 @@ class PairSignals
     @usf_twohop = usf_twohop_bridge_validated?(@a, @b)
   end
 
+  # Direct (1-hop) USF forward-association strengths, asymmetric.
+  # +usf_direct_max+ catches "at least one direction has a human-reported link"
+  # (the usual "are these associated?" question). +usf_direct_min+ is non-zero only
+  # when *both* directions fired, i.e. mutual association — a stronger signal.
+  def usf_direct_strengths
+    @usf_direct_strengths ||= usf_direct_association_strengths(@a, @b)
+  end
+
+  def usf_direct_max
+    usf_direct_strengths.max
+  end
+
+  def usf_direct_min
+    usf_direct_strengths.min
+  end
+
   def both_have_sense_vectors?
     sv_a_count > 0 && sv_b_count > 0
   end
@@ -880,6 +911,8 @@ LEARNED_FEATURE_NAMES = (
     model_sv_max_x_usf
     cn_hops
     cn_shared_neighbors
+    usf_direct_max
+    usf_direct_min
   ] + unigram_pair_feature_names
 ).freeze
 
@@ -935,6 +968,8 @@ def learned_feature_vector(signals)
     m_sv_max * usf / 10.0,
     signals.cn_hops.to_f,
     signals.cn_shared_neighbors.to_f,
+    signals.usf_direct_max.to_f,
+    signals.usf_direct_min.to_f,
   ].concat(unigram_pair_feature_values(signals.a, signals.b))
 end
 

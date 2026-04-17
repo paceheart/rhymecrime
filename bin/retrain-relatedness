@@ -1,0 +1,66 @@
+#!/usr/bin/env bash
+#
+# Orchestrates the three stages of the relatedness pipeline:
+#
+#   1. bin/dump-sense-glosses            → generated/sense_glosses.jsonl
+#   2. bin/build-sense-vectors.py        → generated/model_sense_vectors.msgpack
+#   3. bin/train-relatedness-classifier  → generated/relatedness_classifier.json
+#
+# Default invocation only runs stage 3 (fast; ~1 min). Stages 1-2 are ~20 min on
+# CPU for the full dictionary, so we only redo them when told to.
+#
+# Typical usage:
+#   bin/retrain-relatedness                      # refit classifier on existing features
+#   bin/retrain-relatedness --rebuild-vectors    # also re-encode MPNet sense vectors
+#   bin/retrain-relatedness --model logreg       # passthrough to the Ruby trainer
+#   bin/retrain-relatedness --rebuild-vectors --model gbt --trees 400
+#
+# Stages 1-2 need rebuilding when:
+#   - the dictionary changes (new headwords / WordNet update)
+#   - the dump template changes (bin/dump-sense-glosses)
+#   - you swap models (bin/build-sense-vectors.py --model ...)
+#   - SENSE_VECTOR_MAX_SENSES changes
+#
+# Stage 3 alone is enough when:
+#   - you edit LEARNED_FEATURE_NAMES / PairSignals / learned_feature_vector
+#   - you tweak hyperparameters
+#   - you modify spec/related.csv (the training labels)
+
+set -euo pipefail
+
+REBUILD_VECTORS=0
+PASSTHROUGH=()
+
+for arg in "$@"; do
+  case "$arg" in
+    --rebuild-vectors) REBUILD_VECTORS=1 ;;
+    -h|--help)
+      sed -n '3,29p' "$0" | sed 's/^# \{0,1\}//'
+      exit 0
+      ;;
+    *) PASSTHROUGH+=("$arg") ;;
+  esac
+done
+
+REPO="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$REPO"
+
+if [[ $REBUILD_VECTORS -eq 1 ]]; then
+  if [[ ! -x .venv/bin/python ]]; then
+    echo "error: .venv/bin/python not found. Set up the venv first:" >&2
+    echo "  /opt/homebrew/bin/python3.13 -m venv .venv" >&2
+    echo "  .venv/bin/pip install sentence-transformers msgpack" >&2
+    exit 1
+  fi
+  echo "==> [1/3] dumping sense glosses -> generated/sense_glosses.jsonl"
+  ruby bin/dump-sense-glosses
+  echo "==> [2/3] encoding sense vectors -> generated/model_sense_vectors.msgpack"
+  .venv/bin/python bin/build-sense-vectors.py
+fi
+
+echo "==> [3/3] training classifier -> generated/relatedness_classifier.json"
+if [[ ${#PASSTHROUGH[@]} -eq 0 ]]; then
+  exec ruby bin/train-relatedness-classifier
+else
+  exec ruby bin/train-relatedness-classifier "${PASSTHROUGH[@]}"
+fi

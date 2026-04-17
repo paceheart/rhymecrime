@@ -540,7 +540,9 @@ end
 
 pooled_composite = cv_composites.sum { |c| c[:stats][:composite] }
 avg_thr = cv_composites.sum { |c| c[:threshold] } / cv_composites.size.to_f
-puts format("  CV pooled composite = %d  mean threshold = %.2f", pooled_composite, avg_thr)
+avg_weighted = cv_composites.sum { |c| c[:stats][:weighted_pct] } / cv_composites.size.to_f
+puts format("  CV pooled composite = %d  mean threshold = %.2f  mean weighted = %.1f%%",
+  pooled_composite, avg_thr, avg_weighted)
 puts
 
 # --- Full-data fit for deployment ------------------------------------------
