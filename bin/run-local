@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+#
+# Run RhymeCrime locally via Puma. Thin wrapper around +bundle exec puma+:
+# all arguments pass through to puma unchanged.
+#
+# Usage:
+#   bin/run-local                    # defaults (port 9292, development env)
+#   bin/run-local -p 3000            # choose a port
+#   bin/run-local -e production      # set RACK_ENV
+#   bin/run-local --help             # puma's own help
+#
+# Open:   http://localhost:9292/
+# Stop:   Ctrl-C
+
+set -euo pipefail
+REPO="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$REPO"
+exec bundle exec puma config.ru "$@"
