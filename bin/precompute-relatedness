@@ -96,8 +96,24 @@ jsonl_io = File.open(output_path, "w", encoding: "UTF-8") unless dry_run
 # Elapsed-average ETA: linear extrapolation from items completed so far.
 t0 = Process.clock_gettime(Process::CLOCK_MONOTONIC)
 
+# Per-cue +find_all_thematically_related_words+ scans every candidate headword (~20k) and
+# calls +thematically_related?+ on each pair, populating +$thematically_related_memo+ and
+# +$gloss_negative_pair_cache+ with one entry per pair. Across ~20k cues that's O(N²)
+# entries — hundreds of millions — which sends Ruby's GC into progressively worse
+# thrashing (ETA climbs then swings around erratically). Within a single scan each
+# candidate is distinct so the pair memo gives no intra-scan benefit; across scans it
+# only ever saves the symmetric (b, a) recomputation when both endpoints are cues,
+# a ~2x win nowhere near worth the memory cost. Reset them after each cue. Same for
+# +@related_word_cache+, which never sees a repeat lookup in this loop.
+reset_per_cue_caches = lambda do
+  $thematically_related_memo = nil
+  $gloss_negative_pair_cache = Set.new
+  RelatedWords.instance_variable_set(:@related_word_cache, {})
+end
+
 begin
   lemmas.each_with_index do |lem, i|
+    reset_per_cue_caches.call
     words = RelatedWords.find_all_thematically_related_words(lem, false, true)
     next if words.empty?
 
