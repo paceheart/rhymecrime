@@ -524,6 +524,70 @@ class PairSignals
   end
 end
 
+# Ordered feature vector pulled from +PairSignals+, shared by the learned-classifier
+# trainer (+bin/train-relatedness-classifier+) and runtime scorer
+# (+learned_relatedness_score+). Symmetrized: all directional signals are folded to
+# min/max so the feature order can't leak +(a, b)+ order into the model.
+#
+# NOTE: keep this list and its order in lock-step with the weights file
+# (+generated/relatedness_classifier.json+). When retraining, the file stores its own
+# feature names to fail loud on mismatch.
+LEARNED_FEATURE_NAMES = %w[
+  bias
+  gloss_match
+  usf_twohop
+  both_sv
+  morphy_available
+  edge_present
+  cos_pct
+  edge_weight
+  base_similarity
+  sv_max
+  sv_min
+  sv_count_min
+  sv_count_max
+  morphy_sv_max
+  morphy_sv_min
+  base_x_sv_max
+  base_x_sv_min
+  sv_max_x_sv_min
+  base_x_usf
+  sv_max_x_usf
+].freeze
+
+def learned_feature_vector(signals)
+  both_sv = signals.both_have_sense_vectors?
+  sv_max = both_sv ? signals.sv_max : 0
+  sv_min = both_sv ? signals.sv_min : 0
+  usf = signals.usf_twohop_validated? ? 1.0 : 0.0
+  base = signals.base_similarity
+  ca = signals.sv_a_count
+  cb = signals.sv_b_count
+
+  [
+    1.0,
+    signals.gloss_match? ? 1.0 : 0.0,
+    usf,
+    both_sv ? 1.0 : 0.0,
+    signals.morphy_available? ? 1.0 : 0.0,
+    signals.edge_present? ? 1.0 : 0.0,
+    signals.cos_pct.to_f,
+    signals.edge_weight.to_f,
+    base.to_f,
+    sv_max.to_f,
+    sv_min.to_f,
+    (ca < cb ? ca : cb).to_f,
+    (ca > cb ? ca : cb).to_f,
+    signals.morphy_sv_max.to_f,
+    signals.morphy_sv_min.to_f,
+    base * sv_max / 100.0,
+    base * sv_min / 100.0,
+    sv_max * sv_min / 100.0,
+    base * usf / 10.0,
+    sv_max * usf / 10.0,
+  ]
+end
+
 # --- Phase 2: Feature combining → 0..100 relatedness score ---
 #
 # Each rule below produces a +[score, reason]+ tuple when applicable. The overall
@@ -538,6 +602,92 @@ def similarity_threshold
   $SIMILARITY_THRESHOLD
 end
 
+# --- Learned phase-2 combiner (optional) ---
+#
+# Logistic regression over +learned_feature_vector+, trained by
+# +bin/train-relatedness-classifier+ and written to
+# +generated/relatedness_classifier.json+. When the weights file exists it
+# contributes an additional rule inside +relatedness_contributions+:
+#   learned probability → calibrated 0..100 score such that
+#   p = best_threshold maps to +RELATEDNESS_SCORE_THRESHOLD+.
+# When the file is absent the existing rule-based combiner runs unchanged.
+#
+# Mode controlled by +$RELATED_LEARNED_MODE+ / env +RELATED_LEARNED_MODE+:
+#   +additive+  (default) learned score joins the max-over-rules — can only add TPs.
+#   +replace+             learned score is the *only* rule (except stop-word short-circuit).
+#   +off+                 ignore classifier even if present.
+
+$RELATED_LEARNED_MODE = ENV["RELATED_LEARNED_MODE"] || "additive"
+
+RELATEDNESS_CLASSIFIER_PATH = generated_dict_path(RELATEDNESS_CLASSIFIER_FILENAME)
+
+$relatedness_classifier = nil
+$relatedness_classifier_loaded = false
+def relatedness_classifier
+  return $relatedness_classifier if $relatedness_classifier_loaded
+  $relatedness_classifier_loaded = true
+  return nil if $RELATED_LEARNED_MODE == "off"
+
+  path = RELATEDNESS_CLASSIFIER_PATH
+  return nil unless File.exist?(path)
+
+  clf = JSON.parse(File.read(path, encoding: "UTF-8"))
+  got = clf["feature_names"]
+  expected = LEARNED_FEATURE_NAMES
+  unless got == expected
+    warn "related: classifier feature-name mismatch (#{path}); ignoring. got=#{got.inspect} expected=#{expected.inspect}"
+    return nil
+  end
+
+  $relatedness_classifier = clf
+  puts "loaded relatedness classifier from #{path} (threshold=#{clf['threshold']})"
+  $relatedness_classifier
+end
+
+def learned_sigmoid(z)
+  if z >= 0
+    ez = Math.exp(-z)
+    1.0 / (1.0 + ez)
+  else
+    ez = Math.exp(z)
+    ez / (1.0 + ez)
+  end
+end
+
+# Logistic-regression probability for a signal bundle, in 0..1. Returns +nil+ when
+# no classifier is loaded (trainer never ran, or file removed).
+def learned_relatedness_probability(signals)
+  clf = relatedness_classifier
+  return nil if clf.nil?
+
+  feats = learned_feature_vector(signals)
+  means = clf["means"]
+  stds = clf["stds"]
+  weights = clf["weights"]
+  z = 0.0
+  feats.each_with_index do |v, i|
+    x = i.zero? ? v : (v - means[i]) / stds[i]
+    z += weights[i] * x
+  end
+  learned_sigmoid(z)
+end
+
+# Classifier probability → 0..100 score, calibrated so that +p == threshold+ maps
+# to +RELATEDNESS_SCORE_THRESHOLD+ exactly. Piecewise linear in +p+; avoids wasting
+# dynamic range on the mostly-empty tail above/below the decision boundary.
+def learned_relatedness_score(signals)
+  p = learned_relatedness_probability(signals)
+  return nil if p.nil?
+  clf = $relatedness_classifier
+  t = clf["threshold"].to_f
+  t = 0.5 if t <= 0 || t >= 1
+  if p <= t
+    (RELATEDNESS_SCORE_THRESHOLD * p / t).round
+  else
+    (RELATEDNESS_SCORE_THRESHOLD + (100 - RELATEDNESS_SCORE_THRESHOLD) * (p - t) / (1 - t)).round
+  end
+end
+
 # Returns an array of +[score, reason]+ tuples: one per rule whose preconditions are
 # satisfied by +signals+. May be empty when no signal passes its gate.
 def relatedness_contributions(signals)
@@ -546,6 +696,16 @@ def relatedness_contributions(signals)
   if signals.involves_stop_word?
     stop = signals.stop_word_a? ? signals.a : signals.b
     return [[100, "stop_word: #{stop.inspect} is a stop word (related to everything)"]]
+  end
+
+  # Learned-classifier replace mode: the logistic regression over all phase-1
+  # signals is the *only* contribution (except the stop-word short-circuit above).
+  if $RELATED_LEARNED_MODE == "replace"
+    learned = learned_relatedness_score(signals)
+    if learned
+      p = learned_relatedness_probability(signals)
+      return [[learned, format("learned_replace: p=%.3f", p)]]
+    end
   end
 
   contributions = []
@@ -614,6 +774,17 @@ def relatedness_contributions(signals)
       cooccur.round,
       "cooccurrence: base=#{base} sv=(#{signals.sv_d1},#{signals.sv_d2}) usf=#{signals.usf_twohop_validated?}",
     ]
+  end
+
+  # Learned-classifier additive mode: logistic regression over all phase-1 signals
+  # contributes one more rule. Max-over-contributions means it can only rescue
+  # pairs the hand rules missed, never veto them — safe to enable alongside.
+  if $RELATED_LEARNED_MODE == "additive"
+    learned = learned_relatedness_score(signals)
+    if learned
+      p = learned_relatedness_probability(signals)
+      contributions << [learned, format("learned: p=%.3f", p)]
+    end
   end
 
   contributions

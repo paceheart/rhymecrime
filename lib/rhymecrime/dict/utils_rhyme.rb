@@ -25,6 +25,9 @@ CONCEPTNET_LEMMA_CACHE_SUFFIX = ".en-kept-lemmas.txt.gz"
 NUMBERBATCH_VECTORS_FILENAME = "numberbatch_vectors.msgpack"
 # USF cue→target association strengths (FSG); place under generated/ for runtime (e.g. built from corpora/usf/).
 USF_ASSOCIATIONS_FILENAME = "usf_associations.json"
+# Learned phase-2 relatedness combiner (logistic regression over +PairSignals+ features);
+# built by bin/train-relatedness-classifier, consumed in related.rb.
+RELATEDNESS_CLASSIFIER_FILENAME = "relatedness_classifier.json"
 # Word-frequency rare ceiling: treat as rare when frequency is at or below this (see rare? in crime.rb).
 RARE_FREQ_MAX = 4
 
