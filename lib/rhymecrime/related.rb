@@ -109,6 +109,99 @@ def conceptnet_edge_weight(word1, word2)
   conceptnet_edges[key] || 0.0
 end
 
+# Adjacency index over +conceptnet_edges+: +{node => Set[neighbor, ...]}+. Built once
+# the first time it's needed (~1s for ~300k edges). Underscore-keyed (matches the
+# edge-map keys directly).
+$conceptnet_adjacency = nil
+def conceptnet_adjacency
+  return $conceptnet_adjacency unless $conceptnet_adjacency.nil?
+  adj = {}
+  conceptnet_edges.each_key do |key|
+    a, b = key.split("|", 2)
+    (adj[a] ||= Set.new) << b
+    (adj[b] ||= Set.new) << a
+  end
+  $conceptnet_adjacency = adj
+  puts "built ConceptNet adjacency index: #{adj.size} nodes"
+  adj
+end
+
+def conceptnet_neighbors(word)
+  conceptnet_adjacency[hyphens_to_underscores(word)] || Set.new
+end
+
+# Shortest path length in the undirected ConceptNet graph between two words, clipped
+# at +max_hops+. 1 = direct edge, 2 = one bridge, etc. +max_hops + 1+ means "not
+# reachable within +max_hops+". +max_hops + 2+ means at least one endpoint has no
+# node in the graph at all — distinct from "reachable but far" so the classifier can
+# condition on data availability the way it does with +model_both_in_vocab?+.
+# Bidirectional BFS: alternately expands the smaller frontier, so worst-case work
+# scales like +degree**(max_hops/2)+ instead of +degree**max_hops+.
+def conceptnet_shortest_hops(word1, word2, max_hops = 4)
+  adj = conceptnet_adjacency
+  a = hyphens_to_underscores(word1)
+  b = hyphens_to_underscores(word2)
+  return max_hops + 2 if adj[a].nil? || adj[b].nil?
+  return 0 if a == b
+  return 1 if adj[a].include?(b)
+
+  seen_a = { a => 0 }
+  seen_b = { b => 0 }
+  front_a = [a]
+  front_b = [b]
+  depth_a = 0
+  depth_b = 0
+
+  while depth_a + depth_b < max_hops
+    if front_a.size <= front_b.size
+      new_depth = depth_a + 1
+      next_front = []
+      front_a.each do |node|
+        adj[node]&.each do |neigh|
+          next if seen_a.key?(neigh)
+          if seen_b.key?(neigh)
+            total = new_depth + seen_b[neigh]
+            return total if total <= max_hops
+          end
+          seen_a[neigh] = new_depth
+          next_front << neigh
+        end
+      end
+      return max_hops + 1 if next_front.empty?
+      front_a = next_front
+      depth_a = new_depth
+    else
+      new_depth = depth_b + 1
+      next_front = []
+      front_b.each do |node|
+        adj[node]&.each do |neigh|
+          next if seen_b.key?(neigh)
+          if seen_a.key?(neigh)
+            total = new_depth + seen_a[neigh]
+            return total if total <= max_hops
+          end
+          seen_b[neigh] = new_depth
+          next_front << neigh
+        end
+      end
+      return max_hops + 1 if next_front.empty?
+      front_b = next_front
+      depth_b = new_depth
+    end
+  end
+  max_hops + 1
+end
+
+# Number of nodes with edges to *both* words. Cheap and orthogonal to both edge_weight
+# (0/1 direct-edge signal) and cn_hops (integer graph-distance signal).
+def conceptnet_shared_neighbor_count(word1, word2)
+  adj = conceptnet_adjacency
+  na = adj[hyphens_to_underscores(word1)]
+  nb = adj[hyphens_to_underscores(word2)]
+  return 0 if na.nil? || nb.nil?
+  (na & nb).size
+end
+
 # --- USF Free Association Norms (Nelson, McEvoy & Schreiber 1998) ---
 # 5,019 cue words with ~72K forward association pairs from human participants.
 # Used for 2-hop inference: word1 → bridge → word2, validated by requiring
@@ -514,6 +607,69 @@ end
 # future callers can read the same signal multiple times without recomputation.
 #
 # Phase 2 (+relatedness_score+) is the only place feature weights / scaling live.
+# --- Unigram feature registry ---
+# Each entry here yields three columns in the final feature vector, one per pair
+# reduction in +PAIR_REDUCTIONS+ (+min+ / +max+ / +diff+, which behave as AND / OR /
+# XOR for 0/1-valued booleans and as the obvious aggregates for numerics). Add a
+# new signal by extending +word_unigram_features+ and +UNIGRAM_FEATURE_NAMES+; the
+# classifier will pick it up on the next retrain and prune it implicitly if it
+# can't split on it usefully.
+
+UNIGRAM_FEATURE_NAMES = %w[
+  length
+  log_freq
+  is_rare
+  sense_count
+  model_sense_count
+  wordnet_lemma_count
+  cn_degree
+  usf_out_degree
+  in_numberbatch
+  in_model_vocab
+  pos_count
+].freeze
+
+PAIR_REDUCTIONS = %i[min max diff].freeze
+
+def unigram_pair_feature_names
+  UNIGRAM_FEATURE_NAMES.flat_map { |n| PAIR_REDUCTIONS.map { |r| "#{n}_#{r}" } }
+end
+
+# Memoized per-word: the same word usually appears in many pairs (O(n) scans, cue
+# broadcasts, etc.) so we compute the unigram bundle once per word.
+$word_unigram_features_cache = {}
+def word_unigram_features(word)
+  $word_unigram_features_cache[word] ||= begin
+    freq = frequency(word)
+    nb_hit = dictionary_lemma_has_numberbatch_vector?(word)
+    {
+      "length" => word.length,
+      "log_freq" => Math.log10(freq + 1).round(4),
+      "is_rare" => rare?(word) ? 1 : 0,
+      "sense_count" => sense_vectors(word).size,
+      "model_sense_count" => model_sense_vectors_of(word).size,
+      "wordnet_lemma_count" => (WordNet::Lemma.find_all(word).size rescue 0),
+      "cn_degree" => (conceptnet_adjacency[hyphens_to_underscores(word)]&.size || 0),
+      "usf_out_degree" => (usf_associations[word]&.size || 0),
+      "in_numberbatch" => nb_hit ? 1 : 0,
+      "in_model_vocab" => model_headword_vector(word).nil? ? 0 : 1,
+      "pos_count" => (defined?(part_of_speech_tags) ? part_of_speech_tags(word).size : 0),
+    }
+  end
+end
+
+# Mechanical (min, max, diff) expansion of every unigram for a pair; appended to
+# the learned feature vector in the same order as +unigram_pair_feature_names+.
+def unigram_pair_feature_values(word_a, word_b)
+  fa = word_unigram_features(word_a)
+  fb = word_unigram_features(word_b)
+  UNIGRAM_FEATURE_NAMES.flat_map do |name|
+    va = fa[name].to_f
+    vb = fb[name].to_f
+    [va < vb ? va : vb, va > vb ? va : vb, (va - vb).abs]
+  end
+end
+
 class PairSignals
   attr_reader :a, :b
 
@@ -664,6 +820,22 @@ class PairSignals
   def model_sense_sense_max
     @model_sense_sense_max ||= model_sense_sense_max_cosine(@a, @b)
   end
+
+  # --- ConceptNet graph-structure signals ---
+  # +edge_weight+/+edge_present?+ already capture 1-hop presence. These add:
+  # (a) the shortest path length (capped and distinct "unreachable" / "no-node"
+  # codings so GBT can split on each independently), and (b) the count of nodes
+  # adjacent to *both* sides (a Jaccard-style corroboration signal).
+
+  CN_MAX_HOPS = 4
+
+  def cn_hops
+    @cn_hops ||= conceptnet_shortest_hops(@a, @b, CN_MAX_HOPS)
+  end
+
+  def cn_shared_neighbors
+    @cn_shared_neighbors ||= conceptnet_shared_neighbor_count(@a, @b)
+  end
 end
 
 # Ordered feature vector pulled from +PairSignals+, shared by the learned-classifier
@@ -674,38 +846,42 @@ end
 # NOTE: keep this list and its order in lock-step with the weights file
 # (+generated/relatedness_classifier.json+). When retraining, the file stores its own
 # feature names to fail loud on mismatch.
-LEARNED_FEATURE_NAMES = %w[
-  bias
-  gloss_match
-  usf_twohop
-  both_sv
-  morphy_available
-  edge_present
-  cos_pct
-  edge_weight
-  base_similarity
-  sv_max
-  sv_min
-  sv_count_min
-  sv_count_max
-  morphy_sv_max
-  morphy_sv_min
-  base_x_sv_max
-  base_x_sv_min
-  sv_max_x_sv_min
-  base_x_usf
-  sv_max_x_usf
-  model_in_vocab
-  model_both_sv
-  model_cos_pct
-  model_sv_max
-  model_sv_min
-  model_sense_sense_max
-  model_cos_x_cos
-  model_sv_max_x_sv_min
-  model_cos_x_base
-  model_sv_max_x_usf
-].freeze
+LEARNED_FEATURE_NAMES = (
+  %w[
+    bias
+    gloss_match
+    usf_twohop
+    both_sv
+    morphy_available
+    edge_present
+    cos_pct
+    edge_weight
+    base_similarity
+    sv_max
+    sv_min
+    sv_count_min
+    sv_count_max
+    morphy_sv_max
+    morphy_sv_min
+    base_x_sv_max
+    base_x_sv_min
+    sv_max_x_sv_min
+    base_x_usf
+    sv_max_x_usf
+    model_in_vocab
+    model_both_sv
+    model_cos_pct
+    model_sv_max
+    model_sv_min
+    model_sense_sense_max
+    model_cos_x_cos
+    model_sv_max_x_sv_min
+    model_cos_x_base
+    model_sv_max_x_usf
+    cn_hops
+    cn_shared_neighbors
+  ] + unigram_pair_feature_names
+).freeze
 
 def learned_feature_vector(signals)
   both_sv = signals.both_have_sense_vectors?
@@ -757,7 +933,9 @@ def learned_feature_vector(signals)
     m_sv_max * m_sv_min / 100.0,
     m_cos * base / 100.0,
     m_sv_max * usf / 10.0,
-  ]
+    signals.cn_hops.to_f,
+    signals.cn_shared_neighbors.to_f,
+  ].concat(unigram_pair_feature_values(signals.a, signals.b))
 end
 
 # --- Phase 2: Feature combining → 0..100 relatedness score ---
