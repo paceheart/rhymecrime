@@ -7,3 +7,5 @@ generated/*
 experiments/*
 tmp/*
 .aws-sam/
+.venv/
+.cache/

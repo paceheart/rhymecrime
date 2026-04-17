@@ -5,25 +5,33 @@
 #
 # Input:  spec/related.csv  (gold-labeled pairs: related / related_ish / unrelated / unrelated_ish / whatever)
 # Output: generated/relatedness_classifier.json
-#           { feature_names: [...], means: [...], stds: [...], weights: [...], threshold: 0.x, ... }
+#           common: { feature_names, model_type, threshold, training }
+#           logreg: { means, stds, weights }
+#           gbt:    { bias, lr, trees: [ [ {f, t, l, r} | {v} , ... ], ... ] }
 #
-# Learns a logistic regression over +learned_feature_vector+ (20 symmetrized features
-# pulled from +PairSignals+), optimizing weighted log-loss whose sample weights mirror
-# the evaluation objective in +spec/related_weighted_accuracy.rb+: strong-related rows
-# count 9, ish-related 3, strong-unrelated 3, ish-unrelated 1. After fitting, sweeps
-# the decision threshold over [0.05, 0.95] and picks the probability cutoff maximizing
-# the composite score (same 3:1 FN:FP penalty ratio used at evaluation time).
+# Two supported model types (--model):
+#   logreg  L2-regularized logistic regression (linear combiner, small file, fast).
+#   gbt     Gradient-boosted regression trees (histogram-free exact splits, binary
+#           logistic loss, Newton-step leaves, L2 on leaves, shrinkage). Captures
+#           signal interactions that logistic regression can't. Larger JSON (~100KB
+#           per 200 trees × depth 4) and ~1ms per pair at inference.
 #
-# Reports 5-fold CV composite/weighted-accuracy for an honest generalization estimate,
-# then fits once on the full labeled set for deployment. The deployed model is the
-# one written to disk; CV numbers are for guidance.
+# Both optimize weighted log-loss whose sample weights mirror the evaluation
+# objective in +spec/related_weighted_accuracy.rb+: strong-related 9, ish-related 3,
+# strong-unrelated 3, ish-unrelated 1. After fitting, sweeps the decision threshold
+# over [0.05, 0.95] and picks the probability cutoff maximizing composite (3:1
+# FN:FP penalty ratio).
 #
-#   ruby bin/train-relatedness-classifier
-#   ruby bin/train-relatedness-classifier --folds 10 --epochs 1000 --l2 0.02
-#   ruby bin/train-relatedness-classifier --dry-run          # don't write output file
+# Reports N-fold CV composite for an honest generalization estimate, then fits once
+# on the full labeled set for deployment.
 #
-# After a successful train, run +spec/related_weighted_accuracy.rb+ to see the lift
-# (default is +RELATED_LEARNED_MODE=additive+; try +=replace+ for a pure learned combiner).
+#   ruby bin/train-relatedness-classifier                    # gbt (default)
+#   ruby bin/train-relatedness-classifier --model logreg
+#   ruby bin/train-relatedness-classifier --model gbt --trees 400 --depth 5
+#   ruby bin/train-relatedness-classifier --dry-run
+#
+# After training, run +spec/related_weighted_accuracy.rb+ to see the lift
+# (default +RELATED_LEARNED_MODE=additive+; +=replace+ for pure learned combiner).
 
 $LOAD_PATH.unshift File.expand_path("../lib", __dir__)
 
@@ -32,23 +40,43 @@ require "json"
 require "optparse"
 
 options = {
+  model: "gbt",
   folds: 5,
-  epochs: 600,
-  lr: 0.3,
-  l2: 0.02,
   seed: 42,
   dry_run: false,
   verbose: false,
+
+  # logreg hyperparams
+  epochs: 600,
+  lr: 0.3,
+  l2: 0.02,
+
+  # gbt hyperparams
+  trees: 200,
+  depth: 3,
+  gbt_lr: 0.1,
+  lambda_leaf: 1.0,
+  min_child_hessian: 5.0,
+  colsample: 0.8,
 }
 
 OptionParser.new do |opt|
+  opt.on("--model MODEL", %w[logreg gbt]) { |v| options[:model] = v }
   opt.on("--folds N", Integer) { |v| options[:folds] = v }
-  opt.on("--epochs N", Integer) { |v| options[:epochs] = v }
-  opt.on("--lr F", Float) { |v| options[:lr] = v }
-  opt.on("--l2 F", Float) { |v| options[:l2] = v }
   opt.on("--seed N", Integer) { |v| options[:seed] = v }
   opt.on("--dry-run") { options[:dry_run] = true }
   opt.on("--verbose") { options[:verbose] = true }
+
+  opt.on("--epochs N", Integer) { |v| options[:epochs] = v }
+  opt.on("--lr F", Float) { |v| options[:lr] = v }
+  opt.on("--l2 F", Float) { |v| options[:l2] = v }
+
+  opt.on("--trees N", Integer) { |v| options[:trees] = v }
+  opt.on("--depth N", Integer) { |v| options[:depth] = v }
+  opt.on("--gbt-lr F", Float) { |v| options[:gbt_lr] = v }
+  opt.on("--lambda-leaf F", Float) { |v| options[:lambda_leaf] = v }
+  opt.on("--min-child-hessian F", Float) { |v| options[:min_child_hessian] = v }
+  opt.on("--colsample F", Float) { |v| options[:colsample] = v }
 end.parse!
 
 ENV.delete("RHYMECRIME_DATA_SOURCE")
@@ -58,6 +86,8 @@ Dir.chdir(repo)
 
 require "rhymecrime/crime"
 
+# --- Common helpers ---------------------------------------------------------
+
 def sigmoid(z)
   if z >= 0
     ez = Math.exp(-z)
@@ -66,86 +96,6 @@ def sigmoid(z)
     ez = Math.exp(z)
     ez / (1.0 + ez)
   end
-end
-
-# Standardize columns 1..d-1 in-place (skip bias at column 0). Returns [means, stds].
-def standardize!(rows)
-  d = rows.first.size
-  means = Array.new(d, 0.0)
-  stds = Array.new(d, 1.0)
-  n = rows.size.to_f
-
-  (1...d).each do |j|
-    s = 0.0
-    rows.each { |r| s += r[j] }
-    means[j] = s / n
-    sq = 0.0
-    rows.each { |r| sq += (r[j] - means[j])**2 }
-    stds[j] = Math.sqrt(sq / n)
-    stds[j] = 1.0 if stds[j] < 1e-9
-  end
-
-  rows.each do |r|
-    (1...d).each { |j| r[j] = (r[j] - means[j]) / stds[j] }
-  end
-  [means, stds]
-end
-
-# Apply an already-fit standardization to a fresh row.
-def apply_standardize(row, means, stds)
-  d = row.size
-  out = row.dup
-  (1...d).each { |j| out[j] = (row[j] - means[j]) / stds[j] }
-  out
-end
-
-# Batch gradient descent with L2 regularization (bias unregularized). Sample-weighted
-# log-loss. Returns weight vector.
-def fit_logreg(x_rows, y, sample_weights, lr:, l2:, epochs:, verbose: false)
-  n = x_rows.size
-  d = x_rows.first.size
-  w = Array.new(d, 0.0)
-  w_sum_total = sample_weights.sum.to_f
-
-  prev_loss = Float::INFINITY
-  epochs.times do |epoch|
-    grad = Array.new(d, 0.0)
-    loss = 0.0
-    n.times do |i|
-      x = x_rows[i]
-      z = 0.0
-      d.times { |j| z += w[j] * x[j] }
-      p = sigmoid(z)
-      err = p - y[i]
-      sw = sample_weights[i]
-      pc = [[p, 1e-12].max, 1 - 1e-12].min
-      loss += -sw * (y[i] * Math.log(pc) + (1 - y[i]) * Math.log(1 - pc))
-      d.times { |j| grad[j] += sw * err * x[j] }
-    end
-    (1...d).each { |j| grad[j] += l2 * w[j] }
-
-    step = lr / w_sum_total
-    d.times { |j| w[j] -= step * grad[j] }
-
-    if verbose && (epoch % 100).zero?
-      warn format("  epoch %4d loss=%.4f w0=%.3f", epoch, loss / w_sum_total, w[0])
-    end
-
-    delta = (prev_loss - loss).abs / [prev_loss.abs, 1.0].max
-    break if delta < 1e-7 && epoch > 10
-    prev_loss = loss
-  end
-  w
-end
-
-# Predict probability given raw feature row and standardization.
-def predict_proba(raw_row, w, means, stds)
-  z = 0.0
-  raw_row.each_with_index do |v, j|
-    x = j.zero? ? v : (v - means[j]) / stds[j]
-    z += w[j] * x
-  end
-  sigmoid(z)
 end
 
 # Composite score for a prediction set at a given probability threshold. +rows+ is
@@ -206,7 +156,301 @@ def best_threshold(rows)
   best
 end
 
-# --- Load CSV, build training examples ---
+# --- Logistic regression backend -------------------------------------------
+
+# Standardize columns 1..d-1 in-place (skip bias at column 0). Returns [means, stds].
+def standardize!(rows)
+  d = rows.first.size
+  means = Array.new(d, 0.0)
+  stds = Array.new(d, 1.0)
+  n = rows.size.to_f
+
+  (1...d).each do |j|
+    s = 0.0
+    rows.each { |r| s += r[j] }
+    means[j] = s / n
+    sq = 0.0
+    rows.each { |r| sq += (r[j] - means[j])**2 }
+    stds[j] = Math.sqrt(sq / n)
+    stds[j] = 1.0 if stds[j] < 1e-9
+  end
+
+  rows.each do |r|
+    (1...d).each { |j| r[j] = (r[j] - means[j]) / stds[j] }
+  end
+  [means, stds]
+end
+
+def fit_logreg(x_rows, y, sample_weights, lr:, l2:, epochs:, verbose: false)
+  n = x_rows.size
+  d = x_rows.first.size
+  w = Array.new(d, 0.0)
+  w_sum_total = sample_weights.sum.to_f
+
+  prev_loss = Float::INFINITY
+  epochs.times do |epoch|
+    grad = Array.new(d, 0.0)
+    loss = 0.0
+    n.times do |i|
+      x = x_rows[i]
+      z = 0.0
+      d.times { |j| z += w[j] * x[j] }
+      p = sigmoid(z)
+      err = p - y[i]
+      sw = sample_weights[i]
+      pc = [[p, 1e-12].max, 1 - 1e-12].min
+      loss += -sw * (y[i] * Math.log(pc) + (1 - y[i]) * Math.log(1 - pc))
+      d.times { |j| grad[j] += sw * err * x[j] }
+    end
+    (1...d).each { |j| grad[j] += l2 * w[j] }
+
+    step = lr / w_sum_total
+    d.times { |j| w[j] -= step * grad[j] }
+
+    if verbose && (epoch % 100).zero?
+      warn format("  epoch %4d loss=%.4f w0=%.3f", epoch, loss / w_sum_total, w[0])
+    end
+
+    delta = (prev_loss - loss).abs / [prev_loss.abs, 1.0].max
+    break if delta < 1e-7 && epoch > 10
+    prev_loss = loss
+  end
+  w
+end
+
+def predict_proba_logreg(raw_row, w, means, stds)
+  z = 0.0
+  raw_row.each_with_index do |v, j|
+    x = j.zero? ? v : (v - means[j]) / stds[j]
+    z += w[j] * x
+  end
+  sigmoid(z)
+end
+
+# --- Gradient-boosted tree backend -----------------------------------------
+#
+# Xgboost-style binary logistic: at each round, fit a regression tree to the
+# (gradient / hessian) of log-loss wrt current margin, step margins by
+# +lr * leaf_value+. Tree splits minimize the xgboost gain formula
+#   gain = G_L^2/(H_L+λ) + G_R^2/(H_R+λ) - G^2/(H+λ)
+# Leaf Newton step: +w* = -sum(g) / (sum(h) + λ)+. Sample weights scale +g+ and
+# +h+, so downstream gain / leaf formulas stay identical to unweighted xgboost.
+# Trees stored as flat arrays of nodes; node = {f,t,l,r} internal or {v} leaf.
+
+def find_best_split(x_rows, g, h, feature_indices, rows, total_g, total_h, lambda_leaf:, min_child_hessian:)
+  base_gain = total_g**2 / (total_h + lambda_leaf)
+  best = nil
+  best_gain = 0.0
+
+  feature_indices.each do |f|
+    sorted = rows.sort_by { |i| x_rows[i][f] }
+    g_l = 0.0
+    h_l = 0.0
+    sz = sorted.size
+
+    (0...sz - 1).each do |k|
+      i = sorted[k]
+      g_l += g[i]
+      h_l += h[i]
+      h_r = total_h - h_l
+      next if h_l < min_child_hessian || h_r < min_child_hessian
+
+      v_cur = x_rows[i][f]
+      v_next = x_rows[sorted[k + 1]][f]
+      next if v_cur == v_next
+
+      g_r = total_g - g_l
+      gain = g_l**2 / (h_l + lambda_leaf) + g_r**2 / (h_r + lambda_leaf) - base_gain
+      if gain > best_gain
+        best_gain = gain
+        best = {
+          feature: f,
+          threshold: (v_cur + v_next) / 2.0,
+          gain: gain,
+        }
+      end
+    end
+  end
+
+  best
+end
+
+def build_tree_node(nodes, x_rows, g, h, features, rows, depth, max_depth, lambda_leaf, min_child_hessian)
+  total_g = 0.0
+  total_h = 0.0
+  rows.each do |i|
+    total_g += g[i]
+    total_h += h[i]
+  end
+
+  split = nil
+  if depth < max_depth && rows.size >= 2 && total_h >= 2 * min_child_hessian
+    split = find_best_split(
+      x_rows, g, h, features, rows, total_g, total_h,
+      lambda_leaf: lambda_leaf, min_child_hessian: min_child_hessian
+    )
+  end
+
+  if split.nil?
+    leaf_value = -total_g / (total_h + lambda_leaf)
+    node_idx = nodes.size
+    nodes << { "v" => leaf_value }
+    return node_idx
+  end
+
+  left_rows = []
+  right_rows = []
+  f = split[:feature]
+  t = split[:threshold]
+  rows.each do |i|
+    if x_rows[i][f] <= t
+      left_rows << i
+    else
+      right_rows << i
+    end
+  end
+
+  if left_rows.empty? || right_rows.empty?
+    leaf_value = -total_g / (total_h + lambda_leaf)
+    node_idx = nodes.size
+    nodes << { "v" => leaf_value }
+    return node_idx
+  end
+
+  node_idx = nodes.size
+  nodes << { "f" => f, "t" => t, "l" => nil, "r" => nil }
+  left_idx = build_tree_node(nodes, x_rows, g, h, features, left_rows, depth + 1, max_depth, lambda_leaf, min_child_hessian)
+  right_idx = build_tree_node(nodes, x_rows, g, h, features, right_rows, depth + 1, max_depth, lambda_leaf, min_child_hessian)
+  nodes[node_idx]["l"] = left_idx
+  nodes[node_idx]["r"] = right_idx
+  node_idx
+end
+
+def predict_tree(nodes, row)
+  idx = 0
+  loop do
+    node = nodes[idx]
+    return node["v"] if node.key?("v")
+    idx = row[node["f"]] <= node["t"] ? node["l"] : node["r"]
+  end
+end
+
+def fit_gbt(x_rows, y, sample_weights, trees:, depth:, lr:, lambda_leaf:, min_child_hessian:, colsample:, seed:, verbose: false)
+  n = x_rows.size
+  d = x_rows.first.size
+  rng = Random.new(seed)
+
+  # Initialize bias at weighted-mean logit (so first-round gradients aren't degenerate).
+  sum_w = sample_weights.sum.to_f
+  sum_wy = 0.0
+  n.times { |i| sum_wy += sample_weights[i] * y[i] }
+  p0 = sum_wy / sum_w
+  p0 = [[p0, 1e-4].max, 1 - 1e-4].min
+  bias = Math.log(p0 / (1 - p0))
+
+  margins = Array.new(n, bias)
+  ensemble = []
+
+  # Bias=feature-0 is always 1.0; GBT can't meaningfully split on a constant.
+  # Exclude it from splitting candidates.
+  all_features = (1...d).to_a
+
+  trees.times do |t|
+    g = Array.new(n)
+    h = Array.new(n)
+    n.times do |i|
+      p = sigmoid(margins[i])
+      sw = sample_weights[i]
+      g[i] = sw * (p - y[i])
+      h[i] = sw * p * (1 - p)
+    end
+
+    if colsample < 1.0
+      k = [(all_features.size * colsample).ceil, 1].max
+      features = all_features.sample(k, random: rng)
+    else
+      features = all_features
+    end
+
+    nodes = []
+    build_tree_node(
+      nodes, x_rows, g, h, features, (0...n).to_a, 0, depth,
+      lambda_leaf, min_child_hessian
+    )
+
+    n.times do |i|
+      margins[i] += lr * predict_tree(nodes, x_rows[i])
+    end
+
+    ensemble << nodes
+
+    if verbose && (t % 25).zero?
+      loss = 0.0
+      n.times do |i|
+        p = sigmoid(margins[i])
+        pc = [[p, 1e-12].max, 1 - 1e-12].min
+        loss += -sample_weights[i] * (y[i] * Math.log(pc) + (1 - y[i]) * Math.log(1 - pc))
+      end
+      warn format("  tree %3d  loss=%.4f", t, loss / sum_w)
+    end
+  end
+
+  [bias, ensemble]
+end
+
+def predict_proba_gbt(row, bias, trees, lr)
+  score = bias
+  trees.each { |t| score += lr * predict_tree(t, row) }
+  sigmoid(score)
+end
+
+def gbt_feature_importance(trees, n_features)
+  gains = Array.new(n_features, 0.0)
+  trees.each do |nodes|
+    nodes.each do |node|
+      next if node.key?("v")
+      gains[node["f"]] += 1.0
+    end
+  end
+  gains
+end
+
+# --- Shared fit / predict dispatch -----------------------------------------
+
+# Fit one model on +train_ids+. Returns a lambda that scores a raw feature row
+# and produces a probability, plus a symbol-keyed model hash for serialization.
+def fit_model(model, features_list, labels, weights, train_ids, options)
+  x_train = train_ids.map { |i| features_list[i].dup }
+  y_train = train_ids.map { |i| labels[i] }
+  w_train = train_ids.map { |i| weights[i] }
+
+  case model
+  when "logreg"
+    means, stds = standardize!(x_train)
+    w = fit_logreg(
+      x_train, y_train, w_train,
+      lr: options[:lr], l2: options[:l2], epochs: options[:epochs],
+      verbose: options[:verbose]
+    )
+    predict = ->(row) { predict_proba_logreg(row, w, means, stds) }
+    [predict, { model_type: "logreg", means: means, stds: stds, weights: w }]
+
+  when "gbt"
+    bias, trees = fit_gbt(
+      x_train, y_train, w_train,
+      trees: options[:trees], depth: options[:depth], lr: options[:gbt_lr],
+      lambda_leaf: options[:lambda_leaf], min_child_hessian: options[:min_child_hessian],
+      colsample: options[:colsample], seed: options[:seed], verbose: options[:verbose]
+    )
+    predict = ->(row) { predict_proba_gbt(row, bias, trees, options[:gbt_lr]) }
+    [predict, { model_type: "gbt", bias: bias, lr: options[:gbt_lr], trees: trees }]
+
+  else
+    raise "unknown model: #{model}"
+  end
+end
+
+# --- Load CSV, build training examples -------------------------------------
 
 # Classifier must not see the stop-word short-circuit; phase 3 still handles those.
 ENV["RELATED_LEARNED_MODE"] = "off"
@@ -259,44 +503,33 @@ raw_rows.each do |r|
   ish_flags << ish
 end
 
+puts "model: #{options[:model]}"
 puts "training examples: #{features_list.size}  (+#{skipped_whatever} whatever, #{skipped_stopword} stop-word pairs skipped)"
 puts "positives: #{labels.count(1.0)}  negatives: #{labels.count(0.0)}"
 puts "feature count: #{features_list.first.size}  (#{LEARNED_FEATURE_NAMES.join(', ')})"
 puts
 
-# --- 5-fold CV ---
+# --- N-fold CV -------------------------------------------------------------
 
 srand(options[:seed])
 indices = (0...features_list.size).to_a.shuffle
 folds = Array.new(options[:folds]) { [] }
 indices.each_with_index { |idx, i| folds[i % options[:folds]] << idx }
 
-cv_rows_pooled = []
 cv_composites = []
 
 puts "=== #{options[:folds]}-fold CV ==="
 folds.each_with_index do |test_ids, fi|
   train_ids = folds.each_with_index.flat_map { |f, i| i == fi ? [] : f }
 
-  x_train = train_ids.map { |i| features_list[i].dup }
-  y_train = train_ids.map { |i| labels[i] }
-  w_train = train_ids.map { |i| weights[i] }
-
-  means, stds = standardize!(x_train)
-  w_model = fit_logreg(
-    x_train, y_train, w_train,
-    lr: options[:lr], l2: options[:l2], epochs: options[:epochs], verbose: options[:verbose]
-  )
+  predict, _model_data = fit_model(options[:model], features_list, labels, weights, train_ids, options)
 
   test_scored = test_ids.map do |i|
-    p = predict_proba(features_list[i], w_model, means, stds)
-    { y: labels[i], ish: ish_flags[i], p: p }
+    { y: labels[i], ish: ish_flags[i], p: predict.call(features_list[i]) }
   end
 
   best = best_threshold(test_scored)
-  cv_rows_pooled.concat(test_scored)
   cv_composites << best
-
   s = best[:stats]
   puts format(
     "  fold %d  t=%.2f  composite=%d  weighted=%.1f%%  sfn=%d ifn=%d sfp=%d ifp=%d",
@@ -305,27 +538,18 @@ folds.each_with_index do |test_ids, fi|
   )
 end
 
-avg_comp = cv_composites.sum { |c| c[:stats][:composite] } / cv_composites.size.to_f
+pooled_composite = cv_composites.sum { |c| c[:stats][:composite] }
 avg_thr = cv_composites.sum { |c| c[:threshold] } / cv_composites.size.to_f
-puts format("  CV mean composite = %.1f  mean threshold = %.2f", avg_comp, avg_thr)
+puts format("  CV pooled composite = %d  mean threshold = %.2f", pooled_composite, avg_thr)
 puts
 
-# --- Full-data fit for deployment ---
+# --- Full-data fit for deployment ------------------------------------------
 
 puts "=== full-data fit ==="
-x_full = features_list.map(&:dup)
-y_full = labels
-w_full = weights
-means, stds = standardize!(x_full)
-
-w_model = fit_logreg(
-  x_full, y_full, w_full,
-  lr: options[:lr], l2: options[:l2], epochs: options[:epochs], verbose: options[:verbose]
-)
+predict, model_data = fit_model(options[:model], features_list, labels, weights, (0...features_list.size).to_a, options)
 
 scored = (0...features_list.size).map do |i|
-  p = predict_proba(features_list[i], w_model, means, stds)
-  { y: labels[i], ish: ish_flags[i], p: p }
+  { y: labels[i], ish: ish_flags[i], p: predict.call(features_list[i]) }
 end
 best = best_threshold(scored)
 s = best[:stats]
@@ -335,43 +559,74 @@ puts format(
   s[:strong_fn], s[:ish_fn], s[:strong_fp], s[:ish_fp]
 )
 
-# Feature-weight report in raw units (un-standardize for interpretability).
 puts
-puts "=== feature weights (raw units, for interpretation) ==="
-LEARNED_FEATURE_NAMES.each_with_index do |name, j|
-  raw_w = j.zero? ? w_model[j] : w_model[j] / stds[j]
-  puts format("  %-20s  std=%+8.4f  raw=%+8.4f", name, w_model[j], raw_w)
+case options[:model]
+when "logreg"
+  puts "=== feature weights (raw units, for interpretation) ==="
+  LEARNED_FEATURE_NAMES.each_with_index do |name, j|
+    w = model_data[:weights][j]
+    std = model_data[:stds][j]
+    raw_w = j.zero? ? w : w / std
+    puts format("  %-20s  std=%+8.4f  raw=%+8.4f", name, w, raw_w)
+  end
+when "gbt"
+  puts "=== feature split counts (tree nodes using each feature) ==="
+  counts = gbt_feature_importance(model_data[:trees], features_list.first.size)
+  total_nodes = counts.sum
+  LEARNED_FEATURE_NAMES.each_with_index do |name, j|
+    next if counts[j] == 0
+    pct = total_nodes.zero? ? 0.0 : (100.0 * counts[j] / total_nodes)
+    puts format("  %-20s  splits=%4d  (%.1f%%)", name, counts[j].to_i, pct)
+  end
+  puts format("  total internal splits: %d across %d trees", total_nodes.to_i, model_data[:trees].size)
 end
 puts
 
-# --- Write classifier ---
+# --- Write classifier ------------------------------------------------------
 
-out = {
+common = {
   "feature_names" => LEARNED_FEATURE_NAMES,
-  "means" => means,
-  "stds" => stds,
-  "weights" => w_model,
+  "model_type" => model_data[:model_type],
   "threshold" => best[:threshold],
   "training" => {
+    "model" => options[:model],
     "rows" => features_list.size,
     "positives" => labels.count(1.0),
     "negatives" => labels.count(0.0),
-    "l2" => options[:l2],
-    "lr" => options[:lr],
-    "epochs" => options[:epochs],
     "seed" => options[:seed],
     "cv_folds" => options[:folds],
-    "cv_mean_composite" => avg_comp,
+    "cv_pooled_composite" => pooled_composite,
     "cv_mean_threshold" => avg_thr,
     "in_sample_composite" => s[:composite],
     "in_sample_weighted_pct" => s[:weighted_pct],
   },
 }
 
+case options[:model]
+when "logreg"
+  common["means"] = model_data[:means]
+  common["stds"] = model_data[:stds]
+  common["weights"] = model_data[:weights]
+  common["training"].merge!("l2" => options[:l2], "lr" => options[:lr], "epochs" => options[:epochs])
+when "gbt"
+  common["bias"] = model_data[:bias]
+  common["lr"] = model_data[:lr]
+  common["trees"] = model_data[:trees]
+  common["training"].merge!(
+    "trees" => options[:trees],
+    "depth" => options[:depth],
+    "gbt_lr" => options[:gbt_lr],
+    "lambda_leaf" => options[:lambda_leaf],
+    "min_child_hessian" => options[:min_child_hessian],
+    "colsample" => options[:colsample],
+  )
+end
+
 if options[:dry_run]
   puts "(--dry-run: not writing output file)"
 else
   out_path = generated_dict_path(RELATEDNESS_CLASSIFIER_FILENAME)
-  File.write(out_path, JSON.pretty_generate(out), encoding: "UTF-8")
-  puts "wrote #{out_path}"
+  File.write(out_path, JSON.generate(common), encoding: "UTF-8")
+  size_kb = File.size(out_path) / 1024.0
+  puts format("wrote %s (%.1f KB)", out_path, size_kb)
 end

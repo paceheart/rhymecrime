@@ -28,6 +28,11 @@ USF_ASSOCIATIONS_FILENAME = "usf_associations.json"
 # Learned phase-2 relatedness combiner (logistic regression over +PairSignals+ features);
 # built by bin/train-relatedness-classifier, consumed in related.rb.
 RELATEDNESS_CLASSIFIER_FILENAME = "relatedness_classifier.json"
+# Contextualized sentence-transformer embeddings of dictionary-lemma headwords and their
+# WordNet gloss-per-sense (built by bin/dump-sense-glosses → bin/build-sense-vectors.py).
+# MessagePack: { model:, dim:, headword: {lemma=>vec}, senses: {lemma=>[vec,…]} }.
+# Provides the modern-embedding signals in +PairSignals+ that supplement Numberbatch.
+MODEL_SENSE_VECTORS_FILENAME = "model_sense_vectors.msgpack"
 # Word-frequency rare ceiling: treat as rare when frequency is at or below this (see rare? in crime.rb).
 RARE_FREQ_MAX = 4
 

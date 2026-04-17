@@ -1,0 +1,121 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+#
+# Dump (lemma, sense_idx, text) triples as JSONL for external sentence-transformer
+# encoding (+bin/build-sense-vectors.py+). Output feeds into
+# +generated/model_sense_vectors.msgpack+ which supplies the modern-embedding
+# signals in +PairSignals+ (see +MODEL_SENSE_VECTORS_FILENAME+, +related.rb+).
+#
+# Each headword contributes one "headword" item (+sense_idx = -1+, +text+ is just the
+# headword itself) plus up to +--max-senses+ "sense" items, one per WordNet gloss
+# (+text+ is +"{word}: {gloss}"+). When a word has no direct WordNet senses, we try
+# morphy-resolved inflected forms (same fallback as +sense_vectors_morphy+).
+#
+# Scope:
+#   +--limit-csv CSV+  only dump words referenced in the CSV's +word1+/+word2+ columns.
+#                      Useful for iterating on spec/related.csv fast.
+#   default            all dictionary base lemmas with Numberbatch vectors (~65k; Python
+#                      encoding this many at MPNet pace is ~30 min on Apple Silicon MPS).
+#
+#   ruby bin/dump-sense-glosses --limit-csv spec/related.csv
+#   ruby bin/dump-sense-glosses                    # everything
+#   ruby bin/dump-sense-glosses --max-senses 6 --output /tmp/glosses.jsonl
+
+$LOAD_PATH.unshift File.expand_path("../lib", __dir__)
+
+ENV.delete("RHYMECRIME_DATA_SOURCE")
+
+require "json"
+require "optparse"
+require "set"
+
+options = {
+  limit_csv: nil,
+  max_senses: 4, # mirrors SENSE_VECTOR_MAX_SENSES
+  include_morphy: true,
+  output: nil,
+}
+
+OptionParser.new do |opt|
+  opt.on("--limit-csv PATH") { |v| options[:limit_csv] = v }
+  opt.on("--max-senses N", Integer) { |v| options[:max_senses] = v }
+  opt.on("--no-morphy") { options[:include_morphy] = false }
+  opt.on("--output PATH") { |v| options[:output] = v }
+end.parse!
+
+repo = File.expand_path("..", __dir__)
+Dir.chdir(repo)
+
+require "rhymecrime/crime"
+require "rwordnet"
+
+options[:output] ||= generated_dict_path("sense_glosses.jsonl")
+
+lemmas = Set.new
+if options[:limit_csv]
+  require "csv"
+  rows = CSV.parse(File.read(options[:limit_csv], encoding: "UTF-8"), headers: true)
+  rows.each do |r|
+    %w[word1 word2].each do |col|
+      next unless r[col]
+      w = r[col].to_s.strip
+      next if w.empty?
+      lemmas << lemma(w)
+    end
+  end
+else
+  # Every lemma with a Numberbatch row — the existing base-lemma universe.
+  numberbatch.each_key do |key|
+    lemmas << key.to_s.tr("_", "-")
+  end
+end
+
+lemmas.reject! { |l| stop_word?(l) || l.nil? || l.empty? }
+STDERR.puts "collected #{lemmas.size} lemmas"
+
+def wordnet_glosses_for(word, max_senses, include_morphy)
+  glosses = []
+  WordNet::Lemma.find_all(word).each do |lem|
+    lem.synsets.each do |synset|
+      return glosses if glosses.size >= max_senses
+      glosses << synset.gloss
+    end
+  end
+
+  return glosses unless glosses.empty? && include_morphy
+
+  morphs = (WordNet::Synset.morphy_all(word) rescue []).uniq - [word]
+  morphs.each do |form|
+    WordNet::Lemma.find_all(form).each do |lem|
+      lem.synsets.each do |synset|
+        return glosses if glosses.size >= max_senses
+        glosses << synset.gloss
+      end
+    end
+  end
+  glosses
+end
+
+written = 0
+headword_only = 0
+File.open(options[:output], "w") do |f|
+  lemmas.sort.each do |word|
+    f.puts JSON.generate("word" => word, "sense_idx" => -1, "text" => word)
+    written += 1
+
+    glosses = wordnet_glosses_for(word, options[:max_senses], options[:include_morphy])
+    headword_only += 1 if glosses.empty?
+
+    glosses.each_with_index do |g, i|
+      f.puts JSON.generate(
+        "word" => word,
+        "sense_idx" => i,
+        "text" => "#{word}: #{g}",
+      )
+      written += 1
+    end
+  end
+end
+
+STDERR.puts "wrote #{written} items to #{options[:output]}"
+STDERR.puts "#{headword_only} lemmas had no WordNet senses (headword-only)"

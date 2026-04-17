@@ -190,6 +190,113 @@ def dictionary_lemma_has_numberbatch_vector?(word)
   !numberbatch_table[hyphens_to_underscores(l)].nil?
 end
 
+# --- Modern sentence-transformer embeddings ---
+# Built offline by +bin/dump-sense-glosses+ -> +bin/build-sense-vectors.py+, saved as
+# +generated/model_sense_vectors.msgpack+. Supplements (does not replace) Numberbatch:
+# Numberbatch is tiny and fast for the O(n) scan, while these contextualized vectors
+# carry richer sense distinctions for the per-pair yes/no decision. Shape:
+#   { "model" => String, "dim" => Integer,
+#     "headword" => {lemma => [Float * dim]},
+#     "senses"   => {lemma => [[Float * dim], ...]} }
+# Vectors are pre-L2-normalized so cosine similarity is a plain dot product. Keys use
+# hyphen-form lemmas (matching +lemma()+ output), not the underscore form Numberbatch
+# keys use. Returns +nil+ if the file is absent — callers degrade gracefully (all
+# model-* signals become 0 and +model_both_in_vocab?+ is false, which the learned
+# combiner can condition on).
+$model_sense_vectors = nil
+$model_sense_vectors_loaded = false
+def model_sense_vectors_table
+  return $model_sense_vectors if $model_sense_vectors_loaded
+  $model_sense_vectors_loaded = true
+  path = generated_dict_path(MODEL_SENSE_VECTORS_FILENAME)
+  return nil unless File.exist?(path)
+  $model_sense_vectors = MessagePack.unpack(File.binread(path))
+  hw = $model_sense_vectors["headword"] || {}
+  sv = $model_sense_vectors["senses"] || {}
+  puts "loaded model sense vectors from #{path} " \
+       "(model=#{$model_sense_vectors['model']} dim=#{$model_sense_vectors['dim']} " \
+       "headwords=#{hw.size} senses=#{sv.values.sum(&:size)})"
+  $model_sense_vectors
+end
+
+def model_headword_vector(word)
+  t = model_sense_vectors_table
+  return nil if t.nil?
+  h = t["headword"]
+  h.nil? ? nil : h[word]
+end
+
+def model_sense_vectors_of(word)
+  t = model_sense_vectors_table
+  return [] if t.nil?
+  s = t["senses"]
+  return [] if s.nil?
+  s[word] || []
+end
+
+# Headword-headword cosine under the contextualized model (0..1). Returns 0.0 when
+# either side is out-of-vocab — pair with +model_both_in_vocab?+ so the classifier
+# can distinguish "low similarity" from "no data".
+def model_headword_cosine(word1, word2)
+  v1 = model_headword_vector(word1)
+  v2 = model_headword_vector(word2)
+  return 0.0 if v1.nil? || v2.nil?
+  dot = 0.0
+  v1.size.times { |i| dot += v1[i] * v2[i] }
+  dot
+end
+
+# Directional sense-vs-headword cosines under the contextualized model (each 0..100
+# centile). Analogous to +directional_sense_cosines+ but end-to-end in the model's
+# embedding space: for each sense vector of word1, the cosine against word2's headword
+# vector (and symmetrically). Lets a specific sense of a polysemous word rescue the
+# pair even when the averaged headword embedding doesn't match.
+def model_directional_sense_cosines(word1, word2)
+  best_1to2 = 0
+  best_2to1 = 0
+
+  v2_head = model_headword_vector(word2)
+  if v2_head
+    model_sense_vectors_of(word1).each do |sv|
+      dot = 0.0
+      sv.size.times { |i| dot += sv[i] * v2_head[i] }
+      score = (dot * 100).round
+      best_1to2 = score if score > best_1to2
+    end
+  end
+
+  v1_head = model_headword_vector(word1)
+  if v1_head
+    model_sense_vectors_of(word2).each do |sv|
+      dot = 0.0
+      sv.size.times { |i| dot += sv[i] * v1_head[i] }
+      score = (dot * 100).round
+      best_2to1 = score if score > best_2to1
+    end
+  end
+
+  [best_1to2, best_2to1]
+end
+
+# Max cosine over all (sense_of_a, sense_of_b) pairs (0..100 centile). Captures pairs
+# where a specific sense of A matches a specific sense of B more tightly than either
+# matches the other's headword — i.e. polysemy on *both* sides. Small O(senses_a *
+# senses_b); capped at SENSE_VECTOR_MAX_SENSES^2 = 16 comparisons in practice.
+def model_sense_sense_max_cosine(word1, word2)
+  sa = model_sense_vectors_of(word1)
+  sb = model_sense_vectors_of(word2)
+  return 0 if sa.empty? || sb.empty?
+  best = -1.0
+  sa.each do |va|
+    sb.each do |vb|
+      dot = 0.0
+      va.size.times { |i| dot += va[i] * vb[i] }
+      best = dot if dot > best
+    end
+  end
+  (best * 100).round
+end
+
 # --- WordNet gloss containment (high-precision polysemy rescue) ---
 # Checks if word1 (or a validated derivational form) literally appears as a word
 # in any WordNet definition of word2, or vice versa.
@@ -522,6 +629,41 @@ class PairSignals
     m = morphy_sv_directional
     m ? m.min : 0
   end
+
+  # --- Modern sentence-transformer signals ---
+  # Mirror the Numberbatch-based signals above but use contextualized MPNet embeddings
+  # (see +model_sense_vectors_table+). +model_both_in_vocab?+ lets the combiner treat
+  # "0 because out-of-vocab" differently from "0 because actually unrelated".
+
+  def model_both_in_vocab?
+    return @model_both_in_vocab if defined?(@model_both_in_vocab)
+    @model_both_in_vocab = !model_headword_vector(@a).nil? && !model_headword_vector(@b).nil?
+  end
+
+  def model_cos_pct
+    @model_cos_pct ||= (model_headword_cosine(@a, @b) * 100).round
+  end
+
+  def model_sv_directional
+    @model_sv_directional ||= model_directional_sense_cosines(@a, @b)
+  end
+
+  def model_sv_max
+    model_sv_directional.max
+  end
+
+  def model_sv_min
+    model_sv_directional.min
+  end
+
+  def model_both_have_sense_vectors?
+    return @model_both_have_sv if defined?(@model_both_have_sv)
+    @model_both_have_sv = !model_sense_vectors_of(@a).empty? && !model_sense_vectors_of(@b).empty?
+  end
+
+  def model_sense_sense_max
+    @model_sense_sense_max ||= model_sense_sense_max_cosine(@a, @b)
+  end
 end
 
 # Ordered feature vector pulled from +PairSignals+, shared by the learned-classifier
@@ -553,6 +695,16 @@ LEARNED_FEATURE_NAMES = %w[
   sv_max_x_sv_min
   base_x_usf
   sv_max_x_usf
+  model_in_vocab
+  model_both_sv
+  model_cos_pct
+  model_sv_max
+  model_sv_min
+  model_sense_sense_max
+  model_cos_x_cos
+  model_sv_max_x_sv_min
+  model_cos_x_base
+  model_sv_max_x_usf
 ].freeze
 
 def learned_feature_vector(signals)
@@ -563,6 +715,16 @@ def learned_feature_vector(signals)
   base = signals.base_similarity
   ca = signals.sv_a_count
   cb = signals.sv_b_count
+
+  # Contextualized-model signals. Gated on +model_both_in_vocab?+ so out-of-vocab
+  # pairs don't inject a misleading "cos = 0" into the linear combination — the
+  # gate feature lets the learner condition on data availability.
+  m_in = signals.model_both_in_vocab?
+  m_cos = m_in ? signals.model_cos_pct : 0
+  m_both_sv = signals.model_both_have_sense_vectors?
+  m_sv_max = m_both_sv ? signals.model_sv_max : 0
+  m_sv_min = m_both_sv ? signals.model_sv_min : 0
+  m_ss_max = m_both_sv ? signals.model_sense_sense_max : 0
 
   [
     1.0,
@@ -585,6 +747,16 @@ def learned_feature_vector(signals)
     sv_max * sv_min / 100.0,
     base * usf / 10.0,
     sv_max * usf / 10.0,
+    m_in ? 1.0 : 0.0,
+    m_both_sv ? 1.0 : 0.0,
+    m_cos.to_f,
+    m_sv_max.to_f,
+    m_sv_min.to_f,
+    m_ss_max.to_f,
+    m_cos * signals.cos_pct / 100.0,
+    m_sv_max * m_sv_min / 100.0,
+    m_cos * base / 100.0,
+    m_sv_max * usf / 10.0,
   ]
 end
 
@@ -640,7 +812,13 @@ def relatedness_classifier
   end
 
   $relatedness_classifier = clf
-  puts "loaded relatedness classifier from #{path} (threshold=#{clf['threshold']})"
+  type = clf["model_type"] || "logreg"
+  extra = if type == "gbt"
+            " trees=#{clf['trees'].size}"
+          else
+            ""
+          end
+  puts "loaded relatedness classifier from #{path} (type=#{type} threshold=#{clf['threshold']}#{extra})"
   $relatedness_classifier
 end
 
@@ -654,22 +832,45 @@ def learned_sigmoid(z)
   end
 end
 
-# Logistic-regression probability for a signal bundle, in 0..1. Returns +nil+ when
-# no classifier is loaded (trainer never ran, or file removed).
+# Walk a flat tree (trainer emits one array of nodes per tree, leaves have "v",
+# internal nodes have "f"/"t"/"l"/"r"). Left branch = <=, right branch = >.
+def learned_tree_predict(nodes, row)
+  idx = 0
+  loop do
+    node = nodes[idx]
+    return node["v"] if node.key?("v")
+    idx = row[node["f"]] <= node["t"] ? node["l"] : node["r"]
+  end
+end
+
+# Classifier probability in 0..1. Returns +nil+ when no classifier is loaded.
+# Dispatches on +model_type+: "logreg" (linear, with standardization) or "gbt"
+# (gradient-boosted tree ensemble over raw features).
 def learned_relatedness_probability(signals)
   clf = relatedness_classifier
   return nil if clf.nil?
 
   feats = learned_feature_vector(signals)
-  means = clf["means"]
-  stds = clf["stds"]
-  weights = clf["weights"]
-  z = 0.0
-  feats.each_with_index do |v, i|
-    x = i.zero? ? v : (v - means[i]) / stds[i]
-    z += weights[i] * x
+  case clf["model_type"] || "logreg"
+  when "logreg"
+    means = clf["means"]
+    stds = clf["stds"]
+    weights = clf["weights"]
+    z = 0.0
+    feats.each_with_index do |v, i|
+      x = i.zero? ? v : (v - means[i]) / stds[i]
+      z += weights[i] * x
+    end
+    learned_sigmoid(z)
+  when "gbt"
+    score = clf["bias"]
+    lr = clf["lr"]
+    clf["trees"].each { |t| score += lr * learned_tree_predict(t, feats) }
+    learned_sigmoid(score)
+  else
+    warn "related: unknown classifier model_type=#{clf['model_type'].inspect}"
+    nil
   end
-  learned_sigmoid(z)
 end
 
 # Classifier probability → 0..100 score, calibrated so that +p == threshold+ maps
