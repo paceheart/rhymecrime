@@ -69,6 +69,24 @@ $USF_MIN_BRIDGE_COS = 8
 # Skip USF graph work when primary score is below this (0 = same as pre-filter behavior).
 $USF_MIN_BASE = 0
 
+# Co-occurrence combiner: additive contribution that fires when several weak signals
+# line up even though no single hard-gated rule is satisfied. This is the main lever
+# the 3-phase design unlocks — gates on individual rules are already tuned, but pairs
+# with (e.g.) below-threshold +base+ *and* two-sided sense-vector agreement *and* a
+# validated USF bridge are clearly related despite no single gate passing. Weights
+# tuned on +spec/related.csv+ via grid search over a broad plateau (see
+# +spec/related_weighted_accuracy.rb+). Contribution is +base * w + sv_min * w +
+# max(0, sv_max - floor) * w + (usf ? w : 0)+, each term capped so one runaway
+# signal can't dominate.
+$COOCCUR_BASE_WEIGHT = 3.0
+$COOCCUR_BASE_CAP = 15
+$COOCCUR_SV_MIN_WEIGHT = 2.0
+$COOCCUR_SV_MIN_CAP = 15
+$COOCCUR_SV_MAX_WEIGHT = 1.5
+$COOCCUR_SV_MAX_FLOOR = 5
+$COOCCUR_SV_MAX_CAP = 20
+$COOCCUR_USF_WEIGHT = 10
+
 # --- ConceptNet edge map ---
 # Keys are "word1|word2" (alphabetically sorted), values are edge weights.
 
@@ -577,6 +595,25 @@ def relatedness_contributions(signals)
      signals.usf_twohop_validated?
     boosted = base + $USF_TWOHOP_BOOST
     contributions << [55, "usf_twohop: base=#{base} + boost=#{$USF_TWOHOP_BOOST} => #{boosted} >= #{$SIMILARITY_THRESHOLD}, validated bridge"]
+  end
+
+  # Co-occurrence: sum weak evidence across features. Each term is capped so one
+  # signal can't carry the rule alone — the point is to catch pairs where several
+  # weak signals reinforce each other. Sense-vector terms require both sides to
+  # have WordNet senses (no asymmetric bypass here — that's what
+  # +sense_vectors_asymmetric+ is for).
+  cooccur = 0.0
+  cooccur += [[base, 0].max, $COOCCUR_BASE_CAP].min * $COOCCUR_BASE_WEIGHT
+  if signals.both_have_sense_vectors?
+    cooccur += [signals.sv_min, $COOCCUR_SV_MIN_CAP].min * $COOCCUR_SV_MIN_WEIGHT
+    cooccur += [[signals.sv_max - $COOCCUR_SV_MAX_FLOOR, 0].max, $COOCCUR_SV_MAX_CAP].min * $COOCCUR_SV_MAX_WEIGHT
+  end
+  cooccur += $COOCCUR_USF_WEIGHT if signals.usf_twohop_validated?
+  if cooccur > 0
+    contributions << [
+      cooccur.round,
+      "cooccurrence: base=#{base} sv=(#{signals.sv_d1},#{signals.sv_d2}) usf=#{signals.usf_twohop_validated?}",
+    ]
   end
 
   contributions
