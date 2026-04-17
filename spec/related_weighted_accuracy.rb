@@ -70,6 +70,12 @@ end
 Dir.chdir(repo) do
   require "csv"
   require "rhymecrime/crime"
+  # +PairSignals+ / +relatedness_score+ / +usf_associations+ live in the
+  # relatedness compute pipeline, which +rhymecrime/crime+ no longer pulls in
+  # at require time. Load it explicitly so the diagnostic path works without
+  # relying on the runtime shim's lazy-load.
+  require "rhymecrime/relatedness/signals"
+  require "rhymecrime/relatedness/score"
   require_relative "inclusive_profiler" if want_profile
 
   path = File.join(repo, "spec", "related.csv")

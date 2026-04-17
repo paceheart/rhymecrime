@@ -16,8 +16,9 @@ module Rhymecrime
     class << self
       extend Forwardable
       def_delegators :instance, :clear_session_cache!, :headword?, :fetch_word, :fetch_rime,
-                     :fetch_related_words, :batch_get_words, :batch_get_rimes,
-                     :find_all_related_precomputed
+                     :fetch_related_words, :fetch_related_tuples,
+                     :batch_get_words, :batch_get_rimes,
+                     :find_all_related_precomputed, :find_all_related_precomputed_with_scores
     end
 
     def clear_session_cache!
@@ -100,32 +101,72 @@ module Rhymecrime
     end
 
     def fetch_related_words(lemma_key)
+      fetch_related_tuples(lemma_key).map(&:first)
+    end
+
+    # Returns parallel [[word, score], ...] tuples for the +related#<lemma>+
+    # row. +score+ is the stored +relatedness_score+ (0..100 integer) from
+    # precompute; defaults to +RELATEDNESS_SCORE_THRESHOLD+ when the row
+    # predates the scores-schema (old precompute upload without a +scores+
+    # attr) so UI sorting / coloring still yields sensible values instead of
+    # painting every related word with a 0 score.
+    def fetch_related_tuples(lemma_key)
       item = get_item("related##{lemma_key}")
       return [] unless item
 
       w = item["words"]
       return [] unless w
 
-      w.is_a?(Array) ? w.map(&:to_s) : JSON.parse(w.to_s)
+      words = w.is_a?(Array) ? w.map(&:to_s) : JSON.parse(w.to_s)
+      return [] if words.empty?
+
+      s = item["scores"]
+      scores = if s.is_a?(Array)
+                 s
+               elsif s.is_a?(String) && !s.empty?
+                 JSON.parse(s)
+               else
+                 []
+               end
+
+      words.each_with_index.map do |word, i|
+        raw = scores[i]
+        score = raw.is_a?(Numeric) ? raw.to_i : Object.const_get(:RELATEDNESS_SCORE_THRESHOLD)
+        [word, score]
+      end
     rescue JSON::ParserError
       []
+    rescue NameError
+      # RELATEDNESS_SCORE_THRESHOLD hasn't been loaded yet (dynamo_store is
+      # being required in isolation). Fall back to a hardcoded 50 — matches
+      # the runtime constant in lib/rhymecrime/related.rb.
+      words.each_with_index.map { |word, _i| [word, 50] }
     end
 
     # +lemma_key+ is +lemma(word)+ for the query headword (see +related.rb+).
     def find_all_related_precomputed(lemma_key, include_rhymeless, common_only)
-      raw = fetch_related_words(lemma_key)
+      find_all_related_precomputed_with_scores(lemma_key, include_rhymeless, common_only).map(&:first)
+    end
+
+    # Companion to +find_all_related_precomputed+ that preserves the stored
+    # +relatedness_score+ alongside each surviving word. UI paths that need to
+    # sort / color / serialize by score read this directly instead of paying
+    # for N separate +similarity+ lookups.
+    def find_all_related_precomputed_with_scores(lemma_key, include_rhymeless, common_only)
+      raw = fetch_related_tuples(lemma_key)
       return [] if raw.empty?
 
-      batch_get_words(raw)
+      words = raw.map(&:first)
+      batch_get_words(words)
       unless include_rhymeless
-        rimes = raw.flat_map do |w|
+        rimes = words.flat_map do |w|
           entry = @word_cache[w]
           entry ? entry[1].map(&:rime) : []
         end.uniq
         batch_get_rimes(rimes)
       end
 
-      raw.select do |w|
+      raw.select do |(w, _score)|
         entry = @word_cache[w]
         next false unless entry
 

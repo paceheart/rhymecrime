@@ -1,0 +1,872 @@
+#!/usr/bin/env ruby
+# coding: utf-8
+#
+# relatedness/signals.rb — offline signal gathering for the relatedness pipeline.
+#
+# Holds every knowledge-base loader and per-pair raw-feature extractor needed to
+# compute +relatedness_score+: Numberbatch vectors, ConceptNet graph, USF
+# free-association norms, MPNet contextualized embeddings, WordNet glosses. This
+# is the *seed-time* side of the codebase: loaded by +bin/precompute-relatedness+,
+# +bin/train-relatedness-classifier+, related specs, and the local-dev escape
+# hatch in +lib/rhymecrime/related.rb+ when no precomputed data is available.
+#
+# Not required at Lambda runtime. Every offline tunable, data loader, and the
+# +PairSignals+ class live here so the runtime graph can stay free of the
+# hundreds of MB of data files these modules pull in.
+#
+# Callers are expected to have already loaded +rhymecrime/frontend+ (or
+# +rhymecrime/crime+) so helpers like +lemma+, +stop_word?+, +frequency+,
+# +rare?+, +word_dict_includes_headword?+, and +part_of_speech_tags+ are
+# available.
+#
+
+require "json"
+require "msgpack"
+require "rwordnet"
+require "set"
+require_relative "../pace_utils"
+require_relative "../dict/utils_rhyme"
+
+WordNet::DB.path = File.join(REPO_ROOT, "corpora", "wordnet", "3.1") unless defined?(WordNet::DB) && WordNet::DB.path
+
+CONCEPTNET_EDGES_PATH = generated_dict_path(CONCEPTNET_EDGES_FILENAME) unless defined?(CONCEPTNET_EDGES_PATH)
+NUMBERBATCH_VEC_PATH = generated_dict_path(NUMBERBATCH_VECTORS_FILENAME) unless defined?(NUMBERBATCH_VEC_PATH)
+USF_ASSOCIATIONS_PATH = generated_dict_path(USF_ASSOCIATIONS_FILENAME) unless defined?(USF_ASSOCIATIONS_PATH)
+
+# --- Tunable parameters (optimized via anneal.rb / parameter sweeps) ---
+
+$SIMILARITY_THRESHOLD = 10
+$CONCEPTNET_EDGE_BONUS = 7
+$SENSE_VECTOR_THRESHOLD = 10
+$SENSE_VECTOR_MIN_FLOOR = 5
+$SENSE_VECTOR_MORPHY_FLOOR = 13
+$SENSE_VECTOR_MIN_BASE = 6
+$SENSE_VECTOR_MAX_SENSES = 4
+# Asymmetric sense-vector bypass: when one direction is very strong (e.g. one word's
+# WordNet definitions clearly describe the other) the reverse direction is often
+# diluted by polysemy. Accept as related when +sv_max >= ASYMMETRIC_MAX+ and
+# +sv_min >= ASYMMETRIC_MIN+, as long as the regular +SENSE_VECTOR_MIN_BASE+ gate
+# is satisfied. The non-zero +ASYMMETRIC_MIN+ keeps pure noise out.
+$SENSE_VECTOR_ASYMMETRIC_MAX = 18
+$SENSE_VECTOR_ASYMMETRIC_MIN = 1
+$USF_TWOHOP_BOOST = 10
+$USF_MIN_BRIDGE_COS = 8
+# Skip USF graph work when primary score is below this (0 = same as pre-filter behavior).
+$USF_MIN_BASE = 0
+
+# Co-occurrence combiner: additive contribution that fires when several weak signals
+# line up even though no single hard-gated rule is satisfied. This is the main lever
+# the 3-phase design unlocks — gates on individual rules are already tuned, but pairs
+# with (e.g.) below-threshold +base+ *and* two-sided sense-vector agreement *and* a
+# validated USF bridge are clearly related despite no single gate passing. Weights
+# tuned on +spec/related.csv+ via grid search over a broad plateau (see
+# +spec/related_weighted_accuracy.rb+). Contribution is +base * w + sv_min * w +
+# max(0, sv_max - floor) * w + (usf ? w : 0)+, each term capped so one runaway
+# signal can't dominate.
+$COOCCUR_BASE_WEIGHT = 3.0
+$COOCCUR_BASE_CAP = 15
+$COOCCUR_SV_MIN_WEIGHT = 2.0
+$COOCCUR_SV_MIN_CAP = 15
+$COOCCUR_SV_MAX_WEIGHT = 1.5
+$COOCCUR_SV_MAX_FLOOR = 5
+$COOCCUR_SV_MAX_CAP = 20
+$COOCCUR_USF_WEIGHT = 10
+
+def similarity_threshold
+  $SIMILARITY_THRESHOLD
+end
+
+# --- ConceptNet edge map ---
+# Keys are "word1|word2" (alphabetically sorted), values are edge weights.
+
+$conceptnet_edges = nil
+def conceptnet_edges
+  return $conceptnet_edges unless $conceptnet_edges.nil?
+  path = CONCEPTNET_EDGES_PATH
+  if File.exist?(path)
+    $conceptnet_edges = JSON.parse(File.read(path, encoding: "UTF-8"))
+    puts "loaded #{$conceptnet_edges.size} ConceptNet edges from #{path}"
+  else
+    $conceptnet_edges = {}
+  end
+  $conceptnet_edges
+end
+
+# Expects dictionary-lemma spellings (see +similarity+). Keys match +save_conceptnet_edge_map!+ export.
+def conceptnet_edge_weight(word1, word2)
+  key = [hyphens_to_underscores(word1), hyphens_to_underscores(word2)].sort.join("|")
+  conceptnet_edges[key] || 0.0
+end
+
+# Adjacency index over +conceptnet_edges+: +{node => Set[neighbor, ...]}+. Built once
+# the first time it's needed (~1s for ~300k edges). Underscore-keyed (matches the
+# edge-map keys directly).
+$conceptnet_adjacency = nil
+def conceptnet_adjacency
+  return $conceptnet_adjacency unless $conceptnet_adjacency.nil?
+  adj = {}
+  conceptnet_edges.each_key do |key|
+    a, b = key.split("|", 2)
+    (adj[a] ||= Set.new) << b
+    (adj[b] ||= Set.new) << a
+  end
+  $conceptnet_adjacency = adj
+  puts "built ConceptNet adjacency index: #{adj.size} nodes"
+  adj
+end
+
+def conceptnet_neighbors(word)
+  conceptnet_adjacency[hyphens_to_underscores(word)] || Set.new
+end
+
+# Shortest path length in the undirected ConceptNet graph between two words, clipped
+# at +max_hops+. 1 = direct edge, 2 = one bridge, etc. +max_hops + 1+ means "not
+# reachable within +max_hops+". +max_hops + 2+ means at least one endpoint has no
+# node in the graph at all — distinct from "reachable but far" so the classifier can
+# condition on data availability the way it does with +model_both_in_vocab?+.
+# Bidirectional BFS: alternately expands the smaller frontier, so worst-case work
+# scales like +degree**(max_hops/2)+ instead of +degree**max_hops+.
+def conceptnet_shortest_hops(word1, word2, max_hops = 4)
+  adj = conceptnet_adjacency
+  a = hyphens_to_underscores(word1)
+  b = hyphens_to_underscores(word2)
+  return max_hops + 2 if adj[a].nil? || adj[b].nil?
+  return 0 if a == b
+  return 1 if adj[a].include?(b)
+
+  seen_a = { a => 0 }
+  seen_b = { b => 0 }
+  front_a = [a]
+  front_b = [b]
+  depth_a = 0
+  depth_b = 0
+
+  while depth_a + depth_b < max_hops
+    if front_a.size <= front_b.size
+      new_depth = depth_a + 1
+      next_front = []
+      front_a.each do |node|
+        adj[node]&.each do |neigh|
+          next if seen_a.key?(neigh)
+          if seen_b.key?(neigh)
+            total = new_depth + seen_b[neigh]
+            return total if total <= max_hops
+          end
+          seen_a[neigh] = new_depth
+          next_front << neigh
+        end
+      end
+      return max_hops + 1 if next_front.empty?
+      front_a = next_front
+      depth_a = new_depth
+    else
+      new_depth = depth_b + 1
+      next_front = []
+      front_b.each do |node|
+        adj[node]&.each do |neigh|
+          next if seen_b.key?(neigh)
+          if seen_a.key?(neigh)
+            total = new_depth + seen_a[neigh]
+            return total if total <= max_hops
+          end
+          seen_b[neigh] = new_depth
+          next_front << neigh
+        end
+      end
+      return max_hops + 1 if next_front.empty?
+      front_b = next_front
+      depth_b = new_depth
+    end
+  end
+  max_hops + 1
+end
+
+# Number of nodes with edges to *both* words. Cheap and orthogonal to both edge_weight
+# (0/1 direct-edge signal) and cn_hops (integer graph-distance signal).
+def conceptnet_shared_neighbor_count(word1, word2)
+  adj = conceptnet_adjacency
+  na = adj[hyphens_to_underscores(word1)]
+  nb = adj[hyphens_to_underscores(word2)]
+  return 0 if na.nil? || nb.nil?
+  (na & nb).size
+end
+
+# --- USF Free Association Norms (Nelson, McEvoy & Schreiber 1998) ---
+# 5,019 cue words with ~72K forward association pairs from human participants.
+# Used for 2-hop inference: word1 → bridge → word2, validated by requiring
+# the bridge word to have positive Numberbatch cosine with both endpoints.
+
+$usf_associations = nil
+def usf_associations
+  return $usf_associations unless $usf_associations.nil?
+  path = USF_ASSOCIATIONS_PATH
+  if File.exist?(path)
+    $usf_associations = JSON.parse(File.read(path, encoding: "UTF-8"))
+    puts "loaded #{$usf_associations.size} USF cues from #{path}"
+  else
+    $usf_associations = {}
+  end
+  $usf_associations
+end
+
+# Direct (1-hop) USF forward-association strengths between a lemma pair. Returns
+# +[forward, reverse]+: +forward+ is the strength when +word1+ was the cue and
+# +word2+ appeared as a target, +reverse+ is the symmetric case. Zero in each
+# direction when no direct link exists. Complements +usf_twohop_bridge_validated?+:
+# 2-hop needs validation because intermediate bridges can be spurious, but a direct
+# link from human free-association participants is unambiguous evidence of mental
+# association and typically a much stronger relatedness signal.
+def usf_direct_association_strengths(word1, word2)
+  ua = usf_associations
+  return [0.0, 0.0] if ua.empty?
+  fwd = (ua[word1] && ua[word1][word2]) || 0.0
+  rev = (ua[word2] && ua[word2][word1]) || 0.0
+  [fwd.to_f, rev.to_f]
+end
+
+def usf_twohop_bridge_validated?(word1, word2)
+  ua = usf_associations
+  # Neither endpoint is a USF cue → no word→bridge forward star to search.
+  return false if ua.empty? || (!ua[word1] && !ua[word2])
+
+  [[word1, word2], [word2, word1]].each do |a, b|
+    targets_a = ua[a]
+    next unless targets_a
+    targets_a.each do |bridge, fsg1|
+      next if fsg1 < 0.01
+      targets_b = ua[bridge]
+      next unless targets_b
+      fsg2 = targets_b[b]
+      next unless fsg2 && fsg2 >= 0.01
+      br = lemma(bridge)
+      cos_ab = numberbatch_cosine(a, br)
+      cos_bb = numberbatch_cosine(br, b)
+      min_cos = [cos_ab, cos_bb].min
+      return true if (min_cos * 100).round >= $USF_MIN_BRIDGE_COS
+    end
+  end
+  false
+end
+
+# --- Numberbatch vectors (pre-normalized) ---
+
+$numberbatch = nil
+def numberbatch
+  return $numberbatch unless $numberbatch.nil?
+  path = NUMBERBATCH_VEC_PATH
+  if File.exist?(path)
+    $numberbatch = MessagePack.unpack(File.binread(path))
+    puts "loaded #{$numberbatch.size} Numberbatch vectors from #{path}"
+  else
+    $numberbatch = {}
+  end
+  $numberbatch
+end
+
+# Cached table handle — avoids calling #numberbatch on every vector lookup (hot path).
+def numberbatch_table
+  nb = $numberbatch
+  nb.nil? ? numberbatch : nb
+end
+
+# Expects dictionary-lemma spellings (see +similarity+). Rows match +save_numberbatch_vectors!+ export.
+def numberbatch_cosine(word1, word2)
+  nb = numberbatch_table
+  v1 = nb[hyphens_to_underscores(word1)]
+  v2 = nb[hyphens_to_underscores(word2)]
+  return 0.0 if v1.nil? || v2.nil?
+  dot = 0.0
+  v1.size.times { |i| dot += v1[i] * v2[i] }
+  dot
+end
+
+# True if +lemma(word)+ has a row in the Numberbatch export (+save_numberbatch_vectors!+ keys, underscore-normalized).
+# Used to skip the O(n) relatedness scan when the cue cannot contribute a primary vector score.
+def dictionary_lemma_has_numberbatch_vector?(word)
+  l = lemma(word)
+  !numberbatch_table[hyphens_to_underscores(l)].nil?
+end
+
+# --- Modern sentence-transformer embeddings ---
+# Built offline by +bin/dump-sense-glosses+ -> +bin/build-sense-vectors.py+, saved as
+# +generated/model_sense_vectors.msgpack+. Supplements (does not replace) Numberbatch:
+# Numberbatch is tiny and fast for the O(n) scan, while these contextualized vectors
+# carry richer sense distinctions for the per-pair yes/no decision. Shape:
+#   { "model" => String, "dim" => Integer,
+#     "headword" => {lemma => [Float * dim]},
+#     "senses"   => {lemma => [[Float * dim], ...]} }
+# Vectors are pre-L2-normalized so cosine similarity is a plain dot product. Keys use
+# hyphen-form lemmas (matching +lemma()+ output), not the underscore form Numberbatch
+# keys use. Returns +nil+ if the file is absent — callers degrade gracefully (all
+# model-* signals become 0 and +model_both_in_vocab?+ is false, which the learned
+# combiner can condition on).
+$model_sense_vectors = nil
+$model_sense_vectors_loaded = false
+def model_sense_vectors_table
+  return $model_sense_vectors if $model_sense_vectors_loaded
+  $model_sense_vectors_loaded = true
+  path = generated_dict_path(MODEL_SENSE_VECTORS_FILENAME)
+  return nil unless File.exist?(path)
+  $model_sense_vectors = MessagePack.unpack(File.binread(path))
+  hw = $model_sense_vectors["headword"] || {}
+  sv = $model_sense_vectors["senses"] || {}
+  puts "loaded model sense vectors from #{path} " \
+       "(model=#{$model_sense_vectors['model']} dim=#{$model_sense_vectors['dim']} " \
+       "headwords=#{hw.size} senses=#{sv.values.sum(&:size)})"
+  $model_sense_vectors
+end
+
+def model_headword_vector(word)
+  t = model_sense_vectors_table
+  return nil if t.nil?
+  h = t["headword"]
+  h.nil? ? nil : h[word]
+end
+
+def model_sense_vectors_of(word)
+  t = model_sense_vectors_table
+  return [] if t.nil?
+  s = t["senses"]
+  return [] if s.nil?
+  s[word] || []
+end
+
+# Headword-headword cosine under the contextualized model (0..1). Returns 0.0 when
+# either side is out-of-vocab — pair with +model_both_in_vocab?+ so the classifier
+# can distinguish "low similarity" from "no data".
+def model_headword_cosine(word1, word2)
+  v1 = model_headword_vector(word1)
+  v2 = model_headword_vector(word2)
+  return 0.0 if v1.nil? || v2.nil?
+  dot = 0.0
+  v1.size.times { |i| dot += v1[i] * v2[i] }
+  dot
+end
+
+# Directional sense-vs-headword cosines under the contextualized model (each 0..100
+# centile). Analogous to +directional_sense_cosines+ but end-to-end in the model's
+# embedding space: for each sense vector of word1, the cosine against word2's headword
+# vector (and symmetrically). Lets a specific sense of a polysemous word rescue the
+# pair even when the averaged headword embedding doesn't match.
+def model_directional_sense_cosines(word1, word2)
+  best_1to2 = 0
+  best_2to1 = 0
+
+  v2_head = model_headword_vector(word2)
+  if v2_head
+    model_sense_vectors_of(word1).each do |sv|
+      dot = 0.0
+      sv.size.times { |i| dot += sv[i] * v2_head[i] }
+      score = (dot * 100).round
+      best_1to2 = score if score > best_1to2
+    end
+  end
+
+  v1_head = model_headword_vector(word1)
+  if v1_head
+    model_sense_vectors_of(word2).each do |sv|
+      dot = 0.0
+      sv.size.times { |i| dot += sv[i] * v1_head[i] }
+      score = (dot * 100).round
+      best_2to1 = score if score > best_2to1
+    end
+  end
+
+  [best_1to2, best_2to1]
+end
+
+# Max cosine over all (sense_of_a, sense_of_b) pairs (0..100 centile). Captures pairs
+# where a specific sense of A matches a specific sense of B more tightly than either
+# matches the other's headword — i.e. polysemy on *both* sides. Small O(senses_a *
+# senses_b); capped at SENSE_VECTOR_MAX_SENSES^2 = 16 comparisons in practice.
+def model_sense_sense_max_cosine(word1, word2)
+  sa = model_sense_vectors_of(word1)
+  sb = model_sense_vectors_of(word2)
+  return 0 if sa.empty? || sb.empty?
+  best = -1.0
+  sa.each do |va|
+    sb.each do |vb|
+      dot = 0.0
+      va.size.times { |i| dot += va[i] * vb[i] }
+      best = dot if dot > best
+    end
+  end
+  (best * 100).round
+end
+
+# --- WordNet gloss containment (high-precision polysemy rescue) ---
+# Checks if word1 (or a validated derivational form) literally appears as a word
+# in any WordNet definition of word2, or vice versa.
+
+$gloss_derivation_cache = {}
+# All lowercase gloss tokens for a headword (union of every synset gloss); built once per word.
+$gloss_token_set_cache = {}
+# Pairs (sorted key) known not to match gloss containment either direction.
+$gloss_negative_pair_cache = Set.new
+
+def gloss_word_token_set(lemma_word)
+  $gloss_token_set_cache[lemma_word] ||= begin
+    tokens = Set.new
+    WordNet::Lemma.find_all(lemma_word).each do |lemma|
+      lemma.synsets.each do |synset|
+        synset.gloss.downcase.scan(/[a-z]+/).each { |tok| tokens << tok }
+      end
+    end
+    tokens
+  end
+end
+
+def validated_derivations(word)
+  nb = numberbatch_table
+  candidates = [word]
+  %w[al ian ical ous ic ly ing ed er tion ment s].each { |s| candidates << word + s }
+  candidates << word[0..-2] + "ical" if word.end_with?("y")
+  candidates << word[0..-2] + "ies" if word.end_with?("y")
+
+  candidates.select do |d|
+    next true if d == word
+    w_key = hyphens_to_underscores(word)
+    d_key = word_dict_includes_headword?(d) ? hyphens_to_underscores(lemma(d)) : hyphens_to_underscores(d)
+    v1 = nb[w_key]
+    v2 = nb[d_key]
+    next false unless v1 && v2
+    dot = 0.0
+    v1.size.times { |i| dot += v1[i] * v2[i] }
+    dot >= 0.40
+  end
+end
+
+def gloss_contains?(topic_word, other_word)
+  derivations = $gloss_derivation_cache[topic_word] ||= validated_derivations(topic_word)
+  gloss_tokens = gloss_word_token_set(other_word)
+  derivations.each { |d| return true if gloss_tokens.include?(d) }
+  false
+end
+
+def bidirectional_gloss_contains?(word1, word2)
+  pair_key = word1 < word2 ? "#{word1}\t#{word2}" : "#{word2}\t#{word1}"
+  return false if $gloss_negative_pair_cache.include?(pair_key)
+
+  hit = gloss_contains?(word1, word2) || gloss_contains?(word2, word1)
+  $gloss_negative_pair_cache.add(pair_key) unless hit
+  hit
+end
+
+# --- WordNet gloss-vector sense embeddings ---
+# For each WordNet sense, averages Numberbatch vectors of content words in
+# the definition to create a sense-specific embedding. Handles polysemy by
+# finding the best-matching sense pair.
+
+GLOSS_STOP_WORDS = Set.new(%w[
+  a an the is are was were be been being of in on at by to for or and not nor
+  with that this these those it its he she they them his her their do does did
+  has have had but if so as from than more most which who whom what when where
+  how no some any all each every can could may might will would shall should
+  very much also just only even still about into over after before between
+  through during up down out off away back make made used one
+]).freeze
+
+$sense_vectors_cache = {}
+def sense_vectors(word, max_senses = $SENSE_VECTOR_MAX_SENSES)
+  key = [word, max_senses]
+  return $sense_vectors_cache[key] if $sense_vectors_cache.key?(key)
+
+  nb = numberbatch_table
+  vecs = []
+  count = 0
+  WordNet::Lemma.find_all(word).each do |lemma|
+    lemma.synsets.each do |synset|
+      break if count >= max_senses
+      content_words = synset.gloss.downcase.scan(/[a-z]+/) - GLOSS_STOP_WORDS.to_a
+      embeds = content_words.filter_map do |gw|
+        gk = word_dict_includes_headword?(gw) ? hyphens_to_underscores(lemma(gw)) : hyphens_to_underscores(gw)
+        nb[gk]
+      end
+      next if embeds.size < 2
+      dim = embeds.first.size
+      avg = Array.new(dim, 0.0)
+      embeds.each { |v| dim.times { |i| avg[i] += v[i] } }
+      mag = Math.sqrt(avg.sum { |x| x * x })
+      next if mag < 1e-9
+      vecs << avg.map! { |x| x / mag }
+      count += 1
+    end
+  end
+  $sense_vectors_cache[key] = vecs
+  vecs
+end
+
+def directional_sense_cosines(word1, word2)
+  best_1to2 = 0
+  best_2to1 = 0
+  nb = numberbatch_table
+
+  v2_raw = nb[hyphens_to_underscores(word2)]
+  if v2_raw
+    sense_vectors(word1).each do |sv|
+      dot = 0.0
+      sv.size.times { |i| dot += sv[i] * v2_raw[i] }
+      score = (dot * 100).round
+      best_1to2 = score if score > best_1to2
+    end
+  end
+
+  v1_raw = nb[hyphens_to_underscores(word1)]
+  if v1_raw
+    sense_vectors(word2).each do |sv|
+      dot = 0.0
+      sv.size.times { |i| dot += sv[i] * v1_raw[i] }
+      score = (dot * 100).round
+      best_2to1 = score if score > best_2to1
+    end
+  end
+
+  [best_1to2, best_2to1]
+end
+
+def max_sense_cosine(word1, word2)
+  directional_sense_cosines(word1, word2).max
+end
+
+# Morphy-resolved sense vectors for inflected forms (plurals, verb conjugations)
+# that lack direct WordNet lemma entries. Only used as a fallback when
+# sense_vectors returns empty.
+$morphy_sv_cache = {}
+def sense_vectors_morphy(word, max_senses = $SENSE_VECTOR_MAX_SENSES)
+  return $morphy_sv_cache[word] if $morphy_sv_cache.key?(word)
+  nb = numberbatch_table
+  morphs = (WordNet::Synset.morphy_all(word) rescue []).uniq - [word]
+  vecs = []
+  count = 0
+  morphs.each do |form|
+    break if count >= max_senses
+    WordNet::Lemma.find_all(form).each do |lemma|
+      break if count >= max_senses
+      lemma.synsets.each do |synset|
+        break if count >= max_senses
+        content_words = synset.gloss.downcase.scan(/[a-z]+/) - GLOSS_STOP_WORDS.to_a
+        embeds = content_words.filter_map do |gw|
+          gk = word_dict_includes_headword?(gw) ? hyphens_to_underscores(lemma(gw)) : hyphens_to_underscores(gw)
+          nb[gk]
+        end
+        next if embeds.size < 2
+        dim = embeds.first.size
+        avg = Array.new(dim, 0.0)
+        embeds.each { |v| dim.times { |i| avg[i] += v[i] } }
+        mag = Math.sqrt(avg.sum { |x| x * x })
+        next if mag < 1e-9
+        vecs << avg.map! { |x| x / mag }
+        count += 1
+      end
+    end
+  end
+  $morphy_sv_cache[word] = vecs
+  vecs
+end
+
+def morphy_directional_sense_cosines(word1, word2)
+  sv1_orig = sense_vectors(word1)
+  sv2_orig = sense_vectors(word2)
+  sv1_morphy = sv1_orig.empty? ? sense_vectors_morphy(word1) : []
+  sv2_morphy = sv2_orig.empty? ? sense_vectors_morphy(word2) : []
+  return nil if sv1_morphy.empty? && sv2_morphy.empty?
+
+  d1, d2 = directional_sense_cosines(word1, word2)
+  nb = numberbatch_table
+
+  if sv1_morphy.any?
+    v2_raw = nb[hyphens_to_underscores(word2)]
+    if v2_raw
+      sv1_morphy.each do |sv|
+        dot = 0.0
+        sv.size.times { |i| dot += sv[i] * v2_raw[i] }
+        score = (dot * 100).round
+        d1 = score if score > d1
+      end
+    end
+  end
+
+  if sv2_morphy.any?
+    v1_raw = nb[hyphens_to_underscores(word1)]
+    if v1_raw
+      sv2_morphy.each do |sv|
+        dot = 0.0
+        sv.size.times { |i| dot += sv[i] * v1_raw[i] }
+        score = (dot * 100).round
+        d2 = score if score > d2
+      end
+    end
+  end
+
+  [d1, d2]
+end
+
+# Numberbatch + ConceptNet centile score for two dictionary lemmas. Precompute-time
+# input to +PairSignals#base_similarity+. Not used at Lambda runtime (the runtime
+# +similarity+ reads the stored +relatedness_score+ directly from DynamoDB).
+def lemmilarity(l1, l2)
+  return 0 if stop_word?(l1) || stop_word?(l2)
+
+  cos = numberbatch_cosine(l1, l2)
+  edge_w = conceptnet_edge_weight(l1, l2)
+  edge_bonus = edge_w > 0 ? $CONCEPTNET_EDGE_BONUS : 0
+
+  (cos * 100).round + edge_bonus
+end
+
+# --- Phase 1: Signal gathering ---
+#
+# +PairSignals+ bundles every relatedness signal for a given dictionary-lemma pair
+# +(a, b)+. Each feature is returned in its natural type/range (booleans for yes/no
+# rescues, 0..100 integers for cosine-derived scores, raw weights for ConceptNet edges,
+# counts for sense-vector availability) — no scaling to the composite 0..100 scale
+# happens here. Accessors memoize on the instance so diagnostics, scoring, and any
+# future callers can read the same signal multiple times without recomputation.
+#
+# Phase 2 (+relatedness_score+) is the only place feature weights / scaling live.
+# --- Unigram feature registry ---
+# Each entry here yields three columns in the final feature vector, one per pair
+# reduction in +PAIR_REDUCTIONS+ (+min+ / +max+ / +diff+, which behave as AND / OR /
+# XOR for 0/1-valued booleans and as the obvious aggregates for numerics). Add a
+# new signal by extending +word_unigram_features+ and +UNIGRAM_FEATURE_NAMES+; the
+# classifier will pick it up on the next retrain and prune it implicitly if it
+# can't split on it usefully.
+
+UNIGRAM_FEATURE_NAMES = %w[
+  length
+  log_freq
+  is_rare
+  sense_count
+  model_sense_count
+  wordnet_lemma_count
+  cn_degree
+  usf_out_degree
+  in_numberbatch
+  in_model_vocab
+  pos_count
+].freeze
+
+PAIR_REDUCTIONS = %i[min max diff].freeze
+
+def unigram_pair_feature_names
+  UNIGRAM_FEATURE_NAMES.flat_map { |n| PAIR_REDUCTIONS.map { |r| "#{n}_#{r}" } }
+end
+
+# Memoized per-word: the same word usually appears in many pairs (O(n) scans, cue
+# broadcasts, etc.) so we compute the unigram bundle once per word.
+$word_unigram_features_cache = {}
+def word_unigram_features(word)
+  $word_unigram_features_cache[word] ||= begin
+    freq = frequency(word)
+    nb_hit = dictionary_lemma_has_numberbatch_vector?(word)
+    {
+      "length" => word.length,
+      "log_freq" => Math.log10(freq + 1).round(4),
+      "is_rare" => rare?(word) ? 1 : 0,
+      "sense_count" => sense_vectors(word).size,
+      "model_sense_count" => model_sense_vectors_of(word).size,
+      "wordnet_lemma_count" => (WordNet::Lemma.find_all(word).size rescue 0),
+      "cn_degree" => (conceptnet_adjacency[hyphens_to_underscores(word)]&.size || 0),
+      "usf_out_degree" => (usf_associations[word]&.size || 0),
+      "in_numberbatch" => nb_hit ? 1 : 0,
+      "in_model_vocab" => model_headword_vector(word).nil? ? 0 : 1,
+      "pos_count" => (defined?(part_of_speech_tags) ? part_of_speech_tags(word).size : 0),
+    }
+  end
+end
+
+# Mechanical (min, max, diff) expansion of every unigram for a pair; appended to
+# the learned feature vector in the same order as +unigram_pair_feature_names+.
+def unigram_pair_feature_values(word_a, word_b)
+  fa = word_unigram_features(word_a)
+  fb = word_unigram_features(word_b)
+  UNIGRAM_FEATURE_NAMES.flat_map do |name|
+    va = fa[name].to_f
+    vb = fb[name].to_f
+    [va < vb ? va : vb, va > vb ? va : vb, (va - vb).abs]
+  end
+end
+
+class PairSignals
+  attr_reader :a, :b
+
+  def initialize(a, b)
+    @a = a
+    @b = b
+  end
+
+  # --- boolean features ---
+
+  def stop_word_a?
+    return @stop_word_a if defined?(@stop_word_a)
+    @stop_word_a = stop_word?(@a)
+  end
+
+  def stop_word_b?
+    return @stop_word_b if defined?(@stop_word_b)
+    @stop_word_b = stop_word?(@b)
+  end
+
+  def involves_stop_word?
+    stop_word_a? || stop_word_b?
+  end
+
+  def gloss_match?
+    return @gloss_match if defined?(@gloss_match)
+    @gloss_match = bidirectional_gloss_contains?(@a, @b)
+  end
+
+  def usf_twohop_validated?
+    return @usf_twohop if defined?(@usf_twohop)
+    @usf_twohop = usf_twohop_bridge_validated?(@a, @b)
+  end
+
+  # Direct (1-hop) USF forward-association strengths, asymmetric.
+  # +usf_direct_max+ catches "at least one direction has a human-reported link"
+  # (the usual "are these associated?" question). +usf_direct_min+ is non-zero only
+  # when *both* directions fired, i.e. mutual association — a stronger signal.
+  def usf_direct_strengths
+    @usf_direct_strengths ||= usf_direct_association_strengths(@a, @b)
+  end
+
+  def usf_direct_max
+    usf_direct_strengths.max
+  end
+
+  def usf_direct_min
+    usf_direct_strengths.min
+  end
+
+  def both_have_sense_vectors?
+    sv_a_count > 0 && sv_b_count > 0
+  end
+
+  def morphy_available?
+    !morphy_sv_directional.nil?
+  end
+
+  # --- numeric features (natural scale) ---
+
+  # Numberbatch cosine as a 0..100 centile (may be negative when vectors disagree).
+  def cos_pct
+    @cos_pct ||= (numberbatch_cosine(@a, @b) * 100).round
+  end
+
+  # Raw ConceptNet edge weight (0.0 if no edge recorded).
+  def edge_weight
+    return @edge_weight if defined?(@edge_weight)
+    @edge_weight = conceptnet_edge_weight(@a, @b)
+  end
+
+  def edge_present?
+    edge_weight > 0
+  end
+
+  # Base similarity score: Numberbatch centile + fixed ConceptNet edge bonus when an
+  # edge exists. Same formula as +lemmilarity+; kept here for independent memoization.
+  def base_similarity
+    @base_similarity ||= cos_pct + (edge_present? ? $CONCEPTNET_EDGE_BONUS : 0)
+  end
+
+  # Directional sense-vector cosines (0..100 centiles): +sv_directional.first+ is
+  # word1's sense embeddings vs. word2's Numberbatch vector; second is the reverse.
+  def sv_directional
+    @sv_directional ||= directional_sense_cosines(@a, @b)
+  end
+
+  def sv_d1
+    sv_directional[0]
+  end
+
+  def sv_d2
+    sv_directional[1]
+  end
+
+  def sv_max
+    sv_directional.max
+  end
+
+  def sv_min
+    sv_directional.min
+  end
+
+  # Count of WordNet senses that produced a usable gloss-average embedding.
+  def sv_a_count
+    return @sv_a_count if defined?(@sv_a_count)
+    @sv_a_count = sense_vectors(@a).size
+  end
+
+  def sv_b_count
+    return @sv_b_count if defined?(@sv_b_count)
+    @sv_b_count = sense_vectors(@b).size
+  end
+
+  # Morphy-resolved directional cosines (0..100), or +nil+ when neither side needed
+  # morphy (both had direct WordNet lemma entries) or no morphy form produced a
+  # usable sense vector.
+  def morphy_sv_directional
+    return @morphy_sv_directional if defined?(@morphy_sv_directional)
+    @morphy_sv_directional = morphy_directional_sense_cosines(@a, @b)
+  end
+
+  def morphy_sv_max
+    m = morphy_sv_directional
+    m ? m.max : 0
+  end
+
+  def morphy_sv_min
+    m = morphy_sv_directional
+    m ? m.min : 0
+  end
+
+  # --- Modern sentence-transformer signals ---
+  # Mirror the Numberbatch-based signals above but use contextualized MPNet embeddings
+  # (see +model_sense_vectors_table+). +model_both_in_vocab?+ lets the combiner treat
+  # "0 because out-of-vocab" differently from "0 because actually unrelated".
+
+  def model_both_in_vocab?
+    return @model_both_in_vocab if defined?(@model_both_in_vocab)
+    @model_both_in_vocab = !model_headword_vector(@a).nil? && !model_headword_vector(@b).nil?
+  end
+
+  def model_cos_pct
+    @model_cos_pct ||= (model_headword_cosine(@a, @b) * 100).round
+  end
+
+  def model_sv_directional
+    @model_sv_directional ||= model_directional_sense_cosines(@a, @b)
+  end
+
+  def model_sv_max
+    model_sv_directional.max
+  end
+
+  def model_sv_min
+    model_sv_directional.min
+  end
+
+  def model_both_have_sense_vectors?
+    return @model_both_have_sv if defined?(@model_both_have_sv)
+    @model_both_have_sv = !model_sense_vectors_of(@a).empty? && !model_sense_vectors_of(@b).empty?
+  end
+
+  def model_sense_sense_max
+    @model_sense_sense_max ||= model_sense_sense_max_cosine(@a, @b)
+  end
+
+  # --- ConceptNet graph-structure signals ---
+  # +edge_weight+/+edge_present?+ already capture 1-hop presence. These add:
+  # (a) the shortest path length (capped and distinct "unreachable" / "no-node"
+  # codings so GBT can split on each independently), and (b) the count of nodes
+  # adjacent to *both* sides (a Jaccard-style corroboration signal).
+
+  CN_MAX_HOPS = 4
+
+  def cn_hops
+    @cn_hops ||= conceptnet_shortest_hops(@a, @b, CN_MAX_HOPS)
+  end
+
+  def cn_shared_neighbors
+    @cn_shared_neighbors ||= conceptnet_shared_neighbor_count(@a, @b)
+  end
+end

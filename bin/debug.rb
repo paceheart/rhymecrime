@@ -2,6 +2,12 @@
 
 $LOAD_PATH.unshift File.expand_path("../lib", __dir__)
 require "rhymecrime/crime"
+# Eager-load the compute pipeline so the debug run falls through to the rule
+# bundle + learned classifier when the precompute JSONL has no row for the
+# query pair. The runtime shim in +lib/rhymecrime/related.rb+ also lazy-loads
+# these at first use.
+require "rhymecrime/relatedness/signals"
+require "rhymecrime/relatedness/score"
 
 word1 = ARGV[0]
 word2 = ARGV[1]

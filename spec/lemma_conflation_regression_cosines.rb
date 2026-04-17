@@ -53,6 +53,11 @@ end
 Dir.chdir(repo) do
   require "csv"
   require "rhymecrime/crime"
+  # +thematically_related_pair_uncached?+ + +numberbatch_cosine+ /
+  # +numberbatch_table+ live in the relatedness compute pipeline — not loaded
+  # by +rhymecrime/crime+ at Lambda runtime. Pull them in explicitly.
+  require "rhymecrime/relatedness/signals"
+  require "rhymecrime/relatedness/score"
 
   path = File.join(repo, "spec", "related.csv")
   rows = CSV.parse(File.read(path, encoding: "UTF-8"), headers: true)

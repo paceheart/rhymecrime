@@ -85,6 +85,11 @@ repo = File.expand_path("..", __dir__)
 Dir.chdir(repo)
 
 require "rhymecrime/crime"
+# Full-compute pipeline (Numberbatch, ConceptNet, WordNet, USF, MPNet) — not
+# loaded at Lambda runtime by +rhymecrime/crime+, explicitly pulled in here
+# because the trainer's whole job is to consume these signals.
+require "rhymecrime/relatedness/signals"
+require "rhymecrime/relatedness/score"
 
 # --- Common helpers ---------------------------------------------------------
 

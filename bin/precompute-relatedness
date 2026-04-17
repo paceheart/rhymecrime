@@ -29,6 +29,12 @@ require "optparse"
 require_relative "../lib/rhymecrime/dict/utils_rhyme"
 require_relative "../lib/rhymecrime/frontend"
 require_relative "../lib/rhymecrime/dict/rime"
+# Full-compute pipeline (Numberbatch, ConceptNet, WordNet, USF, MPNet,
+# classifier): not required at Lambda runtime, explicitly pulled in here
+# because this script's whole job is to produce the cache the runtime reads.
+require_relative "../lib/rhymecrime/relatedness/signals"
+require_relative "../lib/rhymecrime/relatedness/score"
+require_relative "../lib/rhymecrime/relatedness/scan"
 
 output_path = generated_dict_path(RELATED_PRECOMPUTE_JSONL_FILENAME)
 dry_run = false
@@ -114,8 +120,24 @@ end
 begin
   lemmas.each_with_index do |lem, i|
     reset_per_cue_caches.call
-    words = RelatedWords.find_all_thematically_related_words(lem, false, true)
-    next if words.empty?
+    # Full-scan path captures the +relatedness_score+ computed for each cue /
+    # candidate pair alongside the candidate headword. Storing the score in
+    # DynamoDB lets the Lambda runtime answer "similarity" / coloring / UI
+    # sort without reloading Numberbatch / ConceptNet / WordNet / the
+    # classifier (the whole point of this precompute).
+    word_score_pairs = RelatedWords.find_all_thematically_related_words_by_scan(lem, false, true)
+    next if word_score_pairs.empty?
+
+    # Clamp to 0..100 (the stop-word shortcut emits 100; rule-based scoring
+    # can emit slightly over 100 via the cooccurrence combiner; threshold
+    # floor is 50). Sort descending by score so the related-list UI gets the
+    # strongest hits first and +max_candidates+ truncation keeps them.
+    sorted = word_score_pairs
+      .map { |w, s| [w, s.clamp(0, 100)] }
+      .sort_by { |(_w, s)| -s }
+
+    words = sorted.map(&:first)
+    scores = sorted.map(&:last)
 
     if (i % 50).zero?
       done = i + 1
@@ -136,7 +158,7 @@ begin
     next if dry_run
 
     pk = "related##{lem}"
-    jsonl_io.puts(JSON.generate("pk" => pk, "words" => words))
+    jsonl_io.puts(JSON.generate("pk" => pk, "words" => words, "scores" => scores))
   end
 ensure
   jsonl_io&.close

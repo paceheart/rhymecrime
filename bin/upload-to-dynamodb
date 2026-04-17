@@ -104,10 +104,19 @@ else
     words = row["words"]
     raise "line missing pk/words: #{line[0, 120]}" unless pk.is_a?(String) && words.is_a?(Array)
 
-    related_items << {
+    # +scores+ is a parallel array of stored +relatedness_score+ values
+    # (0..100 integers) written by +bin/precompute-relatedness+ alongside
+    # +words+. Older JSONL rows may omit it entirely — omit the attribute on
+    # upload in that case and let +Rhymecrime::DynamoRuntime.fetch_related_tuples+
+    # default missing entries to +RELATEDNESS_SCORE_THRESHOLD+ so UI coloring
+    # stays sensible against stale rows.
+    scores = row["scores"]
+    item = {
       "pk" => pk,
       "words" => words
     }
+    item["scores"] = scores if scores.is_a?(Array) && !scores.empty?
+    related_items << item
   end
   put_batch(client, table, related_items)
   puts "  #{related_items.size} related# items"

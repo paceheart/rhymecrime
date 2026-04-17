@@ -47,6 +47,10 @@ repo = File.expand_path("..", __dir__)
 Dir.chdir(repo)
 
 require "rhymecrime/crime"
+# Numberbatch loader + WordNet setup live in relatedness/signals (they're not
+# pulled in by +rhymecrime/crime+ anymore); this script iterates Numberbatch
+# keys and WordNet lemmas/morphy, so require them explicitly.
+require "rhymecrime/relatedness/signals"
 require "rwordnet"
 
 options[:output] ||= generated_dict_path("sense_glosses.jsonl")
