@@ -41,27 +41,26 @@ end
 want_profile = ARGV.include?("--profile") || ENV["RELATED_PROFILE"] == "1"
 want_failures = ARGV.include?("--failures") || ENV["RELATED_DUMP_FAILURES"] == "1"
 
-# Diagnostic line for a single failure: shows lemma pair and every signal the predicate
-# can consult, plus the +why_thematically_related?+ reason (nil for false negatives).
+# Diagnostic line for a single failure: shows lemma pair, every phase-1 signal, the
+# phase-2 composite +relatedness_score+, and the +why_thematically_related?+ reason
+# (may be non-nil on a false-positive row, nil on a false-negative row).
 def related_failure_diagnostic_line(word1, word2, kind)
   l1 = lemma(word1)
   l2 = lemma(word2)
-  base = lemmilarity(l1, l2)
-  cos_pct = (numberbatch_cosine(l1, l2) * 100).round
-  edge_w = conceptnet_edge_weight(l1, l2)
-  gloss = bidirectional_gloss_contains?(l1, l2)
-  sv_d1, sv_d2 = directional_sense_cosines(l1, l2)
-  sv_a_n = sense_vectors(l1).size
-  sv_b_n = sense_vectors(l2).size
-  morphy = (sv_a_n.zero? || sv_b_n.zero?) ? morphy_directional_sense_cosines(l1, l2) : nil
-  usf_cue_a = !usf_associations[l1].nil?
-  usf_cue_b = !usf_associations[l2].nil?
+  a, b = l1 <= l2 ? [l1, l2] : [l2, l1]
+  signals = PairSignals.new(a, b)
+
+  morphy = signals.both_have_sense_vectors? ? nil : signals.morphy_sv_directional
+  usf_cue_a = !usf_associations[a].nil?
+  usf_cue_b = !usf_associations[b].nil?
   reason = why_thematically_related?(word1, word2, false)
 
   format(
-    "%-20s %-20s kind=%-14s l=(%-18s %-18s) base=%3d cos=%3d edge=%6.2f gloss=%-5s sv=(%d,%d) n=(%d,%d) morphy=%s usf=(%s,%s) reason=%s",
-    word1, word2, kind, l1, l2, base, cos_pct, edge_w, gloss.to_s,
-    sv_d1, sv_d2, sv_a_n, sv_b_n,
+    "%-20s %-20s kind=%-14s l=(%-18s %-18s) score=%3d base=%3d cos=%3d edge=%6.2f gloss=%-5s sv=(%d,%d) n=(%d,%d) morphy=%s usf=(%s,%s) reason=%s",
+    word1, word2, kind, a, b,
+    relatedness_score(signals), signals.base_similarity, signals.cos_pct, signals.edge_weight,
+    signals.gloss_match?.to_s,
+    signals.sv_d1, signals.sv_d2, signals.sv_a_count, signals.sv_b_count,
     morphy.inspect,
     usf_cue_a, usf_cue_b,
     reason

@@ -6,11 +6,24 @@
 # Determine topical relatedness of two words
 # or retrieve a list of topically related words.
 #
-# Combines multiple offline signals:
-#   1. Numberbatch cosine similarity + ConceptNet edge bonus (primary)
-#   2. WordNet gloss containment (high-precision rescue for polysemy)
-#   3. WordNet gloss-vector sense embeddings + morphy fallback (secondary rescue)
-#   4. USF Free Association 2-hop (boost to base score via human association graph)
+# Three-phase pipeline:
+#
+#   1. +PairSignals+ — gather raw signals/derived features for a lemma pair. Signals
+#      are the "primitive" evidence: booleans stay booleans, counts stay counts,
+#      cosine similarities stay in their natural 0..100 range. No scoring scale here.
+#
+#   2. +relatedness_score(signals)+ — combine features into an integer 0..100
+#      (0 = definitely unrelated, 100 = maximally related). This is the only place
+#      feature scaling / weighting happens.
+#
+#   3. +thematically_related?+ — boolean predicate: +relatedness_score >= RELATEDNESS_SCORE_THRESHOLD+.
+#
+# Offline signals gathered in phase 1:
+#   - Numberbatch cosine similarity + ConceptNet edge weight (primary vector evidence)
+#   - WordNet gloss containment (high-precision polysemy rescue)
+#   - WordNet gloss-vector sense embeddings + morphy fallback (secondary rescue)
+#   - USF Free Association 2-hop bridge validation (human association graph)
+#   - Stop-word flag (contentless glue: related to everything)
 #
 # Debug: RELATED_TRACE_MEMO=1 — log surface + lemma memo path (thematically_related? → hit/miss → uncached).
 #
@@ -366,56 +379,226 @@ def morphy_directional_sense_cosines(word1, word2)
   [d1, d2]
 end
 
-# --- Main scoring ---
+# --- Phase 1: Signal gathering ---
+#
+# +PairSignals+ bundles every relatedness signal for a given dictionary-lemma pair
+# +(a, b)+. Each feature is returned in its natural type/range (booleans for yes/no
+# rescues, 0..100 integers for cosine-derived scores, raw weights for ConceptNet edges,
+# counts for sense-vector availability) — no scaling to the composite 0..100 scale
+# happens here. Accessors memoize on the instance so diagnostics, scoring, and any
+# future callers can read the same signal multiple times without recomputation.
+#
+# Phase 2 (+relatedness_score+) is the only place feature weights / scaling live.
+class PairSignals
+  attr_reader :a, :b
+
+  def initialize(a, b)
+    @a = a
+    @b = b
+  end
+
+  # --- boolean features ---
+
+  def stop_word_a?
+    return @stop_word_a if defined?(@stop_word_a)
+    @stop_word_a = stop_word?(@a)
+  end
+
+  def stop_word_b?
+    return @stop_word_b if defined?(@stop_word_b)
+    @stop_word_b = stop_word?(@b)
+  end
+
+  def involves_stop_word?
+    stop_word_a? || stop_word_b?
+  end
+
+  def gloss_match?
+    return @gloss_match if defined?(@gloss_match)
+    @gloss_match = bidirectional_gloss_contains?(@a, @b)
+  end
+
+  def usf_twohop_validated?
+    return @usf_twohop if defined?(@usf_twohop)
+    @usf_twohop = usf_twohop_bridge_validated?(@a, @b)
+  end
+
+  def both_have_sense_vectors?
+    sv_a_count > 0 && sv_b_count > 0
+  end
+
+  def morphy_available?
+    !morphy_sv_directional.nil?
+  end
+
+  # --- numeric features (natural scale) ---
+
+  # Numberbatch cosine as a 0..100 centile (may be negative when vectors disagree).
+  def cos_pct
+    @cos_pct ||= (numberbatch_cosine(@a, @b) * 100).round
+  end
+
+  # Raw ConceptNet edge weight (0.0 if no edge recorded).
+  def edge_weight
+    return @edge_weight if defined?(@edge_weight)
+    @edge_weight = conceptnet_edge_weight(@a, @b)
+  end
+
+  def edge_present?
+    edge_weight > 0
+  end
+
+  # Base similarity score: Numberbatch centile + fixed ConceptNet edge bonus when an
+  # edge exists. Same formula as +lemmilarity+; kept here for independent memoization.
+  def base_similarity
+    @base_similarity ||= cos_pct + (edge_present? ? $CONCEPTNET_EDGE_BONUS : 0)
+  end
+
+  # Directional sense-vector cosines (0..100 centiles): +sv_directional.first+ is
+  # word1's sense embeddings vs. word2's Numberbatch vector; second is the reverse.
+  def sv_directional
+    @sv_directional ||= directional_sense_cosines(@a, @b)
+  end
+
+  def sv_d1
+    sv_directional[0]
+  end
+
+  def sv_d2
+    sv_directional[1]
+  end
+
+  def sv_max
+    sv_directional.max
+  end
+
+  def sv_min
+    sv_directional.min
+  end
+
+  # Count of WordNet senses that produced a usable gloss-average embedding.
+  def sv_a_count
+    return @sv_a_count if defined?(@sv_a_count)
+    @sv_a_count = sense_vectors(@a).size
+  end
+
+  def sv_b_count
+    return @sv_b_count if defined?(@sv_b_count)
+    @sv_b_count = sense_vectors(@b).size
+  end
+
+  # Morphy-resolved directional cosines (0..100), or +nil+ when neither side needed
+  # morphy (both had direct WordNet lemma entries) or no morphy form produced a
+  # usable sense vector.
+  def morphy_sv_directional
+    return @morphy_sv_directional if defined?(@morphy_sv_directional)
+    @morphy_sv_directional = morphy_directional_sense_cosines(@a, @b)
+  end
+
+  def morphy_sv_max
+    m = morphy_sv_directional
+    m ? m.max : 0
+  end
+
+  def morphy_sv_min
+    m = morphy_sv_directional
+    m ? m.min : 0
+  end
+end
+
+# --- Phase 2: Feature combining → 0..100 relatedness score ---
+#
+# Each rule below produces a +[score, reason]+ tuple when applicable. The overall
+# relatedness score is the max across applicable rules (equivalent to the OR logic
+# of the original predicate, but graded instead of binary). Only this layer knows
+# about "50 is the threshold for related" — phase 1 stays on each signal's natural
+# scale, phase 3 just compares against +RELATEDNESS_SCORE_THRESHOLD+.
+
+RELATEDNESS_SCORE_THRESHOLD = 50
 
 def similarity_threshold
   $SIMILARITY_THRESHOLD
 end
 
-# Memo keyed by sorted dictionary lemma pair (see +thematically_related?+). Cleared when +load_word_dict+ runs.
-$thematically_related_memo = nil
+# Returns an array of +[score, reason]+ tuples: one per rule whose preconditions are
+# satisfied by +signals+. May be empty when no signal passes its gate.
+def relatedness_contributions(signals)
+  # Stop words are contentless glue: related to every other word. Fully saturates
+  # the composite score so no other signal is consulted.
+  if signals.involves_stop_word?
+    stop = signals.stop_word_a? ? signals.a : signals.b
+    return [[100, "stop_word: #{stop.inspect} is a stop word (related to everything)"]]
+  end
 
-# Uncached predicate on two headwords. Symmetric in +a+ / +b+.
-def thematically_related_pair_uncached?(a, b)
-  # Stop words (e.g. +and+, +the+, +out+, +can+) are treated as related to every other
-  # word: they're contentless glue that legitimately appears next to anything, and in
-  # our test set their "gotcha" rows (e.g. +food+/+canned+, +gay+/+out+) expect
-  # related=true. Short-circuiting keeps the downstream signal functions from seeing
-  # stop-word arguments they were never designed for.
-  return true if stop_word?(a) || stop_word?(b)
+  contributions = []
+  base = signals.base_similarity
 
-  puts "related? #{a} #{b}" if related_trace_memo?
+  # Primary: Numberbatch cosine + ConceptNet edge bonus. Above +$SIMILARITY_THRESHOLD+
+  # we map linearly into [50, 95]; below threshold we still emit a weak partial score
+  # so the composite reflects how close we came (always < 50, so never flips the
+  # predicate on its own).
+  if base >= $SIMILARITY_THRESHOLD
+    score = [50 + (base - $SIMILARITY_THRESHOLD) * 2, 95].min
+    contributions << [score, "similarity: base=#{base} >= #{$SIMILARITY_THRESHOLD} (Numberbatch centiles + ConceptNet edge bonus)"]
+  elsif base > 0
+    contributions << [[base * 3, 49].min, "similarity_partial: base=#{base} (< #{$SIMILARITY_THRESHOLD})"]
+  end
 
-  base = lemmilarity(a, b)
-  return true if base >= $SIMILARITY_THRESHOLD
+  # High-precision rescue: literal gloss/derivation containment.
+  contributions << [90, "gloss: bidirectional WordNet gloss/derivation containment"] if signals.gloss_match?
 
-  return true if bidirectional_gloss_contains?(a, b)
-
+  # Sense-vector rescue (polysemy aware): only meaningful when the base signal is
+  # non-trivial (+$SENSE_VECTOR_MIN_BASE+) so we don't fire on noise.
   if base >= $SENSE_VECTOR_MIN_BASE
-    d1, d2 = directional_sense_cosines(a, b)
-    sv_max = [d1, d2].max
-    sv_min = [d1, d2].min
-    both_have_senses = sense_vectors(a).size > 0 && sense_vectors(b).size > 0
-    if both_have_senses
-      return true if sv_max >= $SENSE_VECTOR_THRESHOLD && sv_min >= $SENSE_VECTOR_MIN_FLOOR
-      return true if sv_max >= $SENSE_VECTOR_ASYMMETRIC_MAX && sv_min >= $SENSE_VECTOR_ASYMMETRIC_MIN
-    elsif $SENSE_VECTOR_MORPHY_FLOOR > 0
-      morphy_result = morphy_directional_sense_cosines(a, b)
-      if morphy_result
-        md1, md2 = morphy_result
-        return true if [md1, md2].max >= $SENSE_VECTOR_THRESHOLD && [md1, md2].min >= $SENSE_VECTOR_MORPHY_FLOOR
+    if signals.both_have_sense_vectors?
+      sv_max = signals.sv_max
+      sv_min = signals.sv_min
+      if sv_max >= $SENSE_VECTOR_THRESHOLD && sv_min >= $SENSE_VECTOR_MIN_FLOOR
+        score = [55 + (sv_max - $SENSE_VECTOR_THRESHOLD), 80].min
+        contributions << [score, "sense_vectors: directional max=#{sv_max} min=#{sv_min} (need max>=#{$SENSE_VECTOR_THRESHOLD} min>=#{$SENSE_VECTOR_MIN_FLOOR}; base similarity=#{base})"]
+      elsif sv_max >= $SENSE_VECTOR_ASYMMETRIC_MAX && sv_min >= $SENSE_VECTOR_ASYMMETRIC_MIN
+        contributions << [55, "sense_vectors_asymmetric: directional max=#{sv_max} min=#{sv_min} (need max>=#{$SENSE_VECTOR_ASYMMETRIC_MAX} min>=#{$SENSE_VECTOR_ASYMMETRIC_MIN}; base similarity=#{base})"]
+      end
+    elsif $SENSE_VECTOR_MORPHY_FLOOR > 0 && signals.morphy_available?
+      mx = signals.morphy_sv_max
+      mn = signals.morphy_sv_min
+      if mx >= $SENSE_VECTOR_THRESHOLD && mn >= $SENSE_VECTOR_MORPHY_FLOOR
+        contributions << [55, "sense_vectors_morphy: directional max=#{mx} min=#{mn} (need max>=#{$SENSE_VECTOR_THRESHOLD} min>=#{$SENSE_VECTOR_MORPHY_FLOOR}; base similarity=#{base})"]
       end
     end
   end
 
+  # USF 2-hop: validated human-association bridge. Equivalent to the old
+  # +base + $USF_TWOHOP_BOOST >= $SIMILARITY_THRESHOLD+ gate, with the boosted
+  # score mapped just over the relatedness threshold.
   if $USF_TWOHOP_BOOST > 0 &&
      base >= $USF_MIN_BASE &&
-     (base + $USF_TWOHOP_BOOST) >= $SIMILARITY_THRESHOLD &&
-     usf_twohop_bridge_validated?(a, b)
-    return true
+     base + $USF_TWOHOP_BOOST >= $SIMILARITY_THRESHOLD &&
+     signals.usf_twohop_validated?
+    boosted = base + $USF_TWOHOP_BOOST
+    contributions << [55, "usf_twohop: base=#{base} + boost=#{$USF_TWOHOP_BOOST} => #{boosted} >= #{$SIMILARITY_THRESHOLD}, validated bridge"]
   end
 
-  false
+  contributions
+end
+
+# Integer 0..100: 0 = definitely unrelated, 100 = maximally related. See
+# +relatedness_contributions+ for the rule-by-rule decomposition.
+def relatedness_score(signals)
+  c = relatedness_contributions(signals)
+  return 0 if c.empty?
+  [c.map(&:first).max, 0].max
+end
+
+# --- Phase 3: Threshold → boolean predicate ---
+
+# Memo keyed by sorted dictionary lemma pair (see +thematically_related?+). Cleared when +load_word_dict+ runs.
+$thematically_related_memo = nil
+
+# Uncached predicate on two dictionary lemmas. Symmetric in +a+ / +b+.
+def thematically_related_pair_uncached?(a, b)
+  puts "related? #{a} #{b}" if related_trace_memo?
+  relatedness_score(PairSignals.new(a, b)) >= RELATEDNESS_SCORE_THRESHOLD
 end
 
 # +a+ and +b+ are dictionary lemmas in lexicographic order (+a+ <= +b+); see +thematically_related?+.
@@ -458,66 +641,26 @@ def thematically_related?(word1, word2, include_self=false)
 end
 
 # Same decision as +thematically_related?+, but returns a short reason string when true, or +nil+ when false.
-# Order of checks matches +thematically_related?+ (first win is reported). Uses +lemma+ for scoring like
+# Reason is the highest-scoring contribution from +relatedness_contributions+. Uses +lemma+ for scoring like
 # +thematically_related?+; +include_self+ treats same headword or same lemma as self when true.
 def why_thematically_related?(word1, word2, include_self = false)
   return "self: same headword" if include_self && word1 == word2
-  return "stop_word: #{word1.inspect} is a stop word (related to everything)" if stop_word?(word1)
-  return "stop_word: #{word2.inspect} is a stop word (related to everything)" if stop_word?(word2)
   return "self: same lexeme (lemma)" if include_self && lemma(word1) == lemma(word2)
 
   l1 = lemma(word1)
   l2 = lemma(word2)
-  return "stop_word: #{l1.inspect} (lemma of #{word1.inspect}) is a stop word" if stop_word?(l1)
-  return "stop_word: #{l2.inspect} (lemma of #{word2.inspect}) is a stop word" if stop_word?(l2)
+  a, b = l1 <= l2 ? [l1, l2] : [l2, l1]
+  contributions = relatedness_contributions(PairSignals.new(a, b))
+  return nil if contributions.empty?
 
-  base = lemmilarity(l1, l2)
-  if base >= $SIMILARITY_THRESHOLD
-    return "similarity: #{base} >= #{$SIMILARITY_THRESHOLD} (Numberbatch centiles + ConceptNet edge bonus)"
-  end
-
-  if bidirectional_gloss_contains?(l1, l2)
-    return "gloss: bidirectional WordNet gloss/derivation containment"
-  end
-
-  if !stop_word?(l1) && !stop_word?(l2) && base >= $SENSE_VECTOR_MIN_BASE
-    d1, d2 = directional_sense_cosines(l1, l2)
-    sv_max = [d1, d2].max
-    sv_min = [d1, d2].min
-    both_have_senses = sense_vectors(l1).size > 0 && sense_vectors(l2).size > 0
-    if both_have_senses
-      if sv_max >= $SENSE_VECTOR_THRESHOLD && sv_min >= $SENSE_VECTOR_MIN_FLOOR
-        return "sense_vectors: directional max=#{sv_max} min=#{sv_min} (need max>=#{$SENSE_VECTOR_THRESHOLD} min>=#{$SENSE_VECTOR_MIN_FLOOR}; base similarity=#{base})"
-      end
-      if sv_max >= $SENSE_VECTOR_ASYMMETRIC_MAX && sv_min >= $SENSE_VECTOR_ASYMMETRIC_MIN
-        return "sense_vectors_asymmetric: directional max=#{sv_max} min=#{sv_min} (need max>=#{$SENSE_VECTOR_ASYMMETRIC_MAX} min>=#{$SENSE_VECTOR_ASYMMETRIC_MIN}; base similarity=#{base})"
-      end
-    elsif $SENSE_VECTOR_MORPHY_FLOOR > 0
-      morphy_result = morphy_directional_sense_cosines(l1, l2)
-      if morphy_result
-        md1, md2 = morphy_result
-        mx = [md1, md2].max
-        mn = [md1, md2].min
-        if mx >= $SENSE_VECTOR_THRESHOLD && mn >= $SENSE_VECTOR_MORPHY_FLOOR
-          return "sense_vectors_morphy: directional max=#{mx} min=#{mn} (need max>=#{$SENSE_VECTOR_THRESHOLD} min>=#{$SENSE_VECTOR_MORPHY_FLOOR}; base similarity=#{base})"
-        end
-      end
-    end
-  end
-
-  if $USF_TWOHOP_BOOST > 0 &&
-     base >= $USF_MIN_BASE &&
-     (base + $USF_TWOHOP_BOOST) >= $SIMILARITY_THRESHOLD &&
-     usf_twohop_bridge_validated?(l1, l2)
-    boosted = base + $USF_TWOHOP_BOOST
-    return "usf_twohop: base=#{base} + boost=#{$USF_TWOHOP_BOOST} => #{boosted} >= #{$SIMILARITY_THRESHOLD}, validated bridge"
-  end
-
-  nil
+  best_score, best_reason = contributions.max_by(&:first)
+  return nil if best_score < RELATEDNESS_SCORE_THRESHOLD
+  best_reason
 end
 
 # Numberbatch + ConceptNet centile score for two dictionary lemmas (no +lemma+ lookup).
-# Thematic scoring calls this directly; +similarity+ is the surface-headword wrapper for UI / ranking.
+# Kept as a public helper for UI / diagnostics; phase-1 signal gathering recomputes the
+# same quantity on +PairSignals#base_similarity+ so it can memoize alongside other signals.
 def lemmilarity(l1, l2)
   return 0 if stop_word?(l1) || stop_word?(l2)
 
