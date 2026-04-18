@@ -838,14 +838,17 @@ def print_word(word, focal_word=false)
     # @todo urlencode
     cgi_print "<a href='/?word1=#{word}'>"
   end
-  ubiq = 255
-  if(rare?(word))
-    ubiq = 0
+  # Color the word by its precomputed relatedness_score to +focal_word+ when one
+  # is supplied (e.g. +set_related+ tuples, where every slot should be related
+  # to +word1+). Skipped when +focal_word+ is falsy (word lists that have no
+  # single focal, or +pair_related+ tuples whose two slots use different focals).
+  similarity_span = focal_word && focal_word != "" && word != focal_word
+  if similarity_span
+    cgi_print "<span style='color: #{word_similarity_color(word, focal_word)}'>"
   end
-  # cgi_print "<span style='color: rgb(#{ubiq}, #{ubiq}, #{ubiq});'>"
   word = word.gsub('_', ' ')
   emit_text word
-  # cgi_print "</span>"
+  cgi_print "</span>" if similarity_span
   if(got_rhymes)
     cgi_print "</a>"
   end

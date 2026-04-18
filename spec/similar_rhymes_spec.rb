@@ -50,6 +50,11 @@ describe 'SET_RELATED' do
     set_related_oughta_contain 'death', 'dead', 'dread'
   end
   
+  context 'stop words' do
+    set_related_ought_not_contain 'pirate', 'of', 'above'
+    set_related_ought_not_contain 'pirate', 'other', 'another'
+  end
+
   context 'pirate' do
     set_related_oughta_contain 'pirate', 'cache', 'lash'
     set_related_oughta_contain 'pirate', 'cove', 'trove'

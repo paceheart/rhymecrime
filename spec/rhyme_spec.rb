@@ -143,6 +143,7 @@ describe 'RHYMES' do
     ought_not_rhyme 'supplemented', 'fermented'
     oughta_rhyme 'poor', 'pure' # P vs. PY is different enough
     ought_not_rhyme 'jar', 'ajar'
+    ought_not_rhyme 'other', 'another' # arguable
   end
   
   context "you can't just add a prefix and call it a rhyme" do

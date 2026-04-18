@@ -15,6 +15,14 @@
 #   --dry-run              Compute only; print progress, do not write a file
 #   --max-cues=N           Only process first N lemmas (smoke test)
 #   --start-after=WORD     Skip lemmas until after this string (lexicographic)
+#   --threads=N            Parallel workers (fork-based). Default: half of +Etc.nprocessors+.
+#
+# Threading notes: the compute is pure-Ruby CPU-bound, so we fork worker processes
+# rather than native threads (MRI's GVL prevents parallel Ruby execution). All
+# heavy data (Numberbatch ~169 MB, ConceptNet, MPNet ~923 MB, WordNet, classifier)
+# loads in the parent before fork, so workers share those pages via copy-on-write.
+# Peak RSS climbs as memos mutate, so the default caps at half of the cores to
+# leave headroom; override with +--threads=N+ when you have the RAM.
 #
 # OOV Numberbatch: headwords whose dictionary lemma has no row in generated/numberbatch_vectors.msgpack
 # skip the expensive full relatedness scan (see +dictionary_lemma_has_numberbatch_vector?+ in related.rb).
@@ -24,6 +32,7 @@ $LOAD_PATH.unshift File.expand_path("../lib", __dir__)
 
 ENV.delete("RHYMECRIME_DATA_SOURCE")
 
+require "etc"
 require "json"
 require "optparse"
 require_relative "../lib/rhymecrime/dict/utils_rhyme"
@@ -40,12 +49,19 @@ output_path = generated_dict_path(RELATED_PRECOMPUTE_JSONL_FILENAME)
 dry_run = false
 max_cues = nil
 start_after = nil
+# Half of the cores is a sensible default: each worker's memos mutate over time
+# and break copy-on-write sharing of the heap, so peak RSS scales with worker
+# count; leaving half the cores free keeps the box responsive and avoids
+# swapping on machines with e.g. 16 GB RAM + 10 cores.
+default_threads = [Etc.nprocessors / 2, 1].max
+threads = default_threads
 
 OptionParser.new do |o|
   o.on("--output=PATH", "JSONL output path") { |p| output_path = File.expand_path(p) }
   o.on("--dry-run", "Compute only; do not write") { dry_run = true }
   o.on("--max-cues=N", Integer) { |n| max_cues = n }
   o.on("--start-after=WORD") { |w| start_after = w }
+  o.on("--threads=N", Integer, "Parallel fork workers (default: #{default_threads})") { |n| threads = [n, 1].max }
 end.parse!
 
 word_path = generated_dict_path(WORD_DICT_FILENAME)
@@ -91,16 +107,18 @@ stopword_lemmas, lemmas = lemmas.partition { |l| stop_word?(l) }
 puts "Skipping #{stopword_lemmas.size} stop-word lemmas (runtime short-circuits to words_we_care_about): #{stopword_lemmas.inspect}" if stopword_lemmas.any?
 
 n = lemmas.size
+threads = [threads, n].min if n.positive?
+threads = 1 if threads < 1
+
 puts "Precompute cues: #{n} preferred common lemmas with rhymes (#{before_n} distinct common lemmas in word_dict before filter)"
-puts "Scanning #{n} lemmas → #{dry_run ? '(dry-run, no file)' : output_path} (JSONL only when ≥1 related word)"
+puts "Scanning #{n} lemmas → #{dry_run ? '(dry-run, no file)' : output_path} with #{threads} worker#{threads == 1 ? '' : 's'} (JSONL only when ≥1 related word)"
 
 RelatedWords.instance_variable_set(:@related_word_cache, {})
 
-jsonl_io = nil
-jsonl_io = File.open(output_path, "w", encoding: "UTF-8") unless dry_run
-
-# Elapsed-average ETA: linear extrapolation from items completed so far.
-t0 = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+# Wall-clock timer covers warm-up + scan + merge; reported at the end alongside
+# the worker count so run-to-run comparisons (e.g. --threads=4 vs --threads=8)
+# are easy to spot-check.
+run_started_at = Process.clock_gettime(Process::CLOCK_MONOTONIC)
 
 # Per-cue +find_all_thematically_related_words+ scans every candidate headword (~20k) and
 # calls +thematically_related?+ on each pair, populating +$thematically_related_memo+ and
@@ -117,32 +135,38 @@ reset_per_cue_caches = lambda do
   RelatedWords.instance_variable_set(:@related_word_cache, {})
 end
 
-begin
-  lemmas.each_with_index do |lem, i|
-    reset_per_cue_caches.call
-    # Full-scan path captures the +relatedness_score+ computed for each cue /
-    # candidate pair alongside the candidate headword. Storing the score in
-    # DynamoDB lets the Lambda runtime answer "similarity" / coloring / UI
-    # sort without reloading Numberbatch / ConceptNet / WordNet / the
-    # classifier (the whole point of this precompute).
-    word_score_pairs = RelatedWords.find_all_thematically_related_words_by_scan(lem, false, true)
-    next if word_score_pairs.empty?
+# Process a single cue: full-scan path captures the +relatedness_score+ computed
+# for each cue / candidate pair alongside the candidate headword. Returns a
+# +[words, scores]+ pair (parallel arrays sorted descending by score) or +nil+
+# when the cue has no related words.
+process_cue = lambda do |lem|
+  reset_per_cue_caches.call
+  word_score_pairs = RelatedWords.find_all_thematically_related_words_by_scan(lem, false, true)
+  return nil if word_score_pairs.empty?
 
-    # Clamp to 0..100 (the stop-word shortcut emits 100; rule-based scoring
-    # can emit slightly over 100 via the cooccurrence combiner; threshold
-    # floor is 50). Sort descending by score so the related-list UI gets the
-    # strongest hits first and +max_candidates+ truncation keeps them.
-    sorted = word_score_pairs
-      .map { |w, s| [w, s.clamp(0, 100)] }
-      .sort_by { |(_w, s)| -s }
+  # Clamp to 0..100 (the stop-word shortcut emits 100; rule-based scoring
+  # can emit slightly over 100 via the cooccurrence combiner; threshold
+  # floor is 50). Sort descending by score so the related-list UI gets the
+  # strongest hits first and +max_candidates+ truncation keeps them.
+  sorted = word_score_pairs
+    .map { |w, s| [w, s.clamp(0, 100)] }
+    .sort_by { |(_w, s)| -s }
 
-    words = sorted.map(&:first)
-    scores = sorted.map(&:last)
+  [sorted.map(&:first), sorted.map(&:last)]
+end
 
-    if (i % 50).zero?
+# Run the scan for +shard+ (the slice of +lemmas+ assigned to this worker),
+# appending one JSONL row per non-empty cue to +io+ (or nil for dry-run).
+# +tag+ is a short identifier printed with each progress line (e.g. "w0").
+run_shard = lambda do |shard, io, tag|
+  t0 = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+  total = shard.size
+  shard.each_with_index do |lem, i|
+    result = process_cue.call(lem)
+    if (i % 50).zero? || i == total - 1
       done = i + 1
       elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC) - t0
-      remaining = n - done
+      remaining = total - done
       eta_suffix =
         if remaining.positive? && done.positive? && elapsed.positive?
           eta_sec = [(remaining.to_f * elapsed / done).round, 0].max
@@ -153,15 +177,101 @@ begin
           ""
         end
       paren = eta_suffix.empty? ? "" : " (#{eta_suffix})"
-      puts "  [#{i}/#{n}] #{lem}: #{words.size} related#{paren}"
+      count = result ? result[0].size : 0
+      puts "  [#{tag} #{i}/#{total}] #{lem}: #{count} related#{paren}"
     end
-    next if dry_run
+    next unless result && io
 
-    pk = "related##{lem}"
-    jsonl_io.puts(JSON.generate("pk" => pk, "words" => words, "scores" => scores))
+    words, scores = result
+    io.puts(JSON.generate("pk" => "related##{lem}", "words" => words, "scores" => scores))
   end
-ensure
-  jsonl_io&.close
 end
 
-puts "Finished."
+if threads <= 1 || n.zero?
+  # Single-process path: keep the simple in-memory flow so stack traces /
+  # interactive debugging work normally.
+  jsonl_io = dry_run ? nil : File.open(output_path, "w", encoding: "UTF-8")
+  begin
+    run_shard.call(lemmas, jsonl_io, "0")
+  ensure
+    jsonl_io&.close
+  end
+else
+  # Fork-based parallelism. Ruby's GVL serializes pure-Ruby execution in
+  # threads, so native threads give us no speedup on this CPU-bound workload.
+  # Forking after all data is loaded lets workers share the big read-only
+  # tables (Numberbatch, ConceptNet, MPNet, classifier) via copy-on-write.
+  #
+  # Eager-load every lazy global here so workers inherit the populated tables
+  # instead of re-reading the files N times (+30s per worker, +1GB RSS per
+  # worker). GC will still dirty some pages over time — COW isn't perfect —
+  # but peak RSS stays closer to 1x than Nx.
+  puts "Warming up compute caches in parent before fork..."
+  numberbatch
+  conceptnet_edges
+  conceptnet_adjacency
+  usf_associations
+  model_sense_vectors_table
+  relatedness_classifier
+  words_we_care_about(false, true)
+  puts "Warm-up complete."
+
+  # Round-robin shard distribution so alphabetical clustering of expensive
+  # cues (long words, hub lemmas) doesn't starve the last worker.
+  shards = Array.new(threads) { [] }
+  lemmas.each_with_index { |lem, i| shards[i % threads] << lem }
+
+  # Each worker writes its own JSONL file; parent concatenates on success.
+  # +.partN.tmp+ sits next to the final output so it lives on the same
+  # filesystem (cheap rename/append) and is easy to spot + clean up on crash.
+  base = dry_run ? nil : output_path
+  shard_paths = dry_run ? Array.new(threads) { nil } : Array.new(threads) { |i| "#{base}.part#{i}.tmp" }
+
+  # Flush so parent's stdout buffer isn't duplicated into every child.
+  $stdout.flush
+  $stderr.flush
+
+  pids = shards.each_with_index.map do |shard, idx|
+    fork do
+      # Worker: fresh memos (inherited from parent are fine but will diverge
+      # across workers anyway). Exit status encodes success/failure.
+      io = shard_paths[idx] ? File.open(shard_paths[idx], "w", encoding: "UTF-8") : nil
+      begin
+        run_shard.call(shard, io, "w#{idx}")
+      ensure
+        io&.close
+      end
+    end
+  end
+
+  # Wait on every child; surface any nonzero exit.
+  failed = []
+  pids.each_with_index do |pid, idx|
+    _, status = Process.wait2(pid)
+    failed << [idx, status] unless status.success?
+  end
+
+  unless failed.empty?
+    # Clean up partial shard files on failure so the next run doesn't merge
+    # half-written output.
+    shard_paths.each { |p| File.delete(p) if p && File.exist?(p) }
+    failed.each { |idx, st| warn "worker w#{idx} failed: #{st.inspect}" }
+    exit 1
+  end
+
+  unless dry_run
+    File.open(output_path, "w", encoding: "UTF-8") do |out|
+      shard_paths.each do |p|
+        next unless p && File.exist?(p)
+        File.open(p, "r", encoding: "UTF-8") { |f| IO.copy_stream(f, out) }
+      end
+    end
+    shard_paths.each { |p| File.delete(p) if p && File.exist?(p) }
+  end
+end
+
+elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC) - run_started_at
+hh = (elapsed / 3600).to_i
+mm = ((elapsed % 3600) / 60).to_i
+ss = (elapsed % 60)
+puts "Finished #{n} lemmas in #{hh}h #{mm}m #{format('%.1f', ss)}s wall clock with #{threads} worker#{threads == 1 ? '' : 's'}."

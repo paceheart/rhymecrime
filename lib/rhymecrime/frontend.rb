@@ -85,9 +85,19 @@ def compute_and_print_html_middle(word1, word2)
   end
 end
 
+# Per-column focal word for tuple coloring. Every slot in a +set_related+ tuple
+# is meant to be topically related to +word1+, so coloring each by its stored
+# relatedness_score vs +word1+ matches the column's semantic. Pair-rhyme goals
+# don't have a single focal (the two slots target different focals), so we
+# skip coloring there.
+def tuple_focal_word_for_goal(goal, word1)
+  goal == "set_related" ? word1 : nil
+end
+
 def print_html_column(goal, output, dregs, input_word1, type, header, width, is_last_column)
   cgi_puts "<td style='vertical-align: top; width:#{width}%;' label='#{goal}'>"
-  print_html_column_data(output, dregs, input_word1, type, header)
+  tuple_focal = tuple_focal_word_for_goal(goal, input_word1)
+  print_html_column_data(output, dregs, input_word1, type, header, tuple_focal)
   cgi_puts "</td>"
   unless is_last_column
     cgi_puts "<td style='width:1%;'> </td>"
@@ -95,10 +105,10 @@ def print_html_column(goal, output, dregs, input_word1, type, header, width, is_
   end
 end
 
-def print_html_column_data(output, dregs, input_word1, type, header)
+def print_html_column_data(output, dregs, input_word1, type, header, tuple_focal_word = nil)
   case type
   when :words, :tuples, :synsets
-    print_interesting_html_column_data(output, dregs, input_word1, header, type)
+    print_interesting_html_column_data(output, dregs, input_word1, header, type, tuple_focal_word)
   when :bad_input
     emit_line header
   when :error
@@ -108,7 +118,7 @@ def print_html_column_data(output, dregs, input_word1, type, header)
   end
 end
 
-def print_interesting_html_column_data(output, dregs, input_word1, header, output_type)
+def print_interesting_html_column_data(output, dregs, input_word1, header, output_type, tuple_focal_word = nil)
   cgi_puts header
   if output.empty?
     if dregs.empty?
@@ -117,20 +127,20 @@ def print_interesting_html_column_data(output, dregs, input_word1, header, outpu
       emit_line "No good results."
     end
   else
-    print_output(output, input_word1, output_type)
+    print_output(output, input_word1, output_type, tuple_focal_word)
   end
   unless dregs.empty?
     cgi_puts "<br/><hr><p>For the desperate:</p>"
-    print_output(dregs, input_word1, output_type)
+    print_output(dregs, input_word1, output_type, tuple_focal_word)
   end
 end
 
-def print_output(output, input_word1, output_type)
+def print_output(output, input_word1, output_type, tuple_focal_word = nil)
   case output_type
   when :words
     print_words(output)
   when :tuples
-    print_tuples(output)
+    print_tuples(output, tuple_focal_word)
   when :synsets
     print_synsets(output, input_word1)
   end
