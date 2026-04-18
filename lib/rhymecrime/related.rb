@@ -29,6 +29,7 @@
 #
 
 require "json"
+require "msgpack"
 require_relative "pace_utils"
 require_relative "dict/utils_rhyme"
 
@@ -188,19 +189,50 @@ end
 # lazy-loaded full scan for local dev.
 class RelatedWords
   class << self
-    # Lazy-loaded {lemma => [[word, score], ...]} from the precompute JSONL.
-    # Empty hash when the file doesn't exist — that's the signal to the
-    # runtime shim that we have no precomputed source (so thematic predicates
-    # will fall back to the lazy-loaded compute pipeline).
+    # Lazy-loaded {lemma => [[word, score], ...]} from the precompute source.
+    # Prefers the compiled MessagePack file (fast — a couple of seconds for the
+    # full ~2 GB table) and falls back to line-by-line JSONL parse when only
+    # the text form is on disk. Empty hash when neither file exists — that's
+    # the signal to the runtime shim that we have no precomputed source and
+    # thematic predicates should fall back to the lazy-loaded compute
+    # pipeline.
     def related_precompute_by_lemma
       return @related_precompute_by_lemma if instance_variable_defined?(:@related_precompute_by_lemma)
 
-      @related_precompute_by_lemma = {}
-      path = generated_dict_path(RELATED_PRECOMPUTE_JSONL_FILENAME)
-      unless File.exist?(path)
+      msgpack_path = generated_dict_path(RELATED_PRECOMPUTE_MSGPACK_FILENAME)
+      if File.exist?(msgpack_path)
+        @related_precompute_by_lemma = load_precompute_msgpack(msgpack_path)
         return @related_precompute_by_lemma
       end
 
+      jsonl_path = generated_dict_path(RELATED_PRECOMPUTE_JSONL_FILENAME)
+      if File.exist?(jsonl_path)
+        @related_precompute_by_lemma = load_precompute_jsonl(jsonl_path)
+        return @related_precompute_by_lemma
+      end
+
+      @related_precompute_by_lemma = {}
+    end
+
+    # Parse the compiled MessagePack blob emitted by +bin/precompute-relatedness+.
+    # Schema: +{lemma_string => [[word_string, score_int], ...]}+ — the exact
+    # shape +related_precompute_by_lemma+ hands to +filter_precomputed_tuples+,
+    # so no post-processing needed.
+    def load_precompute_msgpack(path)
+      table = File.open(path, "rb") { |f| MessagePack.unpack(f.read) }
+      unless table.is_a?(Hash)
+        warn "related: skip precompute msgpack load (#{path}): not a Hash"
+        return {}
+      end
+      puts "loaded #{table.size} precomputed related lemmas from #{path}"
+      table
+    rescue StandardError => e
+      warn "related: skip precompute msgpack load (#{path}): #{e.message}"
+      {}
+    end
+
+    def load_precompute_jsonl(path)
+      table = {}
       n = 0
       File.foreach(path, encoding: "UTF-8") do |line|
         line = line.strip
@@ -221,14 +253,14 @@ class RelatedWords
           [w.to_s, score.is_a?(Numeric) ? score.to_i : RELATEDNESS_SCORE_THRESHOLD]
         end
 
-        @related_precompute_by_lemma[lem] = tuples
+        table[lem] = tuples
         n += 1
       end
-      puts "loaded #{n} precomputed related lemmas from #{path}" if n.positive?
-      @related_precompute_by_lemma
+      puts "loaded #{n} precomputed related lemmas from #{path} (JSONL; run bin/precompute-relatedness to compile the faster .msgpack form)" if n.positive?
+      table
     rescue JSON::ParserError => e
       warn "related: skip precompute load (#{path}): #{e.message}"
-      @related_precompute_by_lemma = {}
+      {}
     end
 
     def precompute_loaded?

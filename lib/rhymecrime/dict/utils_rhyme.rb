@@ -11,8 +11,15 @@ require_relative "phoneme.rb"
 
 RIME_DICT_FILENAME = "rime_dict.txt"
 WORD_DICT_FILENAME = "word_dict.txt"
-# Thematic relatedness precompute for DynamoDB (JSONL: one {"pk","words"} per line); built by bin/precompute-relatedness.
+# Thematic relatedness precompute for DynamoDB (JSONL: one {"pk","words","scores"} per
+# line); built by bin/precompute-relatedness and consumed by bin/upload-to-dynamodb.
 RELATED_PRECOMPUTE_JSONL_FILENAME = "related_precompute.jsonl"
+# Compiled form of the above for fast startup of the local-dev runtime. Same content
+# as the JSONL but encoded as a single MessagePack blob +{lemma => [[word, score], …]}+
+# so the runtime can mmap+unpack the whole table in a couple of seconds instead of
+# line-by-line JSON parsing ~2 GB of text. Built by bin/precompute-relatedness as a
+# final step after the JSONL merge; runtime prefers this file when present.
+RELATED_PRECOMPUTE_MSGPACK_FILENAME = "related_precompute.msgpack"
 PART_OF_SPEECH_FILENAME = "part_of_speech.json"
 # Multi-spelling hyphen folds (in-laws/inlaws, …); built in dict.rb, loaded at runtime.
 HYPHEN_VARIANT_MAP_FILENAME = "hyphen_variant_map.json"

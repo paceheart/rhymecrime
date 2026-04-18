@@ -34,6 +34,7 @@ ENV.delete("RHYMECRIME_DATA_SOURCE")
 
 require "etc"
 require "json"
+require "msgpack"
 require "optparse"
 require_relative "../lib/rhymecrime/dict/utils_rhyme"
 require_relative "../lib/rhymecrime/frontend"
@@ -268,6 +269,48 @@ else
     end
     shard_paths.each { |p| File.delete(p) if p && File.exist?(p) }
   end
+end
+
+# Compile the just-written JSONL into a MessagePack blob the runtime can load
+# in ~a couple of seconds instead of re-parsing ~2 GB of text every boot. The
+# JSONL is still the source of truth for +bin/upload-to-dynamodb+ (line-at-a-
+# time streaming) — this file is purely a local-dev startup accelerator for
+# +RelatedWords.related_precompute_by_lemma+.
+unless dry_run
+  msgpack_path = generated_dict_path(RELATED_PRECOMPUTE_MSGPACK_FILENAME)
+  puts "Compiling #{output_path} → #{msgpack_path}..."
+  t_compile = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+  table = {}
+  File.foreach(output_path, encoding: "UTF-8") do |line|
+    line = line.strip
+    next if line.empty?
+
+    obj = JSON.parse(line)
+    pk = obj["pk"].to_s
+    next unless pk.start_with?("related#")
+
+    lem = pk.delete_prefix("related#")
+    words = obj["words"]
+    next unless words.is_a?(Array)
+
+    scores = obj["scores"]
+    scores = [] unless scores.is_a?(Array)
+    tuples = words.each_with_index.map do |w, i|
+      score = scores[i]
+      [w.to_s, score.is_a?(Numeric) ? score.to_i : RELATEDNESS_SCORE_THRESHOLD]
+    end
+    table[lem] = tuples
+  end
+
+  # Atomic replace: write to a tmp file on the same fs, then rename, so a
+  # crashed partial write doesn't poison the next boot. Readers open for
+  # read before rename continue to see the old inode.
+  tmp = "#{msgpack_path}.tmp"
+  File.open(tmp, "wb") { |f| f.write(MessagePack.pack(table)) }
+  File.rename(tmp, msgpack_path)
+  compile_elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC) - t_compile
+  size_mb = (File.size(msgpack_path).to_f / (1024 * 1024)).round(1)
+  puts "Compiled #{table.size} lemmas into #{msgpack_path} (#{size_mb} MB) in #{format('%.1f', compile_elapsed)}s."
 end
 
 elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC) - run_started_at
