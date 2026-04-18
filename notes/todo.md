@@ -61,8 +61,8 @@ Genderfluid rhyme: each syllable from the primary-stressed syllable onward has a
 
 Non-binary rhyme: a genderfluid rhyme that is not a perfect rhyme. The individual syllable rimes all match, but the intervening onsets (consonant clusters between syllables) differ, so the overall contiguous rime does not match. Examples: latex / paychecks, pitiful / biddable.
 
-get rid of rare words entirely, including rime_dict
+consider adding rare words as keys (but not values)
 
 scrape relatedness from archive of our own
 
-fascitis fasciitis
+

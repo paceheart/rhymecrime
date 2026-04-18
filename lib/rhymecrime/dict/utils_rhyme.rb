@@ -11,15 +11,14 @@ require_relative "phoneme.rb"
 
 RIME_DICT_FILENAME = "rime_dict.txt"
 WORD_DICT_FILENAME = "word_dict.txt"
-# Thematic relatedness precompute for DynamoDB (JSONL: one {"pk","words","scores"} per
-# line); built by bin/precompute-relatedness and consumed by bin/upload-to-dynamodb.
-RELATED_PRECOMPUTE_JSONL_FILENAME = "related_precompute.jsonl"
-# Compiled form of the above for fast startup of the local-dev runtime. Same content
-# as the JSONL but encoded as a single MessagePack blob +{lemma => [[word, score], …]}+
-# so the runtime can mmap+unpack the whole table in a couple of seconds instead of
-# line-by-line JSON parsing ~2 GB of text. Built by bin/precompute-relatedness as a
-# final step after the JSONL merge; runtime prefers this file when present.
-RELATED_PRECOMPUTE_MSGPACK_FILENAME = "related_precompute.msgpack"
+# Local-dev key/value store that mirrors the DynamoDB schema used in Lambda:
+# the +related+ table is keyed by +"related#<lemma>"+ with parallel +words+ and
+# +scores+ JSON arrays. Single SQLite file, no daemon; boot is O(open file) and
+# per-lemma lookups are a single indexed SELECT. Built by bin/precompute-relatedness
+# and consumed by +Rhymecrime::LocalStore+ (runtime shim) and by bin/upload-to-dynamodb
+# (when streaming rows up to prod DDB). In Lambda this file is absent and
+# +Rhymecrime::DataSource.dynamodb?+ routes everything to +DynamoRuntime+ instead.
+LOCAL_STORE_FILENAME = "rhymecrime_local.sqlite3"
 PART_OF_SPEECH_FILENAME = "part_of_speech.json"
 # Multi-spelling hyphen folds (in-laws/inlaws, …); built in dict.rb, loaded at runtime.
 HYPHEN_VARIANT_MAP_FILENAME = "hyphen_variant_map.json"

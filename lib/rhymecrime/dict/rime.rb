@@ -225,6 +225,36 @@ def headword_has_nonidentical_rhyme_partner?(word, prons, rdict, word_dict)
   false
 end
 
+# Logical predicate: is +word+ eligible to be a precompute/DDB cue (the PK of a
+# +related#<lemma>+ row)?
+#
+# Broader than +relatedness_target_word?+: cue coverage must include every
+# lemma a user might ask about at runtime (or a spec fixture references), even
+# rhymeless ones (+music+, +concerto+, +algebra+, +quarterback+). Those lemmas
+# can't appear as a _related_ in another cue's row (no rhyme to attach to),
+# but they're perfectly valid questions on the cue side.
+#
+# Physical implementation today: +word_common_preferred_headword?+. Keep this
+# wrapper so precompute, eval scripts, and build-time stats all agree on what
+# "cue" means — and so widening the cue set later (e.g. to include dispreferred
+# forms a user might type) only requires a change here.
+def cue_word?(word, word_dict)
+  word_common_preferred_headword?(word, word_dict)
+end
+
+# Logical predicate: is +word+ eligible to appear as a related in another cue's
+# row, or to be returned in a related-words response to the UI?
+#
+# Strict superset of +cue_word?+: every relatedness target is a valid cue, but
+# some cues (rhymeless lemmas) are not targets. The extra criterion is a
+# non-identical rhyme partner in +rdict+ — without one the word would never
+# surface in the UI even if it were included in a list.
+def relatedness_target_word?(word, word_dict, rdict)
+  return false unless cue_word?(word, word_dict)
+  prons = word_dict[word]&.dig(1)
+  headword_has_nonidentical_rhyme_partner?(word, prons, rdict, word_dict)
+end
+
 # Drop rime-bucket members not in +allowed+; remove singleton buckets (same invariant as +merge_word_dict_pronunciations_into_rdict!+).
 def prune_rdict_to_headwords!(rdict, allowed)
   allowed = allowed.to_set if allowed.is_a?(Array)

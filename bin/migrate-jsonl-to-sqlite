@@ -1,0 +1,58 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# One-shot migration: read the legacy +generated/related_precompute.jsonl+
+# (from the pre-SQLite precompute pipeline) and populate
+# +generated/rhymecrime_local.sqlite3+ so local dev / specs work against the
+# new +Rhymecrime::LocalStore+ without re-running the full +bin/precompute-
+# relatedness+ scan (~3-4 h on an M-series box).
+#
+# Safe to run multiple times — UPSERTs by +pk+. Delete afterwards; kept
+# deliberately small (no options) because it only exists for the transition.
+
+$LOAD_PATH.unshift File.expand_path("../lib", __dir__)
+
+require "json"
+require_relative "../lib/rhymecrime/dict/utils_rhyme"
+require_relative "../lib/rhymecrime/local_store"
+
+jsonl_path = ARGV.first || generated_dict_path("related_precompute.jsonl")
+unless File.exist?(jsonl_path)
+  warn "Missing #{jsonl_path}"
+  exit 1
+end
+
+output_path = Rhymecrime::LocalStore.database_path
+File.delete(output_path) if File.exist?(output_path)
+
+puts "Migrating #{jsonl_path} → #{output_path}..."
+t0 = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+n = 0
+Rhymecrime::LocalStore.open_for_write do |writer|
+  File.foreach(jsonl_path, encoding: "UTF-8") do |line|
+    line.strip!
+    next if line.empty?
+
+    obj = JSON.parse(line)
+    pk = obj["pk"].to_s
+    next unless pk.start_with?("related#")
+
+    lem = pk.delete_prefix("related#")
+    words = obj["words"]
+    next unless words.is_a?(Array)
+
+    scores = obj["scores"]
+    scores = nil unless scores.is_a?(Array) && !scores.empty?
+
+    writer.upsert_related(lem, words, scores)
+    n += 1
+    if (n % 1000).zero?
+      elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC) - t0
+      puts "  #{n} rows (#{format('%.1f', elapsed)}s)"
+    end
+  end
+end
+
+elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC) - t0
+size_mb = (File.size(output_path).to_f / (1024 * 1024)).round(1)
+puts "Wrote #{n} rows into #{output_path} (#{size_mb} MB) in #{format('%.1f', elapsed)}s."

@@ -233,18 +233,17 @@ def rebuild_rhymecrime_dictionaries()
     base = lemma_map.fetch(word, word)
     common_base_forms.add(base)
   end
-  pref_common_base_n = 0
-  pref_common_base_with_rhymes_n = 0
+  cue_n = 0
+  target_n = 0
   common_base_forms.each do |base|
-    next unless word_common_preferred_headword?(base, word_dict)
+    next unless cue_word?(base, word_dict)
 
-    pref_common_base_n += 1
-    _freq, prons = word_dict[base]
-    pref_common_base_with_rhymes_n += 1 if headword_has_nonidentical_rhyme_partner?(base, prons, rdict, word_dict)
+    cue_n += 1
+    target_n += 1 if relatedness_target_word?(base, word_dict, rdict)
   end
   puts "word_dict: #{word_dict.size} entries"
   puts "  - #{common_n} common"
   puts "  - #{common_base_forms.size} common base forms"
-  puts "  - #{pref_common_base_n} preferred common base forms"
-  puts "  - #{pref_common_base_with_rhymes_n} preferred common base forms with rhymes"
+  puts "  - #{cue_n} cue words (precompute row PKs)"
+  puts "  - #{target_n} relatedness-target words (eligible to appear in a related list)"
 end

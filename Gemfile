@@ -8,6 +8,7 @@ gem "msgpack"
 gem "puma"
 gem "rwordnet"
 gem "sinatra"
+gem "sqlite3"
 
 group :development, :test do
   gem "csv"

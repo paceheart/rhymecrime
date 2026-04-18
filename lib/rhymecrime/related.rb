@@ -5,12 +5,11 @@
 #
 # Answers every relatedness question — "is this pair topically related?",
 # "what's the similarity score?", "which headwords are related to this cue?"
-# — from a precomputed source:
+# — from the precomputed +related#<lemma>+ rows exposed by
+# +Rhymecrime::Store+. The facade picks:
 #
-#   * DynamoDB (+Rhymecrime::DataSource.dynamodb?+): items at +related#<lemma>+
-#     carry parallel +words+ + +scores+ attributes.
-#   * Precompute JSONL (+generated/related_precompute.jsonl+): same schema,
-#     read once at load time.
+#   * +Rhymecrime::DynamoRuntime+ in Lambda (+RHYMECRIME_DATA_SOURCE=dynamodb+),
+#   * +Rhymecrime::LocalStore+ (SQLite) everywhere else.
 #
 # Neither path pulls in Numberbatch, ConceptNet, WordNet, USF, MPNet, or the
 # learned classifier — those live in +lib/rhymecrime/relatedness/*+ and are
@@ -18,20 +17,20 @@
 # +bin/train-relatedness-classifier+, related specs) or by the local-dev
 # fallback below.
 #
-# Local-dev fallback: when neither DynamoDB is configured nor the precompute
-# JSONL exists (fresh clone, running specs before precompute), +similarity+
-# returns 0 and the thematic predicates lazy-require the full compute
-# pipeline (+relatedness/signals+ + +score+ + +scan+) and fall through to it.
+# Local-dev fallback: when the LocalStore is absent (fresh clone, pre-precompute)
+# or missing a row for a queried cue, +similarity+ returns 0 and the thematic
+# predicates lazy-require the full compute pipeline (+relatedness/signals+ +
+# +score+ + +scan+). Lambda never reaches this fallback because +Store.available?+
+# is always true for DynamoDB.
 #
 # Accepted trade-off: when neither (A, B) is a cached cue, +similarity(A, B)+
 # returns 0 and +thematically_related?(A, B)+ is false at runtime — typical
 # for pairs where both sides are rare headwords (no row in precompute).
 #
 
-require "json"
-require "msgpack"
 require_relative "pace_utils"
 require_relative "dict/utils_rhyme"
+require_relative "store"
 
 SIMILAR_MAX = 50000 # O_o
 
@@ -44,10 +43,10 @@ def related_trace_memo?
   ENV["RELATED_TRACE_MEMO"].to_s == "1"
 end
 
-# Lazy-require the full relatedness compute pipeline. Only invoked when neither
-# DynamoDB nor the precompute JSONL has an answer (local-dev / spec fallback).
-# Once loaded, heavy knowledge bases (Numberbatch, ConceptNet, WordNet, etc.)
-# stay in memory for the life of the process.
+# Lazy-require the full relatedness compute pipeline. Only invoked when the
+# Store has no answer (local-dev / spec fallback). Once loaded, heavy
+# knowledge bases (Numberbatch, ConceptNet, WordNet, etc.) stay in memory for
+# the life of the process.
 $relatedness_compute_loaded = false
 def relatedness_lazy_load_compute!
   return if $relatedness_compute_loaded
@@ -55,6 +54,15 @@ def relatedness_lazy_load_compute!
   require_relative "relatedness/score"
   require_relative "relatedness/scan"
   $relatedness_compute_loaded = true
+end
+
+# True when the runtime should treat the Store as authoritative (hard +false+
+# on a pair miss, no compute fallback). Only DDB is authoritative — the
+# LocalStore is a dev cache that may not cover every pair (e.g. eval scripts
+# passing rare cues through +thematically_related?+), so a miss there falls
+# through to the compute pipeline just like on a fresh clone.
+def store_authoritative?
+  Rhymecrime::DataSource.dynamodb?
 end
 
 # --- Runtime similarity (cached relatedness_score 0..100) ---
@@ -127,9 +135,8 @@ end
 
 # True iff the two headwords are topically related. Symmetric. Stop words are
 # treated as related to every other word (contentless glue). At runtime the
-# predicate is answered from the precomputed source via
-# +RelatedWords.pair_in_precomputed?+; only the local-dev fallback lazy-loads
-# the full compute pipeline.
+# predicate is answered via +RelatedWords.pair_in_store?+; the local-dev
+# fallback lazy-loads the compute pipeline when the Store is absent.
 def thematically_related?(word1, word2, include_self = false)
   if ENV["RELATED_TRACE_THEMATIC"] == "1"
     warn "thematically_related? word1=#{word1.inspect} word2=#{word2.inspect} include_self=#{include_self.inspect}"
@@ -145,15 +152,13 @@ def thematically_related?(word1, word2, include_self = false)
   a, b = l1 <= l2 ? [l1, l2] : [l2, l1]
   puts "  -> lemma key #{a} #{b}" if related_trace_memo?
 
-  return true if RelatedWords.pair_in_precomputed?(a, b)
+  return true if RelatedWords.pair_in_store?(a, b)
 
-  # DDB is the canonical runtime source: if it doesn't have the pair, we
-  # accept the "missing means unrelated" trade-off (see file header) and
-  # return false without ever loading the compute pipeline. The precompute
-  # JSONL is weaker — it's a dev-time cache that may not cover every pair —
-  # so we fall through to compute on miss instead of a hard false. Lambda
-  # never hits the fallback because DDB is always configured there.
-  return false if defined?(Rhymecrime::DataSource) && Rhymecrime::DataSource.dynamodb?
+  # DDB is authoritative: "missing means unrelated," no compute fallback in
+  # Lambda. The LocalStore is a dev cache — it may not cover every pair (eval
+  # scripts routinely probe rare cues + rhymeless lemmas), so a miss there
+  # falls through to the compute pipeline.
+  return false if store_authoritative?
 
   relatedness_lazy_load_compute!
   thematically_related_pair_memoized?(a, b)
@@ -174,9 +179,7 @@ def why_thematically_related?(word1, word2, include_self = false)
   score = RelatedWords.lookup_score_by_lemmas(a, b)
   return "precomputed: topically related (score=#{score})" if score >= RELATEDNESS_SCORE_THRESHOLD
 
-  # DDB mode is authoritative (see +thematically_related?+): no compute
-  # fallback, so there's no "why" to report on a miss.
-  return nil if defined?(Rhymecrime::DataSource) && Rhymecrime::DataSource.dynamodb?
+  return nil if store_authoritative?
 
   relatedness_lazy_load_compute!
   why_thematically_related_full?(word1, word2, include_self)
@@ -185,133 +188,23 @@ end
 # --- RelatedWords: cue -> related headwords (+ stored scores) ---
 
 # Enumerates RhymeCrime headwords and returns those topically related to a cue.
-# Prefers DynamoDB (when configured) or the precompute JSONL; falls back to the
-# lazy-loaded full scan for local dev.
+# Delegates to +Rhymecrime::Store+ (DDB in prod, SQLite locally); falls back to
+# a lazy-loaded full scan only when the Store has no row for the cue and isn't
+# authoritative (local-dev with incomplete precompute).
 class RelatedWords
   class << self
-    # Lazy-loaded {lemma => [[word, score], ...]} from the precompute source.
-    # Prefers the compiled MessagePack file (fast — a couple of seconds for the
-    # full ~2 GB table) and falls back to line-by-line JSONL parse when only
-    # the text form is on disk. Empty hash when neither file exists — that's
-    # the signal to the runtime shim that we have no precomputed source and
-    # thematic predicates should fall back to the lazy-loaded compute
-    # pipeline.
-    def related_precompute_by_lemma
-      return @related_precompute_by_lemma if instance_variable_defined?(:@related_precompute_by_lemma)
-
-      msgpack_path = generated_dict_path(RELATED_PRECOMPUTE_MSGPACK_FILENAME)
-      if File.exist?(msgpack_path)
-        @related_precompute_by_lemma = load_precompute_msgpack(msgpack_path)
-        return @related_precompute_by_lemma
-      end
-
-      jsonl_path = generated_dict_path(RELATED_PRECOMPUTE_JSONL_FILENAME)
-      if File.exist?(jsonl_path)
-        @related_precompute_by_lemma = load_precompute_jsonl(jsonl_path)
-        return @related_precompute_by_lemma
-      end
-
-      @related_precompute_by_lemma = {}
-    end
-
-    # Parse the compiled MessagePack blob emitted by +bin/precompute-relatedness+.
-    # Schema: +{lemma_string => [[word_string, score_int], ...]}+ — the exact
-    # shape +related_precompute_by_lemma+ hands to +filter_precomputed_tuples+,
-    # so no post-processing needed.
-    def load_precompute_msgpack(path)
-      table = File.open(path, "rb") { |f| MessagePack.unpack(f.read) }
-      unless table.is_a?(Hash)
-        warn "related: skip precompute msgpack load (#{path}): not a Hash"
-        return {}
-      end
-      puts "loaded #{table.size} precomputed related lemmas from #{path}"
-      table
-    rescue StandardError => e
-      warn "related: skip precompute msgpack load (#{path}): #{e.message}"
-      {}
-    end
-
-    def load_precompute_jsonl(path)
-      table = {}
-      n = 0
-      File.foreach(path, encoding: "UTF-8") do |line|
-        line = line.strip
-        next if line.empty?
-
-        obj = JSON.parse(line)
-        pk = obj["pk"].to_s
-        next unless pk.start_with?("related#")
-
-        lem = pk.delete_prefix("related#")
-        words = obj["words"]
-        next unless words.is_a?(Array)
-
-        scores = obj["scores"]
-        scores = [] unless scores.is_a?(Array)
-        tuples = words.each_with_index.map do |w, i|
-          score = scores[i]
-          [w.to_s, score.is_a?(Numeric) ? score.to_i : RELATEDNESS_SCORE_THRESHOLD]
-        end
-
-        table[lem] = tuples
-        n += 1
-      end
-      puts "loaded #{n} precomputed related lemmas from #{path} (JSONL; run bin/precompute-relatedness to compile the faster .msgpack form)" if n.positive?
-      table
-    rescue JSON::ParserError => e
-      warn "related: skip precompute load (#{path}): #{e.message}"
-      {}
-    end
-
-    def precompute_loaded?
-      !related_precompute_by_lemma.empty?
-    end
-
-    # Filter a precompute row's [[word, score], ...] tuples by the caller's
-    # visibility flags. Preserves +(word, score)+ pairing so callers that need
-    # the stored score downstream can read it without a second lookup.
-    def filter_precomputed_tuples(raw, include_rhymeless, common_only)
-      return [] if raw.nil? || raw.empty?
-      unless defined?(lexicon_word_entry) && defined?(rdict_lookup)
-        return raw.dup
-      end
-
-      raw.select do |(w, _score)|
-        entry = lexicon_word_entry(w)
-        next false unless entry
-        next false if common_only && entry[0].to_i <= RARE_FREQ_MAX
-        if include_rhymeless
-          true
-        else
-          entry[1].any? { |pron| !pron.rime.to_s.empty? && !rdict_lookup(pron.rime).empty? }
-        end
-      end
-    end
-
-    # Returns [[word, score], ...] for the row keyed by +lemma_a+ under the
-    # active data source. DDB fetches the parallel words + scores lists;
-    # precompute JSONL uses the pre-parsed cache. Empty list when the row
-    # doesn't exist.
-    def lookup_tuples_for_lemma(lemma_a)
-      if defined?(Rhymecrime::DataSource) && Rhymecrime::DataSource.dynamodb?
-        Rhymecrime::DynamoRuntime.fetch_related_tuples(lemma_a)
-      else
-        related_precompute_by_lemma[lemma_a] || []
-      end
-    end
-
-    # Membership test for a lemma pair. Tries +related#lemma_a+ first, then
-    # +related#lemma_b+ — only one side needs to be a cached cue (scores are
-    # symmetric). The +lemma(w) == lemma_b+ check covers the common case
+    # Membership test for a lemma pair. Tries the +related#lemma_a+ row first,
+    # then +related#lemma_b+ — only one side needs to be a cached cue (scores
+    # are symmetric). The +lemma(w) == lemma_b+ check covers the common case
     # where the row stores a surface headword whose lemma is the other side
     # (e.g. row for +car+ contains +cars+; query is +cars+/+car+).
-    def pair_in_precomputed?(lemma_a, lemma_b)
+    def pair_in_store?(lemma_a, lemma_b)
       return false if lemma_a.nil? || lemma_b.nil?
 
-      tuples = lookup_tuples_for_lemma(lemma_a)
+      tuples = Rhymecrime::Store.fetch_related_tuples(lemma_a)
       return true if tuples.any? { |(w, _s)| w == lemma_b || lemma(w) == lemma_b }
 
-      tuples = lookup_tuples_for_lemma(lemma_b)
+      tuples = Rhymecrime::Store.fetch_related_tuples(lemma_b)
       tuples.any? { |(w, _s)| w == lemma_a || lemma(w) == lemma_a }
     end
 
@@ -324,10 +217,10 @@ class RelatedWords
     def lookup_score_by_lemmas(lemma_a, lemma_b)
       return 0 if lemma_a.nil? || lemma_b.nil?
 
-      tuples = lookup_tuples_for_lemma(lemma_a)
+      tuples = Rhymecrime::Store.fetch_related_tuples(lemma_a)
       tuples.each { |(w, s)| return s.to_i if w == lemma_b || lemma(w) == lemma_b }
 
-      tuples = lookup_tuples_for_lemma(lemma_b)
+      tuples = Rhymecrime::Store.fetch_related_tuples(lemma_b)
       tuples.each { |(w, s)| return s.to_i if w == lemma_a || lemma(w) == lemma_a }
 
       0
@@ -337,8 +230,8 @@ class RelatedWords
     # +relatedness_score+ for UI / display. Pass +nil+ for no cap (e.g.
     # set_related / pair rhyming): truncation can drop words with lower
     # stored scores that are still legitimately related. Sort uses the
-    # stored scores from the cue's precompute row — no per-candidate DDB
-    # lookup.
+    # stored scores from the cue's precompute row — no per-candidate
+    # backend lookup.
     def find_thematically_related_words(word, include_self, include_rhymeless = true, common_only = false, max_candidates = SIMILAR_MAX)
       tuples = find_all_thematically_related_words_with_scores(word, include_rhymeless, common_only)
       if max_candidates && tuples.length > max_candidates
@@ -363,10 +256,10 @@ class RelatedWords
       return @related_word_cache[key] if @related_word_cache.key?(key)
 
       # Stop words (+stop_word?+) are related to every other word; short-circuit
-      # to +words_we_care_about+ rather than a per-pair scan / precompute
-      # lookup, which is both wasteful and (for DDB / JSONL) not populated for
-      # stop-word keys (see +bin/precompute-relatedness+, which skips them).
-      # Stop-word pairs have no meaningful stored score — assign the
+      # to +words_we_care_about+ rather than a per-pair scan / Store lookup,
+      # which is both wasteful and (by convention) not populated for stop-word
+      # keys (see +bin/precompute-relatedness+, which skips them). Stop-word
+      # pairs have no meaningful stored score — assign the
       # +RELATEDNESS_SCORE_THRESHOLD+ floor so sort order is stable.
       if stop_word?(word) || stop_word?(lemma(word))
         candidates = words_we_care_about(include_rhymeless, common_only).reject { |w| w == word }
@@ -376,29 +269,32 @@ class RelatedWords
         return tuples
       end
 
-      if defined?(Rhymecrime::DataSource) && Rhymecrime::DataSource.dynamodb?
-        lemma_key = lemma(word)
-        tuples = Rhymecrime::DynamoRuntime.find_all_related_precomputed_with_scores(lemma_key, include_rhymeless, common_only)
-        debug "Finding words related to #{word} (Dynamo, lemma=#{lemma_key})... #{tuples.length}\n"
+      lemma_key = lemma(word)
+
+      # DDB is authoritative — empty row means "no related words," full stop.
+      if store_authoritative?
+        tuples = Rhymecrime::Store.find_all_related_precomputed_with_scores(lemma_key, include_rhymeless, common_only)
+        debug "Finding words related to #{word} (store[authoritative], lemma=#{lemma_key})... #{tuples.length}\n"
         @related_word_cache[key] = tuples
         return tuples
       end
 
-      if precompute_loaded?
-        lemma_key = lemma(word)
-        raw = related_precompute_by_lemma[lemma_key]
-        if raw
-          tuples = filter_precomputed_tuples(raw, include_rhymeless, common_only)
-          debug "Finding words related to #{word} (precompute, lemma=#{lemma_key})... #{tuples.length}\n"
-          @related_word_cache[key] = tuples
-          return tuples
-        end
-        # Cue's lemma has no precompute row — fall through to the full scan
-        # (local-dev). DDB mode was handled above and doesn't reach here.
+      # Dev-mode LocalStore is a cache: hit it when the cue has a row, fall
+      # through to the full-scan compute pipeline when it doesn't (pre-SQLite
+      # precompute-set cue miss — e.g. eval scripts or the user typing a
+      # rare headword that wasn't in +rep.keys+ at precompute time). We use
+      # +has_related?+ to distinguish "row exists but filtered to empty"
+      # (legit "no related words" answer) from "row never built for this cue"
+      # (fall through).
+      if Rhymecrime::Store.available? && Rhymecrime::Store.has_related?(lemma_key)
+        tuples = Rhymecrime::Store.find_all_related_precomputed_with_scores(lemma_key, include_rhymeless, common_only)
+        debug "Finding words related to #{word} (store[cache], lemma=#{lemma_key})... #{tuples.length}\n"
+        @related_word_cache[key] = tuples
+        return tuples
       end
 
-      # Local-dev fallback: no DDB, and either no precompute JSONL at all or
-      # no row for this cue. Lazy-require the full compute pipeline and scan.
+      # Local-dev fallback: no Store on disk, or no row for this cue. Lazy-
+      # require the full compute pipeline and scan.
       relatedness_lazy_load_compute!
       tuples = find_all_thematically_related_words_by_scan(word, include_rhymeless, common_only)
       debug "Finding words related to #{word} (full scan)... #{tuples.length}\n"

@@ -1,21 +1,34 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 
-# Pre-compute thematically related headword lists per distinct lemma (same cue set as dict-build’s
-# “preferred common base forms with rhymes” line: common lemma headword, +preferred_form+ surface,
-# +headword_has_nonidentical_rhyme_partner?+). Skips ~35k lemma keys down to ~20k cues vs scanning
-# every common lemma row from the CSV alone.
+# Pre-compute thematically related headword lists per distinct lemma.
+#
+# Cue set (one row per): every +word_common_preferred_headword?+ lemma,
+# including rhymeless ones like +music+ / +concerto+ / +algebra+ — runtime
+# (and +spec/related_weighted_accuracy.rb+) may legitimately ask
+# +thematically_related?+ about any common headword, so we need a row for any
+# common headword.
+#
+# Relateds list (per row): +find_all_thematically_related_words_by_scan(lem,
+# include_rhymeless=false, common_only=true)+ — narrower, only rhymable
+# common headwords, because rhymeless lemmas have no UI path to show up as a
+# related rhyme suggestion. This asymmetry is intentional (see the
+# +lemmas = rep.keys.select+ block below for the cue-side filter).
 # Computation uses only local generated/ files (no RHYMECRIME_DATA_SOURCE=dynamodb).
-# Always writes JSONL to generated/ (default: related_precompute.jsonl); upload with bin/upload-to-dynamodb.
+# Writes directly into the local SQLite store (generated/rhymecrime_local.sqlite3) — the same file
+# +Rhymecrime::LocalStore+ reads at runtime and +bin/upload-to-dynamodb+ streams to prod DDB.
 #
 #   ruby bin/precompute-relatedness
 #
 # Options:
-#   --output=PATH          Override output path (default: generated/related_precompute.jsonl)
+#   --output=PATH          Override SQLite path (default: generated/rhymecrime_local.sqlite3)
 #   --dry-run              Compute only; print progress, do not write a file
 #   --max-cues=N           Only process first N lemmas (smoke test)
 #   --start-after=WORD     Skip lemmas until after this string (lexicographic)
 #   --threads=N            Parallel workers (fork-based). Default: half of +Etc.nprocessors+.
+#   --incremental          Keep existing rows in the target DB and only process cues
+#                          not already present. Use after widening the cue filter so
+#                          you don't redo cues the stored rows already cover.
 #
 # Threading notes: the compute is pure-Ruby CPU-bound, so we fork worker processes
 # rather than native threads (MRI's GVL prevents parallel Ruby execution). All
@@ -23,6 +36,11 @@
 # loads in the parent before fork, so workers share those pages via copy-on-write.
 # Peak RSS climbs as memos mutate, so the default caps at half of the cores to
 # leave headroom; override with +--threads=N+ when you have the RAM.
+#
+# Output: each worker writes to its own shard SQLite file (+.shardN.tmp+ next to
+# the target DB); the parent attaches + +INSERT OR REPLACE+ merges on success.
+# Per-shard DBs avoid write contention that would otherwise serialize workers on
+# the main file's WAL lock.
 #
 # OOV Numberbatch: headwords whose dictionary lemma has no row in generated/numberbatch_vectors.msgpack
 # skip the expensive full relatedness scan (see +dictionary_lemma_has_numberbatch_vector?+ in related.rb).
@@ -33,12 +51,11 @@ $LOAD_PATH.unshift File.expand_path("../lib", __dir__)
 ENV.delete("RHYMECRIME_DATA_SOURCE")
 
 require "etc"
-require "json"
-require "msgpack"
 require "optparse"
 require_relative "../lib/rhymecrime/dict/utils_rhyme"
 require_relative "../lib/rhymecrime/frontend"
 require_relative "../lib/rhymecrime/dict/rime"
+require_relative "../lib/rhymecrime/local_store"
 # Full-compute pipeline (Numberbatch, ConceptNet, WordNet, USF, MPNet,
 # classifier): not required at Lambda runtime, explicitly pulled in here
 # because this script's whole job is to produce the cache the runtime reads.
@@ -46,10 +63,11 @@ require_relative "../lib/rhymecrime/relatedness/signals"
 require_relative "../lib/rhymecrime/relatedness/score"
 require_relative "../lib/rhymecrime/relatedness/scan"
 
-output_path = generated_dict_path(RELATED_PRECOMPUTE_JSONL_FILENAME)
+output_path = Rhymecrime::LocalStore.database_path
 dry_run = false
 max_cues = nil
 start_after = nil
+incremental = false
 # Half of the cores is a sensible default: each worker's memos mutate over time
 # and break copy-on-write sharing of the heap, so peak RSS scales with worker
 # count; leaving half the cores free keeps the box responsive and avoids
@@ -58,11 +76,15 @@ default_threads = [Etc.nprocessors / 2, 1].max
 threads = default_threads
 
 OptionParser.new do |o|
-  o.on("--output=PATH", "JSONL output path") { |p| output_path = File.expand_path(p) }
+  o.on("--output=PATH", "SQLite output path") { |p| output_path = File.expand_path(p) }
   o.on("--dry-run", "Compute only; do not write") { dry_run = true }
   o.on("--max-cues=N", Integer) { |n| max_cues = n }
   o.on("--start-after=WORD") { |w| start_after = w }
   o.on("--threads=N", Integer, "Parallel fork workers (default: #{default_threads})") { |n| threads = [n, 1].max }
+  o.on("--incremental", "Keep existing rows; skip cues already present in +output-path+. " \
+                       "Use when widening the cue filter to avoid redoing the cues already done.") do
+    incremental = true
+  end
 end.parse!
 
 word_path = generated_dict_path(WORD_DICT_FILENAME)
@@ -91,11 +113,20 @@ end
 wd = word_dict
 rd = rdict
 before_n = rep.size
+# Asymmetric cue / relateds filtering: see +cue_word?+ vs
+# +relatedness_target_word?+ in +lib/rhymecrime/dict/rime.rb+. Cues include
+# rhymeless lemmas (+music+, +concerto+, +algebra+, +quarterback+) so any
+# question +thematically_related?+ might be asked at runtime has a row; the
+# rhyme-partner check lives in +relatedness_target_word?+ and only governs the
+# _relateds_ list inside each row (see +process_cue+ below, which uses
+# +find_all_thematically_related_words_by_scan(..., false, true)+ — i.e.
+# +include_rhymeless=false, common_only=true+). Pre-asymmetry, ~70 CSV pairs
+# with e.g. +music+/+drumstick+ missed the store entirely and fell through to
+# the slow compute path every eval run.
 lemmas = rep.keys.select do |lem|
   next false unless wd.key?(lem)
 
-  word_common_preferred_headword?(lem, wd) &&
-    headword_has_nonidentical_rhyme_partner?(lem, wd[lem]&.dig(1), rd, wd)
+  cue_word?(lem, wd)
 end.sort
 lemmas.select! { |l| l > start_after } if start_after
 lemmas = lemmas.first(max_cues) if max_cues
@@ -103,16 +134,39 @@ lemmas = lemmas.first(max_cues) if max_cues
 # Stop words are related to every other word (see +thematically_related?+), so their
 # precompute entry would be the full candidate list — ~20k headwords per stop word.
 # The runtime in +RelatedWords.find_all_thematically_related_words+ short-circuits
-# stop-word lookups to +words_we_care_about+ directly, so no JSONL entry is needed.
+# stop-word lookups to +words_we_care_about+ directly, so no row is needed.
 stopword_lemmas, lemmas = lemmas.partition { |l| stop_word?(l) }
 puts "Skipping #{stopword_lemmas.size} stop-word lemmas (runtime short-circuits to words_we_care_about): #{stopword_lemmas.inspect}" if stopword_lemmas.any?
+
+# +--incremental+: keep the existing +output_path+ DB and only process cues
+# not already present. Used to grow the precompute table after widening the
+# cue filter (or after adding new rare headwords to the dict) without redoing
+# hours of work the stored rows already cover. Everything downstream (shard
+# writes, merge via +INSERT OR REPLACE+) already tolerates this — we just
+# filter the worklist up front.
+if incremental && !dry_run && File.exist?(output_path)
+  require "sqlite3"
+  existing = Set.new
+  db = SQLite3::Database.new(output_path, readonly: true)
+  begin
+    db.execute("SELECT pk FROM related") do |(pk)|
+      lem = pk.to_s.delete_prefix("related#")
+      existing << lem unless lem.empty?
+    end
+  ensure
+    db.close
+  end
+  before = lemmas.size
+  lemmas = lemmas.reject { |l| existing.include?(l) }
+  puts "Incremental: skipping #{before - lemmas.size} cues already in #{output_path} (#{existing.size} total existing rows); processing #{lemmas.size} new."
+end
 
 n = lemmas.size
 threads = [threads, n].min if n.positive?
 threads = 1 if threads < 1
 
 puts "Precompute cues: #{n} preferred common lemmas with rhymes (#{before_n} distinct common lemmas in word_dict before filter)"
-puts "Scanning #{n} lemmas → #{dry_run ? '(dry-run, no file)' : output_path} with #{threads} worker#{threads == 1 ? '' : 's'} (JSONL only when ≥1 related word)"
+puts "Scanning #{n} lemmas → #{dry_run ? '(dry-run, no file)' : output_path} with #{threads} worker#{threads == 1 ? '' : 's'} (SQLite row only when ≥1 related word)"
 
 RelatedWords.instance_variable_set(:@related_word_cache, {})
 
@@ -157,9 +211,9 @@ process_cue = lambda do |lem|
 end
 
 # Run the scan for +shard+ (the slice of +lemmas+ assigned to this worker),
-# appending one JSONL row per non-empty cue to +io+ (or nil for dry-run).
-# +tag+ is a short identifier printed with each progress line (e.g. "w0").
-run_shard = lambda do |shard, io, tag|
+# upserting one SQLite row per non-empty cue through +writer+ (or nil for
+# dry-run). +tag+ is a short identifier printed with each progress line.
+run_shard = lambda do |shard, writer, tag|
   t0 = Process.clock_gettime(Process::CLOCK_MONOTONIC)
   total = shard.size
   shard.each_with_index do |lem, i|
@@ -181,21 +235,27 @@ run_shard = lambda do |shard, io, tag|
       count = result ? result[0].size : 0
       puts "  [#{tag} #{i}/#{total}] #{lem}: #{count} related#{paren}"
     end
-    next unless result && io
+    next unless result && writer
 
     words, scores = result
-    io.puts(JSON.generate("pk" => "related##{lem}", "words" => words, "scores" => scores))
+    writer.upsert_related(lem, words, scores)
   end
 end
 
+# Single-process path: keep the simple in-memory flow so stack traces /
+# interactive debugging work normally. Writes directly to the final SQLite
+# path in a single transaction.
 if threads <= 1 || n.zero?
-  # Single-process path: keep the simple in-memory flow so stack traces /
-  # interactive debugging work normally.
-  jsonl_io = dry_run ? nil : File.open(output_path, "w", encoding: "UTF-8")
-  begin
-    run_shard.call(lemmas, jsonl_io, "0")
-  ensure
-    jsonl_io&.close
+  if dry_run
+    run_shard.call(lemmas, nil, "0")
+  else
+    # Non-incremental: wipe the old DB so rows dropped by the current cue
+    # filter don't survive. Incremental: keep the existing DB; the single-
+    # writer transaction below will +INSERT OR REPLACE+ just the new rows.
+    File.delete(output_path) if !incremental && File.exist?(output_path)
+    Rhymecrime::LocalStore.open_for_write(output_path) do |writer|
+      run_shard.call(lemmas, writer, "0")
+    end
   end
 else
   # Fork-based parallelism. Ruby's GVL serializes pure-Ruby execution in
@@ -222,11 +282,15 @@ else
   shards = Array.new(threads) { [] }
   lemmas.each_with_index { |lem, i| shards[i % threads] << lem }
 
-  # Each worker writes its own JSONL file; parent concatenates on success.
-  # +.partN.tmp+ sits next to the final output so it lives on the same
-  # filesystem (cheap rename/append) and is easy to spot + clean up on crash.
-  base = dry_run ? nil : output_path
-  shard_paths = dry_run ? Array.new(threads) { nil } : Array.new(threads) { |i| "#{base}.part#{i}.tmp" }
+  # Each worker writes to its own SQLite file; parent ATTACHes + merges on
+  # success. +.shardN.tmp+ sits next to the final output so it lives on the
+  # same filesystem (ATTACH across filesystems still works but copy is slower)
+  # and is easy to spot + clean up on crash.
+  shard_paths = dry_run ? Array.new(threads) { nil } : Array.new(threads) { |i| "#{output_path}.shard#{i}.tmp" }
+
+  # Fresh shard files every run: stale rows from a crashed previous shard
+  # would otherwise survive the merge.
+  shard_paths.each { |p| File.delete(p) if p && File.exist?(p) }
 
   # Flush so parent's stdout buffer isn't duplicated into every child.
   $stdout.flush
@@ -236,11 +300,13 @@ else
     fork do
       # Worker: fresh memos (inherited from parent are fine but will diverge
       # across workers anyway). Exit status encodes success/failure.
-      io = shard_paths[idx] ? File.open(shard_paths[idx], "w", encoding: "UTF-8") : nil
-      begin
-        run_shard.call(shard, io, "w#{idx}")
-      ensure
-        io&.close
+      shard_path = shard_paths[idx]
+      if shard_path
+        Rhymecrime::LocalStore.open_for_write(shard_path) do |writer|
+          run_shard.call(shard, writer, "w#{idx}")
+        end
+      else
+        run_shard.call(shard, nil, "w#{idx}")
       end
     end
   end
@@ -261,56 +327,23 @@ else
   end
 
   unless dry_run
-    File.open(output_path, "w", encoding: "UTF-8") do |out|
+    # Non-incremental: wipe the destination so rows dropped by the current
+    # cue filter don't survive. Incremental: keep it; +merge_shard+ does
+    # +INSERT OR REPLACE+ so the new shards overlay cleanly on the existing
+    # rows without touching cues not in this run.
+    File.delete(output_path) if !incremental && File.exist?(output_path)
+    puts "Merging #{shard_paths.size} shard#{shard_paths.size == 1 ? '' : 's'} into #{output_path}..."
+    t_merge = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+    Rhymecrime::LocalStore.open_for_write(output_path) do |writer|
       shard_paths.each do |p|
-        next unless p && File.exist?(p)
-        File.open(p, "r", encoding: "UTF-8") { |f| IO.copy_stream(f, out) }
+        writer.merge_shard(p) if p && File.exist?(p)
       end
     end
+    merge_elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC) - t_merge
+    size_mb = (File.size(output_path).to_f / (1024 * 1024)).round(1)
+    puts "Merged into #{output_path} (#{size_mb} MB) in #{format('%.1f', merge_elapsed)}s."
     shard_paths.each { |p| File.delete(p) if p && File.exist?(p) }
   end
-end
-
-# Compile the just-written JSONL into a MessagePack blob the runtime can load
-# in ~a couple of seconds instead of re-parsing ~2 GB of text every boot. The
-# JSONL is still the source of truth for +bin/upload-to-dynamodb+ (line-at-a-
-# time streaming) — this file is purely a local-dev startup accelerator for
-# +RelatedWords.related_precompute_by_lemma+.
-unless dry_run
-  msgpack_path = generated_dict_path(RELATED_PRECOMPUTE_MSGPACK_FILENAME)
-  puts "Compiling #{output_path} → #{msgpack_path}..."
-  t_compile = Process.clock_gettime(Process::CLOCK_MONOTONIC)
-  table = {}
-  File.foreach(output_path, encoding: "UTF-8") do |line|
-    line = line.strip
-    next if line.empty?
-
-    obj = JSON.parse(line)
-    pk = obj["pk"].to_s
-    next unless pk.start_with?("related#")
-
-    lem = pk.delete_prefix("related#")
-    words = obj["words"]
-    next unless words.is_a?(Array)
-
-    scores = obj["scores"]
-    scores = [] unless scores.is_a?(Array)
-    tuples = words.each_with_index.map do |w, i|
-      score = scores[i]
-      [w.to_s, score.is_a?(Numeric) ? score.to_i : RELATEDNESS_SCORE_THRESHOLD]
-    end
-    table[lem] = tuples
-  end
-
-  # Atomic replace: write to a tmp file on the same fs, then rename, so a
-  # crashed partial write doesn't poison the next boot. Readers open for
-  # read before rename continue to see the old inode.
-  tmp = "#{msgpack_path}.tmp"
-  File.open(tmp, "wb") { |f| f.write(MessagePack.pack(table)) }
-  File.rename(tmp, msgpack_path)
-  compile_elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC) - t_compile
-  size_mb = (File.size(msgpack_path).to_f / (1024 * 1024)).round(1)
-  puts "Compiled #{table.size} lemmas into #{msgpack_path} (#{size_mb} MB) in #{format('%.1f', compile_elapsed)}s."
 end
 
 elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC) - run_started_at

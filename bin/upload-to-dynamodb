@@ -4,27 +4,29 @@
 # Batch-write into DynamoDB (single-table design, pk partition key):
 #   - word_dict.txt  → word#…
 #   - rime_dict.txt  → rime#…
-#   - related_precompute.jsonl (from bin/precompute-relatedness) → related#…
+#   - rhymecrime_local.sqlite3 (from bin/precompute-relatedness) → related#…
 #
 #   RHYMECRIME_TABLE_NAME=rhymecrime AWS_REGION=us-east-1 ruby bin/upload-to-dynamodb
 #
-#   --skip-related     Do not upload related rows (omit if JSONL is missing)
-#   --related=PATH     Override path to JSONL (default: generated/related_precompute.jsonl)
+#   --skip-related     Do not upload related rows (omit if the local store is missing)
+#   --related=PATH     Override path to the local SQLite store
+#                      (default: generated/rhymecrime_local.sqlite3)
 
 $LOAD_PATH.unshift File.expand_path("../lib", __dir__)
 
 require "json"
 require "optparse"
 require "aws-sdk-dynamodb"
+require "sqlite3"
 require_relative "../lib/rhymecrime/data_source"
 require_relative "../lib/rhymecrime/dict/utils_rhyme"
 
 skip_related = false
-related_path = generated_dict_path(RELATED_PRECOMPUTE_JSONL_FILENAME)
+related_path = generated_dict_path(LOCAL_STORE_FILENAME)
 
 OptionParser.new do |o|
-  o.on("--skip-related", "Skip uploading related# items from JSONL") { skip_related = true }
-  o.on("--related=PATH", "Path to related precompute JSONL") { |p| related_path = File.expand_path(p) }
+  o.on("--skip-related", "Skip uploading related# items from the local store") { skip_related = true }
+  o.on("--related=PATH", "Path to local SQLite store built by bin/precompute-relatedness") { |p| related_path = File.expand_path(p) }
 end.parse!
 
 table = Rhymecrime::DataSource.table_name
@@ -94,32 +96,41 @@ else
   end
 
   puts "Uploading related entries from #{related_path}..."
-  related_items = []
-  File.foreach(related_path, encoding: "UTF-8") do |line|
-    line = line.strip
-    next if line.empty?
+  # Stream rows out of SQLite in batches so we don't hold the full ~1.5 GB
+  # table in memory just to feed +batch_write_item+ (which batches 25 at a
+  # time anyway). +words+ and +scores+ came in as JSON blobs in the DB;
+  # +scores+ is omitted from the DDB item when the row has no +scores+ JSON
+  # so +Rhymecrime::DynamoRuntime.fetch_related_tuples+ falls back to
+  # +RELATEDNESS_SCORE_THRESHOLD+ for every entry — matches the behavior for
+  # DDB rows that predate the scores schema.
+  db = SQLite3::Database.new(related_path, readonly: true)
+  begin
+    n_related = 0
+    buf = []
+    db.execute("SELECT pk, words, scores FROM related") do |pk, words_json, scores_json|
+      words = JSON.parse(words_json)
+      raise "row missing words: #{pk}" unless words.is_a?(Array)
 
-    row = JSON.parse(line)
-    pk = row["pk"]
-    words = row["words"]
-    raise "line missing pk/words: #{line[0, 120]}" unless pk.is_a?(String) && words.is_a?(Array)
-
-    # +scores+ is a parallel array of stored +relatedness_score+ values
-    # (0..100 integers) written by +bin/precompute-relatedness+ alongside
-    # +words+. Older JSONL rows may omit it entirely — omit the attribute on
-    # upload in that case and let +Rhymecrime::DynamoRuntime.fetch_related_tuples+
-    # default missing entries to +RELATEDNESS_SCORE_THRESHOLD+ so UI coloring
-    # stays sensible against stale rows.
-    scores = row["scores"]
-    item = {
-      "pk" => pk,
-      "words" => words
-    }
-    item["scores"] = scores if scores.is_a?(Array) && !scores.empty?
-    related_items << item
+      item = { "pk" => pk, "words" => words }
+      if scores_json
+        scores = JSON.parse(scores_json)
+        item["scores"] = scores if scores.is_a?(Array) && !scores.empty?
+      end
+      buf << item
+      if buf.size >= 500
+        put_batch(client, table, buf)
+        n_related += buf.size
+        buf.clear
+      end
+    end
+    unless buf.empty?
+      put_batch(client, table, buf)
+      n_related += buf.size
+    end
+    puts "  #{n_related} related# items"
+  ensure
+    db.close
   end
-  put_batch(client, table, related_items)
-  puts "  #{related_items.size} related# items"
 end
 
 puts "Done."
