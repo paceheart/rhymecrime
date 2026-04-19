@@ -39,6 +39,22 @@ def prune_rhyming_tuple(keep_spec, prune_spec, not_working_reason = nil)
   end
 end
 
+# Assert the pruner drops +spec+ entirely (output has zero tuples). Use for inputs whose members
+# are spelling variants of each other — the tuple carries no information the non-redundant forms
+# don't already convey, so it should never be shown. See +prune_rhyming_tuple+ for
+# +not_working_reason+ semantics.
+def prune_entire_rhyming_tuple(spec, not_working_reason = nil)
+  it "prune entire tuple: #{spec}" do
+    skip_if_not_working(not_working_reason) if prune_rhyming_tuple_not_working?(not_working_reason)
+    input = parse_tuple_literal(spec)
+    result = prune_suffix_redundant_rhyming_tuples([input])
+    expect(result).to(
+      eq([]),
+      "expected pruning to drop #{input.inspect} entirely, got #{result.inspect}"
+    )
+  end
+end
+
 # Assert the pruner keeps both tuples (i.e. neither is redundant with the other). See
 # +prune_rhyming_tuple+ for +not_working_reason+ semantics.
 def dont_prune_rhyming_tuple(a_spec, b_spec, not_working_reason = nil)

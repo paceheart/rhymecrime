@@ -9,6 +9,11 @@
 #  -er/-re (center/centre, fiber/fibre, caliber/calibre, etc.)
 #  -l-/-ll- consonant doubling before vowel-initial suffixes on verbs ending in -l
 #    (barreled/barrelled, traveling/travelling, modeler/modeller, marvelous/marvellous, etc.)
+#
+# These lexical (non-dialectal) variant pairs are also resolved automatically, using
+# wordfreq Zipf to pick the dominant spelling (and the shorter -os form as a deterministic
+# tiebreaker when neither side wins by ≥3×):
+#  -oes/-os plural of -o nouns (heroes/heros, tomatoes/tomatos, aficionados/aficionadoes, etc.)
 acknowledgment acknowledgement
 adaptor adapter
 advisor adviser

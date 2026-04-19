@@ -31,6 +31,10 @@ CONCEPTNET_LEMMA_CACHE_SUFFIX = ".en-kept-lemmas.txt.gz"
 NUMBERBATCH_VECTORS_FILENAME = "numberbatch_vectors.msgpack"
 # USF cue→target association strengths (FSG); place under generated/ for runtime (e.g. built from corpora/usf/).
 USF_ASSOCIATIONS_FILENAME = "usf_associations.json"
+# Auto-detected lexical spelling variant pairs (e.g. -oes/-os), emitted by dict-build from corpus
+# frequency data. Same line format as the hand-edited +spelling_variants.txt+; loaded at runtime
+# via +load_variants_raw+ so no corpus I/O leaks into the runtime path.
+SPELLING_VARIANTS_AUTO_FILENAME = "spelling_variants_auto.txt"
 # Learned phase-2 relatedness combiner (logistic regression over +PairSignals+ features);
 # built by bin/train-relatedness-classifier, consumed in related.rb.
 RELATEDNESS_CLASSIFIER_FILENAME = "relatedness_classifier.json"
@@ -427,6 +431,50 @@ def us_uk_morphology_variant_forms(word)
   return nil unless pair
   u, k = pair
   k == u ? [u] : [u, k]
+end
+
+# Shape-only match of +word+ as the -oes or -os surface of an -o noun's plural. Returns
+# [oes_form, os_form] when the pattern matches, nil otherwise. Used by the build-time
+# corpus variant emitter (dict/corpus_variants.rb) and the pronunciation-overlap guards
+# below; runtime consumption of the resolved pairs goes through +variants()+ via the
+# generated +spelling_variants_auto.txt+ (corpora stay strictly build-side).
+O_PLURAL_MIN_WORD_LENGTH = 4
+
+def o_plural_candidate_pair(word)
+  w = word.to_s
+  return nil if w.length < O_PLURAL_MIN_WORD_LENGTH
+  if w.end_with?("oes")
+    os = w[0...-2] + "s" # "tomatoes" → "tomatos"
+    return nil if os == w
+    return [w, os]
+  end
+  if w.end_with?("os") && !w.end_with?("oos")
+    oes = w[0...-1] + "es" # "tomatos" → "tomatoes"
+    return nil if oes == w
+    return [oes, w]
+  end
+  nil
+end
+
+# True when +a+ and +b+ share at least one +word_dict+ pronunciation after dropping
+# syllable boundaries and stripping stress digits. Rejects surface-only pair matches
+# whose pronunciations diverge (e.g. hypothetical *pathos*/*pathoes*).
+def pronunciations_share_bare_phonemes?(a, b)
+  a_prons = pronunciations_of_headword(a)
+  b_prons = pronunciations_of_headword(b)
+  return false if a_prons.empty? || b_prons.empty?
+  a_bare = a_prons.map { |p| pronunciation_bare_phonemes(p) }
+  b_bare = b_prons.map { |p| pronunciation_bare_phonemes(p) }
+  !(a_bare & b_bare).empty?
+end
+
+def pronunciations_of_headword(word)
+  entry = lexicon_word_entry(word)
+  (entry && entry[1]) || []
+end
+
+def pronunciation_bare_phonemes(pron)
+  pron.phonemes.reject { |p| p == "." }.map { |p| Phoneme.bare_base(p) }
 end
 
 # Fold for grouping hyphen-insensitive spellings (in-laws ↔ inlaws).
@@ -1025,9 +1073,13 @@ def all_forms(word)
 end
 
 def load_variants_raw
-  path = File.join(__dir__, "spelling_variants.txt")
   lines = []
-  File.foreach(path, chomp: true, encoding: "UTF-8") { |line| lines << line }
+  manual_path = File.join(__dir__, "spelling_variants.txt")
+  File.foreach(manual_path, chomp: true, encoding: "UTF-8") { |line| lines << line }
+  auto_path = generated_dict_path(SPELLING_VARIANTS_AUTO_FILENAME)
+  if File.exist?(auto_path)
+    File.foreach(auto_path, chomp: true, encoding: "UTF-8") { |line| lines << line }
+  end
   lines
 end
 
