@@ -122,7 +122,15 @@ describe 'prune_suffix_redundant_rhyming_tuples' do
     prune_rhyming_tuple 'foist / hoist / voiced', 'foistings / hoistings'
   end
 
+  context "don't get tripped up by a stray t" do
+    prune_rhyming_tuple 'prompt / romped / swamped', 'prompts / romps / swamps'
+  end
+
   context 'prune dispreferred spelling variants' do
     prune_entire_rhyming_tuple 'desperados / desperadoes'
+  end
+
+  context 'misc' do
+    prune_rhyming_tuple 'proving / removing', 'provings / removings'
   end
 end

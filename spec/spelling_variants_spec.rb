@@ -45,4 +45,9 @@ describe "SPELLING VARIANTS" do
     prefer_spelling "abbeys", "abbies"
     prefer_spelling "valleys", "vallies"
   end
+
+  context "consonant doubling" do
+    prefer_spelling "tasered", "taserred"
+    prefer_spelling "tasering", "taserring"
+  end
 end

@@ -108,6 +108,7 @@ describe 'SET_RELATED' do
     set_related_ought_not_contain 'pirate', 'barreled', 'barrelled'
     set_related_ought_not_contain 'pirate', 'barreling', 'barrelling'
     set_related_ought_not_contain 'pirate', 'facie', 'racy' # I don't like "facie" without "prima", and even with "prima" I'm not sure it should be related to "pirate"
+    set_related_ought_not_contain 'pirate', 'provings', 'removings' # oughta be redundant with proving / removing
   end
 
   context 'halloween' do

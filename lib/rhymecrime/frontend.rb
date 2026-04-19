@@ -10,7 +10,17 @@ DEBUG_MODE = false
 # Front end for RhymeCrime.
 #
 
+require "set"
 require_relative "crime"
+
+# Per-request "pruning debug" state. When +$debug_pruning+ is true,
+# +prune_suffix_redundant_rhyming_tuples+ retains (rather than drops) its victims
+# and records them in +$debug_pruned_tuples+; +print_tuple+ then renders them
+# inline with kept tuples but tagged with the +output_tuple_pruned+ CSS class.
+# Both live on globals because the pruning and rendering call sites are many
+# layers apart and threading a parameter through would be invasive.
+$debug_pruning = false
+$debug_pruned_tuples = nil
 
 def cgi_puts(string)
   buf = Thread.current[:html_output_buffer]
@@ -153,9 +163,15 @@ end
 
 # Full HTML page (Sinatra / Lambda). Uses a thread-local buffer so +cgi_print+ / +emit_*+ accumulate
 # without contaminating concurrent requests on other Puma threads.
-def build_rhymecrime_page(word1, word2)
+#
+# +debug:+ true (passed from the +debug=1+ URL param) turns on +$debug_pruning+,
+# which causes suffix-redundant tuples to be rendered inline with kept tuples
+# (greyed out via +output_tuple_pruned+) instead of silently dropped.
+def build_rhymecrime_page(word1, word2, debug: false)
   Rhymecrime::DynamoRuntime.clear_session_cache! if defined?(Rhymecrime::DynamoRuntime) && Rhymecrime::DataSource.dynamodb?
   RelatedWords.instance_variable_set(:@related_word_cache, {}) if defined?(RelatedWords)
+  $debug_pruning = debug
+  $debug_pruned_tuples = debug ? Set.new : nil
   buf = +""
   Thread.current[:html_output_buffer] = buf
   w1, w2 = parse_query_words(word1, word2)
@@ -165,6 +181,8 @@ def build_rhymecrime_page(word1, word2)
   buf
 ensure
   Thread.current[:html_output_buffer] = nil
+  $debug_pruning = false
+  $debug_pruned_tuples = nil
 end
 
 # CGI: reads params from environment, prints to stdout.

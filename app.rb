@@ -13,7 +13,7 @@ before do
 end
 
 get "/" do
-  build_rhymecrime_page(params["word1"], params["word2"])
+  build_rhymecrime_page(params["word1"], params["word2"], debug: params["debug"] == "1")
 end
 
 get "/similar" do

@@ -41,6 +41,21 @@ body {
     margin-top: 0px;
 }
 
+/* Pruning-debug view (?debug=1): tuples that +prune_suffix_redundant_rhyming_tuples+
+   would normally drop are retained and rendered in this muted color so the user
+   can see what the pruner is doing. Overrides word-similarity inline styles and
+   anchor colors, hence !important. */
+.output_tuple_pruned,
+.output_tuple_pruned .output_p,
+.output_tuple_pruned a,
+.output_tuple_pruned a:visited,
+.output_tuple_pruned a:hover,
+.output_tuple_pruned a:active,
+.output_tuple_pruned a:focus,
+.output_tuple_pruned span {
+    color: #555 !important;
+}
+
 .output_p {
     color: #22dce1;
     line-height: 110%;

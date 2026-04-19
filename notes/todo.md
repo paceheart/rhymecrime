@@ -80,3 +80,8 @@ loppings / toppings
 What happened to lopping / topping?
 
 harshly / partially
+
+our / scour
+our / scour / tower
+
+preserves / turfs
