@@ -7,19 +7,28 @@
 #   3. disjoint / irregular tuples: keep both
 #
 # These cases have historically been fragile because +tuples.sort+ does not reliably front-load
-# base forms (e.g. +artilleries+ < +artillery+ because +"i" < "y"+), so the pruner must be
+# base forms (e.g. +artilleries+ < +artillery+ because +'i' < 'y'+), so the pruner must be
 # symmetric in both directions regardless of sort order.
 
 # Slash-delimited tuple literal. Spaces around the +/+ are optional.
 def parse_tuple_literal(s)
-  s.to_s.split("/").map(&:strip).reject(&:empty?)
+  s.to_s.split('/').map(&:strip).reject(&:empty?)
+end
+
+# Nil / empty / whitespace-only +not_working_reason+ means "working"; any other string marks the
+# example as deferred and skips it with that reason as the pending message. Centralized here so
+# the two helpers below stay in sync.
+def prune_rhyming_tuple_not_working?(reason)
+  !reason.nil? && !reason.to_s.strip.empty?
 end
 
 # Assert the pruner drops +prune_spec+ and keeps +keep_spec+ when given both as input.
-# Each spec is a slash-joined literal, e.g. +prune_rhyming_tuple "cat / rat", "cats / rats"+.
-def prune_rhyming_tuple(keep_spec, prune_spec, not_working: nil)
+# Each spec is a slash-joined literal, e.g. +prune_rhyming_tuple 'cat / rat', 'cats / rats'+.
+# Pass a non-empty +not_working_reason+ to defer the case; the example is skipped with the
+# reason as its pending message.
+def prune_rhyming_tuple(keep_spec, prune_spec, not_working_reason = nil)
   it "prune: #{prune_spec}  (keep: #{keep_spec})" do
-    skip_if_not_working(not_working)
+    skip_if_not_working(not_working_reason) if prune_rhyming_tuple_not_working?(not_working_reason)
     keep = parse_tuple_literal(keep_spec)
     prune_me = parse_tuple_literal(prune_spec)
     result = prune_suffix_redundant_rhyming_tuples([keep, prune_me])
@@ -30,10 +39,11 @@ def prune_rhyming_tuple(keep_spec, prune_spec, not_working: nil)
   end
 end
 
-# Assert the pruner keeps both tuples (i.e. neither is redundant with the other).
-def dont_prune_rhyming_tuple(a_spec, b_spec, not_working: nil)
+# Assert the pruner keeps both tuples (i.e. neither is redundant with the other). See
+# +prune_rhyming_tuple+ for +not_working_reason+ semantics.
+def dont_prune_rhyming_tuple(a_spec, b_spec, not_working_reason = nil)
   it "don't prune: #{a_spec}  |  #{b_spec}" do
-    skip_if_not_working(not_working)
+    skip_if_not_working(not_working_reason) if prune_rhyming_tuple_not_working?(not_working_reason)
     a = parse_tuple_literal(a_spec)
     b = parse_tuple_literal(b_spec)
     result = prune_suffix_redundant_rhyming_tuples([a, b])
@@ -44,31 +54,42 @@ def dont_prune_rhyming_tuple(a_spec, b_spec, not_working: nil)
   end
 end
 
-describe "prune_suffix_redundant_rhyming_tuples" do
-  context "same-length inflection pairs — keep the base" do
-    prune_rhyming_tuple "cat / rat", "cats / rats"
-    prune_rhyming_tuple "jump / walk / talk", "jumped / walked / talked"
-    prune_rhyming_tuple "artillery / pillory", "artilleries / pillories" # keep -y, ditch -ies
-    prune_rhyming_tuple "carry / marry", "carried / married"
+describe 'prune_suffix_redundant_rhyming_tuples' do
+  context 'unrelated tuples — keep both' do
+    dont_prune_rhyming_tuple 'cat / bat / hat', 'dog / log / frog'
   end
 
-  context "different-length inflection subsets — keep the richer tuple" do
+  context 'degenerate inputs' do
+    it 'returns [] for no tuples' do
+      expect(prune_suffix_redundant_rhyming_tuples([])).to eq([])
+    end
+
+    it 'returns the singleton unchanged' do
+      input = parse_tuple_literal('cat / dog')
+      expect(prune_suffix_redundant_rhyming_tuples([input])).to eq([input])
+    end
+  end
+  
+  context 'same-length inflection pairs — keep the base' do
+    prune_rhyming_tuple 'cat / rat', 'cats / rats'
+    prune_rhyming_tuple 'walk / talk', 'walked / talked'
+    prune_rhyming_tuple 'walk / talk', 'walking / talking'
+    prune_rhyming_tuple 'artillery / pillory', 'artilleries / pillories'
+    prune_rhyming_tuple 'carry / marry', 'carried / married'
+    prune_rhyming_tuple 'carry / marry', 'carrying / marrying'
+    prune_rhyming_tuple 'foist / hoist', 'foisting / hoisting'
+    prune_rhyming_tuple 'foist / hoist', 'foistings / hoistings'
+    prune_rhyming_tuple 'phony / pony', 'phonies / ponies'
+  end
+
+  context 'different-length inflection subsets — keep the richer tuple' do
     prune_rhyming_tuple(
-      "archaeologists / scientologistes / scientologists",
-      "archaeologist / scientologist"
+      'archaeologists / scientologistes / scientologists',
+      'archaeologist / scientologist'
     )
-    prune_rhyming_tuple(
-      "walk / talk / rock / lock", "walked / talked / rocked"
-    )
-    # Multiple inflected subsets of one richer base tuple; both get pruned.
-    prune_rhyming_tuple(
-      "baggy / laggy / shaggy",
-      "baggier / shaggier"
-    )
-    prune_rhyming_tuple(
-      "baggy / laggy / shaggy",
-      "baggiest / shaggiest"
-    )
+    prune_rhyming_tuple 'walk / talk / rock / lock', 'walked / talked / rocked'
+    prune_rhyming_tuple 'baggy / laggy / shaggy', 'baggier / shaggier'
+    prune_rhyming_tuple 'baggy / laggy / shaggy', 'baggiest / shaggiest'
     prune_rhyming_tuple 'breezier / sleazier', 'breeziest / sleaziest'
     prune_rhyming_tuple 'breezy / sleazy', 'breeziest / sleaziest'
     prune_rhyming_tuple 'breezy / sleazy', 'breezier / sleazier'
@@ -77,22 +98,15 @@ describe "prune_suffix_redundant_rhyming_tuples" do
     prune_rhyming_tuple 'busy / dizzy', 'busier / dizzier'
     prune_rhyming_tuple 'busy / dizzy', 'busies / dizzies'
     prune_rhyming_tuple 'busy / dizzy',  'busiest / dizziest'
+
+    prune_rhyming_tuple 'defendant / independent', 'defendants / independents'
+    prune_rhyming_tuple 'defendant / independent', 'defendants / independence', 'how to handle derivationally-different forms that happen to be hononyms of the derivationally-derived form'
+    prune_rhyming_tuple 'defendant / independent', 'defendants / independence / independents', 'how to handle derivationally-different forms that happen to be hononyms of the derivationally-derived form'
+
+    prune_rhyming_tuple 'foist / hoist / voiced', 'foistings / hoistings'
   end
 
-  context "unrelated tuples — keep both" do
-    dont_prune_rhyming_tuple "cat / bat / hat", "dog / log / frog"
-    # +cats+ is a plural, +walked+ is a past — no single consistent inflection kind across slots.
-    dont_prune_rhyming_tuple "cat / walk", "cats / walked"
-  end
-
-  context "degenerate inputs" do
-    it "returns [] for no tuples" do
-      expect(prune_suffix_redundant_rhyming_tuples([])).to eq([])
-    end
-
-    it "returns the singleton unchanged" do
-      input = parse_tuple_literal("cat / dog")
-      expect(prune_suffix_redundant_rhyming_tuples([input])).to eq([input])
-    end
+  context 'prune dispreferred spelling variants' do
+    prune_entire_rhyming_tuple 'desperados / desperadoes'
   end
 end

@@ -69,3 +69,12 @@ fix this duplication:
 accidental / dental / gentle / lentil / oriental / rental
 accidental / gentle / kennel / oriental
 
+
+converse / curse / immerse / perverse / purse / reverse / worse
+conversed / cursed / immersed / pursed / reversed / thirst / worst
+converses / curses / immerses / purses / reverses / versus
+
+Each of them is almost entirely redundant with the other two, but each tuple has one word that's unique to it. Suggest one or more ways of displaying this to the user that follow best UX practices such as minimizing redundant information, grouping related things together, etc
+
+loppings / toppings
+What happened to lopping / topping?

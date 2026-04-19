@@ -10,8 +10,11 @@ $output_format = 'cgi'
 $display_word_frequencies = false
 $display_word_similarities = false
 
-# When set to a String (e.g. by +build_rhymecrime_page+), HTML fragments append here instead of stdout.
-$html_output_buffer = nil
+# When set to a String (e.g. by +build_rhymecrime_page+), HTML fragments append to
+# +Thread.current[:html_output_buffer]+ instead of stdout. MUST be thread-local: Sinatra on Puma
+# serves requests on multiple threads, and a process-wide +$global+ would let concurrent requests
+# overwrite each other's output buffers mid-response (e.g. a fidget query's tuples leaking into
+# a pirate query's HTML).
 
 #
 # Public interface: rhymecrime(word1, word2, goal, output_format='text', debug_mode=false)
@@ -35,24 +38,27 @@ require "memery"
 #
 
 def cgi_print(string)
-  if $html_output_buffer
-    $html_output_buffer << string.to_s
+  buf = Thread.current[:html_output_buffer]
+  if buf
+    buf << string.to_s
   elsif $output_format == "cgi"
     print string
   end
 end
 
 def emit_text(string)
-  if $html_output_buffer
-    $html_output_buffer << string.to_s
+  buf = Thread.current[:html_output_buffer]
+  if buf
+    buf << string.to_s
   else
     print string
   end
 end
 
 def emit_line(string = "")
-  if $html_output_buffer
-    $html_output_buffer << string.to_s << "\n"
+  buf = Thread.current[:html_output_buffer]
+  if buf
+    buf << string.to_s << "\n"
   else
     puts string
   end
@@ -393,10 +399,25 @@ def find_related_rhymes(rhyme, rel)
 end
 
 # Inflect suffix kind from +base+ to +inflected+, or nil if not a recognized surface pattern.
+#
+# Extends +Inflect.match_suffix_kind+ with one chained suffix: +:ings+ (+ing+ then +s+, as in
+# +foist → foisting → foistings+). Conservative scope on purpose: +foistings+-shaped forms are
+# the only multi-inflection we've observed in rhyming-tuple output (+ing+s is the only productive
+# chain in English that lands on a common-enough surface to rhyme-cluster), and we don't want to
+# change pronunciation derivation or dict-build frequency inheritance, which both lean on
+# +Inflect.match_suffix_kind+ returning single kinds. Generalize later if more chains show up.
 def inflection_suffix_kind_from_base(base, inflected)
-  return nil unless Inflect.inflection_of_base?(base, inflected)
+  return nil if base.nil? || inflected.nil?
 
-  Inflect.send(:match_suffix_kind, base, inflected)
+  k = Inflect.send(:match_suffix_kind, base, inflected)
+  return k unless k.nil?
+
+  if inflected.end_with?("ings")
+    ing_form = inflected[0...-1]
+    return :ings if Inflect.send(:match_suffix_kind, base, ing_form) == :ing
+  end
+
+  nil
 end
 
 # True if +later+ is an uninterestingly redundant inflection of +earlier+ (same tuple length and
@@ -847,7 +868,7 @@ def print_tuple(tuple, focal_word=false)
   end
   cgi_print "</p></div>"
   emit_line
-  STDOUT.flush unless $html_output_buffer
+  STDOUT.flush unless Thread.current[:html_output_buffer]
 end
   
 def print_half_of_tuple(tuple, focal_word=false)

@@ -13,8 +13,9 @@ DEBUG_MODE = false
 require_relative "crime"
 
 def cgi_puts(string)
-  if $html_output_buffer
-    $html_output_buffer << string.to_s << "\n"
+  buf = Thread.current[:html_output_buffer]
+  if buf
+    buf << string.to_s << "\n"
   elsif OUTPUT_FORMAT == "cgi"
     puts string
   end
@@ -150,19 +151,20 @@ def print_html_footer
   cgi_puts IO.read(File.join(REPO_ROOT, "assets", "footer.html"), encoding: "UTF-8")
 end
 
-# Full HTML page (Sinatra / Lambda). Uses +$html_output_buffer+ so +cgi_print+ / +emit_*+ accumulate.
+# Full HTML page (Sinatra / Lambda). Uses a thread-local buffer so +cgi_print+ / +emit_*+ accumulate
+# without contaminating concurrent requests on other Puma threads.
 def build_rhymecrime_page(word1, word2)
   Rhymecrime::DynamoRuntime.clear_session_cache! if defined?(Rhymecrime::DynamoRuntime) && Rhymecrime::DataSource.dynamodb?
   RelatedWords.instance_variable_set(:@related_word_cache, {}) if defined?(RelatedWords)
   buf = +""
-  $html_output_buffer = buf
+  Thread.current[:html_output_buffer] = buf
   w1, w2 = parse_query_words(word1, word2)
   print_html_header(w1, w2)
   compute_and_print_html_middle(w1, w2)
   print_html_footer
   buf
 ensure
-  $html_output_buffer = nil
+  Thread.current[:html_output_buffer] = nil
 end
 
 # CGI: reads params from environment, prints to stdout.
@@ -232,14 +234,14 @@ def build_similar_page(word1, word2)
   Rhymecrime::DynamoRuntime.clear_session_cache! if defined?(Rhymecrime::DynamoRuntime) && Rhymecrime::DataSource.dynamodb?
   RelatedWords.instance_variable_set(:@related_word_cache, {}) if defined?(RelatedWords)
   buf = +""
-  $html_output_buffer = buf
+  Thread.current[:html_output_buffer] = buf
   w1, w2 = parse_query_words(word1, word2)
   print_html_header(w1, w2, "Thematic Similarity", "/similar")
   compute_and_print_html_similar_middle(w1, w2)
   print_html_footer
   buf
 ensure
-  $html_output_buffer = nil
+  Thread.current[:html_output_buffer] = nil
 end
 
 def compute_and_print_similar_html
