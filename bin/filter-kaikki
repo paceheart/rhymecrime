@@ -1,0 +1,78 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+# Streaming filter for kaikki.org's English Wiktionary dump.
+#
+# Usage:
+#   curl -fL "https://kaikki.org/dictionary/English/kaikki.org-dictionary-English.jsonl" \
+#     | bin/filter-kaikki \
+#     | gzip > corpora/wiktionary/kaikki-english-filtered.jsonl.gz
+#
+# The raw dump is ~1.5 GB; this filter keeps only the fields dict-build needs,
+# so the gzipped output stays around a few MB. We retain:
+#   word, pos                   -- identity + POS gate
+#   sounds[{ipa, tags}]          -- IPA pronunciations (GA/RP disambiguation)
+#   forms[{form, tags}]          -- inflection paradigm (past/plural/etc.)
+#   senses[{tags, glosses[0..0], alt_of[{word}], form_of[{word}]}]
+#                                -- alt-spelling / misspelling / form-of pointers
+#                                   that let corpus_variants.rb recognize
+#                                   Wiktionary-attested spelling variants
+#                                   without any runtime cost.
+#
+# Every other field in the raw dump is dropped. Lines that lack both
+# pronunciations AND alt/form_of pointers are dropped entirely: they add mass
+# without being consumed anywhere downstream.
+
+require "json"
+
+$stdin.set_encoding("UTF-8")
+$stdout.set_encoding("UTF-8")
+
+ARGF.each_line do |line|
+  obj = begin
+    JSON.parse(line)
+  rescue JSON::ParserError
+    next
+  end
+
+  word = obj["word"]
+  pos = obj["pos"]
+  next if word.nil? || word.empty? || pos.nil? || pos.empty?
+
+  sounds = (obj["sounds"] || []).select { |s| s.is_a?(Hash) && s["ipa"] }
+  kept_sounds = sounds.map { |s| { "ipa" => s["ipa"], "tags" => s["tags"] || [] } }
+
+  forms = (obj["forms"] || []).select { |f| f.is_a?(Hash) && f["form"] && f["tags"] }
+  kept_forms = forms.map { |f| { "form" => f["form"], "tags" => f["tags"] } }
+
+  kept_senses = []
+  (obj["senses"] || []).each do |s|
+    next unless s.is_a?(Hash)
+    alt_of = (s["alt_of"] || []).map { |x| x.is_a?(Hash) ? { "word" => x["word"] } : nil }.compact
+    form_of = (s["form_of"] || []).map { |x| x.is_a?(Hash) ? { "word" => x["word"] } : nil }.compact
+    tags = s["tags"] || []
+    # Only keep a gloss when it's the key evidence -- the alt_of/form_of pointers
+    # are machine-readable, but plenty of variants are only signaled by a gloss
+    # like "Alternative spelling of X." Cap to the first gloss, truncated, to
+    # keep the output small.
+    glosses = (s["glosses"] || [])[0, 1].map { |g| g.to_s[0, 200] }
+    next if alt_of.empty? && form_of.empty? && tags.empty? && glosses.empty?
+    sense = {}
+    sense["tags"] = tags unless tags.empty?
+    sense["glosses"] = glosses unless glosses.empty?
+    sense["alt_of"] = alt_of unless alt_of.empty?
+    sense["form_of"] = form_of unless form_of.empty?
+    kept_senses << sense
+  end
+
+  # A record is worth keeping iff downstream can consume something from it.
+  # Pronunciations feed wiktionary.rb's pron_hash; forms feed forms_map;
+  # alt_of/form_of senses feed corpus_variants.rb's variant discovery.
+  has_variant_signal = kept_senses.any? { |s| s["alt_of"] || s["form_of"] }
+  next if kept_sounds.empty? && kept_forms.empty? && !has_variant_signal
+
+  out = { "word" => word, "pos" => pos }
+  out["sounds"] = kept_sounds unless kept_sounds.empty?
+  out["forms"] = kept_forms unless kept_forms.empty?
+  out["senses"] = kept_senses unless kept_senses.empty?
+  $stdout.puts(JSON.generate(out))
+end

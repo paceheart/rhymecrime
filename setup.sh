@@ -33,23 +33,21 @@ sudo chmod o+x bin/*.rb bin/dict-build bin/preprocess-conceptnet-lemma-cache
 
 sudo dnf install xorg-x11-xauth.x86_64 xorg-x11-server-utils.x86_64 dbus-x11.x86_64
 
-# Wiktionary pronunciation + POS + forms data (kaikki.org / wiktextract) → corpora/wiktionary/
+# Wiktionary pronunciation + POS + forms + alt/form-of senses (kaikki.org / wiktextract) → corpora/wiktionary/
+# The filter logic lives in bin/filter-kaikki so it's easy to re-run when we want
+# to pick up additional fields from the raw dump.
 mkdir -p corpora/wiktionary
 curl -fL "https://kaikki.org/dictionary/English/kaikki.org-dictionary-English.jsonl" \
-  | ruby -rjson -e '
-    $stdin.set_encoding("UTF-8")
-    $stdin.each_line do |l|
-      obj = JSON.parse(l) rescue next
-      pos = obj["pos"]; next unless pos
-      word = obj["word"]; next unless word
-      sounds = obj["sounds"]&.select { |s| s["ipa"] }
-      next if sounds.nil? || sounds.empty?
-      forms = obj["forms"]&.select { |f| f["form"] && f["tags"] }
-      out = { word: word, pos: pos, sounds: sounds.map { |s| { ipa: s["ipa"], tags: s["tags"] } } }
-      out[:forms] = forms.map { |f| { form: f["form"], tags: f["tags"] } } if forms && !forms.empty?
-      puts JSON.generate(out)
-    end
-  ' | gzip > corpora/wiktionary/kaikki-english-filtered.jsonl.gz
+  | bin/filter-kaikki \
+  | gzip > corpora/wiktionary/kaikki-english-filtered.jsonl.gz
+
+# VarCon (Variant Conversion Info) — hand-verified US/UK/CA/AU spelling-variant clusters maintained
+# by the aspell/SCOWL author. Used by lib/rhymecrime/dict/varcon.rb at build time as the authoritative
+# source for regional spelling preference, complementing the noisier Wiktionary signal. License is
+# BSD-style (see varcon-readme). ~750 KB single file.
+mkdir -p corpora/varcon
+curl -fL -o corpora/varcon/varcon.txt \
+  "https://raw.githubusercontent.com/en-wl/wordlist/v1/varcon/varcon.txt"
 
 # Wordfreq Zipf export → generated/wordfreq.tsv (gitignored; used by dict.rb / dict-build)
 # Use `python3 -m pip` so wordfreq installs for the same interpreter as `python3` (asdf/pyenv).

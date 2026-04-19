@@ -1,21 +1,61 @@
-# Build-time emitter for lexical spelling-variant pairs that are derivable from corpus frequency
-# data (as opposed to the hand-curated US/UK dialectal rules in +utils_rhyme.rb+). Output goes to
-# +generated/spelling_variants_auto.txt+, which +load_variants_raw+ reads alongside the manual
-# +spelling_variants.txt+. All corpus I/O stays here: the runtime +preferred_form+ path never
-# consults +wordfreq.tsv+ or SUBTLEX directly.
+# Build-time emitter for lexical spelling-variant pairs that are derivable from corpus data
+# (as opposed to the hand-curated US/UK dialectal rules in +utils_rhyme.rb+). Output goes to
+# +generated/spelling_variants_auto.txt+, which +load_variants_raw+ reads alongside the
+# hand-edited +spelling_variants.txt+. All corpus I/O stays here: the runtime +preferred_form+
+# path never consults +wordfreq.tsv+, SUBTLEX, or Kaikki directly.
 #
-# Currently covers the -oes/-os plural alternation on -o nouns (tomatoes/tomatos,
-# aficionados/aficionadoes, mottos/mottoes, …). The winner is whichever spelling is ≥3× more
-# frequent on the wordfreq Zipf scale; when the gap is narrower than that, or both forms are
-# absent from wordfreq, the morphologically simpler -os spelling wins deterministically so the
-# UI never displays both variants of a truly-tied pair.
+# Two discovery signals:
+#
+#   1. Shape-based +-oes/-os+ plural alternation (tomatoes/tomatos, aficionados/aficionadoes,
+#      mottos/mottoes, …). Both forms must appear as headwords with a shared lemma; the
+#      winner is whichever spelling is ≥3× more frequent on the wordfreq Zipf scale, else
+#      the morphologically simpler -os form wins deterministically.
+#
+#   2. Wiktionary-attested variants from Kaikki's +alt_of+ pointers and canonical
+#      "Alternative spelling of X" / "Misspelling of X" glosses. Both sides must be dict
+#      headwords. For +alt_of+, the direction is treated as a _candidate pairing_ only --
+#      Wiktionary's choice of which side hosts the pointer is editorial, so we still pick
+#      the preferred form by wordfreq and fall back to whichever Wiktionary points _at_
+#      (i.e., the sibling that other Wiktionary editors treated as canonical). For
+#      +misspelling+, the target is always preferred.
 
 require "set"
 require_relative "utils_rhyme"
 
-# log10(3.0) ≈ 0.477: a spelling with ≥3× the wordfreq density of its sibling wins; below that
-# we declare the pair tied and fall back to the deterministic shorter-wins rule.
 CORPUS_ZIPF_DECISIVE_DELTA = Math.log10(3.0)
+
+# Wordfreq Zipf below which a form counts as "rare" for the rare-form variant rule: any
+# Wiktionary-attested pair where one side has Zipf ≤ +RARE_FORM_ZIPF_MAX+ is accepted
+# outright, because the rare side is obviously an archaic/obscure spelling and the common
+# side is the modern canonical form.
+RARE_FORM_ZIPF_MAX = 3.0
+
+# Wordfreq Zipf below which a form is still ambiguously common: if _both_ sides of a pair
+# are at or above this threshold (i.e. neither is rare), we require a regional-dialect or
+# misspelling tag to treat them as spelling variants. Without such evidence, Wiktionary's
+# +obsolete+/+dated+/+dialectal+/+alternative+ annotations tend to produce historical
+# curiosity pairs like +be/by+ that aren't useful modern spelling variants.
+COMMON_PAIR_REGIONAL_TAG_FLOOR = RARE_FORM_ZIPF_MAX
+
+# Wiktionary/Kaikki tags that mark a pair as a dialectal or orthographic variant of the
+# target language community. Presence of any of these justifies keeping a pair even when
+# both forms are common; absence means the pair is at best a historical curiosity.
+REGIONAL_VARIANT_TAGS = Set.new(%w[
+  UK US British American Commonwealth Australia Australian Canada Canadian
+  Ireland Irish Scotland Scottish New-Zealand South-Africa South-African Welsh
+  GenAm GA RP Indian Pakistani Hiberno Hiberno-English European
+  misspelling
+])
+
+# Tags on a structured +alt-of+ sense that mark the pair as a _historical_ curiosity rather
+# than a modern spelling variant. When both sides of a pair are common (Zipf > +RARE_FORM_ZIPF_MAX+)
+# and the only evidence is a structured +alt-of+ annotation carrying one of these decay
+# markers, we reject the pair: Wiktionary's +be → by+ (tagged +dated+/+dialectal+) and
+# +bee → be+ (tagged +obsolete+) are technically Middle English spellings but aren't useful
+# modern spelling variants.
+STRUCTURED_ALT_OF_DECAY_TAGS = Set.new(%w[
+  archaic obsolete dated
+])
 
 SPELLING_VARIANTS_AUTO_HEADER = <<~HEADER
   # Auto-detected lexical spelling variant pairs.
@@ -25,15 +65,29 @@ SPELLING_VARIANTS_AUTO_HEADER = <<~HEADER
   # first. Loaded at runtime by load_variants_raw in utils_rhyme.rb.
 HEADER
 
-# Emit +generated/spelling_variants_auto.txt+ from +word_dict+ and +wordfreq_hash+. Each pair
-# listed appears on both sides of +word_dict+ with a shared pronunciation (stress-insensitive).
-# Safe to call inside +build_word_dict+ before +strip_dispreferred_headwords_from_rdict!+ so the
-# rime-dict bucket stripper sees the resolved pairs on the same build.
-def emit_spelling_variants_auto!(word_dict, wordfreq_hash)
+# Emit +generated/spelling_variants_auto.txt+ from +word_dict+, +wordfreq_hash+, and (optionally)
+# the Wiktionary and VarCon variant maps. Safe to call inside +build_word_dict+ before
+# +strip_dispreferred_headwords_from_rdict!+ so the rime-dict bucket stripper sees the resolved
+# pairs on the same build.
+#
+# Detector precedence (first-write-wins inside +dedupe_variant_pairs+):
+#
+#   1. +-oes/-os+ plural alternation — shape-based, strongest morphological signal.
+#   2. VarCon (Atkinson's hand-verified US/UK/CA/AU mapping) — authoritative preference direction
+#      for the regional-spelling axis.
+#   3. Wiktionary gloss/alt-of pointers — broadest coverage, but noisier. Complements VarCon for
+#      misspellings, eye-dialect, Hiberno/Scottish, archaic variants, and anything VarCon hasn't
+#      seen yet.
+#   4. Inflection propagation over Wiktionary base pairs — e.g. +cipher/cypher → ciphered/cyphered+.
+def emit_spelling_variants_auto!(word_dict, wordfreq_hash, kaikki_variant_map = nil, varcon_variant_map = nil)
   previous_word_dict = $word_dict
   previous_variants = $variants
   $word_dict = word_dict
-  pairs = o_plural_corpus_pairs(word_dict, wordfreq_hash)
+  pairs = []
+  pairs.concat(o_plural_corpus_pairs(word_dict, wordfreq_hash))
+  pairs.concat(varcon_variant_pairs(word_dict, varcon_variant_map, wordfreq_hash)) if varcon_variant_map && !varcon_variant_map.empty?
+  pairs.concat(wiktionary_variant_pairs(word_dict, wordfreq_hash, kaikki_variant_map)) if kaikki_variant_map && !kaikki_variant_map.empty?
+  pairs = dedupe_variant_pairs(pairs)
   ensure_generated_dict_dir!
   path = generated_dict_path(SPELLING_VARIANTS_AUTO_FILENAME)
   File.open(path, "w", encoding: "UTF-8") do |f|
@@ -53,7 +107,7 @@ end
 # same lemma (a stronger signal at build time than pronunciation overlap: dict-build's
 # inflection pipeline assigns quirky secondary stress to alternate-form CMU entries, but
 # only groups them under one base lemma when morphology actually recognizes the pair).
-# Returns a sorted, deduped array of [preferred, alternate].
+# Returns an array of [preferred, alternate].
 def o_plural_corpus_pairs(word_dict, wordfreq_hash)
   seen = Set.new
   pairs = []
@@ -74,13 +128,318 @@ def o_plural_corpus_pairs(word_dict, wordfreq_hash)
     seen << oes
     seen << os
   end
-  pairs.sort
+  pairs
+end
+
+# Emit variant pairs from the VarCon (Atkinson's variant conversion info) map. VarCon is a
+# hand-verified mapping of US/UK/CA/AU spellings, and for any pair it covers we trust its
+# preference direction over Wiktionary's editorial choice. Both sides must be dict headwords;
+# pairs are aggregated across all evidence rows so that POS-qualified entries (e.g.
+# +practice/practise | <N>+ and +practice/practise | <V>+) vote together rather than splitting.
+#
+# When VarCon's preference scores tie (e.g. sense-split clusters like +disc/disk+, where +disk+
+# is primary in sense 1 and +disc+ in sense 2), we fall back to the Zipf-based frequency picker
+# so the more commonly-written spelling wins.
+def varcon_variant_pairs(word_dict, varcon_variant_map, wordfreq_hash = nil)
+  by_pair = Hash.new { |h, k| h[k] = [] }
+  varcon_variant_map.each do |word, rows|
+    next unless word_dict.key?(word)
+    rows.each do |r|
+      target = r[:target]
+      next if target.nil? || target == word
+      next unless word_dict.key?(target)
+      key = [word, target].sort
+      by_pair[key] << { variant: word, target: target,
+                        self_strength: r[:self_strength], target_strength: r[:target_strength] }
+    end
+  end
+
+  direct_pairs = []
+  by_pair.each do |(a, b), rows|
+    # Aggregate preference scores across all evidence rows. Minimum-over-rows rewards any row
+    # that declares one side primary in _some_ region, rather than letting a row where both
+    # sides are marked +variant+ dilute the signal.
+    score_a = rows.map { |r| (r[:variant] == a) ? r[:self_strength] : r[:target_strength] }.min
+    score_b = rows.map { |r| (r[:variant] == b) ? r[:self_strength] : r[:target_strength] }.min
+    preferred, alt =
+      if score_a < score_b
+        [a, b]
+      elsif score_b < score_a
+        [b, a]
+      else
+        # Tie on VarCon's internal preference (e.g. sense-split clusters). Defer to the
+        # wordfreq-based picker so the more commonly-written spelling wins; if wordfreq is also
+        # indecisive, fall back to alphabetic order for reproducibility.
+        winner = wordfreq_hash ? pick_corpus_winner_by_zipf(a, b, wordfreq_hash, deterministic_fallback: nil) : nil
+        winner ? [winner, (winner == a) ? b : a] : [a, b].sort
+      end
+    direct_pairs << [preferred, alt]
+  end
+
+  headwords_with_direct_pair = Set.new
+  direct_pairs.each do |preferred, alt|
+    headwords_with_direct_pair.add(preferred)
+    headwords_with_direct_pair.add(alt)
+  end
+
+  pairs = direct_pairs.dup
+  # VarCon's clusters already enumerate inflected forms explicitly (acknowledgment/acknowledgement,
+  # acknowledgments/acknowledgements, acknowledgment's/acknowledgement's), so propagation here
+  # is mostly a no-op. We run it anyway to catch morphological siblings that happen to appear in
+  # the dict via one path (e.g. the +-ing+ form) but not the other (VarCon sometimes omits
+  # specific inflections for low-level clusters).
+  direct_pairs.each do |preferred, alt|
+    propagate_variant_inflections(preferred, alt, word_dict, headwords_with_direct_pair, pairs)
+  end
+  pairs
+end
+
+# Emit variant pairs that Wiktionary (via Kaikki) explicitly marks as alternate spellings
+# or misspellings of a canonical headword. +kaikki_variant_map+ is
+# +{ variant_word => [{ target:, source:, tags: }, ...] }+ as produced by +load_wiktionary+.
+# Both sides must be dict headwords that survive the build; we never invent a new row.
+# Returns an array of [preferred, alternate] pairs.
+def wiktionary_variant_pairs(word_dict, wordfreq_hash, kaikki_variant_map)
+  # Collapse directional evidence onto unordered pairs: +by_pair[[x, y].sort] = [{variant:, target:, source:, tags:}, ...]+
+  by_pair = Hash.new { |h, k| h[k] = [] }
+  kaikki_variant_map.each do |variant_word, evidences|
+    next unless word_dict.key?(variant_word)
+    evidences.each do |e|
+      target = e[:target]
+      next if target.nil? || target == variant_word
+      next unless word_dict.key?(target)
+      source = e[:source]
+      key = [variant_word, target].sort
+      by_pair[key] << { variant: variant_word, target: target, source: source, tags: e[:tags] || [] }
+    end
+  end
+
+  direct_pairs = []
+  by_pair.each do |(a, b), rows|
+    next unless wiktionary_pair_is_useful?(a, b, rows, wordfreq_hash)
+    preferred, alt = resolve_wiktionary_variant_winner(a, b, rows, wordfreq_hash)
+    direct_pairs << [preferred, alt]
+  end
+
+  # Track which headwords already have a _direct_ Wiktionary variant mapping. Inflection
+  # propagation must never contradict such a mapping: +hed → head+ (Wiktionary, archaic)
+  # is legitimate, but propagating +(he, hee) → (hed, heed)+ would spuriously claim
+  # +hed+ is also a variant of +heed+. When we see +hed+ already in this set, we skip any
+  # propagation that would introduce a second target for it.
+  headwords_with_direct_pair = Set.new
+  direct_pairs.each do |preferred, alt|
+    headwords_with_direct_pair.add(preferred)
+    headwords_with_direct_pair.add(alt)
+  end
+
+  pairs = direct_pairs.dup
+  direct_pairs.each do |preferred, alt|
+    propagate_variant_inflections(preferred, alt, word_dict, headwords_with_direct_pair, pairs)
+  end
+  pairs
+end
+
+# Regular English suffix templates. Each entry is a pair of equal-length suffix arrays: one
+# for the +preferred+ surface, one for the +alt+ surface. For each template, if _both_
+# +preferred + pref_sfx+ and +alt + alt_sfx+ exist in +word_dict+, we emit that sibling
+# variant pair. The symmetric shape keeps the usual English doubling / -y / -e alternations
+# consistent: e.g. +study/studied+ takes the same template as +cipher/ciphered+.
+REGULAR_INFLECTION_SUFFIX_PAIRS = [
+  # plural + 3sg present
+  ["s", "s"],
+  ["es", "es"],
+  # verb morphology
+  ["ed", "ed"],
+  ["d", "d"],
+  ["ing", "ing"],
+  # adjective degrees
+  ["er", "er"],
+  ["est", "est"],
+].freeze
+
+def propagate_variant_inflections(preferred, alt, word_dict, headwords_with_direct_pair, out_pairs)
+  REGULAR_INFLECTION_SUFFIX_PAIRS.each do |pref_sfx, alt_sfx|
+    pa = regular_inflect(preferred, pref_sfx)
+    aa = regular_inflect(alt, alt_sfx)
+    next if pa.nil? || aa.nil?
+    next if pa == preferred || aa == alt
+    # Skip no-op pairs: applying +-s+ vs +-es+ to +absinthe+/+absinth+ both surface as
+    # +absinthes+, which isn't a variant relationship worth emitting.
+    next if pa == aa
+    # Require both inflected forms to already be attested headwords. That's the strongest
+    # correctness check we have: if Wiktionary/cmudict don't list the inflected alt surface,
+    # we don't invent it here (avoids +maneuver/manoeuver → maneuvered/manoeuvered+, where
+    # the alt base is itself a rare nonstandard spelling whose inflected forms are vanishingly
+    # rare in wild English usage).
+    next unless word_dict.key?(pa) && word_dict.key?(aa)
+    # +hed → head+ is the right canonical mapping for +hed+; don't overwrite it with a
+    # chain-propagated +hed → heed+ just because +(he, hee)+ happens to be a Wiktionary
+    # pair that extends regularly by +-d+.
+    next if headwords_with_direct_pair.include?(pa) || headwords_with_direct_pair.include?(aa)
+    out_pairs << [pa, aa]
+  end
+  if preferred.end_with?("y") && alt.end_with?("y")
+    p_stem = preferred.chomp("y")
+    a_stem = alt.chomp("y")
+    %w[ies ied ier iest].each do |sfx|
+      pa = p_stem + sfx
+      aa = a_stem + sfx
+      # Require both inflected forms to be attested headwords for the same reason the main
+      # suffix loop does: otherwise +blowsy/blousy+ (from Wiktionary's +blowsy → blousy+) would
+      # propagate to +blowsier/blousier+ even though +blousier+ isn't in cmudict or wordfreq.
+      next unless word_dict.key?(pa) && word_dict.key?(aa)
+      next if headwords_with_direct_pair.include?(pa) || headwords_with_direct_pair.include?(aa)
+      out_pairs << [pa, aa]
+    end
+  end
+end
+
+# Minimal regular-English morphological inflection for +stem + suffix+. Returns +nil+ when
+# the combination isn't morphologically well-formed (e.g. +manoeuvre+-+s+ would be
+# +manoeuvres+, but +maneuver+-+es+ would be +maneuveres+, which isn't a real English form).
+#
+# Handles:
+#   * e-drop before vowel-initial suffixes (+manoeuvre+"ed" → +manoeuvred+)
+#   * +-es+ on sibilant-final stems (+kiss+"s" → +kisses+, +lash+"s" → +lashes+)
+#   * +-y+ → +-ies+ and +-y+ → +-ied+ on consonant-+y stems when suffix is plain +s+ or
+#     +ed+ (we already handle +-y+/+-ies+ alternation with an explicit branch above, so
+#     here we only canonicalize for the consistency of regular inflection)
+def regular_inflect(stem, suffix)
+  return nil if stem.nil? || stem.empty? || suffix.nil?
+  return stem if suffix.empty?
+  # Disallow impossible concatenations first.
+  vowel_initial = suffix.start_with?("e") || suffix.start_with?("i")
+  if stem.end_with?("e") && vowel_initial
+    # +manoeuvre+ + +ed+ → +manoeuvred+ (drop trailing +e+ before vowel-initial suffix)
+    return stem[0..-2] + suffix
+  end
+  if suffix == "s" && stem =~ /(s|x|z|ch|sh)\z/
+    # +kiss+ + +s+ → +kisses+ (need +-es+ after sibilant-final stems)
+    return stem + "es"
+  end
+  stem + suffix
+end
+
+# Reject pairs whose evidence is too weak to treat as an active spelling variant. The
+# rare-form rule keeps any pair where one side is an obviously archaic/obscure spelling
+# (Zipf ≤ +RARE_FORM_ZIPF_MAX+). When both sides are common we accept whenever any
+# evidence row carries:
+#
+#   * a regional-dialect tag (UK/US/Commonwealth/Australian/...); or
+#   * +:misspelling+ source (canonical vs misspelled form); or
+#   * a _structured_ +:alt_of+ pointer (Kaikki sense tagged +alt-of+ with an +alt_of[]+
+#     target) that is not weighed down by +archaic+/+obsolete+/+dated+ decay markers.
+#     Wiktionary's editorial +alt-of+ annotations are intentional canonicalization
+#     hints: +disc alt-of disk+, +centre alt-of center+. We trust them unless the sense
+#     also admits the variant is historical, which gets us +be/by+ and +bee/be+ noise.
+#
+# Gloss-derived +:alt_of_gloss+ evidence without regional tags is treated as weak: the
+# "Alternative form of X" phrasing alone is enough for the low-frequency rare-form case
+# but not enough to justify a common-common pair in modern usage.
+def wiktionary_pair_is_useful?(a, b, rows, wordfreq_hash)
+  za = (wordfreq_hash[a] || 0.0).to_f
+  zb = (wordfreq_hash[b] || 0.0).to_f
+  one_side_rare = [za, zb].min <= RARE_FORM_ZIPF_MAX
+
+  # Rare-form rule: one side being obviously archaic/rare is a strong signal, but only
+  # when paired with evidence that phrases the pair as a _spelling_ variant. Wiktionary's
+  # +moulder | Synonym of mould+ (tagged +UK obsolete rare+) meets the frequency test --
+  # +moulder+ is Zipf 2.1 -- but the gloss records a semantic synonymy in an obsolete
+  # sense, not a spelling variant. Structured +alt-of+ pointers, +misspelling of X+, and
+  # prose phrasings like +Alternative/Archaic form of X+ remain trustworthy.
+  rows.any? do |r|
+    tags = r[:tags] || []
+    has_regional = tags.any? { |t| REGIONAL_VARIANT_TAGS.include?(t) }
+    has_decay = tags.any? { |t| STRUCTURED_ALT_OF_DECAY_TAGS.include?(t) }
+    case r[:source]
+    when :misspelling
+      next true
+    when :alt_of
+      # Structured +alt-of+ pointer is Wiktionary's editorial canonicalization; trust it
+      # for rare-side pairs unconditionally and for common-common pairs only when the
+      # sense isn't marked +archaic+/+obsolete+/+dated+.
+      next true if one_side_rare || !has_decay
+    when :alt_of_gloss
+      # Prose phrasing like +Alternative/Archaic/Commonwealth spelling of X+ is strong
+      # enough for the rare-side case; for common-common we still need regional evidence
+      # (and the regional sense itself has to be active, not obsolete).
+      next true if one_side_rare
+      next true if has_regional && !has_decay
+    when :synonym_of
+      # +Synonym of X+ is semantically broad (frolf/disc, moulder/mould); only accept
+      # when the regional tag signals an active regional spelling synonymy.
+      next true if has_regional && !has_decay
+    end
+    false
+  end
+end
+
+# A +form_of+ sense is worth keeping only when its tags signal spelling variation rather
+# than inflection. Kaikki marks plain inflections with +plural+/+past+/+participle+/etc.;
+# the alt-spelling side is usually tagged +alternative+/+alt-form+/+archaic+/+obsolete+/
+# +dialectal+/+nonstandard+/+rare+/+dated+/+standard+ (the latter when one spelling is the
+# "standard" version of a nonstandard form).
+def variant_tags_look_like_spelling?(tags)
+  return false if tags.nil? || tags.empty?
+  tags.any? { |t| SPELLING_VARIANT_TAG_HINTS.include?(t) }
+end
+
+SPELLING_VARIANT_TAG_HINTS = Set.new(%w[
+  alternative alt-form altform alt-spelling alt-of
+  archaic obsolete dated rare dialectal nonstandard informal
+  standard spelling Eye-dialect eye-dialect Latinization
+])
+
+# Pick the preferred spelling for a Wiktionary-attested pair, given a set of directional
+# evidence rows {variant:, target:, source:, tags:}. Rules in precedence order:
+#
+#   1. +:misspelling+ evidence: any row pointing "+variant+ is a misspelling of +target+"
+#      makes +target+ canonical, regardless of frequency. This dominates even if the
+#      wordfreq Zipf of the misspelling happens to be higher.
+#   2. Wordfreq Zipf delta ≥ +CORPUS_ZIPF_DECISIVE_DELTA+ (≈log10(3)): higher-frequency
+#      spelling wins.
+#   3. Directional +:alt_of+ majority: if Wiktionary consistently points one side at the
+#      other, respect that as a canonicalization hint.
+#   4. Lexicographic fallback so builds are reproducible.
+def resolve_wiktionary_variant_winner(a, b, rows, wordfreq_hash)
+  misspelling_targets = rows.select { |r| r[:source] == :misspelling }.map { |r| r[:target] }
+  unless misspelling_targets.empty?
+    target = misspelling_targets.first
+    variant = (target == a) ? b : a
+    return [target, variant]
+  end
+
+  freq_winner = pick_corpus_winner_by_zipf(a, b, wordfreq_hash, deterministic_fallback: nil)
+  if freq_winner
+    alt = (freq_winner == a) ? b : a
+    return [freq_winner, alt]
+  end
+
+  alt_of_target_votes = Hash.new(0)
+  rows.each do |r|
+    # Count structured +:alt_of+ twice as heavily as +:alt_of_gloss+ or +:synonym_of+:
+    # Wiktionary editors' tag-structured canonicalization pointer is a stronger signal
+    # than a prose phrasing that could reflect either direction.
+    case r[:source]
+    when :alt_of       then alt_of_target_votes[r[:target]] += 2
+    when :alt_of_gloss then alt_of_target_votes[r[:target]] += 1
+    when :synonym_of   then alt_of_target_votes[r[:target]] += 1
+    end
+  end
+  unless alt_of_target_votes.empty?
+    target = alt_of_target_votes.max_by { |_, v| v }.first
+    variant = (target == a) ? b : a
+    return [target, variant]
+  end
+
+  sorted = [a, b].sort
+  [sorted[0], sorted[1]]
 end
 
 # Pick whichever spelling has the decisively higher wordfreq Zipf (delta ≥
 # +CORPUS_ZIPF_DECISIVE_DELTA+); on a tie (or when both forms are absent from wordfreq) return
-# +deterministic_fallback+. Callers pass the morphologically simpler -os form as the fallback so
-# the UI never displays both spellings of a truly-tied pair.
+# +deterministic_fallback+. Callers pass the morphologically simpler -os form (or +nil+) as the
+# fallback so the UI never displays both spellings of a truly-tied pair.
 def pick_corpus_winner_by_zipf(a, b, wordfreq_hash, deterministic_fallback:)
   za = (wordfreq_hash[a] || 0.0).to_f
   zb = (wordfreq_hash[b] || 0.0).to_f
@@ -88,4 +447,18 @@ def pick_corpus_winner_by_zipf(a, b, wordfreq_hash, deterministic_fallback:)
   return a if diff >= CORPUS_ZIPF_DECISIVE_DELTA
   return b if -diff >= CORPUS_ZIPF_DECISIVE_DELTA
   deterministic_fallback
+end
+
+# Deduplicate variant pairs by normalized key. When multiple detectors emit the same pair,
+# the first one wins (o_plural_corpus_pairs runs first and is the stronger shape-based signal).
+def dedupe_variant_pairs(pairs)
+  seen = Set.new
+  out = []
+  pairs.each do |preferred, alt|
+    key = [preferred, alt].sort
+    next if seen.include?(key)
+    seen.add(key)
+    out << [preferred, alt]
+  end
+  out.sort
 end

@@ -560,8 +560,17 @@ end
 #
 # Set +VERBOSE=1+ in the environment to print each pruned tuple (and the kept tuple it matched);
 # this is separate from +$debug_mode+ / +debug+, which remain very chatty elsewhere.
+#
+# When +$debug_pruning+ is true (set per-request from the +debug=1+ URL param), tuples that
+# would normally be dropped are instead retained in the returned array AND recorded in
+# +$debug_pruned_tuples+, so the renderer can display them inline, greyed out, alongside
+# the kept tuples.
 def prune_suffix_redundant_rhyming_tuples(tuples)
   verbose_prunes = ENV["VERBOSE"] == "1"
+  debug_pruning = $debug_pruning
+  # Snapshot the input so the caller's array is never mutated; the original
+  # is not otherwise needed because the pruned set is populated in-place.
+  _original = tuples.dup if debug_pruning
   sorted = tuples.sort
   kept = []
   sorted.each do |tup|
@@ -586,6 +595,10 @@ def prune_suffix_redundant_rhyming_tuples(tuples)
     if keeper
       if verbose_prunes
         puts "pruned rhyming tuple (suffix-redundant): #{tup.join(' / ')}  [kept: #{keeper.join(' / ')}]"
+      end
+      if debug_pruning
+        $debug_pruned_tuples << tup
+        kept << tup
       end
       next
     end
@@ -612,6 +625,11 @@ def prune_suffix_redundant_rhyming_tuples(tuples)
 
       if verbose_prunes
         puts "pruned rhyming tuple (suffix-redundant): #{ear.join(' / ')}  [kept: #{tup.join(' / ')}]"
+      end
+      if debug_pruning
+        $debug_pruned_tuples << ear
+        # Retain ear (marked pruned) instead of rejecting it.
+        next false
       end
       true
     end
@@ -642,6 +660,14 @@ end
 
 $rhyming_tuple_cache = Hash.new()
 def find_rhyming_tuples(input_rel1, common_only = false)
+  # Skip the cache when +$debug_pruning+ is true: the pruner side-effects
+  # +$debug_pruned_tuples+ (a per-request Set consulted by +print_tuple+ for the
+  # grey pruning color), and returning cached results would bypass that population,
+  # leaving retained-pruned tuples un-colored. Debug requests are rare so recomputing
+  # is fine. We also avoid populating the cache from debug-mode results, since those
+  # include tuples that non-debug callers expect to have been dropped.
+  return really_find_rhyming_tuples(input_rel1, common_only) if $debug_pruning
+
   if $rhyming_tuple_cache.key?([input_rel1, common_only])
     return $rhyming_tuple_cache[[input_rel1, common_only]]
   else
@@ -854,7 +880,8 @@ end
 
 def print_tuple(tuple, focal_word=false)
   # this basically just pushes the rare words to the end, but we could do something snazzier if we want
-  cgi_print "<div class='output_tuple'><p class='output_p'>"
+  pruned_class = ($debug_pruning && $debug_pruned_tuples&.include?(tuple)) ? " output_tuple_pruned" : ""
+  cgi_print "<div class='output_tuple#{pruned_class}'><p class='output_p'>"
   good_tuple = tuple.reject{ |t| rare?(t) }
   bad_tuple  = tuple.select{ |t| rare?(t) }
   if(good_tuple.empty?)

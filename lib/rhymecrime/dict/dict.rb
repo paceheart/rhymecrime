@@ -33,6 +33,7 @@ require_relative "utils_rhyme"
 require_relative "phoneme.rb"
 require_relative "pronunciation.rb"
 require_relative "wiktionary"
+require_relative "varcon"
 require_relative "inflect"
 
 require_relative "constants"
@@ -181,7 +182,8 @@ def rebuild_rhymecrime_dictionaries()
   cmudict = load_cmudict
   original_cmudict_headwords = cmudict.keys.each_with_object(Set.new) { |k, s| s.add(k) }
   wordfreq_hash = load_wordfreq
-  wiktionary_prons, forms_map, pos_map, kaikki_verb_morph, kaikki_capitalized_only = load_wiktionary
+  wiktionary_prons, forms_map, pos_map, kaikki_verb_morph, kaikki_capitalized_only, kaikki_variant_map = load_wiktionary
+  varcon_variant_map = load_varcon
   wiktionary_headwords = wiktionary_prons.keys
   apply_lexical_pos_layer_a!(pos_map)
   wn_seed_pos_map_for_cmudict_gaps!(pos_map, cmudict)
@@ -211,7 +213,7 @@ def rebuild_rhymecrime_dictionaries()
   hyp_cmudict_edge = delete_headwords_with_edge_hyphen!(cmudict)
   puts "Removed #{hyp_cmudict_edge} cmudict headwords with a leading or trailing '-'" if hyp_cmudict_edge > 0
   rdict = build_rime_dict(cmudict)
-  word_dict = build_word_dict(cmudict, rdict, subtlex_hash, subtlex_total_hash, wordfreq_hash, wiktionary_words, pos_map, forms_map, kaikki_verb_morph, original_cmudict_headwords, kaikki_capitalized_only)
+  word_dict = build_word_dict(cmudict, rdict, subtlex_hash, subtlex_total_hash, wordfreq_hash, wiktionary_words, pos_map, forms_map, kaikki_verb_morph, original_cmudict_headwords, kaikki_capitalized_only, kaikki_variant_map, varcon_variant_map)
   hyphen_fold_build_keys = word_dict.keys
   lemma_map = compute_lemma_map(word_dict)
   save_string_hash(rdict, generated_dict_path_under_dict_dir(RIME_DICT_FILENAME), RIME_DICT_HEADER)
