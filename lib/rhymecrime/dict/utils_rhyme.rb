@@ -342,8 +342,84 @@ def us_uk_er_re_pair(word)
   nil
 end
 
+# US/UK consonant-doubling before a vowel-initial suffix on verbs ending in -l
+# (barreled/barrelled, traveling/travelling, modeler/modeller, marvelous/marvellous, counselor/
+# counsellor, …). US keeps a single l; UK doubles it. The pseudo-base (word minus the vowel
+# suffix, ending in a single l) must itself be a headword in +$word_dict+, which guards against
+# silent-e collisions (filed/filled, tiled/tilled, smiled/smilled, …) and unrelated ll-words
+# (called/caled, pulled/puled, boiled/boilled, …). As an extra safety belt the silent-e form
+# (pseudo-base with the trailing l replaced by "e") must NOT be a headword; this rejects the
+# rare cases where the naked pseudo-base happens to be in the dictionary but the "real" base
+# is the silent-e verb (e.g. "til" exists but the derivation is from "tile").
+US_UK_LL_VOWEL_SUFFIXES = %w[ing ers est ors ous ed er or].freeze
+
+US_UK_LL_MIN_WORD_LENGTH = 6
+US_UK_LL_MIN_PSEUDO_BASE_LENGTH = 3
+
+# Parse +word+ as either the US or UK shape of an -l-/-ll- doubling pair. Returns
+# [us_suffix_sliced_base_ending_in_single_l, matched_vowel_suffix] on match, nil otherwise.
+# The returned base always ends in a single "l" (never "ll") and is at least
+# +US_UK_LL_MIN_PSEUDO_BASE_LENGTH+ characters long.
+def us_uk_ll_parse(word)
+  w = word.to_s
+  return nil if w.length < US_UK_LL_MIN_WORD_LENGTH
+  US_UK_LL_VOWEL_SUFFIXES.sort_by { |s| [-s.length, s] }.each do |suf|
+    next unless w.end_with?(suf)
+    trunc = w[0...-suf.length]
+    if trunc.end_with?("ll") && !trunc.end_with?("lll")
+      pseudo_base = trunc[0...-1]
+    elsif trunc.end_with?("l") && !trunc.end_with?("ll")
+      pseudo_base = trunc
+    else
+      next
+    end
+    next if pseudo_base.length < US_UK_LL_MIN_PSEUDO_BASE_LENGTH
+    return [pseudo_base, suf]
+  end
+  nil
+end
+
+def us_to_uk_ll_spelling(us_word)
+  parsed = us_uk_ll_parse(us_word)
+  return nil unless parsed
+  pseudo_base, suf = parsed
+  pseudo_base + "l" + suf
+end
+
+def uk_to_us_ll_spelling(uk_word)
+  parsed = us_uk_ll_parse(uk_word)
+  return nil unless parsed
+  pseudo_base, suf = parsed
+  pseudo_base + suf
+end
+
+# Reject (filed, filled)-style collisions where the "real" base is a silent-e verb rather than
+# the naked pseudo-base ending in -l. See US_UK_LL_VOWEL_SUFFIXES comment for the full rationale.
+def us_uk_ll_pseudo_base_acceptable?(pseudo_base)
+  return false if pseudo_base.length < US_UK_LL_MIN_PSEUDO_BASE_LENGTH
+  return false unless word_dict_includes_headword?(pseudo_base)
+  return false if word_dict_includes_headword?(pseudo_base[0...-1] + "e")
+  true
+end
+
+def us_uk_ll_pair(word)
+  w = word.to_s
+  return nil if w.length < US_UK_LL_MIN_WORD_LENGTH
+  parsed = us_uk_ll_parse(w)
+  return nil unless parsed
+  pseudo_base, suf = parsed
+  return nil unless us_uk_ll_pseudo_base_acceptable?(pseudo_base)
+
+  us = pseudo_base + suf
+  uk = pseudo_base + "l" + suf
+  return nil if us == uk
+  return nil unless word_dict_includes_headword?(us) && word_dict_includes_headword?(uk)
+
+  [us, uk]
+end
+
 def us_uk_morphology_pair(word)
-  us_uk_ize_pair(word) || us_uk_or_pair(word) || us_uk_er_re_pair(word)
+  us_uk_ize_pair(word) || us_uk_or_pair(word) || us_uk_er_re_pair(word) || us_uk_ll_pair(word)
 end
 
 def us_uk_morphology_variant_forms(word)

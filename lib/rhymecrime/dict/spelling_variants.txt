@@ -7,6 +7,8 @@
 #  -ize/-ise (and -yze/-yse, -ization/-isation, -izer/-iser, etc.
 #  -or/-our (color/colour, behavior/behaviour, favorite/favourite, etc.
 #  -er/-re (center/centre, fiber/fibre, caliber/calibre, etc.)
+#  -l-/-ll- consonant doubling before vowel-initial suffixes on verbs ending in -l
+#    (barreled/barrelled, traveling/travelling, modeler/modeller, marvelous/marvellous, etc.)
 acknowledgment acknowledgement
 adaptor adapter
 advisor adviser

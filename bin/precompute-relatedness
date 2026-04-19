@@ -334,7 +334,7 @@ else
     File.delete(output_path) if !incremental && File.exist?(output_path)
     puts "Merging #{shard_paths.size} shard#{shard_paths.size == 1 ? '' : 's'} into #{output_path}..."
     t_merge = Process.clock_gettime(Process::CLOCK_MONOTONIC)
-    Rhymecrime::LocalStore.open_for_write(output_path) do |writer|
+    Rhymecrime::LocalStore.open_for_write(output_path, transaction: false) do |writer|
       shard_paths.each do |p|
         writer.merge_shard(p) if p && File.exist?(p)
       end

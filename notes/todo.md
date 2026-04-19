@@ -65,4 +65,7 @@ consider adding rare words as keys (but not values)
 
 scrape relatedness from archive of our own
 
+fix this duplication:
+accidental / dental / gentle / lentil / oriental / rental
+accidental / gentle / kennel / oriental
 

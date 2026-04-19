@@ -102,6 +102,8 @@ describe 'SET_RELATED' do
     set_related_oughta_contain 'pirate', 'shanty', 'vigilante'
     set_related_oughta_contain 'pirate', 'sleeves', 'thieves'
     set_related_oughta_contain 'pirate', 'fiends', 'submarines'
+    set_related_ought_not_contain 'pirate', 'barreled', 'barrelled'
+    set_related_ought_not_contain 'pirate', 'barreling', 'barrelling'
   end
 
   context 'halloween' do

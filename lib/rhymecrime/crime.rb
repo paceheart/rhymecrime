@@ -440,9 +440,102 @@ def rhyming_tuple_suffix_redundant_with?(earlier, later)
   end
 end
 
-# Drop tuples that differ from an earlier tuple only by parallel +Inflect+ suffixes (e.g. plural or
-# past tense of the same set). Tuples are sorted lexicographically before scanning so uninflected
-# spellings tend to be kept over inflected ones.
+# Preference order for sibling pruning: when two same-length tuples are both inflections of the
+# same absent base, the tuple with the lower-ranked kind wins (more basic inflections are kept).
+# Example: +breezier / sleazier+ (kind +:er+, rank 4) beats +breeziest / sleaziest+ (+:est+, rank
+# 5) when neither +breezy / sleazy+ is present in the input.
+RHYMING_TUPLE_SIBLING_KIND_RANK = { s: 1, ed: 2, ing: 3, er: 4, est: 5, ly: 6, ful: 7 }.freeze
+
+def rhyming_tuple_kind_preferred?(preferred, other)
+  return false if preferred.nil? || other.nil? || preferred == other
+  rp = RHYMING_TUPLE_SIBLING_KIND_RANK.fetch(preferred, Float::INFINITY)
+  ro = RHYMING_TUPLE_SIBLING_KIND_RANK.fetch(other, Float::INFINITY)
+  rp < ro
+end
+
+# If same-length tuples +a+ and +b+ are slot-parallel inflections of a common hidden base (not
+# necessarily a headword in the dictionary) via two *different* consistent +Inflect+ suffix kinds,
+# return +[kind_a, kind_b]+. Otherwise +nil+. Used to prune sibling inflections of an
+# absent-from-input base, e.g. pruning +breeziest / sleaziest+ in favor of +breezier / sleazier+.
+def rhyming_tuples_share_hidden_base(a, b)
+  return nil if a.empty? || a.size != b.size
+  return nil if a == b
+
+  candidates_per_slot = a.each_index.map do |i|
+    ca = Inflect.raw_candidate_bases_for_inflected(a[i])
+    cb = Inflect.raw_candidate_bases_for_inflected(b[i])
+    (ca & cb).to_a
+  end
+  return nil if candidates_per_slot.any?(&:empty?)
+
+  candidates_per_slot.first.each do |b0|
+    ka = Inflect.send(:match_suffix_kind, b0, a.first)
+    kb = Inflect.send(:match_suffix_kind, b0, b.first)
+    next if ka.nil? || kb.nil? || ka == kb
+
+    matches_all = true
+    (1...a.size).each do |i|
+      found = candidates_per_slot[i].any? do |bi|
+        Inflect.send(:match_suffix_kind, bi, a[i]) == ka &&
+          Inflect.send(:match_suffix_kind, bi, b[i]) == kb
+      end
+      unless found
+        matches_all = false
+        break
+      end
+    end
+    return [ka, kb] if matches_all
+  end
+
+  nil
+end
+
+# True if every word in +bases+ (the shorter tuple) inflects into a distinct word in +inflecteds+
+# (the longer tuple) using one shared +Inflect+ suffix kind. Used to detect the case where a
+# base-form tuple is a strict inflectional subset of a richer inflected tuple (e.g. the 3-member
+# singular [archaeologist/paleontologist/scientologist] vs. the 4-member plural
+# [archaeologists/paleontologists/scientologistes/scientologists]).
+def rhyming_tuple_bases_all_inflect_into?(bases, inflecteds)
+  return false if bases.empty? || inflecteds.empty?
+  return false if bases.size > inflecteds.size
+
+  kind_lock = nil
+  used_idx = {}
+  bases.each do |b|
+    matched_i = nil
+    matched_k = nil
+    inflecteds.each_with_index do |infl, i|
+      next if used_idx[i]
+
+      k = inflection_suffix_kind_from_base(b, infl)
+      next if k.nil?
+
+      matched_i = i
+      matched_k = k
+      break
+    end
+    return false if matched_i.nil?
+
+    if kind_lock.nil?
+      kind_lock = matched_k
+    elsif kind_lock != matched_k
+      return false
+    end
+    used_idx[matched_i] = true
+  end
+  true
+end
+
+# Drop tuples that differ from another tuple only by parallel +Inflect+ suffixes (e.g. plural or
+# past tense of the same set). Handles three regimes:
+#
+#   1. same-length base/inflected pair: keep the base, prune the inflected
+#   2. richer-vs-smaller inflectional subset: keep the richer tuple
+#   3. base-vs-inflected-superset (richer inflected has extra members not in the base): keep the
+#      richer inflected
+#
+# Checks are bidirectional against the kept list because +tuples.sort+ does not reliably
+# front-load base forms (e.g. +"artilleries" < "artillery"+ because +"i" < "y"+).
 #
 # Set +VERBOSE=1+ in the environment to print each pruned tuple (and the kept tuple it matched);
 # this is separate from +$debug_mode+ / +debug+, which remain very chatty elsewhere.
@@ -451,12 +544,55 @@ def prune_suffix_redundant_rhyming_tuples(tuples)
   sorted = tuples.sort
   kept = []
   sorted.each do |tup|
-    keeper = kept.find { |ear| rhyming_tuple_suffix_redundant_with?(ear, tup) }
+    keeper = kept.find do |ear|
+      if ear.size == tup.size
+        # Same-length pair. Either ear is the base-form and tup the inflection, or both are
+        # sibling inflections of a shared absent base and ear carries the more-preferred kind.
+        rhyming_tuple_suffix_redundant_with?(ear, tup) ||
+          begin
+            kinds = rhyming_tuples_share_hidden_base(ear, tup)
+            kinds && rhyming_tuple_kind_preferred?(kinds[0], kinds[1])
+          end
+      elsif ear.size > tup.size
+        # ear is either a richer base (tup inflected subset) or a richer inflected tuple (tup is
+        # the base subset). Either way, richer wins — prune tup.
+        rhyming_tuple_suffix_redundant_with?(ear, tup) ||
+          rhyming_tuple_bases_all_inflect_into?(tup, ear)
+      else
+        false
+      end
+    end
     if keeper
       if verbose_prunes
         puts "pruned rhyming tuple (suffix-redundant): #{tup.join(' / ')}  [kept: #{keeper.join(' / ')}]"
       end
       next
+    end
+
+    kept.reject! do |ear|
+      redundant =
+        if ear.size == tup.size
+          # Same-length symmetric check: tup is the base, ear is its inflection; or both are
+          # sibling inflections of a shared absent base and tup carries the more-preferred kind.
+          rhyming_tuple_suffix_redundant_with?(tup, ear) ||
+            begin
+              kinds = rhyming_tuples_share_hidden_base(tup, ear)
+              kinds && rhyming_tuple_kind_preferred?(kinds[0], kinds[1])
+            end
+        elsif ear.size < tup.size
+          # Either tup is richer inflected of a smaller base ear (richer wins), or tup is a
+          # richer base and ear is its inflected subset (richer still wins).
+          rhyming_tuple_bases_all_inflect_into?(ear, tup) ||
+            rhyming_tuple_suffix_redundant_with?(tup, ear)
+        else
+          false
+        end
+      next false unless redundant
+
+      if verbose_prunes
+        puts "pruned rhyming tuple (suffix-redundant): #{ear.join(' / ')}  [kept: #{tup.join(' / ')}]"
+      end
+      true
     end
 
     kept << tup

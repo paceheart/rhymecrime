@@ -36,23 +36,35 @@ module Rhymecrime
       # Opens (or creates) a local store SQLite file for writing and yields a
       # +Writer+. Used by +bin/precompute-relatedness+ (workers for per-shard
       # files, parent for the final merged file) and +bin/upload-to-dynamodb+.
-      # Always wraps the body in a single transaction — SQLite's per-commit
-      # fsync dominates write throughput otherwise.
-      def open_for_write(path = database_path)
+      # Wraps the body in a single transaction by default — SQLite's per-commit
+      # fsync dominates write throughput for many small +upsert_related+ calls.
+      # Pass +transaction: false+ when the body runs ATTACH/DETACH (e.g. the
+      # shard-merge path): SQLite can't DETACH an attached db while an enclosing
+      # transaction still holds a read lock on it, which leaves the alias bound
+      # and breaks the next ATTACH with "database <alias> is already in use".
+      def open_for_write(path = database_path, transaction: true)
         FileUtils.mkdir_p(File.dirname(path))
         db = SQLite3::Database.new(path)
         configure_for_bulk_write!(db)
         db.execute(Writer::SCHEMA_SQL)
         writer = Writer.new(db)
-        db.transaction
-        begin
-          yield writer
-          db.commit
-        rescue StandardError
-          db.rollback
-          raise
-        ensure
-          db.close
+        if transaction
+          db.transaction
+          begin
+            yield writer
+            db.commit
+          rescue StandardError
+            db.rollback
+            raise
+          ensure
+            db.close
+          end
+        else
+          begin
+            yield writer
+          ensure
+            db.close
+          end
         end
       end
 
@@ -100,15 +112,20 @@ module Rhymecrime
 
       # Attach +shard_path+ as a secondary database and bulk-copy its +related+
       # rows into the main table. Used by the parent process in
-      # +bin/precompute-relatedness+ to merge per-worker shards.
+      # +bin/precompute-relatedness+ to merge per-worker shards. Must run in
+      # autocommit mode (see +open_for_write(transaction: false)+): a wrapping
+      # transaction keeps a read lock on the attached db, which prevents DETACH
+      # and collides on the next merge's ATTACH.
       def merge_shard(shard_path)
         @db.execute("ATTACH DATABASE ? AS shard", shard_path)
-        @db.execute(
-          "INSERT OR REPLACE INTO related (pk, words, scores) " \
-          "SELECT pk, words, scores FROM shard.related"
-        )
-      ensure
-        @db.execute("DETACH DATABASE shard") rescue nil
+        begin
+          @db.execute(
+            "INSERT OR REPLACE INTO related (pk, words, scores) " \
+            "SELECT pk, words, scores FROM shard.related"
+          )
+        ensure
+          @db.execute("DETACH DATABASE shard")
+        end
       end
     end
 
