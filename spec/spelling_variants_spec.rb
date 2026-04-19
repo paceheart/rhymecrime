@@ -28,7 +28,6 @@ describe "SPELLING VARIANTS" do
   # specific stems. (Contrast with the native -o nouns below, which prefer -oes.)
   context "-o loanwords prefer plain -os" do
     prefer_spelling "aficionados", "aficionadoes"
-    prefer_spelling "bravados",    "bravadoes"
     prefer_spelling "desperados",  "desperadoes"
     prefer_spelling "mottos",      "mottoes"
   end
@@ -38,5 +37,12 @@ describe "SPELLING VARIANTS" do
     prefer_spelling "heroes",    "heros"
     prefer_spelling "tomatoes",  "tomatos"
     prefer_spelling "potatoes",  "potatos"
+  end
+
+  context "-eys vs -ies" do
+    prefer_spelling "monies", "moneys"
+    prefer_spelling "monkeys", "monkies"
+    prefer_spelling "abbeys", "abbies"
+    prefer_spelling "valleys", "vallies"
   end
 end

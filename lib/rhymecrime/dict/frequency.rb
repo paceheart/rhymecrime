@@ -1185,6 +1185,7 @@ def build_word_dict(cmudict, rdict, subtlex_hash, subtlex_total_hash, wordfreq_h
   word_dict = add_frequency_info(cmudict, subtlex_hash, subtlex_total_hash, wordfreq_hash, wiktionary_words, pos_map, forms_map, kaikki_verb_morph, original_cmudict_headwords, kaikki_capitalized_only)
   word_dict = filter_word_dict(word_dict)
   merge_word_dict_pronunciations_into_rdict!(rdict, word_dict)
+  emit_spelling_variants_auto!(word_dict, wordfreq_hash)
   strip_dispreferred_headwords_from_rdict!(rdict, word_dict)
   delete_rare_only_rime_buckets!(rdict, word_dict)
   delete_common_identical_only_rime_buckets!(rdict, word_dict)

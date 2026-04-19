@@ -435,9 +435,9 @@ end
 
 # Shape-only match of +word+ as the -oes or -os surface of an -o noun's plural. Returns
 # [oes_form, os_form] when the pattern matches, nil otherwise. Used by the build-time
-# corpus variant emitter (dict/corpus_variants.rb) and the pronunciation-overlap guards
-# below; runtime consumption of the resolved pairs goes through +variants()+ via the
-# generated +spelling_variants_auto.txt+ (corpora stay strictly build-side).
+# corpus variant emitter (dict/corpus_variants.rb); runtime consumption of the resolved
+# pairs goes through +variants()+ via the generated +spelling_variants_auto.txt+ so no
+# corpus I/O leaks into the runtime path.
 O_PLURAL_MIN_WORD_LENGTH = 4
 
 def o_plural_candidate_pair(word)
@@ -454,27 +454,6 @@ def o_plural_candidate_pair(word)
     return [oes, w]
   end
   nil
-end
-
-# True when +a+ and +b+ share at least one +word_dict+ pronunciation after dropping
-# syllable boundaries and stripping stress digits. Rejects surface-only pair matches
-# whose pronunciations diverge (e.g. hypothetical *pathos*/*pathoes*).
-def pronunciations_share_bare_phonemes?(a, b)
-  a_prons = pronunciations_of_headword(a)
-  b_prons = pronunciations_of_headword(b)
-  return false if a_prons.empty? || b_prons.empty?
-  a_bare = a_prons.map { |p| pronunciation_bare_phonemes(p) }
-  b_bare = b_prons.map { |p| pronunciation_bare_phonemes(p) }
-  !(a_bare & b_bare).empty?
-end
-
-def pronunciations_of_headword(word)
-  entry = lexicon_word_entry(word)
-  (entry && entry[1]) || []
-end
-
-def pronunciation_bare_phonemes(pron)
-  pron.phonemes.reject { |p| p == "." }.map { |p| Phoneme.bare_base(p) }
 end
 
 # Fold for grouping hyphen-insensitive spellings (in-laws ↔ inlaws).

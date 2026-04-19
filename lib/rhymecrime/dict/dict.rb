@@ -41,6 +41,7 @@ require_relative "lexical"
 require_relative "morphology"
 require_relative "rime"
 require_relative "frequency"
+require_relative "corpus_variants"
 
 $inflection_base_words = {}
 

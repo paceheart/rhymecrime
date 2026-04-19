@@ -78,3 +78,5 @@ Each of them is almost entirely redundant with the other two, but each tuple has
 
 loppings / toppings
 What happened to lopping / topping?
+
+harshly / partially
