@@ -155,6 +155,12 @@ def kaikki_form_oov_rescue_headwords(forms_map, wordfreq_hash, zipf_floor, wikti
       if base_wn_noun_only && (form.end_with?("ing") || form.end_with?("ed")) && form != base
         next
       end
+      # Forms with zero wordfreq trace are Wiktionary-paradigm junk (*bravados*, *gollies*,
+      # *polyed*, *hocused*). Legitimate rare inflections of attested bases register at least
+      # a floor Zipf. Skip this rescue path for them; the disconnect filter's Kaikki-paradigm
+      # branch still rescues zero-wordfreq forms when the base has a POS-appropriate WordNet
+      # entry (agoraphobias, necrophilias, nostalgias).
+      next unless wordfreq_hash.key?(form)
       out.add(form)
     end
   end
@@ -261,7 +267,36 @@ def filter_word_dict_disconnected!(word_dict, rdict, subtlex_hash, wordfreq_hash
         end
       end
       in_wordfreq_tsv = wordfreq_hash.key?(w)
-      keep = if in_wordfreq_tsv
+      # Kaikki-documented non-lemma paradigm forms (+polys+ form_of +poly+, +gollies+ form_of +golly+)
+      # with weak corpus evidence are Wiktionary-paradigm-only junk: Zipf < RARE (tiny document
+      # tail), SUBTLEX FREQcount 1-2 (caption noise). The default "any wordfreq row / any SUBTLEX
+      # trickle" rescue keeps them as freq=0 rows which later surface as +:rare+ in +rarity_spec+
+      # rather than the expected +:forbidden+. Require a stronger signal — Zipf ≥ RARE, SUBTLEX
+      # dialogue above trickle, WN entry, or explicit NB/CN presence — for Kaikki paradigm surfaces.
+      # Non-paradigm freq=0 words fall through the normal rescue paths below.
+      kaikki_paradigm = morph_kaikki_lists_surface_as_inflected_nonlemma?(w)
+      keep = if kaikki_paradigm
+               zipf_w = wordfreq_hash[w] || 0
+               sub_w = subtlex_hash[w] || 0
+               strong_wordfreq = zipf_w >= WORDFREQ_RARE_ZIPF
+               strong_subtlex = sub_w >= MORPH_CORPUS_SUBTLEX_MIN
+               wnw = wn_has_entry?(w)
+               # Base-of-inflection anchor: when Kaikki's +form_of+ lemma has a POS-appropriate
+               # WordNet entry (noun for *-s* plural, verb for *-ing* / *-ed*), the Wiktionary
+               # paradigm form is a legitimate rare inflection of an attested lexeme and should
+               # survive as freq=0 (rarity_spec +:rare+). POS-aware, not "any WN POS", because
+               # Kaikki aggressively documents deverbal participles for WN noun-only lemmas
+               # (+opinion+→+opinioning+, +kitchen+→+kitchening+, +attorney+→+attorneying+,
+               # +conversation+→+conversationing+) that English does not actually verbify.
+               # Without this anchor the filter drops +agoraphobias+ / +foxed+ / +sacristies+
+               # for the same weak-corpus reason we drop +polys+ / +gollies+ / +gettered+ (whose
+               # bases are _not_ in WordNet at all). Junk bases never acquire a WN entry because
+               # WN's lexicographic gate is stricter than Wiktionary's.
+               base_wn = kaikki_paradigm_base_has_pos_appropriate_wn?(w)
+               r = strong_wordfreq || strong_subtlex || wnw || base_wn
+               dict_trace_puts(w, "disconnect round=#{rounds}: freq=0 Kaikki-paradigm form of #{$inflection_base_words[w]}: zipf=#{zipf_w} sub=#{sub_w} wn=#{wnw} base_wn=#{base_wn} keep=#{r}") if dict_trace_word?(w)
+               r
+             elsif in_wordfreq_tsv
                if dict_trace_word?(w)
                  nb ||= numberbatch_headwords_intersecting(dict_set)
                  cn ||= conceptnet_headwords_intersecting(dict_set)
@@ -298,6 +333,25 @@ def filter_word_dict_disconnected!(word_dict, rdict, subtlex_hash, wordfreq_hash
   word_dict
 end
 
+# True if +word+ is a Kaikki non-lemma form whose +form_of+ base has a POS-appropriate
+# WordNet entry: +-ing+/+-ed+ wants a verb base (WN participle paradigm), +-s+/-+es+/+-er+/
+# +-est+ wants any WN entry (plurals and comparatives often substantivize adjectives —
+# *alpines*, *agoraphobics* — so noun-only gating drops them; the surface's wordfreq floor
+# in +compute_frequency+ still guards against truly empty paradigms). Used to shield
+# legitimate rare inflections of attested lexemes (*sacristies*, *foxed*, *alpines*,
+# *agoraphobics*) while still catching the junk (*polys*, *gollies*, *gettered*, *hocused*,
+# *finnaed*, *taserred*, *rizzed* — whose bases are not in WordNet at all).
+def kaikki_paradigm_base_has_pos_appropriate_wn?(word)
+  base = $inflection_base_words[word]
+  return false if base.nil? || base == word
+  return false unless wn_has_entry?(base)
+  if word.end_with?("ing") || word.end_with?("ed")
+    wn_base_has_verb?(base)
+  else
+    true
+  end
+end
+
 def compute_frequency(word, subtlex_hash, wordfreq_hash, subtlex_total_hash: nil, kaikki_capitalized_only: nil, pos_map: nil)
   return 0 if morph_spurious_plural_s_on_invariant_noun?(word)
 
@@ -306,6 +360,54 @@ def compute_frequency(word, subtlex_hash, wordfreq_hash, subtlex_total_hash: nil
   sub_raw = subtlex_hash[word] || 0
   zipf = wordfreq_hash[word] || 0
   syn_n = wn_synset_count(word)
+
+  # Kaikki-documented paradigm form (surface is a form_of some other lemma): do not score off
+  # marginal SUBTLEX / sub-rare Zipf. Wiktionary documents the full verb/plural paradigm for
+  # obscure senses — jargon, obsolete, regional, noun-coined-to-verb — and the surfaces show
+  # up with FREQcount of 1-2 in SUBTLEX (caption noise) or Zipf < 2.0 in wordfreq (single-digit
+  # document hits). Example junk: *gollies* (SUBTLEX count=2, Zipf 0), *polys* (SUBTLEX count=1,
+  # Zipf 1.71), *bravados* (SUBTLEX 0, NB-only). These should stay freq=0 and be pruned by the
+  # disconnect filter unless Phase 8/11 rescue them via strong surface attestation of the form
+  # itself. Guard is narrow: only fires when (a) the surface is a Kaikki non-lemma form of a
+  # different base, (b) no WordNet anchor on the surface, (c) Zipf below RARE threshold, and
+  # (d) SUBTLEX is trickle-level (< SUBTLEX_OVERRIDE_PROPER_MIN). Legit common plurals and
+  # inflections all carry strong wordfreq Zipf, WN entries, or high SUBTLEX FREQcount and
+  # bypass this gate.
+  #
+  # Exception: if the Kaikki +form_of+ base has a POS-appropriate WordNet entry (noun for +-s+
+  # plural, verb for +-ed+ / +-ing+), leave compute_frequency alone. These are legitimate rare
+  # inflections of attested lexemes (+sacristies+ ← +sacristy+, +alpines+ ← +alpine+,
+  # +agoraphobics+ ← +agoraphobic+) that must keep their weak-signal frequency so they
+  # survive the earlier +filter_word_dict+ (+prons.empty? && freq==0+) pass; otherwise they
+  # never reach the disconnect filter's base-WN rescue. Bases for the junk cases (+poly+,
+  # +golly+, +bravado+-as-verb, +hocus+, +getter+) have no matching WN entry so this clause
+  # does not apply to them.
+  if !in_wordnet && zipf < WORDFREQ_RARE_ZIPF &&
+      sub_raw < SUBTLEX_OVERRIDE_PROPER_MIN &&
+      morph_kaikki_lists_surface_as_inflected_nonlemma?(word) &&
+      !kaikki_paradigm_base_has_pos_appropriate_wn?(word)
+    dict_trace_puts(word, "compute_frequency: Kaikki form_of paradigm with weak signal (sub=#{sub_raw} zipf=#{zipf}) => 0") if dict_trace_word?(word)
+    return 0
+  end
+
+  # Short-base Kaikki paradigm plurals (+or+→+ors+, +o+→+os+, +pos+→+poss+, +bo+→+bos+): 1-3
+  # char bases whose Wiktionary-documented +-s+ surface inherits web/SUBTLEX noise that looks
+  # conversational but is mostly function-word / acronym / abbreviation fragment spam. Zero
+  # when the surface has no WN entry of its own and Zipf stays sub-COMMON — legit short-base
+  # plurals (+bees+ from +bee+ Zipf 4.86, +toes+ from +toe+) either sit well above COMMON or
+  # show up in WN; their Kaikki form remains undisturbed. +poss+ SUBTLEX 7 is all-lowercase
+  # tweet slang for +possible+, not a real plural of WN +pos+. Does not apply to +-es+/+-ing+/
+  # +-ed+ which have verb paradigms with different noise profiles.
+  if !in_wordnet && zipf < WORDFREQ_COMMON_ZIPF &&
+      morph_kaikki_lists_surface_as_inflected_nonlemma?(word) &&
+      word.end_with?("s")
+    base = $inflection_base_words[word]
+    if base && base.length <= 3 && base != word &&
+        (word == "#{base}s" || word == "#{base}es")
+      dict_trace_puts(word, "compute_frequency: Kaikki short-base (#{base}) plural with sub-COMMON Zipf (#{zipf}) => 0") if dict_trace_word?(word)
+      return 0
+    end
+  end
 
   # Two-letter all-proper: usually chemical/state abbreviations in WordNet (Al, Bi, AL).
   # Multiple synsets → keep 0 (al, ba). Single synset → only trust subtitles below a ceiling
@@ -729,22 +831,40 @@ def add_frequency_info(cmudict, subtlex_hash, subtlex_total_hash, wordfreq_hash,
       next
     end
     inflection_suffix_kind = Inflect.send(:match_suffix_kind, base, inflected)
-    # Kaikki forms_map sometimes links archaic / dialectal surfaces to a modern lemma with no
-    # regular-English suffix relationship (*glide*→*glid*). When Inflect can't identify a suffix
-    # kind AND the surface has zero corpus presence (wordfreq + SUBTLEX both empty), refuse to
-    # inherit the base's frequency — legitimate irregular inflections (*bought*, *knew*) always
-    # have ample Zipf on the surface.
+    # Kaikki forms_map sometimes links archaic / dialectal / mock-Latinate surfaces to a modern
+    # lemma with no regular-English suffix relationship (*house*→*hice*, *os*→*ossa*, *dye*→*dyce*,
+    # *glide*→*glid*). When Inflect can't identify a suffix kind, require a WordNet entry for the
+    # surface or Zipf ≥ COMMON before letting it inherit donor frequency. A sub-COMMON Zipf is a
+    # Wikipedia / Common Crawl tail signal that typically reflects Wiktionary paradigm echo rather
+    # than running-text usage. Legitimate irregular inflections (*bought* Zipf 4.92, *knew* 5.21,
+    # *children* 5.04, *feet* 4.74, *teeth* 4.02, *mice* 3.89) all sit well above COMMON.
     if inflection_suffix_kind.nil?
       sub_raw_inf = subtlex_hash[inflected] || 0
       wf_raw_inf = (wordfreq_hash[inflected] || 0).to_f
-      if sub_raw_inf == 0 && wf_raw_inf == 0
-        dict_trace_puts(inflected, "Phase8 ← #{base}: skip (Kaikki form with empty suffix and zero corpus signal)") if tr
+      wn_inf = wn_has_entry?(inflected)
+      unless wn_inf || wf_raw_inf >= WORDFREQ_COMMON_ZIPF || sub_raw_inf >= SUBTLEX_OVERRIDE_PROPER_MIN
+        dict_trace_puts(inflected, "Phase8 ← #{base}: skip (Kaikki irregular form, wf=#{wf_raw_inf} sub=#{sub_raw_inf} no WN)") if tr
         next
       end
     end
     if inflection_suffix_kind == :s && !morph_base_allows_plural_s?(base, pos_map, forms_map, inflected, wordfreq_hash: wordfreq_hash, subtlex_hash: subtlex_hash)
       dict_trace_puts(inflected, "Phase8 ← #{base}: skip (plural :s not allowed)") if tr
       next
+    end
+    # Non-standard consonant+y plurals: English pluralizes +lady+→+ladies+, +teddy+→+teddies+,
+    # +eddy+→+eddies+. Kaikki sometimes documents the dialectal +-ys+ surface (*teddys*, *eddys*,
+    # *gettys*) as an "alternative form of" the lemma; these inherit donor frequency from the
+    # common base. The -ies surface is the preferred/canonical inflection in CMUdict/wordfreq, so
+    # the -ys form adds noise. Skip unless the -ys surface has its own Zipf ≥ RARE or WN entry
+    # (+boys+/+guys+ are not cons+y, so they do not match this pattern).
+    if inflection_suffix_kind == :s && base.length >= 2 &&
+        base.end_with?("y") && !%w[a e i o u y].include?(base[-2]) &&
+        inflected == "#{base}s"
+      wf_raw_inf = (wordfreq_hash[inflected] || 0).to_f
+      unless wn_has_entry?(inflected) || wf_raw_inf >= WORDFREQ_RARE_ZIPF
+        dict_trace_puts(inflected, "Phase8 ← #{base}: skip (nonstandard cons+ys plural; standard is -ies)") if tr
+        next
+      end
     end
     zf_w = wordfreq_hash[inflected] || 0
     if (inflection_suffix_kind == :ed || inflection_suffix_kind == :ing) && !morph_base_allows_verb_forms?(base, inflected, pos_map, forms_map, zf_w, wordfreq_hash, kaikki_verb_morph: kaikki_verb_morph)
@@ -758,11 +878,30 @@ def add_frequency_info(cmudict, subtlex_hash, subtlex_total_hash, wordfreq_hash,
         next
       end
     end
-    surf_ok = inflection_surface_reference_attested?(inflected, subtlex_hash, wordfreq_hash, cmudict_orig, ref_cn, ref_nb, ref_usf, neol_words: neol_words) ||
-      wiktionary_surface_form_attested?(forms_map, base, inflected) ||
-      neol_words.include?(base)
-    if base_freq > RARE_FREQ_MAX && !common_words.include?(base) && !surf_ok
-      dict_trace_puts(inflected, "Phase8 ← #{base}: skip (not in wordfreq/SUBTLEX/WN/CMU/USF/CN/NB/neol/Kaikki surface)") if tr
+    # Surface attestation: require real corpus evidence for the inflected form when the base
+    # lacks a "common" anchor (neither common_words nor wordfreq Zipf ≥ COMMON). Stronger than
+    # "any SUBTLEX trickle / Numberbatch vector" because Wiktionary documents full paradigms
+    # for obscure verbal / plural senses (*getter* physics jargon, *bravado* obsolete swagger-
+    # verb, *golly* Australian spit-verb, *poly* fantasy polymorph-verb, *hocus* obsolete) whose
+    # surfaces show up in SUBTLEX with FREQcount of 1-2 or as a Numberbatch vector but never in
+    # running text. Require wordfreq presence, WN entry, original CMUdict, or neol membership of
+    # the inflected form itself. neol-only on the _base_ (rizz → rizzed) does not license OOV
+    # inflections; real neol inflections (*yeeted*, *twerked*) show up in wordfreq at low Zipf.
+    # Bases whose own Zipf ≥ WORDFREQ_COMMON_ZIPF (sacristy 3.36, agoraphobic 3.13, alpine 3.79,
+    # foxy 3.61) remain authoritative and skip this gate so their Kaikki-documented rare
+    # inflections (*sacristies*, *agoraphobics*, *alpines*, *foxier*) still receive donor
+    # frequency via the usual propagation.
+    base_zipf = wordfreq_hash[base] || 0
+    surf_ok = wordfreq_hash.key?(inflected) ||
+      wn_has_entry?(inflected) ||
+      cmudict_orig.include?(inflected) ||
+      neol_words.include?(inflected)
+    base_has_real_anchor = common_words.include?(base) ||
+      wn_has_entry?(base) ||
+      neol_words.include?(base) ||
+      base_zipf >= WORDFREQ_COMMON_ZIPF
+    if base_freq > RARE_FREQ_MAX && !base_has_real_anchor && !surf_ok
+      dict_trace_puts(inflected, "Phase8 ← #{base}: skip (base not in common_words/WN/neol, Zipf #{base_zipf} < COMMON, surface not in wordfreq/WN/CMU/neol)") if tr
       next
     end
     hash[inflected][0] = base_freq
@@ -964,6 +1103,26 @@ def add_frequency_info(cmudict, subtlex_hash, subtlex_total_hash, wordfreq_hash,
         dict_trace_puts(base, "Phase11: skip (too short; Zipf #{base_zipf_pre} < #{WORDFREQ_COMMON_ZIPF})") if tb
         next
       end
+      # Proper-noun bases (SUBTLEX majority capitalized, Kaikki capitalized-only) without any WN
+      # common-noun anchor must not drive Inflect derivation. Without this gate, surname CMU
+      # headwords (*ferris* with +ferris wheel+-driven Zipf 4.10 but SUBTLEX capitalized 185/209
+      # vs lowercase 24) reach Phase 11 and spin up junk plural surfaces (*ferriss* — Inflect's
+      # consonant-doubling fallback for unstressed *-is* endings). Real common nouns (+blog+,
+      # +twerk+, +gramophone+) have WN noun entries or an almost-entirely-lowercase SUBTLEX
+      # profile and skip this gate. The +likely_proper_noun_by_case?+ helper is gated by a very
+      # low +max_low+ so we compute the capitalization ratio directly here for high-SUBTLEX-total
+      # surname bases where the proper-noun signal is strong but the lowercase trickle (ferris
+      # wheel / ferris-wheel idiom) inflates FREQlow above the normal gate.
+      unless wn_has_entry?(base) && wn_base_has_noun?(base)
+        sub_total_b = (subtlex_total_hash && subtlex_total_hash[base]) || 0
+        ratio_b = subtlex_capitalized_ratio(base, subtlex_hash, subtlex_total_hash)
+        proper_noun_by_ratio = sub_total_b > 0 && ratio_b && ratio_b >= SUBTLEX_PROPER_NOUN_RATIO_MIN
+        kaikki_cap_only = kaikki_capitalized_only && kaikki_capitalized_only.include?(base)
+        if proper_noun_by_ratio || kaikki_cap_only
+          dict_trace_puts(base, "Phase11: skip (proper-noun base: cap_ratio=#{ratio_b} kaikki_cap_only=#{kaikki_cap_only})") if tb
+          next
+        end
+      end
       sub_raw = subtlex_hash[base] || 0
       # SUBTLEX floor *or* conversational web Zipf (*blog* is dialogue-light in SUBTLEX but Zipf≈4.7).
       # Curated neol bases also qualify so modern lemmas (*doomscroll*) spread to their inflections.
@@ -1015,11 +1174,35 @@ def add_frequency_info(cmudict, subtlex_hash, subtlex_total_hash, wordfreq_hash,
           dict_trace_puts(w, "Phase11 ← #{base}: skip (Zipf #{wf} ≥ #{WORDFREQ_COMMON_ZIPF})") if tr
           next
         end
-        surf_attested = inflection_surface_reference_attested?(w, subtlex_hash, wordfreq_hash, cmudict_orig, ref_cn, ref_nb, ref_usf, neol_words: neol_words) ||
-          neol_words.include?(base)
+        # Surface attestation: require wordfreq / WN / CMU / neol for the inflection itself (not just
+        # the trickle signals — SUBTLEX count of 1, lone Numberbatch vector — that Phase 8 also rejects).
+        # Base membership in neol does not license Inflect-generated inflections (*taserred*,
+        # *taserring*, *finnaed*, *rizzed*): the real neol paradigms (*tasered*, *tasering*, *yeeted*)
+        # show up in wordfreq at low Zipf. Without this gate, even high-Zipf bases (*poly* Zipf 3.64)
+        # hand donor frequency to Kaikki-documented jargon inflections (*polyed*) that have zero
+        # running-text presence; the existing-row branch below would otherwise lift them without any
+        # surface check. Short *-s* plurals of true WordNet noun-only bases (*gramophones*) still
+        # surf_attested via WN / CMUdict so legitimate rare plurals are unaffected.
+        surf_attested = wordfreq_hash.key?(w) ||
+          wn_has_entry?(w) ||
+          cmudict_orig.include?(w) ||
+          neol_words.include?(w)
         base_zipf = wordfreq_hash[base] || 0
-        if donor > RARE_FREQ_MAX && base_zipf < WORDFREQ_COMMON_ZIPF && !surf_attested
-          dict_trace_puts(w, "Phase11 ← #{base}: skip (not in wordfreq/SUBTLEX/WN/CMU/USF/CN/NB/neol; base Zipf #{base_zipf} < #{WORDFREQ_COMMON_ZIPF})") if tr
+        # Only require form-level surf_attested when the base itself lacks a "real word" anchor.
+        # Bases in common_words, WordNet, neol, or wordfreq at Zipf ≥ COMMON are authoritative
+        # enough that their Kaikki-documented inflections get donor frequency on the base's
+        # reputation alone (sacristy→sacristies, alpine→alpines, yeet→yeets). Without this
+        # base-anchor escape, the surface-level gate would drop legit rare plurals / comparatives
+        # of common-ish English lemmas whose inflected forms never accumulate enough SUBTLEX /
+        # wordfreq volume to self-attest. The junk cases (poly, golly, hocus, bravado-as-verb,
+        # taser, rizz, finna, getter, fox-as-verb-beyond-WN, ferris-as-plural) all fail every
+        # clause of this anchor: no common_words / WN / neol entry, and Zipf < COMMON.
+        base_has_real_anchor = common_words.include?(base) ||
+          wn_has_entry?(base) ||
+          neol_words.include?(base) ||
+          base_zipf >= WORDFREQ_COMMON_ZIPF
+        if donor > RARE_FREQ_MAX && !base_has_real_anchor && !surf_attested
+          dict_trace_puts(w, "Phase11 ← #{base}: skip (base not in common_words/WN/neol, Zipf #{base_zipf} < COMMON, surface not in wordfreq/WN/CMU/neol)") if tr
           next
         end
         if inflection_suffix_kind == :s
@@ -1042,6 +1225,16 @@ def add_frequency_info(cmudict, subtlex_hash, subtlex_total_hash, wordfreq_hash,
           # +gen+ base (Zipf 4.33, passes corpus_ok), undoing the Option 2 clamp.
           if wn_encyclopedic_single_synset_demoted?(w, subtlex_hash, wordfreq_hash)
             dict_trace_puts(w, "Phase11 ← #{base}: skip (:s branch, WN single-synset specialized-lex demotion)") if tr
+            next
+          end
+          # Mirror the Phase 8 nonstandard consonant+y plural gate: English canonical plural of
+          # +teddy+/+lady+/+eddy+ is +teddies+/+ladies+/+eddies+. Kaikki sometimes records the
+          # +-ys+ alternative; without its own Zipf ≥ RARE or WN entry, that surface is Wiktionary
+          # paradigm echo and should not receive donor frequency here either.
+          if base.length >= 2 && base.end_with?("y") && !%w[a e i o u y].include?(base[-2]) &&
+              w == "#{base}s" &&
+              !wn_has_entry?(w) && (wordfreq_hash[w] || 0) < WORDFREQ_RARE_ZIPF
+            dict_trace_puts(w, "Phase11 ← #{base}: skip (:s branch, nonstandard cons+ys plural)") if tr
             next
           end
           unless corpus_ok || lexical_plural_ok
