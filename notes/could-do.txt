@@ -26,3 +26,5 @@
 corpora
 - C4 https://stanford-cs324.github.io/winter2022/lectures/data/
 - "the pile"
+
+scrape relatedness from archive of our own

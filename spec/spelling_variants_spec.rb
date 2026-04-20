@@ -30,6 +30,7 @@ describe "SPELLING VARIANTS" do
     prefer_spelling "aficionados", "aficionadoes"
     prefer_spelling "desperados",  "desperadoes"
     prefer_spelling "mottos",      "mottoes"
+    prefer_spelling "ghettos",     "ghettoes"
   end
 
   # Native English -o nouns that take the older -oes plural in standard orthography.
@@ -37,6 +38,7 @@ describe "SPELLING VARIANTS" do
     prefer_spelling "heroes",    "heros"
     prefer_spelling "tomatoes",  "tomatos"
     prefer_spelling "potatoes",  "potatos"
+    prefer_spelling "echoes",    "echos"
   end
 
   context "-eys vs -ies" do
@@ -49,5 +51,10 @@ describe "SPELLING VARIANTS" do
   context "consonant doubling" do
     prefer_spelling "tasered", "taserred"
     prefer_spelling "tasering", "taserring"
+    prefer_spelling "parroted", "parrotted"
+  end
+
+  context "words ending in e" do
+    prefer_spelling "icing", "iceing"
   end
 end

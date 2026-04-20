@@ -110,6 +110,7 @@ describe 'RHYMES' do
     ought_not_rhyme 'leader', 'lieder'
     ought_not_rhyme 'lindsay', 'lindsey'
     ought_not_rhyme 'hanukkah', 'chanukah' # what if the initial sounds are different, though? Then how do we know to eliminate this?
+    ought_not_rhyme 'adherence', 'adherents'
   end
   context "'lay' ought not rhyme with 'lei'..." do
     ought_not_rhyme 'lay', 'lei'
@@ -224,6 +225,17 @@ describe 'RHYMES' do
     ought_not_rhyme 'pacific', 'transpacific'
     ought_not_rhyme 'legal', 'illegal'
     ought_not_rhyme 'alcoholic', 'non-alcoholic'
+    ought_not_rhyme 'subordinate', 'insubordinate'
+    ought_not_rhyme 'live', 'outlive'
+    ought_not_rhyme 'verbal', 'nonverbal'
+    ought_not_rhyme 'western', 'northwestern'
+    ought_not_rhyme 'western', 'midwestern'
+    ought_not_rhyme 'midwestern', 'northwestern'
+    ought_not_rhyme 'lay', 'overlay'
+    ought_not_rhyme 'lay', 'underlay'
+    ought_not_rhyme 'overlay', 'underlay'
+    ought_not_rhyme 'lie', 'underlie'
+    ought_not_rhyme 'lying', 'underlying'
   end
 
   context "spelling variants ought not count as rhymes" do

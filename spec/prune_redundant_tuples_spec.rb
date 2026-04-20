@@ -132,5 +132,15 @@ describe 'prune_suffix_redundant_rhyming_tuples' do
 
   context 'misc' do
     prune_rhyming_tuple 'proving / removing', 'provings / removings'
+    prune_rhyming_tuple 'boot / flute / fruit', 'booted / fluted / fruited'
+    prune_rhyming_tuple 'boot / flute / fruit', 'booted / fluted'
+    prune_rhyming_tuple 'boot / flute / fruit', 'booting / fluting'
+    prune_rhyming_tuple 'booted / fluted / fruited', 'booting / fluting / fruiting'
+    prune_rhyming_tuple 'booted / fluted / fruited', 'booting / fluting'
+    prune_rhyming_tuple(
+      'alluded / booted / fluted / fruited / polluted / suited',
+      'alluding / booting / fluting / polluting / suiting'
+    )
+
   end
 end
