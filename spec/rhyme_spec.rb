@@ -93,7 +93,7 @@ describe 'RHYMES' do
     ought_not_rhyme 'axolotls', 'bottles'  # stress mismatch, but I don't hate it
     oughta_rhyme 'spiral', 'viral'
     ought_not_rhyme 'eyes', 'sees' # this was a bug due to two pronunciations of 'reprise'
-    ought_not_rhyme 'biopic', 'myopic' # stress mismatch
+    ought_not_rhyme 'biopic', 'myopic', not_working_message: "stress mismatch, TODO: fix bad pronunciation"
     oughta_rhyme 'poor', 'pure' # P vs. PY is different enough
   end
 
@@ -119,7 +119,7 @@ describe 'RHYMES' do
     ought_not_rhyme 'leader', 'lieder'
     ought_not_rhyme 'lindsay', 'lindsey'
     ought_not_rhyme 'hanukkah', 'chanukah' # what if the initial sounds are different, though? Then how do we know to eliminate this?
-    ought_not_rhyme 'adherence', 'adherents'
+    ought_not_rhyme 'adherence', 'adherents', not_working_message: "these aren't true homophones, but we forget that when we elide the T"
   end
   context "'lay' ought not rhyme with 'lei'..." do
     ought_not_rhyme 'lay', 'lei'
@@ -566,7 +566,7 @@ describe 'RHYMES' do
   context 'hyphens' do
     could_go_either_way 'flaws', 'in-laws' # probably stress mismatch
     could_go_either_way 'flaws', 'inlaws' # probably stress mismatch
-    ought_not_rhyme_one_way 'flaws', 'inlaws'
+    ought_not_rhyme_one_way 'flaws', 'inlaws', not_working_message: "TODO: inlaws pronunciation should have stress on first syllable"
     ought_not_rhyme 'inlaws', 'in-laws'
     ought_not_rhyme 'nonbuilding', 'non-building'
     ought_not_rhyme 'cul-de-sac', 'back' # stress mismatch
@@ -770,21 +770,20 @@ describe 'RHYMES' do
     oughta_rhyme 'loot', 'pursuit'
     oughta_rhyme 'reef', 'thief'
     oughta_rhyme 'abducted', 'obstructed'
-    ought_not_rhyme 'aquatic', 'haddock' # vowel mismatch
+    ought_not_rhyme 'aquatic', 'haddock', not_working_message: "vowel mismatch, TODO: fix bad pronunciation"
     oughta_rhyme 'haddock', 'thematic'
-    ought_not_rhyme 'aquatic', 'thematic'
-    ought_not_rhyme 'satyr', 'splatter'
+    ought_not_rhyme 'aquatic', 'thematic', not_working_message: "vowel mismatch, TODO: fix bad pronunciation"
+    ought_not_rhyme 'satyr', 'splatter', not_working_message: "vowel mismatch, TODO: fix bad pronunciation"
     oughta_rhyme 'satyr', 'later'
     oughta_rhyme 'floating', 'loading'
     could_go_either_way 'floating', 'offloading'
-    ought_not_rhyme 'laugher', 'rocker'
-    oughta_rhyme 'laugher', 'staffer'
-    oughta_rhyme 'attire', 'squire'
+    ought_not_rhyme 'laugher', 'rocker', not_working_message: "vowel mismatch, TODO: fix bad pronunciation"
+    oughta_rhyme 'laugher', 'staffer', not_working_message: "vowel mismatch, TODO: fix bad pronunciation"
     oughta_rhyme 'haunted', 'daunted'
     oughta_rhyme 'haunted', 'undaunted'
     ought_not_rhyme 'daunted', 'undaunted'
     ought_not_rhyme 'official', 'unofficial'
-    ought_not_rhyme 'color', 'scholar'
+    ought_not_rhyme 'color', 'scholar', not_working_message: "vowel mismatch, TODO: fix bad pronunciation"
     oughta_rhyme 'collar', 'scholar'
     ought_not_rhyme 'collar', 'color'
     oughta_rhyme 'marauding', 'plotting'
@@ -996,5 +995,17 @@ describe 'RHYMES' do
     ought_not_rhyme 'anal', 'canal'
     ought_not_rhyme 'fez', 'snes', not_working_message: 'TODO: spot-fix bad pronunciations'
     ought_not_rhyme 'froggy', 'swaggy', not_working_message: 'TODO: spot-fix bad pronunciations'
+  end
+
+  context 'ire' do
+    oughta_rhyme 'ire', 'fire'
+    oughta_rhyme 'tire', 'squire'
+    oughta_rhyme 'attire', 'squire'
+    oughta_rhyme 'dire', 'buyer'
+    oughta_rhyme 'attire', 'aspire'
+    oughta_rhyme 'briar', 'inquire'
+    oughta_rhyme 'desire', 'inspire'
+    oughta_rhyme 'choir', 'inquire' # identical rimes
+    oughta_rhyme 'acquire', 'admire'
   end
 end

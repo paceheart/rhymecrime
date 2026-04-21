@@ -178,6 +178,22 @@ def word_dict_includes_headword?(w)
   defined?($word_dict) && $word_dict.is_a?(Hash) && !$word_dict.empty? && $word_dict.key?(w)
 end
 
+# Like +word_dict_includes_headword?+ but also requires that the entry carries at least one
+# pronunciation. Used by US/UK variant-pair detection to avoid anointing frequency-only ghost
+# entries (+expertize+, +favorize+, +criticize+/+criticise+ mispairings, etc.) as the
+# preferred form of a well-pronounced counterpart: a prefix-less entry with empty prons
+# can't rhyme, so making it the canonical surface strands the real word in no cohort.
+def word_dict_includes_pronounced_headword?(w)
+  if defined?(Rhymecrime::DataSource) && Rhymecrime::DataSource.dynamodb?
+    return Rhymecrime::DynamoRuntime.headword?(w) # Dynamo export already drops pronless entries.
+  end
+  return false unless defined?($word_dict) && $word_dict.is_a?(Hash) && !$word_dict.empty?
+  entry = $word_dict[w]
+  return false unless entry
+  prons = entry[1]
+  prons.is_a?(Array) && !prons.empty?
+end
+
 # Headwords to consider when expanding topical relatedness (RhymeCrime lexicon + test extras).
 # Requires crime.rb to have defined +word_dict+ and optionally WORDS_NEEDED_FOR_TESTING.
 def word_we_care_about?(word)
@@ -244,7 +260,10 @@ def us_uk_ize_pair(word)
     return [w, uk]
   end
   us = uk_to_us_ize_spelling(w)
-  if us && us != w && word_dict_includes_headword?(us) && us_to_uk_ize_spelling(us) == w
+  # Require a pronounced US counterpart: rejects frequency-only ghosts like +expertize+ that
+  # would otherwise be crowned the canonical form of a real word (+expertise+) and strand it
+  # from every rime cohort.
+  if us && us != w && word_dict_includes_pronounced_headword?(us) && us_to_uk_ize_spelling(us) == w
     return [us, w]
   end
   nil
@@ -290,11 +309,11 @@ def us_uk_or_pair(word)
   w = word.to_s
   return nil if w.length < US_UK_OR_MIN_WORD_LENGTH
   uk = us_to_uk_or_spelling(w)
-  if uk && uk != w && uk.length >= US_UK_OR_MIN_WORD_LENGTH && word_dict_includes_headword?(w) && word_dict_includes_headword?(uk) && uk_to_us_or_spelling(uk) == w
+  if uk && uk != w && uk.length >= US_UK_OR_MIN_WORD_LENGTH && word_dict_includes_pronounced_headword?(w) && word_dict_includes_pronounced_headword?(uk) && uk_to_us_or_spelling(uk) == w
     return [w, uk]
   end
   us = uk_to_us_or_spelling(w)
-  if us && us != w && us.length >= US_UK_OR_MIN_WORD_LENGTH && word_dict_includes_headword?(w) && word_dict_includes_headword?(us) && us_to_uk_or_spelling(us) == w
+  if us && us != w && us.length >= US_UK_OR_MIN_WORD_LENGTH && word_dict_includes_pronounced_headword?(w) && word_dict_includes_pronounced_headword?(us) && us_to_uk_or_spelling(us) == w
     return [us, w]
   end
   nil
@@ -341,11 +360,11 @@ def us_uk_er_re_pair(word)
   w = word.to_s
   return nil if w.length < US_UK_ER_RE_MIN_WORD_LENGTH
   uk = us_to_uk_er_re_spelling(w)
-  if uk && uk != w && uk.length >= US_UK_ER_RE_MIN_WORD_LENGTH && word_dict_includes_headword?(w) && word_dict_includes_headword?(uk) && uk_to_us_er_re_spelling(uk) == w
+  if uk && uk != w && uk.length >= US_UK_ER_RE_MIN_WORD_LENGTH && word_dict_includes_pronounced_headword?(w) && word_dict_includes_pronounced_headword?(uk) && uk_to_us_er_re_spelling(uk) == w
     return [w, uk]
   end
   us = uk_to_us_er_re_spelling(w)
-  if us && us != w && us.length >= US_UK_ER_RE_MIN_WORD_LENGTH && word_dict_includes_headword?(w) && word_dict_includes_headword?(us) && us_to_uk_er_re_spelling(us) == w
+  if us && us != w && us.length >= US_UK_ER_RE_MIN_WORD_LENGTH && word_dict_includes_pronounced_headword?(w) && word_dict_includes_pronounced_headword?(us) && us_to_uk_er_re_spelling(us) == w
     return [us, w]
   end
   nil
@@ -422,7 +441,7 @@ def us_uk_ll_pair(word)
   us = pseudo_base + suf
   uk = pseudo_base + "l" + suf
   return nil if us == uk
-  return nil unless word_dict_includes_headword?(us) && word_dict_includes_headword?(uk)
+  return nil unless word_dict_includes_pronounced_headword?(us) && word_dict_includes_pronounced_headword?(uk)
 
   [us, uk]
 end

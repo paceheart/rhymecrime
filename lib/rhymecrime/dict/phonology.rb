@@ -127,6 +127,14 @@ CONFLATE_IMPERFECT_RHYME_SUFFIX_RULES = [
   [%w[ZH IY0 NG], %w[JH IY0 NG]],
   [%w[ZH AH0 R], %w[JH AH0 R]],
   [%w[ZH AH0 R Z], %w[JH AH0 R Z]],
+  # +-ire+ smoothing: English compresses word-final +AY1 AH0 R+ (disyllabic "TYE-er") and +AY1 R+
+  # (monosyllabic "TYRE") to the same thing. CMUDict is inconsistent -- +fire+, +hire+, +wire+ get
+  # both prons, but +attire+, +tire+, +desire+, +buyer+ only get +AY1 AH0 R+ and +squire+, +aspire+,
+  # +inspire+, +admire+ only get +AY1 R+, stranding obvious rhymes in separate cohorts. Conflate to
+  # the shorter form so everyone lands in +AY_R+.
+  [%w[AY1 AH0 R], %w[AY1 R]],
+  [%w[AY1 AH0 R Z], %w[AY1 R Z]],
+  [%w[AY1 AH0 R D], %w[AY1 R D]],
 ].freeze
 
 # Array-native conflate (avoids an extra join/split vs string-only path).

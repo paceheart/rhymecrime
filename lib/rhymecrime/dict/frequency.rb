@@ -707,15 +707,26 @@ def add_frequency_info(cmudict, subtlex_hash, subtlex_total_hash, wordfreq_hash,
   end
   puts "#{extra} extra words added from SUBTLEX"
 
-  # Phase 5: add words from common_words.txt not already in the dict.
+  # Phase 5: add (or sentinel-floor) words from common_words.txt. Freq 99 is a structural
+  # sentinel: it lands above +RARITY_CLASSIFIER_RESCORE_MAX_FREQ+ so the Phase 12 rarity
+  # classifier won't delete these curated headwords as forbidden. Pre-existing entries at
+  # or below +RARE_FREQ_MAX+ get bumped (otherwise a word like +mitten+ — legit but sparse
+  # in SUBTLEX — can be floored at freq 4 and then nuked by the classifier).
   common_extra = 0
+  common_bumped = 0
   common_words.each do |word|
-    next if hash.key?(word)
-    hash[word] = [99, []]
-    puts "  Added #{word} to the dictionary with frequency 99"
-    common_extra += 1
+    if hash.key?(word)
+      next if hash[word][0] > RARE_FREQ_MAX
+      hash[word][0] = 99
+      common_bumped += 1
+    else
+      hash[word] = [99, []]
+      puts "  Added #{word} to the dictionary with frequency 99"
+      common_extra += 1
+    end
   end
   puts "#{common_extra} extra words added from common_words.txt" if common_extra > 0
+  puts "#{common_bumped} existing rare-band headwords floored by common_words.txt" if common_bumped > 0
 
   # Phase 5b: modern neologisms from neol2016 (12dicts) + supplement.
   # Neither list is a complete inventory of inflections, so the union serves as attestation
