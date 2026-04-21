@@ -8,6 +8,8 @@ require_relative "lexical"
 require_relative "morphology"
 require_relative "phonology"
 require_relative "rime"
+require_relative "rarity_signals"
+require_relative "rarity_classifier"
 
 #
 # SUBTLEX-US (movie subtitle corpus, 51M words, 74K unique word forms)
@@ -1368,6 +1370,26 @@ def add_frequency_info(cmudict, subtlex_hash, subtlex_total_hash, wordfreq_hash,
 
   hyp_edge = delete_headwords_with_edge_hyphen!(hash)
   puts "#{hyp_edge} headwords with a leading or trailing '-' removed after frequency phases" if hyp_edge > 0
+
+  # Phase 12: post-propagation rarity classifier rescore / signal dump (no-op when the
+  # classifier JSON is absent AND dump is not enabled). See
+  # +lib/rhymecrime/dict/rarity_classifier.rb+ for the rescore semantics; the dump
+  # path is driven by +RHYMECRIME_RARITY_DUMP_SIGNALS+.
+  rarity_rescore_and_dump!(
+    hash,
+    subtlex_hash: subtlex_hash,
+    subtlex_total_hash: subtlex_total_hash,
+    wordfreq_hash: wordfreq_hash,
+    pos_map: pos_map,
+    wiktionary_words: wiktionary_words,
+    rare_words: rare_words,
+    common_words: common_words,
+    neol_words: neol_words,
+    cmudict_orig: cmudict_orig,
+    ref_cn: ref_cn,
+    ref_nb: ref_nb,
+    ref_usf: ref_usf,
+  )
 
   puts "#{count + extra + common_extra + floor_applied + inherited + cw_inherited + morph_inherited + morph_corpus} total entries with frequency data"
   return hash

@@ -1,0 +1,426 @@
+# encoding: utf-8
+#
+# Phase 2 of the rarity pipeline: machine-learned scorer over +RaritySignals+.
+#
+# Reads +generated/rarity_classifier.json+ (produced by +bin/train-rarity-classifier+)
+# and maps a signals struct to one of +:common / :rare / :forbidden+ plus an integer
+# freq in {0, 2, 10} that downstream preference-ordering code compares.
+#
+# When the classifier JSON is absent (clean clone, uninitialized training run) this
+# module returns +nil+ from +rarity_classifier+ / +rarity_classify+, and the caller
+# falls back to the legacy rule-based combiner in +compute_frequency+ / Phase 6 /
+# +filter_word_dict_disconnected!+. That keeps +./bin/dict-build+ working during the
+# bootstrap window when the classifier has not been trained yet.
+#
+# Three supported training targets (one is selected at train time via
+# +--target 3class|2class|regressor+ and stored in the JSON as +target+):
+#
+#   3class     — 3-way softmax over {common, rare, forbidden}; +probs+ is
+#                [p_forbidden, p_rare, p_common]; argmax is the label.
+#   2class     — binary +forbidden+ vs +allowed+; if allowed, split rare/common
+#                via a raw-Zipf threshold +rare_common_zipf+ (typically
+#                +WORDFREQ_COMMON_ZIPF+).
+#   regressor  — single scalar target (0=forbidden, 2=rare, 10=common); two
+#                thresholds +t_forbidden_rare+ and +t_rare_common+ partition it.
+#
+# +learned_rarity_feature_vector+ / +LEARNED_RARITY_FEATURE_NAMES+ are the same
+# ordered list of feature names the trainer emits to the JSON. A feature-name
+# mismatch at load time produces a warning and falls back to the legacy rule path.
+
+require "json"
+require "fileutils"
+require_relative "rarity_signals"
+require_relative "utils_rhyme"
+require_relative "constants"
+
+# Keep in lock-step with +bin/train-rarity-classifier+. The JSON records its own
+# feature-name list so mismatches are detected at load.
+LEARNED_RARITY_FEATURE_NAMES = %w[
+  bias
+  wordfreq_zipf
+  subtlex_freqlow
+  subtlex_total
+  subtlex_cap_ratio_present
+  subtlex_cap_ratio
+  cmudict_original_flag
+  conceptnet_flag
+  numberbatch_flag
+  usf_flag
+  neol_flag
+  common_words_flag
+  rare_words_flag
+  stop_word_flag
+  wiktionary_words_flag
+  wn_entry_flag
+  wn_synset_count
+  wn_lemma_count
+  wn_all_proper_flag
+  wn_has_noun_flag
+  wn_has_verb_flag
+  wn_has_adj_flag
+  usf_out_degree
+  cn_degree
+  cn_adjacency_loaded_flag
+  word_len
+  two_letter_alpha_flag
+  four_letter_alpha_flag
+  likely_proper_noun_by_case_flag
+  pos_tag_count
+  pos_has_noun_flag
+  pos_has_verb_flag
+  pos_has_adj_flag
+  pos_has_intj_flag
+  pos_all_function_word_flag
+  post_propagation_freq
+  log_post_propagation_freq
+  is_rare_by_freq_flag
+  freq_source_phase_index
+  received_donor_from_common_base_flag
+].freeze
+
+def _rf(b)
+  b ? 1.0 : 0.0
+end
+
+def learned_rarity_feature_vector(sig)
+  cap_ratio_present = !sig.subtlex_cap_ratio.nil?
+  cap_ratio_val = cap_ratio_present ? sig.subtlex_cap_ratio.to_f : 0.0
+
+  ppf = (sig.post_propagation_freq || 0).to_f
+  log_ppf = Math.log10(ppf + 1.0)
+  is_rare_by_freq = ppf > 0 && ppf <= RARE_FREQ_MAX
+
+  [
+    1.0,
+    sig.wordfreq_zipf.to_f,
+    sig.subtlex_freqlow.to_f,
+    sig.subtlex_total.to_f,
+    _rf(cap_ratio_present),
+    cap_ratio_val,
+    _rf(sig.cmudict_original_flag),
+    _rf(sig.conceptnet_flag),
+    _rf(sig.numberbatch_flag),
+    _rf(sig.usf_flag),
+    _rf(sig.neol_flag),
+    _rf(sig.common_words_flag),
+    _rf(sig.rare_words_flag),
+    _rf(sig.stop_word_flag),
+    _rf(sig.wiktionary_words_flag),
+    _rf(sig.wn_entry_flag),
+    sig.wn_synset_count.to_f,
+    sig.wn_lemma_count.to_f,
+    _rf(sig.wn_all_proper_flag),
+    _rf(sig.wn_has_noun_flag),
+    _rf(sig.wn_has_verb_flag),
+    _rf(sig.wn_has_adj_flag),
+    sig.usf_out_degree.to_f,
+    sig.cn_degree.to_f,
+    _rf(sig.cn_adjacency_loaded_flag),
+    sig.word_len.to_f,
+    _rf(sig.two_letter_alpha_flag),
+    _rf(sig.four_letter_alpha_flag),
+    _rf(sig.likely_proper_noun_by_case_flag),
+    sig.pos_tag_count.to_f,
+    _rf(sig.pos_has_noun_flag),
+    _rf(sig.pos_has_verb_flag),
+    _rf(sig.pos_has_adj_flag),
+    _rf(sig.pos_has_intj_flag),
+    _rf(sig.pos_all_function_word_flag),
+    ppf,
+    log_ppf,
+    _rf(is_rare_by_freq),
+    rarity_freq_source_to_index(sig.freq_source_phase).to_f,
+    _rf(sig.received_donor_from_common_base_flag),
+  ]
+end
+
+RARITY_CLASSIFIER_FILENAME = "rarity_classifier.json"
+RARITY_CLASSIFIER_PATH = generated_dict_path(RARITY_CLASSIFIER_FILENAME) unless defined?(RARITY_CLASSIFIER_PATH)
+
+$rarity_classifier = nil
+$rarity_classifier_loaded = false
+
+def rarity_classifier_disabled?
+  v = ENV["RHYMECRIME_RARITY_CLASSIFIER"]
+  return true if v && %w[off 0 false no disabled].include?(v.downcase)
+  false
+end
+
+def rarity_classifier
+  return $rarity_classifier if $rarity_classifier_loaded
+  $rarity_classifier_loaded = true
+  return nil if rarity_classifier_disabled?
+  path = RARITY_CLASSIFIER_PATH
+  return nil unless File.exist?(path)
+
+  clf = JSON.parse(File.read(path, encoding: "UTF-8"))
+  got = clf["feature_names"]
+  expected = LEARNED_RARITY_FEATURE_NAMES
+  unless got == expected
+    warn "rarity: classifier feature-name mismatch (#{path}); ignoring. got=#{got.inspect} expected=#{expected.inspect}"
+    return nil
+  end
+
+  $rarity_classifier = clf
+  type = clf["model_type"] || "unknown"
+  target = clf["target"] || "unknown"
+  puts "loaded rarity classifier from #{path} (target=#{target} type=#{type})"
+  $rarity_classifier
+end
+
+def _rarity_sigmoid(z)
+  if z >= 0
+    ez = Math.exp(-z)
+    1.0 / (1.0 + ez)
+  else
+    ez = Math.exp(z)
+    ez / (1.0 + ez)
+  end
+end
+
+def _rarity_tree_predict(nodes, row)
+  idx = 0
+  loop do
+    n = nodes[idx]
+    return n["v"] if n.key?("v")
+    idx = row[n["f"]] <= n["t"] ? n["l"] : n["r"]
+  end
+end
+
+def _rarity_logreg_binary_margin(feats, model)
+  means = model["means"]
+  stds  = model["stds"]
+  w     = model["weights"]
+  z = 0.0
+  feats.each_with_index do |v, i|
+    if i.zero?
+      x = v
+    else
+      s = stds[i]
+      x = s > 1e-12 ? (v - means[i]) / s : 0.0
+    end
+    z += w[i] * x
+  end
+  z
+end
+
+def _rarity_logreg_binary_proba(feats, model)
+  _rarity_sigmoid(_rarity_logreg_binary_margin(feats, model))
+end
+
+def _rarity_gbt_binary_margin(feats, model)
+  score = model["bias"].to_f
+  lr = model["lr"].to_f
+  model["trees"].each { |t| score += lr * _rarity_tree_predict(t, feats) }
+  score
+end
+
+def _rarity_gbt_binary_proba(feats, model)
+  _rarity_sigmoid(_rarity_gbt_binary_margin(feats, model))
+end
+
+def _rarity_gbt_regression(feats, model)
+  score = model["bias"].to_f
+  lr = model["lr"].to_f
+  model["trees"].each { |t| score += lr * _rarity_tree_predict(t, feats) }
+  score
+end
+
+# Multiclass: one-vs-rest binary classifiers per class. +probs+ is the softmax over the
+# per-class raw logits; class label order matches +clf["classes"]+ (canonical:
+# ["forbidden", "rare", "common"]).
+def _rarity_multiclass_probs(feats, clf)
+  classes = clf["classes"]
+  type = clf["model_type"]
+  logits = classes.map do |c|
+    case type
+    when "logreg"
+      m = clf["models"][c]
+      _rarity_logreg_binary_margin(feats, m)
+    when "gbt"
+      _rarity_gbt_binary_margin(feats, clf["models"][c])
+    else
+      raise "unknown rarity model_type: #{type.inspect}"
+    end
+  end
+  mx = logits.max
+  exps = logits.map { |z| Math.exp(z - mx) }
+  sum = exps.sum
+  exps.map { |e| e / sum }
+end
+
+# Returns +[category_symbol, integer_freq]+ for +sig+. Integer freq in {0, 2, 10}
+# so downstream preference code that compares integer freqs keeps working.
+#
+# +:forbidden => 0+ (the Phase 3 +rare?+ cutoff in +crime.rb+ treats freq <=
+# +RARE_FREQ_MAX+ as rare, so 0 is "rare but deletable"; the caller deletes the
+# headword). +:rare => 2+ (below +RARE_FREQ_MAX+=4). +:common => 10+ (above the
+# cutoff). Extend this mapping if the build needs more resolution in the common
+# band.
+def rarity_classify(sig)
+  clf = rarity_classifier
+  return nil if clf.nil?
+
+  feats = learned_rarity_feature_vector(sig)
+  target = clf["target"]
+
+  cat = case target
+        when "3class"
+          probs = _rarity_multiclass_probs(feats, clf)
+          classes = clf["classes"]
+          classes[probs.each_with_index.max_by { |v, _| v }[1]].to_sym
+        when "2class"
+          p_forbidden = case clf["model_type"]
+                        when "logreg" then _rarity_logreg_binary_proba(feats, clf)
+                        when "gbt"    then _rarity_gbt_binary_proba(feats, clf)
+                        else raise "unknown rarity model_type: #{clf["model_type"].inspect}"
+                        end
+          threshold = (clf["threshold"] || 0.5).to_f
+          if p_forbidden >= threshold
+            :forbidden
+          else
+            rc = (clf["rare_common_zipf"] || WORDFREQ_COMMON_ZIPF).to_f
+            sig.wordfreq_zipf.to_f >= rc ? :common : :rare
+          end
+        when "regressor"
+          score = _rarity_gbt_regression(feats, clf)
+          t_fr = (clf["t_forbidden_rare"] || 1.0).to_f
+          t_rc = (clf["t_rare_common"] || 6.0).to_f
+          if score < t_fr
+            :forbidden
+          elsif score < t_rc
+            :rare
+          else
+            :common
+          end
+        else
+          raise "unknown rarity target: #{target.inspect}"
+        end
+
+  freq = case cat
+         when :forbidden then 0
+         when :rare      then 2
+         when :common    then 10
+         end
+  [cat, freq]
+end
+
+# Rescoring freqs that exceed this are treated as "structural sentinels" (stop_word
+# 999999, common_words 99, neol 98) and NOT touched by the classifier — a
+# classifier that fires :forbidden on a stop word is almost certainly wrong and we'd
+# rather leak some rescore opportunities than lose stop words. Headwords at or below
+# this still get rescored.
+RARITY_CLASSIFIER_RESCORE_MAX_FREQ = 90
+
+$rarity_usf_associations = nil
+def rarity_usf_associations_for_build
+  return $rarity_usf_associations unless $rarity_usf_associations.nil?
+  path = generated_dict_path(USF_ASSOCIATIONS_FILENAME)
+  $rarity_usf_associations = if File.exist?(path)
+                               data = JSON.parse(File.read(path, encoding: "UTF-8"))
+                               puts "loaded #{data.size} USF cues for rarity signals from #{path}"
+                               data
+                             else
+                               {}
+                             end
+  $rarity_usf_associations
+end
+
+# Build ConceptNet adjacency for the rarity signal pass from the PREVIOUS build's
+# edges file. First-ever build of a fresh clone: file is absent,
+# +conceptnet_adjacency_loaded+ is false so the classifier can condition on
+# "data not available" rather than "0 degree". Steady-state builds use the prior
+# build's edges — degrees drift until the classifier converges.
+$rarity_cn_adjacency = nil
+$rarity_cn_adjacency_loaded = nil
+def rarity_conceptnet_adjacency_for_build
+  return [$rarity_cn_adjacency, $rarity_cn_adjacency_loaded] unless $rarity_cn_adjacency.nil?
+  path = generated_dict_path(CONCEPTNET_EDGES_FILENAME)
+  if File.exist?(path)
+    edges = JSON.parse(File.read(path, encoding: "UTF-8"))
+    adj = {}
+    edges.each_key do |key|
+      a, b = key.split("|", 2)
+      (adj[a] ||= []) << b
+      (adj[b] ||= []) << a
+    end
+    $rarity_cn_adjacency = adj
+    $rarity_cn_adjacency_loaded = true
+    puts "built prior-build ConceptNet adjacency for rarity signals: #{adj.size} nodes over #{edges.size} edges"
+  else
+    $rarity_cn_adjacency = {}
+    $rarity_cn_adjacency_loaded = false
+  end
+  [$rarity_cn_adjacency, $rarity_cn_adjacency_loaded]
+end
+
+def rarity_rescore_and_dump!(hash, **ctx_kwargs)
+  dump_path = ENV["RHYMECRIME_RARITY_DUMP_SIGNALS"]
+  dump_enabled = !dump_path.nil? && !dump_path.empty?
+  clf = rarity_classifier
+  return if clf.nil? && !dump_enabled
+
+  cn_adj, cn_loaded = rarity_conceptnet_adjacency_for_build
+  ctx = RarityContext.build(
+    usf_associations: rarity_usf_associations_for_build,
+    conceptnet_adjacency: cn_adj,
+    conceptnet_adjacency_loaded: cn_loaded,
+    **ctx_kwargs,
+  )
+  rescored = 0
+  deleted = 0
+  skipped_sentinel = 0
+
+  dump_file = nil
+  if dump_enabled
+    FileUtils.mkdir_p(File.dirname(dump_path))
+    dump_file = File.open(dump_path, "w", encoding: "UTF-8")
+  end
+
+  begin
+    hash.keys.each do |word|
+      entry = hash[word]
+      next unless entry
+
+      sig = extract_rarity_signals(word, ctx)
+      sig.post_propagation_freq = entry[0]
+
+      if dump_file
+        features = learned_rarity_feature_vector(sig)
+        dump_file.puts JSON.generate(
+          "word" => word,
+          "features" => features,
+          "freq" => entry[0],
+        )
+      end
+
+      next if clf.nil?
+
+      if entry[0] > RARITY_CLASSIFIER_RESCORE_MAX_FREQ
+        skipped_sentinel += 1
+        next
+      end
+
+      result = rarity_classify(sig)
+      next if result.nil?
+
+      new_cat, new_freq = result
+      if new_cat == :forbidden
+        hash.delete(word)
+        deleted += 1
+      elsif entry[0] != new_freq
+        entry[0] = new_freq
+        rescored += 1
+      end
+    end
+  ensure
+    dump_file&.close
+  end
+
+  if clf
+    puts "rarity classifier: rescored #{rescored} entries, deleted #{deleted} forbidden entries, skipped #{skipped_sentinel} sentinel-freq entries"
+  end
+  if dump_enabled
+    puts "rarity signals dumped to #{dump_path}"
+  end
+end
