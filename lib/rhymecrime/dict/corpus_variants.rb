@@ -156,6 +156,16 @@ def varcon_variant_pairs(word_dict, varcon_variant_map, wordfreq_hash = nil)
 
   direct_pairs = []
   by_pair.each do |(a, b), rows|
+    # Rime gate: VarCon clusters a few verb-morphology alternations whose surfaces do not
+    # share a rime (+dreamed+ +D R IY_M_D+ vs +dreamt+ +D R EH_M_P_T+; +burned+/+burnt+;
+    # +learned+/+learnt+). These are regionally-accepted _morphological_ doublets, not
+    # rhyme-preserving spelling variants — treating them as spelling variants would strip
+    # +dreamt+ from the +EH_M_P_T+ rime bucket even though +tempt+/+undreamt+/+kempt+
+    # depend on it. +colour+/+color+, +centre+/+center+, +acknowledgement+/+acknowledgment+
+    # and the rest of VarCon's genuine spelling-axis clusters pronounce identically and
+    # pass the gate unchanged.
+    next unless headwords_share_rime?(a, b, word_dict)
+
     # Aggregate preference scores across all evidence rows. Minimum-over-rows rewards any row
     # that declares one side primary in _some_ region, rather than letting a row where both
     # sides are marked +variant+ dilute the signal.
@@ -217,6 +227,7 @@ def wiktionary_variant_pairs(word_dict, wordfreq_hash, kaikki_variant_map)
   direct_pairs = []
   by_pair.each do |(a, b), rows|
     next unless wiktionary_pair_is_useful?(a, b, rows, wordfreq_hash)
+    next unless headwords_share_rime?(a, b, word_dict)
     preferred, alt = resolve_wiktionary_variant_winner(a, b, rows, wordfreq_hash)
     direct_pairs << [preferred, alt]
   end
@@ -276,6 +287,11 @@ def propagate_variant_inflections(preferred, alt, word_dict, headwords_with_dire
     # chain-propagated +hed → heed+ just because +(he, hee)+ happens to be a Wiktionary
     # pair that extends regularly by +-d+.
     next if headwords_with_direct_pair.include?(pa) || headwords_with_direct_pair.include?(aa)
+    # Propagated forms must actually rhyme: +sin/sinne+ is a valid archaic pair, but the
+    # +-er+-propagated pair +siner/sinner+ collides with a genuine English noun with a
+    # different pronunciation (+sinner+ = +S IH N ER+, not +S AY N ER+); they don't share
+    # a rime, so reject. Same gate applied in +wiktionary_variant_pairs+ for direct pairs.
+    next unless headwords_share_rime?(pa, aa, word_dict)
     out_pairs << [pa, aa]
   end
   if preferred.end_with?("y") && alt.end_with?("y")
@@ -289,8 +305,41 @@ def propagate_variant_inflections(preferred, alt, word_dict, headwords_with_dire
       # propagate to +blowsier/blousier+ even though +blousier+ isn't in cmudict or wordfreq.
       next unless word_dict.key?(pa) && word_dict.key?(aa)
       next if headwords_with_direct_pair.include?(pa) || headwords_with_direct_pair.include?(aa)
+      next unless headwords_share_rime?(pa, aa, word_dict)
       out_pairs << [pa, aa]
     end
+  end
+end
+
+# True when +a+ and +b+ have at least one pronunciation each whose +rime+ matches. Used to
+# veto Wiktionary/Kaikki-sourced "spelling variants" that don't actually rhyme: Kaikki's
+# +alt_of+/+synonym_of+/+misspelling+ annotations are noisy enough to produce pairs like
+# +cache/cachet+ (+AE_SH+ vs +AE_T+), +bone/bane+ (+OW_N+ vs +EY_N+), +fuss/fuzz+ (+AH_S+
+# vs +AH_Z+), and +hundreds/tons+ (semantic synonymy, unrelated rimes). Real spelling variants
+# -- +colour/color+, +tomatoes/tomatos+, +acknowledgment/acknowledgement+, +teem/team+ --
+# share rimes. Homophone collisions that survive the gate (+teem/team+) are addressed by
+# the +pick_corpus_winner_by_zipf+ fallback; this check is only about eliminating clearly
+# non-rhyming noise.
+#
+# Both sides must have +Pronunciation+ entries in +word_dict+ (we don't invent rimes). A
+# side without any recorded rime can't meaningfully share a rime with the other, so we reject
+# the pair: e.g. +seeder+ survives the build with no CMU pronunciation but +seder+ has
+# +S EY_D_AH_R+; treating them as spelling variants would only dispreference the side that
+# actually has a pron. The +o_plural_corpus_pairs+ caller bypasses this gate entirely (its
+# shape-based lemma match is a stronger morphological signal); VarCon and Wiktionary pairs
+# are gated so verb-morphology doublets like +dreamed/dreamt+ don't strip rime-bucket members.
+def headwords_share_rime?(a, b, word_dict)
+  prons_a = word_dict[a]&.dig(1)
+  prons_b = word_dict[b]&.dig(1)
+  return false if prons_a.nil? || prons_a.empty? || prons_b.nil? || prons_b.empty?
+  rimes_a = prons_a.each_with_object(Set.new) do |p, s|
+    r = p.rime
+    s << r unless r.nil? || r.empty?
+  end
+  return false if rimes_a.empty?
+  prons_b.any? do |p|
+    r = p.rime
+    !r.nil? && !r.empty? && rimes_a.include?(r)
   end
 end
 
@@ -393,26 +442,30 @@ SPELLING_VARIANT_TAG_HINTS = Set.new(%w[
 # Pick the preferred spelling for a Wiktionary-attested pair, given a set of directional
 # evidence rows {variant:, target:, source:, tags:}. Rules in precedence order:
 #
-#   1. +:misspelling+ evidence: any row pointing "+variant+ is a misspelling of +target+"
-#      makes +target+ canonical, regardless of frequency. This dominates even if the
-#      wordfreq Zipf of the misspelling happens to be higher.
-#   2. Wordfreq Zipf delta ≥ +CORPUS_ZIPF_DECISIVE_DELTA+ (≈log10(3)): higher-frequency
-#      spelling wins.
+#   1. Wordfreq Zipf delta ≥ +CORPUS_ZIPF_DECISIVE_DELTA+ (≈log10(3)): higher-frequency
+#      spelling wins, regardless of which direction Wiktionary's editorial annotations
+#      point. A massively more common "misspelling" is in practice the canonical modern
+#      form (+team+ Zipf 5.67 vs +teem+ 2.07, +sinner+ 3.39 vs +siner+ 1.05); trusting
+#      Kaikki's arrow here would invert the preference. Same rule applies when Kaikki
+#      marks the low-freq side +archaic+/+obsolete+/+alt-form+ of the high-freq side.
+#   2. +:misspelling+ evidence (freq indecisive): +target+ of the +misspelling+ annotation
+#      wins. Used for genuinely close-freq pairs where Kaikki's explicit canonicalization
+#      direction is the best signal we have.
 #   3. Directional +:alt_of+ majority: if Wiktionary consistently points one side at the
 #      other, respect that as a canonicalization hint.
 #   4. Lexicographic fallback so builds are reproducible.
 def resolve_wiktionary_variant_winner(a, b, rows, wordfreq_hash)
+  freq_winner = pick_corpus_winner_by_zipf(a, b, wordfreq_hash, deterministic_fallback: nil)
+  if freq_winner
+    alt = (freq_winner == a) ? b : a
+    return [freq_winner, alt]
+  end
+
   misspelling_targets = rows.select { |r| r[:source] == :misspelling }.map { |r| r[:target] }
   unless misspelling_targets.empty?
     target = misspelling_targets.first
     variant = (target == a) ? b : a
     return [target, variant]
-  end
-
-  freq_winner = pick_corpus_winner_by_zipf(a, b, wordfreq_hash, deterministic_fallback: nil)
-  if freq_winner
-    alt = (freq_winner == a) ? b : a
-    return [freq_winner, alt]
   end
 
   alt_of_target_votes = Hash.new(0)
