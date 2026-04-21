@@ -558,9 +558,122 @@ def rhyming_tuple_bases_all_inflect_into?(bases, inflecteds)
   true
 end
 
+# Set of valid-looking base headwords for +word+ — +word+ itself (when it is a headword), its
+# stored lemma, and any +Inflect.raw_candidate_bases_for_inflected+ candidate that is a headword.
+# Recurses one level (e.g. +foistings+ → +foisting+ → +foist+) so chained inflections stay
+# connected. Used by the hidden-base pruning path in +prune_suffix_redundant_rhyming_tuples+.
+def rhyming_tuple_word_bases(word)
+  result = Set.new
+  return result if word.nil? || word.empty?
+  result.add(word) if word_dict_includes_headword?(word)
+  lem = lemma(word)
+  result.add(lem) if lem && word_dict_includes_headword?(lem)
+  Inflect.raw_candidate_bases_for_inflected(word).each do |b|
+    next unless word_dict_includes_headword?(b)
+    result.add(b)
+    # One level of recursion so chained inflections (+foistings+ → +foisting+ → +foist+) and
+    # e-drop chains (+suiting+ listed with both +suite+ and +suit+) all reach the deepest
+    # attested headword.
+    lem2 = lemma(b)
+    result.add(lem2) if lem2 && word_dict_includes_headword?(lem2)
+    Inflect.raw_candidate_bases_for_inflected(b).each do |c|
+      result.add(c) if word_dict_includes_headword?(c)
+    end
+  end
+  result
+end
+
+# Shortest headword in +rhyming_tuple_word_bases+, tie-broken lex. Returns +word+ itself when no
+# bases are known (pure OOV). Used by +rhyming_tuple_inflection_distance+ to count how many words
+# in a tuple have shifted off their root form.
+def rhyming_tuple_word_canonical_base(word)
+  bases = rhyming_tuple_word_bases(word).to_a
+  return word if bases.empty?
+  bases.min_by { |b| [b.length, b] }
+end
+
+# Greedy bipartite assignment: can every word in +shorter+ be paired with a distinct word in
+# +longer+ whose +rhyming_tuple_word_bases+ set overlaps? When true, +shorter+ is redundant with
+# +longer+ via a shared-hidden-base mapping (even when direct +Inflect.match_suffix_kind+ probes
+# don't fire because both sides are inflected, e.g. +booting / fluting+ vs +booted / fluted /
+# fruited+).
+def rhyming_tuples_lemma_subset?(shorter, longer)
+  return false if shorter.empty? || shorter.size > longer.size
+  s_bases = shorter.map { |w| rhyming_tuple_word_bases(w) }
+  return false if s_bases.any?(&:empty?)
+  l_bases = longer.map { |w| rhyming_tuple_word_bases(w) }
+  return false if l_bases.any?(&:empty?)
+  used = Array.new(longer.size, false)
+  s_bases.each do |sb|
+    idx = (0...longer.size).find { |i| !used[i] && !(sb & l_bases[i]).empty? }
+    return false if idx.nil?
+    used[idx] = true
+  end
+  true
+end
+
+# Count of slots where the word is NOT its own canonical base (has been inflected off a root).
+# Lower = closer to base forms. Primary tiebreaker for same-length hidden-base-parallel tuples:
+# +[prompt, romped, swamped]+ (distance 2) beats +[prompts, romps, swamps]+ (distance 3) because
+# the former retains one uninflected base.
+def rhyming_tuple_inflection_distance(tuple)
+  tuple.count { |w| rhyming_tuple_word_canonical_base(w) != w }
+end
+
+# True when every word in +tuple+ shares a common non-self base — the tuple is N different
+# spellings of one root (+desperados / desperadoes+ both → +desperado+). Such tuples add no
+# information beyond the canonical surface and +prune_suffix_redundant_rhyming_tuples+ drops them
+# entirely.
+def rhyming_tuple_all_spelling_variants?(tuple)
+  return false if tuple.size < 2
+  shared = nil
+  tuple.each do |w|
+    non_self = rhyming_tuple_word_bases(w) - [w]
+    return false if non_self.empty?
+    shared = shared.nil? ? non_self.dup : shared & non_self
+    return false if shared.empty?
+  end
+  true
+end
+
+# True when +tup+ is redundant with the already-kept +ear+. Consolidates the four existing signal
+# paths (same-length suffix-redundant, same-length sibling hidden base, richer base via
+# +bases_all_inflect_into+, richer inflected via +suffix_redundant_with+) and adds the
+# +rhyming_tuples_lemma_subset?+ fallback for cases where both tuples are inflected off a shared
+# absent base that +Inflect.match_suffix_kind+ can't directly bridge
+# (+booting / fluting+ vs +booted / fluted / fruited+, +prompt / romped / swamped+ vs
+# +prompts / romps / swamps+).
+def rhyming_tuple_redundant_with?(ear, tup)
+  if ear.size == tup.size
+    return true if rhyming_tuple_suffix_redundant_with?(ear, tup)
+    kinds = rhyming_tuples_share_hidden_base(ear, tup)
+    return true if kinds && rhyming_tuple_kind_preferred?(kinds[0], kinds[1])
+    # Fallback: hidden-base-parallel siblings whose kinds aren't uniform per tuple (so the
+    # existing share_hidden_base probe can't seat them) but whose lemma multisets match and ear
+    # carries more base-form words.
+    return true if rhyming_tuples_lemma_subset?(tup, ear) &&
+      rhyming_tuples_lemma_subset?(ear, tup) &&
+      rhyming_tuple_inflection_distance(ear) < rhyming_tuple_inflection_distance(tup)
+    false
+  elsif ear.size > tup.size
+    return true if rhyming_tuple_suffix_redundant_with?(ear, tup)
+    return true if rhyming_tuple_bases_all_inflect_into?(tup, ear)
+    # Fallback: tup's hidden-base multiset is a subset of ear's (richer wins), even when both
+    # sides are already-inflected surfaces (ear = +booted / fluted / fruited+, tup =
+    # +booting / fluting+). The direct suffix-kind probes above can't bridge two inflected
+    # forms; the lemma-subset probe can.
+    return true if rhyming_tuples_lemma_subset?(tup, ear)
+    false
+  else
+    false
+  end
+end
+
 # Drop tuples that differ from another tuple only by parallel +Inflect+ suffixes (e.g. plural or
-# past tense of the same set). Handles three regimes:
+# past tense of the same set). Handles four regimes:
 #
+#   0. whole-tuple spelling-variant drop: all members are alternate spellings of one root
+#      (+desperados / desperadoes+ → drop)
 #   1. same-length base/inflected pair: keep the base, prune the inflected
 #   2. richer-vs-smaller inflectional subset: keep the richer tuple
 #   3. base-vs-inflected-superset (richer inflected has extra members not in the base): keep the
@@ -582,27 +695,22 @@ def prune_suffix_redundant_rhyming_tuples(tuples)
   # Snapshot the input so the caller's array is never mutated; the original
   # is not otherwise needed because the pruned set is populated in-place.
   _original = tuples.dup if debug_pruning
+
+  # Phase 0: drop tuples whose members are all spelling variants of a single root (the tuple
+  # carries no information beyond the canonical surface the renderer already emits).
+  tuples = tuples.reject do |tup|
+    next false unless rhyming_tuple_all_spelling_variants?(tup)
+    if verbose_prunes
+      puts "pruned rhyming tuple (all spelling variants of one root): #{tup.join(' / ')}"
+    end
+    $debug_pruned_tuples << tup if debug_pruning
+    !debug_pruning
+  end
+
   sorted = tuples.sort
   kept = []
   sorted.each do |tup|
-    keeper = kept.find do |ear|
-      if ear.size == tup.size
-        # Same-length pair. Either ear is the base-form and tup the inflection, or both are
-        # sibling inflections of a shared absent base and ear carries the more-preferred kind.
-        rhyming_tuple_suffix_redundant_with?(ear, tup) ||
-          begin
-            kinds = rhyming_tuples_share_hidden_base(ear, tup)
-            kinds && rhyming_tuple_kind_preferred?(kinds[0], kinds[1])
-          end
-      elsif ear.size > tup.size
-        # ear is either a richer base (tup inflected subset) or a richer inflected tuple (tup is
-        # the base subset). Either way, richer wins — prune tup.
-        rhyming_tuple_suffix_redundant_with?(ear, tup) ||
-          rhyming_tuple_bases_all_inflect_into?(tup, ear)
-      else
-        false
-      end
-    end
+    keeper = kept.find { |ear| rhyming_tuple_redundant_with?(ear, tup) }
     if keeper
       if verbose_prunes
         puts "pruned rhyming tuple (suffix-redundant): #{tup.join(' / ')}  [kept: #{keeper.join(' / ')}]"
@@ -615,23 +723,7 @@ def prune_suffix_redundant_rhyming_tuples(tuples)
     end
 
     kept.reject! do |ear|
-      redundant =
-        if ear.size == tup.size
-          # Same-length symmetric check: tup is the base, ear is its inflection; or both are
-          # sibling inflections of a shared absent base and tup carries the more-preferred kind.
-          rhyming_tuple_suffix_redundant_with?(tup, ear) ||
-            begin
-              kinds = rhyming_tuples_share_hidden_base(tup, ear)
-              kinds && rhyming_tuple_kind_preferred?(kinds[0], kinds[1])
-            end
-        elsif ear.size < tup.size
-          # Either tup is richer inflected of a smaller base ear (richer wins), or tup is a
-          # richer base and ear is its inflected subset (richer still wins).
-          rhyming_tuple_bases_all_inflect_into?(ear, tup) ||
-            rhyming_tuple_suffix_redundant_with?(tup, ear)
-        else
-          false
-        end
+      redundant = rhyming_tuple_redundant_with?(tup, ear)
       next false unless redundant
 
       if verbose_prunes
