@@ -161,6 +161,8 @@ def rarity_classifier
     return nil
   end
 
+  _rarity_compile_classifier!(clf)
+
   $rarity_classifier = clf
   type = clf["model_type"] || "unknown"
   target = clf["target"] || "unknown"
@@ -187,6 +189,76 @@ def _rarity_tree_predict(nodes, row)
   end
 end
 
+# Compiled representation of one GBT tree: a single flat Array with 4 slots per node,
+# laid out contiguously at +base = node_index * 4+:
+#   [base+0] feature index (Integer), or +-1+ to mark a leaf
+#   [base+1] threshold (Float), OR leaf value when +[base+0] == -1+
+#   [base+2] pre-multiplied base offset of the left child  (child_index * 4)
+#   [base+3] pre-multiplied base offset of the right child (child_index * 4)
+#
+# The JSON-on-disk form is an Array of Hashes with string keys — fine for the trainer but
+# the per-node hot-loop cost in +dict-build+ was 5 hash probes per traversal step, and
+# stackprof showed +_rarity_tree_predict+ at ~46% of total CPU on a full build. Collapsing
+# each tree to one flat Array with pre-multiplied child offsets means every node traversal
+# does at most 3 +Array#[]+ lookups and 1 +row#[]+ lookup (no hash probes, no multiplies,
+# no per-call destructuring).
+def _rarity_compile_tree(nodes)
+  n = nodes.length
+  flat = Array.new(n * 4)
+  nodes.each_with_index do |h, i|
+    b = i * 4
+    if h.key?("v")
+      flat[b]     = -1
+      flat[b + 1] = h["v"].to_f
+      flat[b + 2] = 0
+      flat[b + 3] = 0
+    else
+      flat[b]     = h["f"].to_i
+      flat[b + 1] = h["t"].to_f
+      flat[b + 2] = h["l"].to_i * 4
+      flat[b + 3] = h["r"].to_i * 4
+    end
+  end
+  flat
+end
+
+def _rarity_tree_predict_compiled(flat, row)
+  b = 0
+  loop do
+    f = flat[b]
+    return flat[b + 1] if f < 0
+    b = row[f] <= flat[b + 1] ? flat[b + 2] : flat[b + 3]
+  end
+end
+
+# Replace +model["trees"]+ with a compiled form (+model["trees_c"]+) and cache bias/lr as
+# floats (+model["bias_f"]+ / +model["lr_f"]+). Idempotent. Leaves the original +"trees"+
+# intact so introspection / re-serialization still works.
+def _rarity_maybe_compile_gbt_model!(model)
+  return unless model.is_a?(Hash)
+  return unless model["trees"].is_a?(Array)
+  return if model["trees_c"]
+  model["bias_f"]  = model["bias"].to_f
+  model["lr_f"]    = model["lr"].to_f
+  model["trees_c"] = model["trees"].map { |t| _rarity_compile_tree(t) }
+end
+
+# Walk a loaded classifier and compile every GBT model we'll evaluate in the hot path.
+def _rarity_compile_classifier!(clf)
+  type = clf["model_type"]
+  case clf["target"]
+  when "3class"
+    return unless type == "gbt"
+    per_class = clf["models"] || {}
+    per_class.each_value { |m| _rarity_maybe_compile_gbt_model!(m) }
+  when "2class"
+    return unless type == "gbt"
+    _rarity_maybe_compile_gbt_model!(clf)
+  when "regressor"
+    _rarity_maybe_compile_gbt_model!(clf)
+  end
+end
+
 def _rarity_logreg_binary_margin(feats, model)
   means = model["means"]
   stds  = model["stds"]
@@ -209,10 +281,18 @@ def _rarity_logreg_binary_proba(feats, model)
 end
 
 def _rarity_gbt_binary_margin(feats, model)
-  score = model["bias"].to_f
-  lr = model["lr"].to_f
-  model["trees"].each { |t| score += lr * _rarity_tree_predict(t, feats) }
-  score
+  trees_c = model["trees_c"]
+  if trees_c
+    score = model["bias_f"]
+    lr = model["lr_f"]
+    trees_c.each { |t| score += lr * _rarity_tree_predict_compiled(t, feats) }
+    score
+  else
+    score = model["bias"].to_f
+    lr = model["lr"].to_f
+    model["trees"].each { |t| score += lr * _rarity_tree_predict(t, feats) }
+    score
+  end
 end
 
 def _rarity_gbt_binary_proba(feats, model)
@@ -220,10 +300,18 @@ def _rarity_gbt_binary_proba(feats, model)
 end
 
 def _rarity_gbt_regression(feats, model)
-  score = model["bias"].to_f
-  lr = model["lr"].to_f
-  model["trees"].each { |t| score += lr * _rarity_tree_predict(t, feats) }
-  score
+  trees_c = model["trees_c"]
+  if trees_c
+    score = model["bias_f"]
+    lr = model["lr_f"]
+    trees_c.each { |t| score += lr * _rarity_tree_predict_compiled(t, feats) }
+    score
+  else
+    score = model["bias"].to_f
+    lr = model["lr"].to_f
+    model["trees"].each { |t| score += lr * _rarity_tree_predict(t, feats) }
+    score
+  end
 end
 
 # Multiclass: one-vs-rest binary classifiers per class. +probs+ is the softmax over the

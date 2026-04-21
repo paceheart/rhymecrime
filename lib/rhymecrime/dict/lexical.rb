@@ -14,6 +14,7 @@ require_relative "utils_rhyme"
 # does not grow unbounded across repeated builds in the same process.
 def clear_wordnet_lemma_cache!
   @wordnet_lemma_find_all_cache = {}
+  @wordnet_synset_count_cache = {}
   $wn_synset_line_index_by_path = nil
 end
 
@@ -61,9 +62,13 @@ def four_letter_alpha?(word)
 end
 
 def wn_synset_count(word)
+  cache = @wordnet_synset_count_cache ||= {}
+  cached = cache[word]
+  return cached unless cached.nil?
   lemmas = wn_lemma_find_all_cached(word)
-  return 0 if lemmas.empty?
-  lemmas.sum { |l| l.synsets.size }
+  count = lemmas.empty? ? 0 : lemmas.sum { |l| l.synsets.size }
+  cache[word] = count
+  count
 end
 
 def acronym_shape_wordfreq_only?(word)
