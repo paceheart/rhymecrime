@@ -86,6 +86,7 @@ describe 'RHYMES' do
     oughta_rhyme 'spiral', 'viral'
     ought_not_rhyme 'eyes', 'sees' # this was a bug due to two pronunciations of 'reprise'
     ought_not_rhyme 'biopic', 'myopic' # stress mismatch
+    oughta_rhyme 'poor', 'pure' # P vs. PY is different enough
   end
 
   context 'perfect rhymes must rhyme the last primary-stressed syllable, not just the last syllable' do
@@ -120,122 +121,166 @@ describe 'RHYMES' do
     oughta_rhyme 'bay', 'lei', not_working_message: "lei is missing from word_dict"
   end
   
-  context 'identical rhymes' do
-    ought_not_rhyme 'leave', 'believe'
-    oughta_rhyme 'troll', 'patrol', not_working_message: true
-    oughta_rhyme 'troll', 'control', not_working_message: true
-    oughta_rhyme 'end', 'pend'
-    oughta_rhyme 'end', 'append'
-    ought_not_rhyme 'pend', 'append' # identical
-    oughta_rhyme 'upend', 'pend' # skipped candidate: 'upend' isn't in cmudict, and if it were, we'd get an incorrect syllable boundary anyway
-    ought_not_rhyme 'end', 'upend' # working for the wrong reasons: 'upend' isn't in cmudict, and if it were, we'd get an incorrect syllable boundary anyway
-    ought_not_rhyme 'lied', 'relied'
-    ought_not_rhyme 'confide', 'defied'
-    ought_not_rhyme 'side', 'beside'
-    ought_not_rhyme 'side', 'alongside'
-    ought_not_rhyme 'beside', 'alongside'
-    ought_not_rhyme 'applied', 'misapplied'
-    ought_not_rhyme 'plied', 'applied'
-    ought_not_rhyme 'complied', 'applied'
-    ought_not_rhyme 'recorded', 'prerecorded'
-    ought_not_rhyme 'corded', 'recorded'
-    ought_not_rhyme 'illicit', 'solicit' # I'm sad that these are identical rhymes. illicit [IH2 L IH1 S AH0 T] solicit [S AH0 L IH1 S IH0 T]
-    ought_not_rhyme 'spectre', 'inspector'
-    ought_not_rhyme 'supplemented', 'fermented'
-    oughta_rhyme 'poor', 'pure' # P vs. PY is different enough
-    ought_not_rhyme 'jar', 'ajar'
-    ought_not_rhyme 'other', 'another' # arguable
-    ought_not_rhyme 'subordinate', 'insubordinate'
-  end
-  
   context "you can't just add a prefix and call it a rhyme" do
     oughta_rhyme 'grape', 'ape' # gr- is not a prefix
     oughta_rhyme 'pot', 'spot' # s- is not a prefix
     oughta_rhyme 'under', 'plunder' # pl- is not a prefix
-    ought_not_rhyme 'bone', 'trombone' # trom- is not a prefix, but this is an identical rhyme anyway
-    
     ought_not_rhyme 'promising', 'unpromising'
     ought_not_rhyme 'diversity', 'biodiversity'
-    ought_not_rhyme 'ion', 'cation'
-    
-    oughta_rhyme 'able', 'cable'
-    oughta_rhyme 'unable', 'cable'
+    ought_not_rhyme 'ion', 'anion' # an- is a chemistry prefix
+    ought_not_rhyme 'ion', 'cation' # cat- is a chemisty prefix
+    oughta_rhyme 'able', 'cable' # control
+    oughta_rhyme 'unable', 'cable' # control
     ought_not_rhyme 'able', 'unable' # un- is a prefix
-    ought_not_rhyme 'unable', 'disable' # dis- is a prefix
+    oughta_rhyme 'cable', 'disable' # control
+    oughta_rhyme 'able', 'disable' # dis- is a prefix
+    ought_not_rhyme 'unable', 'disable' # two prefixes
     oughta_rhyme 'able', 'sable' # s- is not a prefix
     oughta_rhyme 'table', 'disable'
-    oughta_rhyme 'sable', 'disable' # skipped candidate: arguable
-    ought_not_rhyme 'able', 'disable'
-
-    oughta_rhyme 'action', 'traction'
-    oughta_rhyme 'action', 'attraction'
-    ought_not_rhyme 'traction', 'attraction' # arguable
     ought_not_rhyme 'enchant', 'disenchant'
     ought_not_rhyme 'enchanted', 'disenchanted'
-
     oughta_rhyme 'ice', 'dice'
-    ought_not_rhyme 'ice', 'deice' # deice (de-ice) is not in cmudict, so this succeeds for the wrong reason
-
-    oughta_rhyme 'stand', 'strand'
-    oughta_rhyme 'understand', 'strand'
-    ought_not_rhyme 'stand', 'understand'
-    ought_not_rhyme 'organizing', 'reorganizing'
-    ought_not_rhyme 'organizing', 'self-organizing'
-    ought_not_rhyme 'urban', 'suburban'
-    ought_not_rhyme 'urbanize', 'suburbanize'
-    ought_not_rhyme 'america', 'midamerica'
-    ought_not_rhyme 'america', 'microamerica'
-    ought_not_rhyme 'pure', 'impure'
-    ought_not_rhyme 'open', 'reopen'
-    ought_not_rhyme 'opened', 'unopened'
-    ought_not_rhyme 'mixed', 'unmixed'
-    ought_not_rhyme 'mixed', 'intermixed'
-    ought_not_rhyme 'unmixed', 'intermixed'
-    ought_not_rhyme 'operate', 'interoperate'
-    ought_not_rhyme 'operate', 'cooperate'
-    ought_not_rhyme 'indicated', 'contraindicated'
-    ought_not_rhyme 'emphasize', 'deemphasize'
-    ought_not_rhyme 'closed', 'enclosed'
-    ought_not_rhyme 'close', 'enclose' # this is trickier because 'close' can mean 'nearby' in which case it's pronounced differently
-    ought_not_rhyme 'act', 'enact'
-    ought_not_rhyme 'urb', 'exurb'
-    ought_not_rhyme 'ordinary', 'extraordinary'
+    ought_not_rhyme 'ice', 'deice' # de- is a prefix, but deice (de-ice) is not in cmudict, so this succeeds for the wrong reason
+    oughta_rhyme 'stand', 'strand' # control
+    oughta_rhyme 'understand', 'strand' # control
+    ought_not_rhyme 'stand', 'understand' # under- is a prefix
+    ought_not_rhyme 'organizing', 'reorganizing' # re-
+    ought_not_rhyme 'organizing', 'self-organizing' # self-
+    ought_not_rhyme 'urban', 'suburban' # sub-
+    ought_not_rhyme 'urbanize', 'suburbanize' # sub-
+    ought_not_rhyme 'america', 'midamerica' # mid-
+    ought_not_rhyme 'america', 'microamerica' # micro-
+    ought_not_rhyme 'pure', 'impure' # im-
+    ought_not_rhyme 'open', 'reopen' # re-
+    ought_not_rhyme 'opened', 'unopened' # un-
+    ought_not_rhyme 'mixed', 'unmixed' # un-
+    ought_not_rhyme 'mixed', 'intermixed' # inter-
+    ought_not_rhyme 'unmixed', 'intermixed' # inter-
+    ought_not_rhyme 'operate', 'interoperate' # inter-
+    ought_not_rhyme 'operate', 'cooperate' # co-
+    ought_not_rhyme 'indicated', 'contraindicated' # contra-
+    ought_not_rhyme 'emphasize', 'deemphasize' # de-
+    ought_not_rhyme 'closed', 'enclosed' # en-
+    ought_not_rhyme 'close', 'enclose' # en-, but trickier because 'close' can mean 'nearby' in which case it's pronounced differently
+    ought_not_rhyme 'act', 'enact' # en-
+    ought_not_rhyme 'urb', 'exurb' # ex-
+    ought_not_rhyme 'ordinary', 'extraordinary' # extra-
     ought_not_rhyme 'exempt', 'preempt' # arguable
-    ought_not_rhyme 'subhuman', 'superhuman'
-    ought_not_rhyme 'active', 'hyperactive'
-    ought_not_rhyme 'inactive', 'hyperactive'
-    ought_not_rhyme 'operate', 'teleoperate'
-    ought_not_rhyme 'logical', 'teleological'
-    ought_not_rhyme 'enemy', 'archenemy'
-    ought_not_rhyme 'villain', 'archvillain'
-    oughta_rhyme 'attribution', 'distribution'
-    ought_not_rhyme 'distribution', 'redistribution'
-    ought_not_rhyme 'loading', 'unloading'
-    ought_not_rhyme 'loading', 'reloading'
-    ought_not_rhyme 'loading', 'offloading'
-    ought_not_rhyme 'fitted', 'refitted'
-    ought_not_rhyme 'join', 'enjoin'
-    ought_not_rhyme 'join', 'rejoin'
-    ought_not_rhyme 'upwind', 'downwind'
-    ought_not_rhyme 'find', 'upwind'
-    ought_not_rhyme 'game', 'pregame'
-    ought_not_rhyme 'game', 'postgame'
-    ought_not_rhyme 'space', 'hyperspace'
-    ought_not_rhyme 'atlantic', 'transatlantic'
-    ought_not_rhyme 'pacific', 'transpacific'
-    ought_not_rhyme 'legal', 'illegal'
-    ought_not_rhyme 'alcoholic', 'non-alcoholic'
-    ought_not_rhyme 'subordinate', 'insubordinate'
-    ought_not_rhyme 'live', 'outlive'
-    ought_not_rhyme 'verbal', 'nonverbal'
-    ought_not_rhyme 'western', 'northwestern'
-    ought_not_rhyme 'western', 'midwestern'
-    ought_not_rhyme 'midwestern', 'northwestern'
-    ought_not_rhyme 'lay', 'overlay'
-    ought_not_rhyme 'lay', 'underlay'
-    ought_not_rhyme 'overlay', 'underlay'
-    ought_not_rhyme 'lie', 'underlie'
-    ought_not_rhyme 'lying', 'underlying'
+    ought_not_rhyme 'human', 'subhuman' # sub-
+    ought_not_rhyme 'human', 'superhuman' # super-
+    ought_not_rhyme 'subhuman', 'superhuman' # sub- + super-
+    ought_not_rhyme 'active', 'hyperactive' # hyper-
+    ought_not_rhyme 'inactive', 'hyperactive' # in- + hyper-
+    ought_not_rhyme 'operate', 'teleoperate' # tele-
+    ought_not_rhyme 'logical', 'teleological' # teleo-
+    ought_not_rhyme 'enemy', 'archenemy' # arch-
+    ought_not_rhyme 'villain', 'archvillain' # arch-
+    ought_not_rhyme 'distribution', 'redistribution' # re-
+    ought_not_rhyme 'loading', 'unloading' # un-
+    ought_not_rhyme 'loading', 'reloading' # re-
+    ought_not_rhyme 'loading', 'offloading' # off-
+    ought_not_rhyme 'fitted', 'refitted' # re-
+    ought_not_rhyme 'join', 'enjoin' # en-
+    ought_not_rhyme 'join', 'rejoin' # re-
+    ought_not_rhyme 'wind', 'upwind' # up- + 
+    ought_not_rhyme 'wind', 'downwind' # down-
+    ought_not_rhyme 'upwind', 'downwind' # up- + down-
+    ought_not_rhyme 'find', 'upwind' # pronunciation test
+    ought_not_rhyme 'game', 'pregame' # pre-
+    ought_not_rhyme 'game', 'postgame' # post-
+    ought_not_rhyme 'space', 'hyperspace' # hyper-
+    ought_not_rhyme 'atlantic', 'transatlantic' # trans-
+    ought_not_rhyme 'pacific', 'transpacific' # trans-
+    ought_not_rhyme 'legal', 'illegal' # il-
+    ought_not_rhyme 'alcoholic', 'non-alcoholic' # non-
+    ought_not_rhyme 'subordinate', 'insubordinate' # in-
+    ought_not_rhyme 'live', 'outlive' # out-
+    ought_not_rhyme 'verbal', 'nonverbal' # non-
+    ought_not_rhyme 'western', 'northwestern' # north-
+    ought_not_rhyme 'western', 'southwestern' # south-
+    ought_not_rhyme 'western', 'northwestern' # north-
+    ought_not_rhyme 'western', 'midwestern' # mid-
+    ought_not_rhyme 'midwestern', 'northwestern' # mid- + north-
+    ought_not_rhyme 'eastern', 'northeastern' # north-
+    ought_not_rhyme 'eastern', 'southeastern' # south-
+    ought_not_rhyme 'eastern', 'northeastern' # north-
+    ought_not_rhyme 'eastern', 'mideastern' # mid-
+    ought_not_rhyme 'mideastern', 'northeastern' # mid- + north-
+    ought_not_rhyme 'lay', 'overlay' # over-
+    ought_not_rhyme 'lay', 'underlay' # under-
+    ought_not_rhyme 'overlay', 'underlay' # over- + under-
+    ought_not_rhyme 'lie', 'underlie' # under-
+    ought_not_rhyme 'lying', 'underlying' # under-
+    # TODO: rezoned (and thus these specs) want a pron from re- + zoned: prepend e.g. R IH0 or R IY0
+    # plus a syllable boundary before zoned's CMU string. General prefix morphology is overkill for this alone.
+    oughta_rhyme 'owned', 'zoned'
+    oughta_rhyme 'unowned', 'zoned', not_working_message: true
+    oughta_rhyme 'owned', 'rezoned', not_working_message: true
+    oughta_rhyme 'unowned', 'rezoned', not_working_message: true
+    ought_not_rhyme 'atonal', 'tonal' # a-
+    ought_not_rhyme 'composition', 'decomposition' # de-
+    ought_not_rhyme 'cycling', 'recycling' # re-
+    ought_not_rhyme 'chanted', 'enchanted' # en-
+    ought_not_rhyme 'chanted', 'disenchanted' # dis- en-
+    ought_not_rhyme 'enchanted', 'disenchanted' # en- + dis- en-
+    ought_not_rhyme 'dishonesty', 'honesty' # dis-
+    ought_not_rhyme 'healthy', 'unhealthy' # un-
+    ought_not_rhyme 'side', 'beside' # be-
+    ought_not_rhyme 'side', 'alongside' # along-
+    ought_not_rhyme 'beside', 'alongside' # be- + along-
+    ought_not_rhyme 'applied', 'misapplied' # mis-
+    ought_not_rhyme 'recorded', 'prerecorded' # pre-
+    ought_not_rhyme 'ordinate', 'subordinate' # sub-
+    ought_not_rhyme 'ordinate', 'insubordinate' # in- sub-
+    ought_not_rhyme 'subordinate', 'insubordinate' # in-
+    ought_not_rhyme 'other', 'another' # arguable; an- is... kind of a prefix?
+    context "unless they're not derivationally related" do
+      # Pseudo-prefixes (the +re-+ isn't really derivational) would need lemma-aware
+      # reasoning to distinguish from real prefix rhymes. For now we accept splash damage
+      # from +filter_out_prefix_words+ and skip these.
+      nwm = 'splash damage: filter_out_prefix_words treats the false re- as derivational'
+      oughta_rhyme 'percussion', 'repercussion', not_working_message: nwm
+      oughta_rhyme 'lied', 'relied', not_working_message: nwm
+      oughta_rhyme 'corded', 'recorded', not_working_message: nwm
+    end
+  end
+
+  context "identical rimes" do
+    oughta_rhyme 'leave', 'believe'
+    oughta_rhyme 'troll', 'patrol', not_working_message: true
+    oughta_rhyme 'troll', 'control', not_working_message: true
+    oughta_rhyme 'end', 'pend'
+    oughta_rhyme 'end', 'append'
+    oughta_rhyme 'pend', 'append' # identical
+    oughta_rhyme 'upend', 'pend' # skipped candidate: 'upend' isn't in cmudict, and if it were, we'd get an incorrect syllable boundary anyway
+    ought_not_rhyme 'end', 'upend' # working for the wrong reasons: 'upend' isn't in cmudict, and if it were, we'd get an incorrect syllable boundary anyway
+    oughta_rhyme 'confide', 'defied'
+    oughta_rhyme 'plied', 'applied' # ap- is not a prefix
+    oughta_rhyme 'complied', 'applied'
+    oughta_rhyme 'illicit', 'solicit' # I'm sad that these are identical rhymes. illicit [IH2 L IH1 S AH0 T] solicit [S AH0 L IH1 S IH0 T]
+    oughta_rhyme 'spectre', 'inspector'
+    oughta_rhyme 'supplemented', 'fermented'
+    oughta_rhyme 'jar', 'ajar'
+    oughta_rhyme 'bone', 'trombone' # trom- is not a prefix
+    oughta_rhyme 'sable', 'disable' # arguable
+    oughta_rhyme 'action', 'traction' # tr- is not a prefix
+    oughta_rhyme 'action', 'attraction' # attr- is not a prefix
+    oughta_rhyme 'traction', 'attraction' # arguable
+    oughta_rhyme 'attribution', 'distribution' # arguable
+    oughta_rhyme 'nest', 'finessed', not_working_message: "identical rhyme"
+    oughta_rhyme 'keto', 'mosquito', not_working_message: "bad wiktionary pron for keto"
+    oughta_rhyme 'cord', 'record' # arguable
+    oughta_rhyme 'chord', 'record' # arguable
+    oughta_rhyme 'hemiola', 'viola' # arguable
+    oughta_rhyme 'mandolin', 'violin' # arguable
+    oughta_rhyme 'exhortations', 'meditations' # arguable
+    oughta_rhyme 'composition', 'musician'
+    oughta_rhyme 'compositions', 'musicians'
+    oughta_rhyme 'condemnation', 'contamination' # arguable
+    oughta_rhyme 'extracted', 'reacted'
+    oughta_rhyme 'sanitation', 'temptation'
+    oughta_rhyme 'totalitarian', 'vegetarian'
+    oughta_rhyme 'nation', 'abomination'
   end
 
   context "spelling variants ought not count as rhymes" do
@@ -583,8 +628,6 @@ describe 'RHYMES' do
     oughta_rhyme 'locker', 'clocker'
     ought_not_rhyme 'fails', 'entrails' # 'entrails' stress is on the first syllable
     oughta_rhyme 'guess', 'finesse'
-    oughta_rhyme 'nest', 'finessed', not_working_message: "it's an identical rhyme. I'd like to include it but I don't know how without including unwanted identical rhymes"
-    oughta_rhyme 'keto', 'mosquito', not_working_message: "bad wiktionary pron for keto"
     oughta_rhyme 'vibe', 'subscribe'
     oughta_rhyme 'vibes', 'subscribes'
     oughta_rhyme 'vibed', 'subscribed'
@@ -602,7 +645,7 @@ describe 'RHYMES' do
     oughta_rhyme 'accelerometer', 'thermometer'
   end
   
-  context 'Homophone / spelling-variant traps' do
+  context 'homophone / spelling-variant traps' do
     ought_not_rhyme 'metal', 'mettle'
     ought_not_rhyme 'kernel', 'colonel'
     ought_not_rhyme 'write', 'right'
@@ -611,15 +654,6 @@ describe 'RHYMES' do
     ought_not_rhyme 'symbol', 'cymbal'
   end
 
-    # TODO: rezoned (and thus these specs) want a pron from re- + zoned: prepend e.g. R IH0 or R IY0
-    # plus a syllable boundary before zoned's CMU string. General prefix morphology is overkill for this alone.
-  context 'prefix morphology' do
-    oughta_rhyme 'owned', 'zoned'
-    oughta_rhyme 'unowned', 'zoned', not_working_message: true
-    oughta_rhyme 'owned', 'rezoned', not_working_message: true
-    oughta_rhyme 'unowned', 'rezoned', not_working_message: true
-  end
-  
   context 'non-binary rhymes' do
     oughta_rhyme 'latex', 'paychecks', not_working_message: 'TODO: support non-binary rhymes'
     oughta_rhyme 'pitiful', 'biddable', not_working_message: 'non-binary plus T -> D'
@@ -702,8 +736,6 @@ describe 'RHYMES' do
     oughta_rhyme 'bow', 'flow'
     oughta_rhyme 'bridal', 'idol'
     oughta_rhyme 'cantata', 'sonata'
-    ought_not_rhyme 'cord', 'record' # identical
-    ought_not_rhyme 'chord', 'record' # identical
     oughta_rhyme 'clarinet', 'minuet'
     oughta_rhyme 'croon', 'tune'
     oughta_rhyme 'crooner', 'tuner'
@@ -719,9 +751,7 @@ describe 'RHYMES' do
     oughta_rhyme 'gong', 'song'
     oughta_rhyme 'harmonic', 'sonic'
     oughta_rhyme 'harp', 'sharp'
-    ought_not_rhyme 'hemiola', 'viola' # identical (arguable)
     oughta_rhyme 'jingle', 'single'
-    ought_not_rhyme 'mandolin', 'violin' # identical (arguable)
     oughta_rhyme 'orchestration', 'vibration'
     oughta_rhyme 'piano', 'soprano'
     oughta_rhyme 'piece', 'release'
@@ -773,7 +803,6 @@ describe 'RHYMES' do
     oughta_rhyme 'blessed', 'request'
     oughta_rhyme 'appeal', 'kneel'
     oughta_rhyme 'recites', 'rites'
-    ought_not_rhyme 'exhortations', 'meditations' # identical
     oughta_rhyme 'humble', 'mumble'
     oughta_rhyme 'jew', 'pew'
     oughta_rhyme 'knee', 'plea'
@@ -871,19 +900,6 @@ describe 'RHYMES' do
   end
 
   context 'prereqs from similar_rhymes_spec: ought_not_rhyme (identical/prefix)' do
-    ought_not_rhyme 'atonal', 'tonal'
-    oughta_rhyme 'composition', 'musician'
-    oughta_rhyme 'compositions', 'musicians'
-    ought_not_rhyme 'composition', 'decomposition'
-    ought_not_rhyme 'condemnation', 'contamination' # arguable
-    ought_not_rhyme 'cycling', 'recycling'
-    ought_not_rhyme 'disenchanted', 'enchanted'
-    ought_not_rhyme 'dishonesty', 'honesty'
-    oughta_rhyme 'extracted', 'reacted'
-    ought_not_rhyme 'healthy', 'unhealthy'
-    ought_not_rhyme 'percussion', 'repercussion'
-    ought_not_rhyme 'sanitation', 'temptation'
-    ought_not_rhyme 'totalitarian', 'vegetarian'
   end
 
   context 'prereqs from similar_rhymes_spec: ought_not_rhyme (homophones/spelling variants)' do
