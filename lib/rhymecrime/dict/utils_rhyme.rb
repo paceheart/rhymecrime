@@ -1178,9 +1178,18 @@ end
 #
 
 COMMON_PREFIXES = [
+  'a',       # privative (atonal, asexual, achromatic, abiotic) and locative (aflame, ashore,
+             # around, aground, abuzz). Accepts splash damage on words that merely start with
+             # +a+ (ajar/jar, acorn/corn, amid/mid, ahead/head, abut/but, avoid/void, ado/do,
+             # abasement/basement...) -- those cases live in the +unless they're not
+             # derivationally related+ spec subcontext which is currently skipped.
+  'along',   # alongside
+  'an',
   'ante',
   'anti',
+  'arch',
   'auto',
+  'be',      # beside, below, become (splash damage on between/tween etc.)
   'bi',
   'co',
   'com',
@@ -1188,21 +1197,33 @@ COMMON_PREFIXES = [
   'contra',
   'de',
   'dis',
+  'disen',   # compound dis- + en- (disenchanted → chanted). Recursive prefix stripping
+             # would be more principled but regresses +served+/+undeserved+ (un+de+served),
+             # so enumerate attested compounds instead.
+  'down',    # downwind, downhill, downstream
+  'east',
   'en',
+  'endo',    # endothermic → thermic
   'ex',
+  'exo',     # exothermic → thermic
   'extra',
   'hetero',
   'homeo',
   'homo',
   'hyper',
+  'il',      # illegal, illicit, illogical
+  'im',      # impure, impolite (splash damage on peach/impeach etc.)
   'in',
   'inter',
   'intra',
   'macro',
   'micro',
+  'mid',
   'mis',
   'mono',
   'non',
+  'north',
+  'off',
   'omni',
   'out',
   'over',
@@ -1210,11 +1231,13 @@ COMMON_PREFIXES = [
   'pre',
   'pro',
   're',
+  'south',
   'sub',
   'super',
   'sym',
   'syn',
   'tele',
+  'teleo',   # teleological → logical (tele → ological wouldn't match)
   'trans',
   'tri',
   'un',

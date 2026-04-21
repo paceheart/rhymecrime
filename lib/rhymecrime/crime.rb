@@ -228,6 +228,13 @@ def prefix_words(words, focal_word)
   # All words in WORDS that would share the same root as FOCAL_WORD if you removed its prefix.
   # For example, if WORDS contains "able" and "disable", the prefix_words are ["disable"].
   # But if WORDS contained "unable" and "disable", there would be no prefix_words.
+  # Recursive (compound) stripping was tried but regresses +served+/+undeserved+ etc. where
+  # +un+de+served+ collapses to +served+ but the user considers the pair derivationally
+  # distinct. Genuine compounds like +chanted+/+disenchanted+ (dis- + en-) are handled via
+  # explicit compound entries in COMMON_PREFIXES (e.g. +disen+). Opaque/etymologically-
+  # prefixed words that modern speakers don't perceive as derivational (+record+ = re+cord,
+  # +deserve+ = de+serve, +ajar+ = a+jar) are accepted as splash damage; see the
+  # corresponding +not_working_message+ pending tests in rhyme_spec.
   focal_roots = Array.new
   focal_roots << focal_word
   for prefix in COMMON_PREFIXES
@@ -238,7 +245,7 @@ def prefix_words(words, focal_word)
       end
     end
   end
-  
+
   result = Array.new
   for word in words
     if focal_roots.include?(word)
@@ -285,19 +292,24 @@ def find_rhyming_words(word, identical_ok=true)
   return rhyming_words || [ ]
 end
 
-def identical_rhyme?(rhyme, target_rhyme_syllables_array, target_rime)
-  # Used to filter out identical rhymes, where the entire final stressed syllable is identical to the one in RSIG.
-  # e.g. if you input "leave", this will return "grieve" but not "believe", because the rhyming syllable
-  # "L_IY_V" is identical.
-  # Only considers pronunciations that actually rhyme (share the target rime), so a non-rhyming
-  # alternate pronunciation (e.g. noun RE-cord vs verb re-CORD) can't give a false escape.
+def identical_rhyme?(rhyme, target_pron)
+  # Catches true homophones (same full pronunciation): +write+/+right+, +plain+/+plane+,
+  # +symbol+/+cymbal+, +flour+/+flower+, +puffin+/+puffin'+. These would pass a
+  # rime-cohort lookup but almost never count as legitimate rhymes; they're
+  # "homophone / spelling-variant traps".
+  #
+  # Morphological prefix cases (+loading+/+unloading+, +end+/+upend+, +able+/+disable+)
+  # are intentionally _not_ caught here -- they're handled by +filter_out_prefix_words+
+  # downstream. Coincidental identical rhyme syllables with different onsets
+  # (+leave+/+believe+, +plied+/+applied+, +bone+/+trombone+) _pass_ this filter and
+  # are allowed to rhyme. We accept splash damage (e.g. +percussion+/+repercussion+
+  # getting caught by +filter_out_prefix_words+) in exchange for a simpler rule.
+  target_rime = target_pron.rime
   for pron in pronunciations(rhyme)
     next unless pron.rime == target_rime
-    if pron.rhyme_syllables_array != target_rhyme_syllables_array
-      return false
-    end
+    return true if pron.phonemes == target_pron.phonemes
   end
-  return true
+  return false
 end
 
 def all_identical_rhymes?(words)
@@ -319,9 +331,8 @@ def find_rhyming_words_for_pronunciation(pron, identical_ok=true)
   # use our compiled rime dictionary
   results = Array.new
   rime = pron.rime
-  rsyllables = pron.rhyme_syllables_array
   rdict_lookup(rime).each do |rhyme|
-    if(!identical_ok && identical_rhyme?(rhyme, rsyllables, rime))
+    if(!identical_ok && identical_rhyme?(rhyme, pron))
       debug "Filtered out identical rhyme: #{pron} / #{rhyme} (#{debug_info(rhyme)})"
     else
       results.push(rhyme)

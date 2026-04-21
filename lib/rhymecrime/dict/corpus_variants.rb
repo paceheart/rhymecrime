@@ -57,6 +57,23 @@ STRUCTURED_ALT_OF_DECAY_TAGS = Set.new(%w[
   archaic obsolete dated
 ])
 
+# Wiktionary-attested pairs we refuse to emit as spelling variants. Each entry is a
+# [sorted] pair. These are cases where Kaikki's +alt-of+ pointer exists only for a minor
+# POS or sense of an otherwise independent word with its own dominant meaning:
+#
+#   * +biddy+ is primarily a noun ("old woman, Irish maid, …"); the +biddy [adj] alt-of
+#     bitty+ entry is one minor US-dialect sense that shouldn't dispreference +biddy+ from
+#     the +IH_D_IY+ rime bucket and break +pity oughta-rhyme biddy+.
+#   * +pie+ is primarily the dessert noun; the +pie [noun/verb] alt-of pi+ entries cover a
+#     rare typography sense ("mixed-up printing type") that shouldn't dispreference +pie+
+#     from the +AY+ rime bucket and break +bi oughta-rhyme pie+.
+#
+# Listed as unordered pairs; order within each pair doesn't matter for blocking.
+WIKTIONARY_VARIANT_BLOCKLIST = Set.new([
+  ["biddy", "bitty"],
+  ["pi", "pie"],
+].map(&:sort))
+
 SPELLING_VARIANTS_AUTO_HEADER = <<~HEADER
   # Auto-detected lexical spelling variant pairs.
   #
@@ -226,8 +243,10 @@ def wiktionary_variant_pairs(word_dict, wordfreq_hash, kaikki_variant_map)
 
   direct_pairs = []
   by_pair.each do |(a, b), rows|
+    next if WIKTIONARY_VARIANT_BLOCKLIST.include?([a, b].sort)
     next unless wiktionary_pair_is_useful?(a, b, rows, wordfreq_hash)
     next unless headwords_share_rime?(a, b, word_dict)
+    next if distinct_inflected_forms?(a, b)
     preferred, alt = resolve_wiktionary_variant_winner(a, b, rows, wordfreq_hash)
     direct_pairs << [preferred, alt]
   end
@@ -341,6 +360,29 @@ def headwords_share_rime?(a, b, word_dict)
     r = p.rime
     !r.nil? && !r.empty? && rimes_a.include?(r)
   end
+end
+
+# True when both +a+ and +b+ are Kaikki-documented inflected forms of _different_ base lemmas.
+# Kaikki's dialectal +alt-of+ annotations occasionally cross morphological families -- the
+# +hits → its+ pointer ("hits is a dialectal Alternative form of its", tagged +alt-of+
+# +alternative+ +dialectal+) passes the freq and decay gates in +wiktionary_pair_is_useful?+
+# because neither is rare and +dialectal+ isn't a decay tag, but the pair is phonologically
+# misleading: +hits+ is the plural of +hit+ (lemma +hit+) and +its+ is the possessive of +it+
+# (lemma +it+). Treating them as spelling variants dispreferences +its+ from +hits+'s rhyme
+# list and lumps them under +all_forms+, breaking +hits oughta-rhyme its+ and
+# +its ought-not-rhyme it's+. True spelling variants -- +colour/color+, +catalog/catalogue+,
+# +adapter/adaptor+ -- have each side as its own base in Kaikki's forms_map (no base
+# annotation); the inflected siblings like +catalogs/catalogues+ come in via
+# +propagate_variant_inflections+, not as direct Wiktionary pairs.
+#
+# We read +$inflection_base_words+ rather than +word_dict[w][2]+ because lemma assignment
+# (+compute_lemma_map+) runs _after_ +emit_spelling_variants_auto!+ in +dict.rb+, so the
+# word_dict entries seen here still have shape +[freq, prons]+ (no lemma slot populated yet).
+def distinct_inflected_forms?(a, b)
+  ba = $inflection_base_words[a]
+  bb = $inflection_base_words[b]
+  return false if ba.nil? || bb.nil?
+  ba != bb
 end
 
 # Minimal regular-English morphological inflection for +stem + suffix+. Returns +nil+ when
