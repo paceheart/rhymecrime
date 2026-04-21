@@ -51,7 +51,7 @@ describe 'SET_RELATED' do
   end
   
   context 'stop words' do
-    set_related_ought_not_contain 'pirate', 'of', 'above'
+    # we don't want tuples with _only_ stop words, but it's okay if there are also go-words. set_related_ought_not_contain 'pirate', 'of', 'above'
     set_related_ought_not_contain 'pirate', 'other', 'another'
   end
 
@@ -128,7 +128,7 @@ describe 'SET_RELATED' do
     set_related_oughta_contain 'music', 'beat', 'sheet'
     set_related_oughta_contain 'music', 'cantata', 'sonata'
     set_related_oughta_contain 'music', 'enjoys', 'noise'
-    set_related_oughta_contain 'music', 'funk', 'pnuk'
+    set_related_oughta_contain 'music', 'funk', 'punk'
     set_related_oughta_contain 'music', 'sing', 'swing'
     set_related_oughta_contain 'music', 'orchestration', 'vibration'
     set_related_oughta_contain 'music', 'sonic', 'harmonic'
@@ -145,33 +145,33 @@ describe 'SET_RELATED' do
     set_related_oughta_contain 'music', 'bridal', 'idol'
     set_related_oughta_contain 'music', 'audition', 'composition'
     set_related_oughta_contain 'music', 'chord', 'record'
-    set_related_ought_not_contain 'music', 'compositions', 'musicians' # this identical rhymes gets a pass because it's in a set with a bunch of other non-identical rhymes
-    set_related_ought_not_contain 'music', 'composition', 'musician' # this identical rhyme gets a pass because it's in a set with 'partition', which really probably oughtn't be related to music
+    set_related_ought_not_contain 'music', 'compositions', 'musicians'
+    set_related_ought_not_contain 'music', 'composition', 'musician'
     set_related_oughta_contain 'music', 'clarinet', 'minuet'
     set_related_oughta_contain 'music', 'accidental', 'instrumental'
     set_related_oughta_contain 'music', 'sings', 'strings'
-    # ritardando OOV: set_related_oughta_contain 'music', 'glissando', 'ritardando'
-    set_related_oughta_contain 'music', 'viola', 'hemiola', not_working_message: "arguable stress mismatch"
-    set_related_oughta_contain 'music', 'overtone', 'xylophone', not_working_message: "arguable stress mismatch"
+    set_related_oughta_contain 'music', 'glissando', 'ritardando', not_working_message: "ritardando OOV"
+    set_related_oughta_contain 'music', 'viola', 'hemiola'
+    set_related_ought_not_contain 'music', 'overtone', 'xylophone'
     set_related_oughta_contain 'music', 'wave', 'rave'
     set_related_oughta_contain 'music', 'beat', 'repeat'
     set_related_oughta_contain 'music', 'flow', 'bow'
     set_related_oughta_contain 'music', 'jingle', 'single' # as in a hit single
     set_related_oughta_contain 'music', 'harp', 'sharp'
-    set_related_oughta_contain 'music', 'show', 'arpeggio', not_working_message: "stress mismatch"
-    set_related_oughta_contain 'music', 'mix', 'drumsticks', not_working_message: "stress mismatch"
-    set_related_oughta_contain 'music', 'violin', 'mandolin', not_working_message: "arguable stress mismatch"
+    set_related_oughta_contain 'music', 'show', 'arpeggio' # , not_working_message: "stress mismatch"
+    set_related_oughta_contain 'music', 'mix', 'drumsticks' #, not_working_message: "stress mismatch"
+    set_related_oughta_contain 'music', 'violin', 'mandolin'
     set_related_oughta_contain 'music', 'rest', 'expressed'
     set_related_oughta_contain 'music', 'lute', 'flute'
     set_related_oughta_contain 'music', 'fortissimo', 'pianissimo'
-    set_related_oughta_contain 'music', 'gong', 'song' # reverse relatedness would fix
+    set_related_oughta_contain 'music', 'gong', 'song'
     set_related_oughta_contain 'music', 'duet', 'quartet'
     set_related_oughta_contain 'music', 'duet', 'quintet'
     set_related_ought_not_contain 'music', 'coral', 'choral' # exclude homophones 
     set_related_ought_not_contain 'music', 'recorded', 'prerecorded' # exclude identical rhymes
-    set_related_ought_not_contain 'music', 'percussion', 'repercussion'
+    set_related_oughta_contain 'music', 'percussion', 'repercussion' # looks like an identical rhyme but it's not
     set_related_ought_not_contain 'music', 'tonal', 'atonal' # exclude identical rhymes
-    set_related_oughta_contain 'music', 'abbreviation', 'notation' # identical rhymes are OK if they're part of a tuple that contains non-identical rhymes such as the previous line
+    set_related_oughta_contain 'music', 'abbreviation', 'notation'
     set_related_ought_not_contain 'music', 'tv', 'vision'
     set_related_ought_not_contain 'music', 'bass', 'brass' # the fish is not related to the tuba
     it 'set_related music: bone / intone / trombone tuple' do
