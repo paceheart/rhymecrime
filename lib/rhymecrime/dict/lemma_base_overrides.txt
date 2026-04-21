@@ -1,4 +1,0 @@
-# Surface headword -> lemma (both must exist in word_dict at lemma-map time). Last match wins.
-# Applied after Kaikki + Inflect lemma resolution (see compute_lemma_map in dict.rb).
-agreed agree
-agreement agree

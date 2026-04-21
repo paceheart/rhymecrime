@@ -1,4 +1,4 @@
-# Lemma column expectations from generated/word_dict (see bin/dict-build and lemma_base_overrides).
+# Lemma column expectations from generated/word_dict (see bin/dict-build).
 # Rows: surface, lemma, optional skip (1 to skip unless RHYMECRIME_RUN_SKIPPED), optional notes.
 
 require "csv"
@@ -25,7 +25,7 @@ def oughta_lemma(surface, expected_lemma, not_working_message: nil)
   it "lemma('#{surface}') is '#{expected_lemma}'" do
     skip_if_not_working(not_working_message)
     got = lemma(surface)
-    expect(got).to eq(expected_lemma), "expected lemma('#{surface}') == '#{expected_lemma}', got '#{got}' (word_dict column / overrides)"
+    expect(got).to eq(expected_lemma), "expected lemma('#{surface}') == '#{expected_lemma}', got '#{got}' (word_dict column)"
   end
 end
 

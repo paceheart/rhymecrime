@@ -410,7 +410,7 @@ food,seder,related,prereq: food+evil/seder+invader
 food,served,related,prereq: food+evil/served+undeserved
 food,snack,related,prereq: food+dark/snack+black
 food,starvation,related,prereq: food+evil/starvation+abomination
-food,the,unrelated,stop words ought not show up as related to anything
+food,the,related,stop word (related to everything by design; contentless glue)
 food,turkey,related,prereq: food+dark/turkey+murky
 food,veggie,related,prereq: food+dark/veggie+edgy
 food,waiter,related,prereq: food+evil/waiter+traitor
@@ -1751,7 +1751,7 @@ gay,mission,related,off the top of my head
 gay,active,whatever,bulk random lemma base + common preferred + rime (seed 42)
 gay,adaptive,unrelated,bulk random lemma base + common preferred + rime (seed 42)
 gay,adjustment,whatever,bulk random lemma base + common preferred + rime (seed 42)
-gay,and,related,I guess stop words should be related to everything?
+gay,and,related,stop word
 gay,angling,unrelated,bulk random lemma base + common preferred + rime (seed 42)
 gay,approximation,unrelated,bulk random lemma base + common preferred + rime (seed 42)
 gay,aquamarine,unrelated,bulk random lemma base + common preferred + rime (seed 42)
@@ -2333,3 +2333,12 @@ cat,digoxin,unrelated_ish,cat review
 cat,diesel,unrelated_ish,cat review
 cat,yarn,related,cat review
 cat,laser,related,cat review
+pack,exploration,related,prereq: exploration/pack+track
+track,exploration,related,prereq: exploration/pack+track
+pirate,shore,related,prereq: pirate/shore+tor
+pirate,tor,related,prereq: pirate/shore+tor
+pirate,mutineer,related,prereq: pirate/buccaneer+mutineer
+pirate,alcoholic,related,prereq: pirate/diabolic+alcoholic
+pirate,diabolic,related,prereq: pirate/diabolic+alcoholic
+pirate,fursona,related,prereq: pirate/fursona+jonah
+pirate,jonah,related,prereq: pirate/fursona+jonah

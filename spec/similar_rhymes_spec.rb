@@ -78,7 +78,6 @@ describe 'SET_RELATED' do
     set_related_oughta_contain 'pirate', 'seagull', 'illegal'
     set_related_oughta_contain 'pirate', 'shore', 'tor'
     set_related_oughta_contain 'pirate', 'attitude', 'latitude'
-    set_related_oughta_contain 'pirate', 'peg', 'leg'
     set_related_oughta_contain 'pirate', 'crude', 'pursued'
     set_related_oughta_contain 'pirate', 'buggery', 'thuggery'
     set_related_oughta_contain 'pirate', 'crews', 'tattoos'

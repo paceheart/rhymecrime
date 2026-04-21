@@ -116,25 +116,20 @@ end
 
 # Suffix replacements for imperfect-rhyme conflation; order must match +conflate_imperfect_rhyme_phoneme_string+.
 CONFLATE_IMPERFECT_RHYME_SUFFIX_RULES = [
-  [%w[L S], %w[L T S]],
-  [%w[M T], %w[M P T]],
-  [%w[N D Z], %w[N Z]],
-  [%w[N S], %w[N T S]],
+  [%w[L S], %w[L T S]], # else / melts
+  [%w[M T], %w[M P T]], # dreamt / tempt
+  [%w[N D Z], %w[N Z]], # funds / tons
+  [%w[N S], %w[N T S]], # fence / scents
   [%w[T CH], %w[CH]],
-  [%w[ZH], %w[JH]],
-  [%w[ZH AH0 Z], %w[JH AH0 Z]],
-  [%w[ZH D], %w[JH D]],
-  [%w[ZH IY0 NG], %w[JH IY0 NG]],
-  [%w[ZH AH0 R], %w[JH AH0 R]],
-  [%w[ZH AH0 R Z], %w[JH AH0 R Z]],
-  # +-ire+ smoothing: English compresses word-final +AY1 AH0 R+ (disyllabic "TYE-er") and +AY1 R+
-  # (monosyllabic "TYRE") to the same thing. CMUDict is inconsistent -- +fire+, +hire+, +wire+ get
-  # both prons, but +attire+, +tire+, +desire+, +buyer+ only get +AY1 AH0 R+ and +squire+, +aspire+,
-  # +inspire+, +admire+ only get +AY1 R+, stranding obvious rhymes in separate cohorts. Conflate to
-  # the shorter form so everyone lands in +AY_R+.
-  [%w[AY1 AH0 R], %w[AY1 R]],
-  [%w[AY1 AH0 R Z], %w[AY1 R Z]],
-  [%w[AY1 AH0 R D], %w[AY1 R D]],
+  [%w[ZH], %w[JH]], # massage / lodge
+  [%w[ZH AH0 Z], %w[JH AH0 Z]], # massages / lodges
+  [%w[ZH D], %w[JH D]], # massaged / lodged
+  [%w[ZH IY0 NG], %w[JH IY0 NG]], # massaging / lodging
+  [%w[ZH AH0 R], %w[JH AH0 R]], # massager / lodger
+  [%w[ZH AH0 R Z], %w[JH AH0 R Z]], # massagers / lodgers
+  [%w[AY1 AH0 R], %w[AY1 R]], # compress word-final disyllabic "TYE-er" into monosyllabic "TYRE"
+  [%w[AY1 AH0 R Z], %w[AY1 R Z]], # same for tires
+  [%w[AY1 AH0 R D], %w[AY1 R D]], # same for tired
 ].freeze
 
 # Array-native conflate (avoids an extra join/split vs string-only path).
