@@ -434,7 +434,7 @@ def rarity_conceptnet_adjacency_for_build
     end
     $rarity_cn_adjacency = adj
     $rarity_cn_adjacency_loaded = true
-    puts "built prior-build ConceptNet adjacency for rarity signals: #{adj.size} nodes over #{edges.size} edges"
+    puts "built prior-build ConceptNet adjacency for rarity signals: #{edges.size} edges over #{adj.size} nodes"
   else
     $rarity_cn_adjacency = {}
     $rarity_cn_adjacency_loaded = false

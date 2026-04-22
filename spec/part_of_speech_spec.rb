@@ -38,7 +38,7 @@ PART_OF_SPEECH_EXPECTED = [
   %w[analysis noun],
   %w[jaw noun verb],
   %w[breaker noun],
-  { word: "jawbreaker", expect: %w[noun], not_working_message: true },
+  %w[jawbreaker noun],
   %w[decide verb],
   %w[throuple noun],
   %w[blog noun verb],

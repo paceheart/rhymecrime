@@ -3,11 +3,14 @@
 ;;; Same format as CMUdict. Assumed to be correct and complete;
 ;;; any other pronunciation of a word in this list will be ignored.
 A  EY1
+AQUATIC  AH0 K W AA1 T IH0 K
 BACCHANAL  B AE1 K IH0 N AH0 L
 BIOPIC  B AY2 OW0 P IH1 K
+BREECHES B R IY1 CH AH0 Z
+COLOR  K AH1 L ER0
 INTO  IH1 N T UW0
 INTO(1)  IH0 N T UW1
-LAUGHER  L AA1 F ER0
+LAUGHER  L AE1 F ER0
 SATYR  S EY1 T ER0
 SNES  S N EH1 S
-SWAGGY S W AO1 G IY0
+SWAGGY S W AE1 G IY0

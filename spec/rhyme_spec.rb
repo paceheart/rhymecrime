@@ -770,20 +770,20 @@ describe 'RHYMES' do
     oughta_rhyme 'loot', 'pursuit'
     oughta_rhyme 'reef', 'thief'
     oughta_rhyme 'abducted', 'obstructed'
-    ought_not_rhyme 'aquatic', 'haddock', not_working_message: "vowel mismatch, TODO: fix bad pronunciation"
+    ought_not_rhyme 'aquatic', 'haddock' # fixed by an authoritative pronunciation
     oughta_rhyme 'haddock', 'thematic'
-    ought_not_rhyme 'aquatic', 'thematic', not_working_message: "vowel mismatch, TODO: fix bad pronunciation"
-    ought_not_rhyme 'satyr', 'splatter', not_working_message: "vowel mismatch, TODO: fix bad pronunciation"
+    ought_not_rhyme 'aquatic', 'thematic' # fixed by an authoritative pronunciation
+    ought_not_rhyme 'satyr', 'splatter' # fixed by an authoritative pronunciation
     oughta_rhyme 'satyr', 'later'
     oughta_rhyme 'floating', 'loading'
     could_go_either_way 'floating', 'offloading'
-    ought_not_rhyme 'laugher', 'rocker', not_working_message: "vowel mismatch, TODO: fix bad pronunciation"
-    oughta_rhyme 'laugher', 'staffer', not_working_message: "vowel mismatch, TODO: fix bad pronunciation"
+    ought_not_rhyme 'laugher', 'rocker' # fixed by an authoritative pronunciation
+    oughta_rhyme 'laugher', 'staffer' # fixed by an authoritative pronunciation
     oughta_rhyme 'haunted', 'daunted'
     oughta_rhyme 'haunted', 'undaunted'
     ought_not_rhyme 'daunted', 'undaunted'
     ought_not_rhyme 'official', 'unofficial'
-    ought_not_rhyme 'color', 'scholar', not_working_message: "vowel mismatch, TODO: fix bad pronunciation"
+    ought_not_rhyme 'color', 'scholar' # fixed by an authoritative pronunciation
     oughta_rhyme 'collar', 'scholar'
     ought_not_rhyme 'collar', 'color'
     oughta_rhyme 'marauding', 'plotting'
@@ -988,13 +988,15 @@ describe 'RHYMES' do
   end
 
   context 'bad pronunciations' do
-    oughta_rhyme 'britches', 'snitches', not_working_message: 'TODO: spot-fix bad pronunciations'
-    ought_not_rhyme 'breeches', 'snitches', not_working_message: 'TODO: spot-fix bad pronunciations'
+    oughta_rhyme 'britches', 'snitches' # fixed via an authoritative pronunciation
+    ought_not_rhyme 'breeches', 'snitches' # fixed via an authoritative pronunciation
     oughta_rhyme 'breeches', 'beaches'
-    ought_not_rhyme 'anal', 'bacchanal', not_working_message: 'TODO: spot-fix bad pronunciations'
+    ought_not_rhyme 'anal', 'bacchanal' # fixed via an authoritative pronunciation
     ought_not_rhyme 'anal', 'canal'
-    ought_not_rhyme 'fez', 'snes', not_working_message: 'TODO: spot-fix bad pronunciations'
-    ought_not_rhyme 'froggy', 'swaggy', not_working_message: 'TODO: spot-fix bad pronunciations'
+    ought_not_rhyme 'fez', 'snes' # fixed via an authoritative pronunciation
+    ought_not_rhyme 'froggy', 'swaggy' # fixed via an authoritative pronunciation
+    oughta_rhyme 'froggy', 'doggie'
+    oughta_rhyme 'swaggy', 'baggy' # fixed via an authoritative pronunciation
     ought_not_rhyme 'a', 'into'
   end
 
