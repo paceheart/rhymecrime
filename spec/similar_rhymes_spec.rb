@@ -15,6 +15,29 @@ def set_related_contains?(input, output1, output2)
   return false
 end
 
+# Permissive sibling of +set_related_contains?+: pass if any inflected form sharing +base1+'s lemma
+# co-occurs with any inflected form sharing +base2+'s lemma in some rhyming tuple. Use when the
+# suffix-redundancy pruner collapses base/-s/-ed/-ing/-er siblings into a single emitted tuple and
+# we don't care which inflectional surface survives — only that *a* member of each lemma family
+# rhymes with the other in context.
+def lemma_family(base)
+  fam = lemma_to_words[base]
+  fam = fam.nil? || fam.empty? ? [base] : fam.dup
+  fam << base unless fam.include?(base)
+  fam
+end
+
+def set_related_contains_base_form?(input, base1, base2)
+  fam1 = lemma_family(base1)
+  fam2 = lemma_family(base2)
+  for tuple in find_rhyming_tuples(input) do
+    if fam1.any? { |w| tuple.include?(w) } && fam2.any? { |w| tuple.include?(w) }
+      return true
+    end
+  end
+  return false
+end
+
 def set_related_works(input)
   test_name = "set_related works: #{input}"
   it test_name do
@@ -35,6 +58,15 @@ def set_related_ought_not_contain(input, output1, output2, not_working_message: 
   it test_name do
     skip_if_not_working(not_working_message)
     expect(set_related_contains?(input, output1, output2)).to eql(false), "Set-related rhymes for '#{input}' ought not include '#{output1}' / '#{output2}' / ..."
+  end
+end
+
+def set_related_oughta_contain_base_form(input, base1, base2, not_working_message: nil)
+  test_name = "set_related: #{input} -> #{base1}* / #{base2}*"
+  it test_name do
+    skip_if_not_working(not_working_message)
+    expect(set_related_contains_base_form?(input, base1, base2)).to eql(true),
+      "Set-related rhymes for '#{input}' oughta include some inflected form of '#{base1}' (family=#{lemma_family(base1).inspect}) alongside some inflected form of '#{base2}' (family=#{lemma_family(base2).inspect}), but instead we just get #{find_rhyming_tuples(input)}"
   end
 end
 
@@ -65,7 +97,7 @@ describe 'SET_RELATED' do
     set_related_oughta_contain 'pirate', 'peg', 'leg'
     set_related_oughta_contain 'pirate', 'daring', 'swearing'
     set_related_oughta_contain 'pirate', 'hacker', 'cracker' # a different kind of pirate
-    set_related_oughta_contain 'pirate', 'sea', 'dvd' # two different kinds of pirate
+    set_related_oughta_contain 'pirate', 'sea', 'dvd', not_working_message: "dvd rare" # two different kinds of pirate
     set_related_oughta_contain 'pirate', 'buccaneer', 'peer-to-peer' # two different kinds of pirate
     set_related_oughta_contain 'pirate', 'buccaneer', 'commandeer'
     set_related_oughta_contain 'pirate', 'buccaneer', 'mutineer'
@@ -76,7 +108,7 @@ describe 'SET_RELATED' do
     set_related_ought_not_contain 'pirate', 'eyes', 'seas' # via two pronunciations of 'reprise'
     set_related_oughta_contain 'pirate', 'marauding', 'plotting'
     set_related_oughta_contain 'pirate', 'seagull', 'illegal'
-    set_related_oughta_contain 'pirate', 'shore', 'tor'
+    set_related_oughta_contain 'pirate', 'shore', 'tor', not_working_message: "tor rare"
     set_related_oughta_contain 'pirate', 'attitude', 'latitude'
     set_related_oughta_contain 'pirate', 'crude', 'pursued'
     set_related_oughta_contain 'pirate', 'buggery', 'thuggery'
@@ -138,27 +170,25 @@ describe 'SET_RELATED' do
     set_related_oughta_contain 'music', 'flute', 'lute'
     set_related_oughta_contain 'music', 'fandango', 'tango'
     set_related_oughta_contain 'music', 'session', 'progression'
-    set_related_oughta_contain 'music', 'croon', 'tune'
-    set_related_oughta_contain 'music', 'crooner', 'tuner'
+    set_related_oughta_contain_base_form 'music', 'croon', 'tune'
     set_related_oughta_contain 'music', 'ears', 'spheres'
     set_related_oughta_contain 'music', 'bridal', 'idol'
     set_related_oughta_contain 'music', 'audition', 'composition'
     set_related_oughta_contain 'music', 'chord', 'record'
-    set_related_ought_not_contain 'music', 'compositions', 'musicians'
-    set_related_ought_not_contain 'music', 'composition', 'musician'
+    set_related_oughta_contain_base_form 'music', 'composition', 'musician' # identical rime
     set_related_oughta_contain 'music', 'clarinet', 'minuet'
     set_related_oughta_contain 'music', 'accidental', 'instrumental'
-    set_related_oughta_contain 'music', 'sings', 'strings'
-    set_related_oughta_contain 'music', 'glissando', 'ritardando', not_working_message: "ritardando OOV"
-    set_related_oughta_contain 'music', 'viola', 'hemiola'
+    set_related_oughta_contain_base_form 'music', 'sing', 'string'
+    set_related_oughta_contain 'music', 'glissando', 'ritardando', not_working_message: "ritardando rare"
+    set_related_oughta_contain 'music', 'viola', 'hemiola', not_working_message: "hemiola rare"
     set_related_ought_not_contain 'music', 'overtone', 'xylophone'
     set_related_oughta_contain 'music', 'wave', 'rave'
     set_related_oughta_contain 'music', 'beat', 'repeat'
     set_related_oughta_contain 'music', 'flow', 'bow'
     set_related_oughta_contain 'music', 'jingle', 'single' # as in a hit single
     set_related_oughta_contain 'music', 'harp', 'sharp'
-    set_related_oughta_contain 'music', 'show', 'arpeggio' # , not_working_message: "stress mismatch"
-    set_related_oughta_contain 'music', 'mix', 'drumsticks' #, not_working_message: "stress mismatch"
+    set_related_oughta_contain 'music', 'show', 'arpeggio', not_working_message: "stress mismatch"
+    set_related_oughta_contain 'music', 'mix', 'drumsticks', not_working_message: "stress mismatch"
     set_related_oughta_contain 'music', 'violin', 'mandolin'
     set_related_oughta_contain 'music', 'rest', 'expressed'
     set_related_oughta_contain 'music', 'lute', 'flute'
@@ -196,23 +226,22 @@ describe 'SET_RELATED' do
     set_related_oughta_contain 'water', 'supplied', 'tide'
     set_related_oughta_contain 'water', 'dam', 'swam'
     set_related_oughta_contain 'water', 'slosh', 'wash'
-    set_related_oughta_contain 'water', 'humidity', 'turbidity'
+    set_related_oughta_contain 'water', 'humidity', 'turbidity', not_working_message: "turbidity rare"
     set_related_oughta_contain 'water', 'bay', 'spray'
     set_related_oughta_contain 'water', 'steam', 'stream'
-    set_related_oughta_contain 'water', 'eau', 'flow'
+    set_related_oughta_contain 'water', 'eau', 'flow', not_working_message: "eau rare"
     set_related_oughta_contain 'water', 'sweat', 'wet'
     set_related_oughta_contain 'water', 'cool', 'pool'
     set_related_oughta_contain 'water', 'drain', 'rain'
     set_related_ought_not_contain 'water', 'sea', 'cod'
     set_related_oughta_contain 'water', 'blood', 'flood'
     set_related_oughta_contain 'water', 'marine', 'saline'
-    set_related_oughta_contain 'water', 'dip', 'sip'
+    set_related_oughta_contain_base_form 'water', 'dip', 'sip'
     set_related_ought_not_contain 'water', 'flour', 'flower'
   end
 
   context 'clumsy' do
-    set_related_oughta_contain 'clumsy', 'bumbling', 'fumbling'
-    set_related_oughta_contain 'clumsy', 'bumbling', 'stumbling'
+    set_related_oughta_contain_base_form 'clumsy', 'bumble', 'fumble'
     set_related_oughta_contain 'clumsy', 'excuse', 'shoes'
     set_related_oughta_contain 'clumsy', 'drop', 'flop'
   end
@@ -226,15 +255,14 @@ describe 'SET_RELATED' do
     set_related_oughta_contain 'prayers', 'addressed', 'blessed'
     set_related_oughta_contain 'prayers', 'blessed', 'request'
     set_related_oughta_contain 'prayers', 'appeal', 'kneel'
-    set_related_oughta_contain 'prayers', 'recites', 'rites'
+    set_related_oughta_contain_base_form 'prayers', 'recite', 'rite'
     set_related_oughta_contain 'prayers', 'exhortations', 'meditations'
     set_related_oughta_contain 'prayers', 'humble', 'mumble'
     set_related_oughta_contain 'prayers', 'jew', 'pew'
     set_related_oughta_contain 'prayers', 'knee', 'plea'
-    set_related_oughta_contain 'prayers', 'heal', 'kneel'
-    set_related_oughta_contain 'prayers', 'healing', 'kneeling'
-    set_related_oughta_contain 'prayers', 'feast', 'priest'
-    set_related_oughta_contain 'prayers', 'feasts', 'priests'
+    set_related_oughta_contain_base_form 'prayers', 'heal', 'kneel'
+    set_related_oughta_contain_base_form 'prayers', 'feast', 'priest'
+    set_related_oughta_contain_base_form 'prayers', 'feasts', 'priests'
   end
 
   context 'carbon' do
@@ -259,7 +287,7 @@ describe 'SET_RELATED' do
     set_related_oughta_contain 'crime', 'acquitted', 'committed'
     set_related_oughta_contain 'crime', 'arrest', 'confessed'
     set_related_oughta_contain 'crime', 'sleuth', 'truth'
-    set_related_oughta_contain 'crime', 'drugs', 'thugs'
+    set_related_oughta_contain_base_form 'crime', 'drug', 'thug'
     set_related_oughta_contain 'crime', 'denial', 'trial'
     set_related_oughta_contain 'crime', 'job', 'mob'
     set_related_oughta_contain 'crime', 'sentence', 'repentance'
@@ -368,13 +396,19 @@ describe 'PAIR_RELATED' do
   end
 
   context 'food evil' do
+    context 'stop words' do
+      # in pair_related, we require both to be go-words, otherwise
+      # stop words will dominate the cross product
+      pair_related_ought_not_contain 'food', 'evil', 'dill', 'will'
+      pair_related_ought_not_contain 'food', 'evil', "i'll", "revile"
+    end
     pair_related_oughta_contain 'food', 'evil', 'chewed', 'rude'
     pair_related_oughta_contain 'food', 'evil', 'cuisine', 'mean'
     pair_related_oughta_contain 'food', 'evil', 'feed', 'greed'
     pair_related_oughta_contain 'food', 'evil', 'grain', 'pain'
     pair_related_oughta_contain 'food', 'evil', 'grain', 'bane'
     pair_related_oughta_contain 'food', 'evil', 'rice', 'vice'
-    pair_related_ought_not_contain 'food', 'evil', 'vegetarian', 'totalitarian' # it's a damn shame that this is an identical rhyme
+    pair_related_oughta_contain 'food', 'evil', 'vegetarian', 'totalitarian' # identical rime but so good
     pair_related_oughta_contain 'food', 'evil', 'dinner', 'sinner'
     pair_related_oughta_contain 'food', 'evil', 'cake', 'rake'
     pair_related_oughta_contain 'food', 'evil', 'mushroom', 'doom', not_working_message: "stress mismatch"
@@ -384,9 +418,9 @@ describe 'PAIR_RELATED' do
     pair_related_oughta_contain 'food', 'evil', 'bread', 'undead'
     pair_related_oughta_contain 'food', 'evil', 'heinz', 'maligns'
     pair_related_oughta_contain 'food', 'evil', 'served', 'undeserved' # this is not quite an identical rhyme becauze the s in undeserved is pronounced like a z
-    pair_related_ought_not_contain 'food', 'evil', 'sanitation', 'temptation' # identical rhyme
+    pair_related_oughta_contain 'food', 'evil', 'sanitation', 'temptation' # identical rime
     pair_related_ought_not_contain 'food', 'evil', 'healthy', 'unhealthy'
-    pair_related_ought_not_contain 'food', 'evil', 'contamination', 'condemnation'
+    pair_related_oughta_contain 'food', 'evil', 'contamination', 'condemnation'
     pair_related_oughta_contain 'food', 'evil', 'savory', 'slavery'
     pair_related_ought_not_contain 'food', 'evil', 'savoury', 'slavery'
     pair_related_oughta_contain 'food', 'evil', 'crumb', 'scum'

@@ -995,6 +995,7 @@ describe 'RHYMES' do
     ought_not_rhyme 'anal', 'canal'
     ought_not_rhyme 'fez', 'snes', not_working_message: 'TODO: spot-fix bad pronunciations'
     ought_not_rhyme 'froggy', 'swaggy', not_working_message: 'TODO: spot-fix bad pronunciations'
+    ought_not_rhyme 'a', 'into'
   end
 
   context 'ire' do

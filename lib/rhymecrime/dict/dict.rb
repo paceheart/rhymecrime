@@ -76,7 +76,7 @@ end
 # (file-based, 3.1-safe). Derivation is last and walks WN data for +word+ when earlier checks fail.
 def wn_accept_inflection_lemma_pair?(word, base)
   wn_share_synset?(word, base) ||
-    wn_ed_verb_stem_via_morphy?(word, base) ||
+    wn_verb_stem_via_morphy?(word, base) ||
     wn_productive_affix_lemma_pair?(word, base) ||
     wn_derivationally_related_to_base?(word, base)
 end
@@ -87,7 +87,8 @@ end
 # Words with a WordNet entry and an :er/:est suffix keep themselves (singer, faster are standalone).
 # For Source B, if the word has a WordNet entry then the candidate base must pass
 # +wn_accept_inflection_lemma_pair?+ (shared synset, 1-hop derivation pointers, guarded -ly/-ful,
-# or unique verbal morphy for Inflect *-ed*). This blocks false stems like crew→crow when no link matches.
+# or unique verbal morphy for Inflect *-ed* / *-ing*). This blocks false stems like crew→crow when
+# no link matches.
 # Fallback: self-lemma (word is its own base).
 def compute_lemma_map(word_dict)
   lemma_map = {}

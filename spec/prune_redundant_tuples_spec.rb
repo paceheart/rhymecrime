@@ -55,6 +55,19 @@ def prune_entire_rhyming_tuple(spec, not_working_reason = nil)
   end
 end
 
+# Assert the pruner allows +spec+. Inverse of prune_entire_rhyming_tuple.
+def allow_entire_rhyming_tuple(spec, not_working_reason = nil)
+  it "prune entire tuple: #{spec}" do
+    skip_if_not_working(not_working_reason) if prune_rhyming_tuple_not_working?(not_working_reason)
+    input = parse_tuple_literal(spec)
+    result = prune_suffix_redundant_rhyming_tuples([input])
+    expect(result).to_not(
+      eq([]),
+      "expected pruning to allow #{input.inspect} entirely, got #{result.inspect}"
+    )
+  end
+end
+
 # Assert the pruner keeps both tuples (i.e. neither is redundant with the other). See
 # +prune_rhyming_tuple+ for +not_working_reason+ semantics.
 def dont_prune_rhyming_tuple(a_spec, b_spec, not_working_reason = nil)
@@ -141,6 +154,12 @@ describe 'prune_suffix_redundant_rhyming_tuples' do
       'alluded / booted / fluted / fruited / polluted / suited',
       'alluding / booting / fluting / polluting / suiting'
     )
+  end
 
+  context 'stop words' do
+    prune_entire_rhyming_tuple 'above / of' # prune tuples that are entirely stop words
+    allow_entire_rhyming_tuple 'above / dove / of' # a single go-word allows it to live
+    
+    prune_entire_rhyming_tuple 'a / 
   end
 end

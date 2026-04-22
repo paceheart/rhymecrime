@@ -189,6 +189,48 @@ def conflate_imperfect_rhyme_phoneme_string(phoneme_space_string)
   conflate_imperfect_rhyme_phoneme_tokens(phoneme_space_string.split).join(" ")
 end
 
+# CMUDict sometimes lists an abbreviation's *expanded* form as an alternate pronunciation:
+# e.g. +TV(1) = T EH2 L AH0 V IH1 ZH AH0 N+ (the pronunciation of "television") or
+# +CORP(1) = K AO1 R P ER0 EY1 SH AH0 N+ (pronunciation of "corporation"). These bogus
+# alternates cause abbreviations to rhyme with words they don't actually sound like
+# (e.g. +tv+ sharing a rime with +vision+).
+#
+# We detect them with a tight, conservative heuristic: an alternate is dropped only if
+#   (a) its phoneme count is at least 2x the primary's AND at least 3 more phonemes, AND
+#   (b) after stripping stress digits, it exactly matches some *other* word's primary
+#       pronunciation.
+# Legit alternate pronunciations (stress variants, vowel shifts, homophones, spelling
+# variants of roughly-equal length) all pass through untouched. As of CMUDict 0.7c, this
+# filter drops exactly 11 entries: AL., CONN., CORP family, GA, JAN., MASS., REP, TV.
+def drop_abbreviation_expansion_alternates!(cmudict_flat_prons)
+  strip_stress = ->(pron) { pron.phonemes.map { |ph| ph.to_s.gsub(/\d/, "") }.join(" ") }
+  primary_pron_fingerprint_to_words = Hash.new { |h, k| h[k] = [] }
+  cmudict_flat_prons.each do |word, prons|
+    next if prons.empty?
+    primary_pron_fingerprint_to_words[strip_stress.call(prons.first)] << word
+  end
+  dropped = 0
+  cmudict_flat_prons.each do |word, prons|
+    next if prons.size < 2
+    primary = prons.first
+    primary_len = primary.phonemes.length
+    filtered = [primary]
+    prons.drop(1).each do |alt|
+      alt_len = alt.phonemes.length
+      fp = strip_stress.call(alt)
+      other_word_match = (primary_pron_fingerprint_to_words[fp] - [word]).any?
+      if other_word_match && alt_len >= 2 * primary_len && alt_len - primary_len >= 3
+        dropped += 1
+        dict_trace_puts(word, "Dropping abbreviation-expansion alt: #{alt} (matches primary of #{primary_pron_fingerprint_to_words[fp] - [word]})") if dict_trace_word?(word)
+      else
+        filtered << alt
+      end
+    end
+    cmudict_flat_prons[word] = filtered
+  end
+  dropped
+end
+
 def load_cmudict()
   # word => [pronunciation1, pronunciation2 ...]
   # pronunciation = [syllable1, syllable1, ...]
@@ -230,6 +272,8 @@ def load_cmudict()
     end
   }
   puts "Loaded #{hash.length} words from cmudict"
+  dropped_expansions = drop_abbreviation_expansion_alternates!(hash)
+  puts "Dropped #{dropped_expansions} abbreviation-expansion alternate pronunciations" if dropped_expansions > 0
   # filter out redundant apostrophe words: if we already have "foo", ignore "foo's" and "foos'"
   newhash = Hash.new
   for word, prons in hash do
@@ -249,7 +293,13 @@ end
 
 def ignore_cmudict_word?(word, cmudict)
   # ignore words containing digits, except w00t
-  (word =~ /\d/) && (word != "w00t")
+  return true if (word =~ /\d/) && (word != "w00t")
+  # ignore words containing a period anywhere: CMUDict uses dots for abbreviations,
+  # both word-final (AL., CONN., CORP., JAN., MASS., REP., ST.) and mid-word (CORP.'S,
+  # U.S., U.S.A., etc.). These are abbreviation spellings that shouldn't participate in
+  # rhyming; the bare form (e.g. corp, rep) is already indexed when it legitimately rhymes.
+  return true if word.include?(".")
+  false
 end
 
 def initial_consonant_cluster_ok?(cluster)

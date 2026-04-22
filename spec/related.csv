@@ -410,7 +410,7 @@ food,seder,related,prereq: food+evil/seder+invader
 food,served,related,prereq: food+evil/served+undeserved
 food,snack,related,prereq: food+dark/snack+black
 food,starvation,related,prereq: food+evil/starvation+abomination
-food,the,related,stop word (related to everything by design; contentless glue)
+food,the,related,stop word
 food,turkey,related,prereq: food+dark/turkey+murky
 food,veggie,related,prereq: food+dark/veggie+edgy
 food,waiter,related,prereq: food+evil/waiter+traitor
@@ -2342,3 +2342,5 @@ pirate,alcoholic,related,prereq: pirate/diabolic+alcoholic
 pirate,diabolic,related,prereq: pirate/diabolic+alcoholic
 pirate,fursona,related,prereq: pirate/fursona+jonah
 pirate,jonah,related,prereq: pirate/fursona+jonah
+pirate,facie,unrelated,prereq: pirate ought_not facie+racy
+pirate,racy,related,prereq: pirate ought_not facie+racy

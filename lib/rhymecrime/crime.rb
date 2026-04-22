@@ -689,12 +689,138 @@ end
 # would normally be dropped are instead retained in the returned array AND recorded in
 # +$debug_pruned_tuples+, so the renderer can display them inline, greyed out, alongside
 # the kept tuples.
-def prune_suffix_redundant_rhyming_tuples(tuples)
+# Within a single rhyming tuple, drop members that are morphological +COMMON_PREFIXES+
+# derivations of another member already present in the tuple, when the two share an
+# identical rhyme-syllable fingerprint (the criterion +all_identical_rhymes?+ already
+# uses to identify phonologically-redundant members). Example:
+# +[healthy, stealthy, unhealthy]+ -> +[healthy, stealthy]+ because +unhealthy+ = +un+
+# + +healthy+ and both share the +HH EH L TH IY+ rsyll. Does not touch independent
+# same-pron homophones (+coral+/+choral+, +flour+/+flower+) since neither is a prefix
+# derivation of the other.
+def condense_tuple_derived_forms(tup)
+  return tup if tup.size < 2
+  rsyll_set_of = {}
+  tup.each do |w|
+    rsyll_set_of[w] = pronunciations(w).map { |p| p.rhyme_syllables_string }.to_set
+  end
+  dropped = Set.new
+  tup.each do |derived|
+    tup.each do |base|
+      next if base == derived
+      next if dropped.include?(base)
+      next if (rsyll_set_of[derived] & rsyll_set_of[base]).empty?
+      COMMON_PREFIXES.each do |prefix|
+        if derived.start_with?(prefix) && derived[prefix.length..] == base
+          dropped << derived
+          break
+        end
+      end
+      break if dropped.include?(derived)
+    end
+  end
+  return tup if dropped.empty?
+  tup - dropped.to_a
+end
+
+# Within a single rhyming tuple, break homophone clusters down to one winner.
+# "Homophone cluster" = members sharing a full phoneme sequence (+identical_rhyme?+):
+# +coral+/+choral+, +flour+/+flower+, +write+/+right+, +rite+/+right+, +symbol+/+cymbal+.
+# Unlike +condense_tuple_derived_forms+ (which handles +COMMON_PREFIXES+ derivations
+# sharing only a rhyme-syllable fingerprint), neither member here is morphologically
+# derived from the other, so there's no a-priori favorite; we need the cue to pick.
+# Ranking key per member +w+:
+#   1. +similarity(focal_word, w)+ — stored relatedness to the cue, highest wins.
+#   2. +frequency(w)+ — unigram frequency, highest wins (user-specified tiebreak).
+#   3. alphabetical +w+ — final deterministic tiebreak.
+# A +nil+ +focal_word+ (callers that haven't plumbed the cue through) disables this
+# pass; the tuple is returned untouched.
+def condense_tuple_homophones(tup, focal_word)
+  return tup if tup.size < 2 || focal_word.nil?
+  ungrouped = tup.dup
+  clusters = []
+  while (seed = ungrouped.shift)
+    seed_prons = pronunciations(seed)
+    mates = ungrouped.select do |other|
+      seed_prons.any? { |sp| identical_rhyme?(other, sp) }
+    end
+    next if mates.empty?
+    ungrouped -= mates
+    clusters << [seed, *mates]
+  end
+  return tup if clusters.empty?
+  dropped = Set.new
+  clusters.each do |cluster|
+    ranked = cluster.sort_by do |w|
+      [-similarity(focal_word, w).to_i, -frequency(w).to_i, w]
+    end
+    ranked[1..].each { |w| dropped << w }
+  end
+  tup - dropped.to_a
+end
+
+# DynamoDB warm-up: batch-fetch every headword appearing in +relateds_lists+, then
+# every rime their pronunciations reach, then every word in those rime cohorts.
+# No-op when not running against Dynamo (local-dev / CMUDict path hits in-process
+# hashes). Consolidates the prefetch preamble previously duplicated across the
+# +_dynamo+ variants of +find_rhyming_tuples+ / +find_rhyming_pairs+.
+def prefetch_dynamo_for_relateds!(*relateds_lists)
+  return unless Rhymecrime::DataSource.dynamodb?
+  all_relateds = relateds_lists.flat_map(&:to_a).uniq
+  Rhymecrime::DynamoRuntime.batch_get_words(all_relateds)
+  rimes = all_relateds.flat_map { |rel| pronunciations(rel).map(&:rime) }.uniq
+  Rhymecrime::DynamoRuntime.batch_get_rimes(rimes)
+  rhyme_words = rimes.flat_map { |r| rdict_lookup(r) }.uniq
+  Rhymecrime::DynamoRuntime.batch_get_words(rhyme_words)
+end
+
+# True when the pair +[a, b]+ would collapse to a single member under Phase 0.5
+# tuple condensation — i.e. it is a morphological +COMMON_PREFIXES+ derivation
+# over matching +rhyme_syllables_string+ (+condense_tuple_derived_forms+), or a
+# true same-phoneme homophone pair (+condense_tuple_homophones+). Examples:
+# +[healthy, unhealthy]+ (prefix); +[flour, flower]+, +[coral, choral]+,
+# +[symbol, cymbal]+ (homophones). The homophone condenser needs a +focal_word+
+# to pick a winner, but for the drop-or-keep decision here we only care whether
+# the cluster collapses, so any non-nil focal (we pass +a+) produces the same
+# +size+ result.
+def rhyming_pair_trivial?(a, b)
+  return false if a == b
+  condense_tuple_derived_forms([a, b]).size < 2 ||
+    condense_tuple_homophones([a, b], a).size < 2
+end
+
+# Pair-mode analog of Phase 0.5 in +prune_suffix_redundant_rhyming_tuples+.
+# Drops pairs whose two members +rhyming_pair_trivial?+ flags as prefix
+# derivations or same-pronunciation homophones — the "rhyme" carries no
+# information beyond the trivial collapse. A pair is binary, so unlike the
+# tuple condensers (which pick a winner and keep the tuple alive) we drop the
+# whole pair. Called from +really_find_rhyming_pairs+ after the rhyme-cross.
+def prune_trivial_rhyming_pairs(pairs)
+  return pairs if pairs.empty?
+  verbose_prunes = ENV["VERBOSE"] == "1"
+  pairs.reject do |(a, b)|
+    trivial = rhyming_pair_trivial?(a, b)
+    puts "pruned rhyming pair (trivial rhyme: prefix or homophone): #{a} / #{b}" if trivial && verbose_prunes
+    trivial
+  end
+end
+
+def prune_suffix_redundant_rhyming_tuples(tuples, focal_word = nil)
   verbose_prunes = ENV["VERBOSE"] == "1"
   debug_pruning = $debug_pruning
   # Snapshot the input so the caller's array is never mutated; the original
   # is not otherwise needed because the pruned set is populated in-place.
   _original = tuples.dup if debug_pruning
+
+  # Phase -1: drop tuples composed entirely of stop words (e.g. +above / of+). A single
+  # non-stop-word member is enough to keep the tuple alive (+above / dove / of+ survives).
+  tuples = tuples.reject do |tup|
+    next false unless tup.all? { |w| stop_word?(w) }
+    if verbose_prunes
+      puts "pruned rhyming tuple (all stop words): #{tup.join(' / ')}"
+    end
+    $debug_pruned_tuples << tup if debug_pruning
+    !debug_pruning
+  end
 
   # Phase 0: drop tuples whose members are all spelling variants of a single root (the tuple
   # carries no information beyond the canonical surface the renderer already emits).
@@ -705,6 +831,31 @@ def prune_suffix_redundant_rhyming_tuples(tuples)
     end
     $debug_pruned_tuples << tup if debug_pruning
     !debug_pruning
+  end
+
+  # Phase 0.5: within each tuple, condense redundant members.
+  # (a) +condense_tuple_derived_forms+ drops derived forms whose base form is already
+  #     present — same +rhyme_syllables_string+ plus a +COMMON_PREFIXES+ strip:
+  #     +[healthy, stealthy, unhealthy] \to [healthy, stealthy]+;
+  #     +[recorded, prerecorded, unrecorded, ...] \to [recorded, ...]+.
+  # (b) +condense_tuple_homophones+ then breaks residual same-full-pronunciation
+  #     clusters (+coral+/+choral+, +flour+/+flower+, +write+/+right+) that aren't
+  #     prefix derivations of each other, keeping the member most closely related to
+  #     +focal_word+ (tie-break: unigram frequency, then alphabetical). Requires a
+  #     non-nil +focal_word+; otherwise this sub-pass is a no-op.
+  tuples = tuples.map do |tup|
+    condensed = condense_tuple_derived_forms(tup)
+    condensed = condense_tuple_homophones(condensed, focal_word)
+    if verbose_prunes && condensed.size < tup.size
+      dropped = tup - condensed
+      puts "condensed rhyming tuple (dropped #{dropped.inspect}): #{tup.join(' / ')} -> #{condensed.join(' / ')}"
+    end
+    if debug_pruning
+      (tup - condensed).each { |w| $debug_pruned_tuples << [w] } # record each dropped member as a singleton
+      tup # keep original under debug
+    else
+      condensed
+    end
   end
 
   sorted = tuples.sort
@@ -761,7 +912,30 @@ def filter_related_words_to_common_preferred(words)
   words.select { |w| word_common_preferred_for_tuple_or_pair?(w) }
 end
 
-$rhyming_tuple_cache = Hash.new()
+# Maximum number of entries held by each of the rhyming-result LRU caches
+# (+$rhyming_tuple_cache+ and +$rhyming_pair_cache+). Small by design: a single
+# web request typically hits only a handful of distinct (word[, word2], common_only)
+# keys, so 30 is plenty to absorb repeat calls without letting the caches grow
+# unboundedly across a long-running process.
+RHYMING_LRU_CACHE_SIZE = 30
+
+# LRU cache backed by a Ruby Hash (which preserves insertion order). On a hit
+# we delete + reinsert the key to bump it to the most-recently-used slot; on a
+# miss we evict the oldest entry via +shift+ once capacity is exceeded. The
+# block passed to +lru_cache_fetch+ is only invoked on a miss.
+def lru_cache_fetch(cache, key, capacity)
+  if cache.key?(key)
+    value = cache.delete(key)
+    cache[key] = value
+    return value
+  end
+  value = yield
+  cache[key] = value
+  cache.shift while cache.size > capacity
+  value
+end
+
+$rhyming_tuple_cache = {}
 def find_rhyming_tuples(input_rel1, common_only = false)
   # Skip the cache when +$debug_pruning+ is true: the pruner side-effects
   # +$debug_pruned_tuples+ (a per-request Set consulted by +print_tuple+ for the
@@ -771,12 +945,8 @@ def find_rhyming_tuples(input_rel1, common_only = false)
   # include tuples that non-debug callers expect to have been dropped.
   return really_find_rhyming_tuples(input_rel1, common_only) if $debug_pruning
 
-  if $rhyming_tuple_cache.key?([input_rel1, common_only])
-    return $rhyming_tuple_cache[[input_rel1, common_only]]
-  else
-    results = really_find_rhyming_tuples(input_rel1, common_only)
-    $rhyming_tuple_cache[[input_rel1, common_only]] = results
-    return results
+  lru_cache_fetch($rhyming_tuple_cache, [input_rel1, common_only], RHYMING_LRU_CACHE_SIZE) do
+    really_find_rhyming_tuples(input_rel1, common_only)
   end
 end
 
@@ -790,64 +960,22 @@ def really_find_rhyming_tuples(input_rel1, common_only = false)
   #   If R is in RELATEDS1, compute R's rime and put RHYME1 in the bucket labeled by that rime.
   # Return all buckets with two or more words in them, after +prune_suffix_redundant_rhyming_tuples+
   # drops tuples that only parallel an earlier tuple's +Inflect+ suffixes (e.g. all plural or all past).
-  if Rhymecrime::DataSource.dynamodb?
-    return really_find_rhyming_tuples_dynamo(input_rel1, common_only)
-  end
-
-  related_rhymes = Hash.new {|h,k| h[k] = [] } # hash of arrays
-  unless(explicitly_forbidden?(input_rel1))
-    related_list = filter_related_words_to_common_preferred(
-      find_related_words(input_rel1, true, false, nil, common_only: true)
-    )
-    relateds1 = related_list.to_set
-    related_list.each { |rel1|
-      for rel1pron in pronunciations(rel1)
-        rime = rel1pron.rime
-        debug "Rhymes for #{rel1} [#{rime}] #{debug_info(rel1)}:"
-        find_rhyming_words_for_pronunciation(rel1pron, true).each { |rhyme1|
-          if relateds1.include?(rhyme1) # we only care about relateds of input_rel1
-            rhyme1 = preferred_form(rhyme1) # push 'honor' instead of 'honour'. This will ensure we don't push both.
-            related_rhymes[rime].push(rhyme1)
-            debug " #{rhyme1} #{debug_info(rhyme1)}"
-          end
-        }
-      end
-    }
-  end
-  tuples = [ ]
-  related_rhymes.each { |rime, relrhymes|
-    relrhymes.sort!.uniq!
-    if(relrhymes.length > 1 && !all_identical_rhymes?(relrhymes))
-      tuples.push(relrhymes.sort!)
-    end
-  }
-  # Alternate pronunciations can yield different +rime+ keys (e.g. OW_L_IY_AH_N vs OW_L_Y_AH_N) with the
-  # same sorted word set — dedupe before suffix pruning so output is not repeated line-for-line.
-  tuples.uniq!
-  prune_suffix_redundant_rhyming_tuples(tuples).reject { |tup| tup.nil? || tup.size < 2 }
-end
-
-def really_find_rhyming_tuples_dynamo(input_rel1, common_only = false)
-  related_rhymes = Hash.new { |h, k| h[k] = [] }
   return [] if explicitly_forbidden?(input_rel1)
 
   related_list = filter_related_words_to_common_preferred(
     find_related_words(input_rel1, true, false, nil, common_only: true)
   )
   relateds1 = related_list.to_set
-  Rhymecrime::DynamoRuntime.batch_get_words(related_list.to_a)
-  rimes = related_list.flat_map { |rel| pronunciations(rel).map(&:rime) }.uniq
-  Rhymecrime::DynamoRuntime.batch_get_rimes(rimes)
-  rhyme_words = rimes.flat_map { |r| rdict_lookup(r) }.uniq
-  Rhymecrime::DynamoRuntime.batch_get_words(rhyme_words)
+  prefetch_dynamo_for_relateds!(related_list)
 
+  related_rhymes = Hash.new { |h, k| h[k] = [] }
   related_list.each do |rel1|
     pronunciations(rel1).each do |rel1pron|
       rime = rel1pron.rime
       debug "Rhymes for #{rel1} [#{rime}] #{debug_info(rel1)}:"
       find_rhyming_words_for_pronunciation(rel1pron, true).each do |rhyme1|
-        if relateds1.include?(rhyme1)
-          rhyme1 = preferred_form(rhyme1)
+        if relateds1.include?(rhyme1) # we only care about relateds of input_rel1
+          rhyme1 = preferred_form(rhyme1) # push 'honor' instead of 'honour'. This will ensure we don't push both.
           related_rhymes[rime].push(rhyme1)
           debug " #{rhyme1} #{debug_info(rhyme1)}"
         end
@@ -856,17 +984,28 @@ def really_find_rhyming_tuples_dynamo(input_rel1, common_only = false)
   end
 
   tuples = []
-  related_rhymes.each do |rime, relrhymes|
+  related_rhymes.each do |_rime, relrhymes|
     relrhymes.sort!.uniq!
-    if relrhymes.length > 1 && !all_identical_rhymes?(relrhymes)
-      tuples.push(relrhymes.sort!)
-    end
+    tuples.push(relrhymes.sort) if relrhymes.length > 1 && !all_identical_rhymes?(relrhymes)
   end
+  # Alternate pronunciations can yield different +rime+ keys (e.g. OW_L_IY_AH_N vs OW_L_Y_AH_N) with the
+  # same sorted word set — dedupe before suffix pruning so output is not repeated line-for-line.
   tuples.uniq!
-  prune_suffix_redundant_rhyming_tuples(tuples).reject { |tup| tup.nil? || tup.size < 2 }
+  prune_suffix_redundant_rhyming_tuples(tuples, input_rel1).reject { |tup| tup.nil? || tup.size < 2 }
 end
 
+$rhyming_pair_cache = {}
 def find_rhyming_pairs(input_rel1, input_rel2, common_only = false)
+  # Mirrors +find_rhyming_tuples+'s caching policy: bypass the cache whenever
+  # +$debug_pruning+ is true so pruning side-effects still populate.
+  return really_find_rhyming_pairs(input_rel1, input_rel2, common_only) if $debug_pruning
+
+  lru_cache_fetch($rhyming_pair_cache, [input_rel1, input_rel2, common_only], RHYMING_LRU_CACHE_SIZE) do
+    really_find_rhyming_pairs(input_rel1, input_rel2, common_only)
+  end
+end
+
+def really_find_rhyming_pairs(input_rel1, input_rel2, common_only = false)
   # Pairs of rhyming words where the first word is related to INPUT_REL1 and the second word is related to INPUT_REL2
   # Each element of the returned array is a pair of rhyming words [W1 W2] where W1 is related to INPUT_REL1 and W2 is related to INPUT_REL2
   # Algorithm:
@@ -875,61 +1014,25 @@ def find_rhyming_pairs(input_rel1, input_rel2, common_only = false)
   # For each word REL1 in RELATEDS1,
   #   Get all non-identical rhymes RHYME of REL1.
   #   If RHYME rhymes with REL1 and is related to INPUT_REL2, we win! "REL1 / RHYME" is a pair.
-  if Rhymecrime::DataSource.dynamodb?
-    return find_rhyming_pairs_dynamo(input_rel1, input_rel2, common_only)
-  end
-
-  related_rhymes = Hash.new {|h,k| h[k] = [] } # hash of arrays
-  unless(explicitly_forbidden?(input_rel1) || explicitly_forbidden?(input_rel2))
-    relateds1 = filter_related_words_to_common_preferred(
-      find_related_words(input_rel1, true, false, nil, common_only: true)
-    )
-    relateds2 = filter_related_words_to_common_preferred(
-      find_related_words(input_rel2, true, false, nil, common_only: true)
-    ).to_set
-    relateds1.each { |rel1|
-      # rel1 is a word related to input_rel1. We're looking for rhyming pairs [rel1 rel2].
-      debug "rhymes for #{rel1} (#{debug_info(rel1)}):<br>"
-      find_rhyming_words(rel1, false).each { |rhyme| # check all non-identical rhymes of REL1, call each one 'RHYME'
-        if(relateds2.include? rhyme) # is RHYME related to INPUT_REL2? If so, we win!
-          related_rhymes[rel1].push(rhyme)
-          debug " " + rhyme + " " + debug_info(rhyme)
-        end
-      }
-      debug "<br><br>"
-    }
-  end
-  pairs = [ ]
-  related_rhymes.each { |relrhyme1, relrhyme2_list|
-    if(!relrhyme2_list.empty?)
-      relrhyme2_list.each { |relrhyme2|
-        pairs.push([relrhyme1, relrhyme2])
-      }
-    end
-  }
-  return pairs
-end
-
-def find_rhyming_pairs_dynamo(input_rel1, input_rel2, common_only = false)
-  related_rhymes = Hash.new { |h, k| h[k] = [] }
   return [] if explicitly_forbidden?(input_rel1) || explicitly_forbidden?(input_rel2)
 
+  # Stop words are thematically related to everything by policy, which would otherwise flood
+  # the pair output with pairs like [a, duh] / [a, the]. A 2-element pair has no room for a
+  # go-word anchor when either side is a stop word, so we drop those before the rhyme cross.
   relateds1 = filter_related_words_to_common_preferred(
     find_related_words(input_rel1, true, false, nil, common_only: true)
-  )
+  ).reject { |w| stop_word?(w) }
   relateds2 = filter_related_words_to_common_preferred(
     find_related_words(input_rel2, true, false, nil, common_only: true)
-  ).to_set
-  Rhymecrime::DynamoRuntime.batch_get_words((relateds1.to_a + relateds2.to_a).uniq)
-  rimes = relateds1.flat_map { |rel| pronunciations(rel).map(&:rime) }.uniq
-  Rhymecrime::DynamoRuntime.batch_get_rimes(rimes)
-  rhyme_words = rimes.flat_map { |r| rdict_lookup(r) }.uniq
-  Rhymecrime::DynamoRuntime.batch_get_words(rhyme_words)
+  ).reject { |w| stop_word?(w) }.to_set
+  prefetch_dynamo_for_relateds!(relateds1, relateds2)
 
+  related_rhymes = Hash.new { |h, k| h[k] = [] }
   relateds1.each do |rel1|
+    # rel1 is a word related to input_rel1. We're looking for rhyming pairs [rel1 rel2].
     debug "rhymes for #{rel1} (#{debug_info(rel1)}):<br>"
-    find_rhyming_words(rel1, false).each do |rhyme|
-      if relateds2.include?(rhyme)
+    find_rhyming_words(rel1, false).each do |rhyme| # check all non-identical rhymes of REL1, call each one 'RHYME'
+      if relateds2.include?(rhyme) # is RHYME related to INPUT_REL2? If so, we win!
         related_rhymes[rel1].push(rhyme)
         debug " " + rhyme + " " + debug_info(rhyme)
       end
@@ -939,13 +1042,9 @@ def find_rhyming_pairs_dynamo(input_rel1, input_rel2, common_only = false)
 
   pairs = []
   related_rhymes.each do |relrhyme1, relrhyme2_list|
-    next if relrhyme2_list.empty?
-
-    relrhyme2_list.each do |relrhyme2|
-      pairs.push([relrhyme1, relrhyme2])
-    end
+    relrhyme2_list.each { |relrhyme2| pairs.push([relrhyme1, relrhyme2]) }
   end
-  pairs
+  prune_trivial_rhyming_pairs(pairs)
 end
 
 #

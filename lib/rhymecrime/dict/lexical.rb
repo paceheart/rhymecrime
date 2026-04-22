@@ -244,10 +244,15 @@ def wn_productive_affix_lemma_pair?(word, base)
   true
 end
 
-# Regular/adj-participial *-ed* surfaces whose unique verbal morphy stem matches +base+ and Inflect
-# agrees (*deafened*→*deafen*). Requires a single morphy verb stem so *feed* (feed/fee) does not fire.
-def wn_ed_verb_stem_via_morphy?(word, base)
-  return false unless Inflect.send(:match_suffix_kind, base, word) == :ed
+# Regular verbal *-ed* / *-ing* surfaces whose unique verbal morphy stem matches +base+ and
+# +Inflect+ agrees on the suffix shape (+deafened+→+deafen+, +bumbling+→+bumble+). Rescues cases
+# where WordNet lists the inflected form as its own adj/gerund head (so +wn_share_synset?+ /
+# +wn_derivationally_related_to_base?+ return false) but the verbal relationship is still sound.
+# Requires a single morphy verb stem so ambiguous stems don't fire: +feed+→{+feed+,+fee+} blocks
+# +-ed+; +singing+→{+sing+,+singe+} blocks +-ing+.
+def wn_verb_stem_via_morphy?(word, base)
+  kind = Inflect.send(:match_suffix_kind, base, word)
+  return false unless kind == :ed || kind == :ing
   return false unless wn_base_has_verb?(base)
 
   stems = (WordNet::Synset.morphy(word, "verb") rescue [])

@@ -22,6 +22,7 @@
 
 require "json"
 require "msgpack"
+require "numo/narray"
 require "rwordnet"
 require "set"
 require_relative "../pace_utils"
@@ -71,6 +72,31 @@ $COOCCUR_SV_MAX_WEIGHT = 1.5
 $COOCCUR_SV_MAX_FLOOR = 5
 $COOCCUR_SV_MAX_CAP = 20
 $COOCCUR_USF_WEIGHT = 10
+
+# Cheap gate for the expensive MPNet sense-sense and directional-sense cosines.
+# When +model_headword_cosine+ (one 768-dim dot product, already needed for the
+# classifier's +model_cos_pct+ feature) is below this threshold, both
+# +model_sense_sense_max_cosine+ and +model_directional_sense_cosines+
+# short-circuit to 0. Cutoff is on the raw cosine (-1..1), not the
+# +model_cos_pct+ centile.
+#
+# Rationale: a 768-dim unit-vector dot product near 0 means the two words live
+# in nearly-orthogonal regions of the MPNet embedding space. Sense vectors are
+# variants of the headword vector (built from gloss contexts), so when the
+# heads are near-orthogonal the per-sense cosines are almost always below the
+# classifier's threshold and the expensive K_a*K_b*768 inner loop is wasted.
+# Pairs that would have squeaked through via a polysemous sense are rare
+# enough that the overall predicate is essentially unchanged; the retrained
+# classifier absorbs the small residual by leaning harder on +model_cos_pct+
+# (which remains uncapped).
+#
+# In the +pirate+ one-cue profile, ~41% of wall time was inside these two
+# functions (see +notes/todo.md+ perf log). Raising the gate from 0 to 0.10
+# skips the vast majority of the ~20k-candidate scan inner loops.
+#
+# Override with +RHYMECRIME_MODEL_SENSE_GATE=0.05+ etc. Negative / blank
+# disables the gate.
+$MODEL_SENSE_COSINE_GATE = (ENV["RHYMECRIME_MODEL_SENSE_GATE"] || "0.10").to_f
 
 def similarity_threshold
   $SIMILARITY_THRESHOLD
@@ -291,7 +317,8 @@ end
 # Built offline by +bin/dump-sense-glosses+ -> +bin/build-sense-vectors.py+, saved as
 # +generated/model_sense_vectors.msgpack+. Supplements (does not replace) Numberbatch:
 # Numberbatch is tiny and fast for the O(n) scan, while these contextualized vectors
-# carry richer sense distinctions for the per-pair yes/no decision. Shape:
+# carry richer sense distinctions for the per-pair yes/no decision. On-disk shape
+# (msgpack):
 #   { "model" => String, "dim" => Integer,
 #     "headword" => {lemma => [Float * dim]},
 #     "senses"   => {lemma => [[Float * dim], ...]} }
@@ -300,6 +327,18 @@ end
 # keys use. Returns +nil+ if the file is absent — callers degrade gracefully (all
 # model-* signals become 0 and +model_both_in_vocab?+ is false, which the learned
 # combiner can condition on).
+#
+# At load time the per-word vectors get converted to +Numo::SFloat+ (32-bit float):
+#   headword:  {lemma => Numo::SFloat(dim)}               or nil if OOV
+#   senses:    {lemma => Numo::SFloat(K, dim)}            or nil if no senses
+# The cosine helpers below are then one +Numo+ +dot+ call apiece — each 768-dim
+# dot product offloads to the native BLAS shipped with +numo-narray+, giving a
+# ~12x speed-up over the previous pure-Ruby +va.size.times { |i| ... }+ loops
+# (measured: 40 kpairs/s vs 3.3 kpairs/s on the +pirate+ precompute cue). The
+# float32 cast is lossless for cosine purposes: vectors are already stored as
+# +Float+ in the msgpack but their dynamic range is well within float32's
+# precision, and the +(* 100).round+ quantization at the call sites hides any
+# LSB drift.
 $model_sense_vectors = nil
 $model_sense_vectors_loaded = false
 def model_sense_vectors_table
@@ -307,15 +346,35 @@ def model_sense_vectors_table
   $model_sense_vectors_loaded = true
   path = generated_dict_path(MODEL_SENSE_VECTORS_FILENAME)
   return nil unless File.exist?(path)
-  $model_sense_vectors = MessagePack.unpack(File.binread(path))
-  hw = $model_sense_vectors["headword"] || {}
-  sv = $model_sense_vectors["senses"] || {}
+  raw = MessagePack.unpack(File.binread(path))
+  hw_raw = raw["headword"] || {}
+  sn_raw = raw["senses"] || {}
+
+  hw = {}
+  hw_raw.each { |k, v| hw[k] = Numo::SFloat.cast(v) if v && !v.empty? }
+
+  sn = {}
+  total_senses = 0
+  sn_raw.each do |k, vs|
+    next if vs.nil? || vs.empty?
+    sn[k] = Numo::SFloat.cast(vs)
+    total_senses += vs.size
+  end
+
+  $model_sense_vectors = {
+    "model" => raw["model"],
+    "dim" => raw["dim"],
+    "headword" => hw,
+    "senses" => sn,
+  }
   puts "loaded model sense vectors from #{path} " \
-       "(model=#{$model_sense_vectors['model']} dim=#{$model_sense_vectors['dim']} " \
-       "headwords=#{hw.size} senses=#{sv.values.sum(&:size)})"
+       "(model=#{raw['model']} dim=#{raw['dim']} " \
+       "headwords=#{hw.size} senses=#{total_senses})"
   $model_sense_vectors
 end
 
+# Returns the word's headword vector as a 1-D +Numo::SFloat+ of length +dim+,
+# or +nil+ when the word is out of MPNet vocabulary.
 def model_headword_vector(word)
   t = model_sense_vectors_table
   return nil if t.nil?
@@ -323,24 +382,25 @@ def model_headword_vector(word)
   h.nil? ? nil : h[word]
 end
 
+# Returns the word's sense vectors as a 2-D +Numo::SFloat+ of shape +[K, dim]+,
+# or +nil+ when the word has no sense vectors. Callers that need a count use
+# +.shape[0]+; presence is +.nil? == false+.
 def model_sense_vectors_of(word)
   t = model_sense_vectors_table
-  return [] if t.nil?
+  return nil if t.nil?
   s = t["senses"]
-  return [] if s.nil?
-  s[word] || []
+  return nil if s.nil?
+  s[word]
 end
 
-# Headword-headword cosine under the contextualized model (0..1). Returns 0.0 when
+# Headword-headword cosine under the contextualized model (-1..1). Returns 0.0 when
 # either side is out-of-vocab — pair with +model_both_in_vocab?+ so the classifier
 # can distinguish "low similarity" from "no data".
 def model_headword_cosine(word1, word2)
   v1 = model_headword_vector(word1)
   v2 = model_headword_vector(word2)
   return 0.0 if v1.nil? || v2.nil?
-  dot = 0.0
-  v1.size.times { |i| dot += v1[i] * v2[i] }
-  dot
+  v1.dot(v2).to_f
 end
 
 # Directional sense-vs-headword cosines under the contextualized model (each 0..100
@@ -348,29 +408,32 @@ end
 # embedding space: for each sense vector of word1, the cosine against word2's headword
 # vector (and symmetrically). Lets a specific sense of a polysemous word rescue the
 # pair even when the averaged headword embedding doesn't match.
-def model_directional_sense_cosines(word1, word2)
-  best_1to2 = 0
-  best_2to1 = 0
-
+#
+# Gated by +$MODEL_SENSE_COSINE_GATE+ on the raw headword-headword cosine: when the
+# two words are near-orthogonal in MPNet space, none of their per-sense cosines are
+# going to cross the classifier's decision threshold either, so we skip the K_a + K_b
+# vector-matrix products entirely. Accepts an optional precomputed +headword_cos+ to
+# avoid recomputing what +PairSignals+ already cached.
+def model_directional_sense_cosines(word1, word2, headword_cos = nil)
   v2_head = model_headword_vector(word2)
-  if v2_head
-    model_sense_vectors_of(word1).each do |sv|
-      dot = 0.0
-      sv.size.times { |i| dot += sv[i] * v2_head[i] }
-      score = (dot * 100).round
-      best_1to2 = score if score > best_1to2
-    end
+  v1_head = model_headword_vector(word1)
+  return [0, 0] if v2_head.nil? && v1_head.nil?
+
+  gate = $MODEL_SENSE_COSINE_GATE
+  if gate.positive? && v1_head && v2_head
+    cos = headword_cos || v1_head.dot(v2_head).to_f
+    return [0, 0] if cos < gate
   end
 
-  v1_head = model_headword_vector(word1)
-  if v1_head
-    model_sense_vectors_of(word2).each do |sv|
-      dot = 0.0
-      sv.size.times { |i| dot += sv[i] * v1_head[i] }
-      score = (dot * 100).round
-      best_2to1 = score if score > best_2to1
-    end
-  end
+  sa = model_sense_vectors_of(word1)
+  sb = model_sense_vectors_of(word2)
+
+  # +sa.dot(v2_head)+ is a +(K_a, dim) . (dim)+ product: one BLAS call returns a
+  # +K_a+-length vector of sense-vs-head cosines; +.max+ picks the best sense.
+  best_1to2 = (v2_head && sa) ? (sa.dot(v2_head).max * 100).round : 0
+  best_1to2 = 0 if best_1to2 < 0
+  best_2to1 = (v1_head && sb) ? (sb.dot(v1_head).max * 100).round : 0
+  best_2to1 = 0 if best_2to1 < 0
 
   [best_1to2, best_2to1]
 end
@@ -378,20 +441,26 @@ end
 # Max cosine over all (sense_of_a, sense_of_b) pairs (0..100 centile). Captures pairs
 # where a specific sense of A matches a specific sense of B more tightly than either
 # matches the other's headword — i.e. polysemy on *both* sides. Small O(senses_a *
-# senses_b); capped at SENSE_VECTOR_MAX_SENSES^2 = 16 comparisons in practice.
-def model_sense_sense_max_cosine(word1, word2)
+# senses_b); capped at SENSE_VECTOR_MAX_SENSES^2 = 16 comparisons in practice. Same
+# headword-cosine gate as +model_directional_sense_cosines+ (see rationale there).
+def model_sense_sense_max_cosine(word1, word2, headword_cos = nil)
   sa = model_sense_vectors_of(word1)
   sb = model_sense_vectors_of(word2)
-  return 0 if sa.empty? || sb.empty?
-  best = -1.0
-  sa.each do |va|
-    sb.each do |vb|
-      dot = 0.0
-      va.size.times { |i| dot += va[i] * vb[i] }
-      best = dot if dot > best
+  return 0 if sa.nil? || sb.nil?
+
+  gate = $MODEL_SENSE_COSINE_GATE
+  if gate.positive?
+    v1_head = model_headword_vector(word1)
+    v2_head = model_headword_vector(word2)
+    if v1_head && v2_head
+      cos = headword_cos || v1_head.dot(v2_head).to_f
+      return 0 if cos < gate
     end
   end
-  (best * 100).round
+
+  # +sa.dot(sb.transpose)+ is a +(K_a, dim) . (dim, K_b) = (K_a, K_b)+ matmul:
+  # one BLAS call gives every sense-pair cosine; +.max+ picks the best cell.
+  ((sa.dot(sb.transpose)).max * 100).round
 end
 
 # --- WordNet gloss containment (high-precision polysemy rescue) ---
@@ -664,7 +733,7 @@ def word_unigram_features(word)
       "log_freq" => Math.log10(freq + 1).round(4),
       "is_rare" => rare?(word) ? 1 : 0,
       "sense_count" => sense_vectors(word).size,
-      "model_sense_count" => model_sense_vectors_of(word).size,
+      "model_sense_count" => (mv = model_sense_vectors_of(word)) ? mv.shape[0] : 0,
       "wordnet_lemma_count" => (WordNet::Lemma.find_all(word).size rescue 0),
       "cn_degree" => (conceptnet_adjacency[hyphens_to_underscores(word)]&.size || 0),
       "usf_out_degree" => (usf_associations[word]&.size || 0),
@@ -829,12 +898,20 @@ class PairSignals
     @model_both_in_vocab = !model_headword_vector(@a).nil? && !model_headword_vector(@b).nil?
   end
 
+  # Raw headword-headword cosine in [-1, 1]. Computed once per pair and reused by
+  # +model_cos_pct+ as well as the gate inside +model_directional_sense_cosines+ /
+  # +model_sense_sense_max_cosine+ — a tiny +Numo#dot+ but nice to only do once.
+  def model_headword_cos
+    return @model_headword_cos if defined?(@model_headword_cos)
+    @model_headword_cos = model_headword_cosine(@a, @b)
+  end
+
   def model_cos_pct
-    @model_cos_pct ||= (model_headword_cosine(@a, @b) * 100).round
+    @model_cos_pct ||= (model_headword_cos * 100).round
   end
 
   def model_sv_directional
-    @model_sv_directional ||= model_directional_sense_cosines(@a, @b)
+    @model_sv_directional ||= model_directional_sense_cosines(@a, @b, model_headword_cos)
   end
 
   def model_sv_max
@@ -847,11 +924,11 @@ class PairSignals
 
   def model_both_have_sense_vectors?
     return @model_both_have_sv if defined?(@model_both_have_sv)
-    @model_both_have_sv = !model_sense_vectors_of(@a).empty? && !model_sense_vectors_of(@b).empty?
+    @model_both_have_sv = !model_sense_vectors_of(@a).nil? && !model_sense_vectors_of(@b).nil?
   end
 
   def model_sense_sense_max
-    @model_sense_sense_max ||= model_sense_sense_max_cosine(@a, @b)
+    @model_sense_sense_max ||= model_sense_sense_max_cosine(@a, @b, model_headword_cos)
   end
 
   # --- ConceptNet graph-structure signals ---
