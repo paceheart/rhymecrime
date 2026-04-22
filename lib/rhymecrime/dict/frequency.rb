@@ -1,5 +1,5 @@
 # encoding: utf-8
-# SUBTLEX / wordfreq I/O, compute_frequency, add_frequency_info phases, filter_word_dict, build_word_dict.
+# SUBTLEX / wordfreq I/O, compute_frequency, add_frequency_info phases, build_word_dict.
 
 require "set"
 require_relative "utils_rhyme"
@@ -124,19 +124,6 @@ def load_wordfreq()
   puts "Loaded #{wordfreq_hash.length} words from wordfreq"
   wordfreq_hash
 end
-def filter_word_dict(word_dict)
-  filtered_word_dict = Hash.new
-  for word, entry in word_dict
-    freq, prons = entry
-    if(!prons.empty? || freq > 0)
-      filtered_word_dict[word] = entry
-      dict_trace_puts(word, "filter_word_dict: freq=#{freq} prons=#{prons.size} passed filters") if dict_trace_word?(word)
-    end
-  end
-  puts "#{filtered_word_dict.length} out of #{word_dict.length} entries remain in the dictionary after removing words with no rhymes and zero frequency"
-  return filtered_word_dict
-end
-
 # Kaikki +wordfreq+ OOV rescue (idea 2b): forms in +forms_map+ whose +base+ has wordfreq Zipf ≥ +zipf_floor+.
 # Does not use Inflect forward derivation (idea 2a) — too many FPs.
 # Skip -ing / -ed forms whose base is a non-verb in WordNet (*kitchen* noun ⇒ *kitchening* rescue
@@ -379,11 +366,10 @@ def compute_frequency(word, subtlex_hash, wordfreq_hash, subtlex_total_hash: nil
   # Exception: if the Kaikki +form_of+ base has a POS-appropriate WordNet entry (noun for +-s+
   # plural, verb for +-ed+ / +-ing+), leave compute_frequency alone. These are legitimate rare
   # inflections of attested lexemes (+sacristies+ ← +sacristy+, +alpines+ ← +alpine+,
-  # +agoraphobics+ ← +agoraphobic+) that must keep their weak-signal frequency so they
-  # survive the earlier +filter_word_dict+ (+prons.empty? && freq==0+) pass; otherwise they
-  # never reach the disconnect filter's base-WN rescue. Bases for the junk cases (+poly+,
-  # +golly+, +bravado+-as-verb, +hocus+, +getter+) have no matching WN entry so this clause
-  # does not apply to them.
+  # +agoraphobics+ ← +agoraphobic+) that must keep their weak-signal frequency so they reach
+  # +filter_word_dict_disconnected!+'s base-WN rescue — zeroing them here would orphan them at
+  # the disconnect filter instead. Bases for the junk cases (+poly+, +golly+, +bravado+-as-verb,
+  # +hocus+, +getter+) have no matching WN entry so this clause does not apply to them.
   if !in_wordnet && zipf < WORDFREQ_RARE_ZIPF &&
       sub_raw < SUBTLEX_OVERRIDE_PROPER_MIN &&
       morph_kaikki_lists_surface_as_inflected_nonlemma?(word) &&
@@ -1369,7 +1355,7 @@ def add_frequency_info(cmudict, subtlex_hash, subtlex_total_hash, wordfreq_hash,
     hash.delete(word)
     hyphenated_proper_scrub += 1
   end
-  puts "#{hyphenated_proper_scrub} hyphenated freq==0 headwords dropped (WN proper-noun lexfiles only)" if hyphenated_proper_scrub > 0
+  puts "#{hyphenated_proper_scrub} hyphenated zero-frequency headwords dropped (WN proper-noun lexfiles only)" if hyphenated_proper_scrub > 0
 
   forbidden_scrub = 0
   hash.keys.each do |word|
@@ -1409,7 +1395,6 @@ end
 def build_word_dict(cmudict, rdict, subtlex_hash, subtlex_total_hash, wordfreq_hash, wiktionary_words, pos_map, forms_map, kaikki_verb_morph = nil, original_cmudict_headwords = nil, kaikki_capitalized_only = nil, kaikki_variant_map = nil, varcon_variant_map = nil)
   cmudict = filter_cmudict(cmudict, rdict)
   word_dict = add_frequency_info(cmudict, subtlex_hash, subtlex_total_hash, wordfreq_hash, wiktionary_words, pos_map, forms_map, kaikki_verb_morph, original_cmudict_headwords, kaikki_capitalized_only)
-  word_dict = filter_word_dict(word_dict)
   merge_word_dict_pronunciations_into_rdict!(rdict, word_dict)
   emit_spelling_variants_auto!(word_dict, wordfreq_hash, kaikki_variant_map, varcon_variant_map)
   strip_dispreferred_headwords_from_rdict!(rdict, word_dict)
