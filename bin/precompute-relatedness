@@ -26,7 +26,8 @@
 #   --max-cues=N           Only process first N lemmas (smoke test)
 #   --start-after=WORD     Resume-after-crash: skip lemmas up through this one in
 #                          the current processing order (freq-desc, alpha within band).
-                           This will do the wrong thing if the word frequencies change.
+#                          Will do the wrong thing if the word frequencies changed
+#                          between runs — in that case, re-run with --incremental
 #   --threads=N            Parallel workers (fork-based). Default: half of +Etc.nprocessors+.
 #   --incremental          Keep existing rows in the target DB and only process cues
 #                          not already present. Use after widening the cue filter so
@@ -40,8 +41,15 @@
 # rather than native threads (MRI's GVL prevents parallel Ruby execution). All
 # heavy data (Numberbatch ~169 MB, ConceptNet, MPNet ~923 MB, WordNet, classifier)
 # loads in the parent before fork, so workers share those pages via copy-on-write.
-# Peak RSS climbs as memos mutate, so the default caps at half of the cores to
-# leave headroom; override with +--threads=N+ when you have the RAM.
+# Peak RSS per worker climbs to ~2.5 GB as its +$thematically_related_memo+ /
+# +$gloss_negative_pair_cache+ dirty pages and break CoW sharing; the default
+# therefore takes the min of two caps:
+#   * CPU cap:    +Etc.nprocessors / 2+          — keep the box responsive
+#   * memory cap: +(RAM - OS_RESERVE) / PER_WORKER_RSS+
+# so a 16 GB box doesn't try to run 5 workers just because it has 10 cores and
+# end up swapping. Override either cap with +--threads=N+, or tune the
+# +RHYMECRIME_PRECOMPUTE_PER_WORKER_GB+ / +RHYMECRIME_PRECOMPUTE_OS_RESERVE_GB+
+# env vars if the observed RSS drifts.
 #
 # Output: each worker writes to its own shard SQLite file (+.shardN.tmp+ next to
 # the target DB); the parent attaches + +INSERT OR REPLACE+ merges on success.
@@ -74,19 +82,62 @@ dry_run = false
 max_cues = nil
 start_after = nil
 incremental = false
-# Half of the cores is a sensible default: each worker's memos mutate over time
-# and break copy-on-write sharing of the heap, so peak RSS scales with worker
-# count; leaving half the cores free keeps the box responsive and avoids
-# swapping on machines with e.g. 16 GB RAM + 10 cores.
-default_threads = [Etc.nprocessors / 2, 1].max
+# Detect installed physical RAM in bytes (macOS / Linux). Falls back to +nil+
+# on other platforms or when the probe fails, in which case we skip the
+# memory-based cap and rely on the CPU cap alone. Called once during startup;
+# the +sysctl+ / +/proc/meminfo+ cost is negligible.
+def detect_physical_memory_bytes
+  case RbConfig::CONFIG["host_os"]
+  when /darwin/
+    out = `sysctl -n hw.memsize 2>/dev/null`.strip
+    out.empty? ? nil : out.to_i
+  when /linux/
+    line = File.foreach("/proc/meminfo", encoding: "UTF-8").find { |l| l.start_with?("MemTotal:") }
+    line ? line.split[1].to_i * 1024 : nil
+  end
+rescue StandardError
+  nil
+end
+
+# Per-worker peak RSS assumption (GB). Measured around 2.5 GB on the +pirate+
+# precompute profile; rounded up a little for headroom (GC thrash bloats the
+# heap beyond the steady-state working set before major collections clean up).
+per_worker_gb = (ENV["RHYMECRIME_PRECOMPUTE_PER_WORKER_GB"] || "3").to_f
+# Leave this much RAM free for the OS + editors + browser + kernel caches.
+# Going below this tips the OS into swap, which tanks throughput far worse then
+# dropping a worker.
+os_reserve_gb = (ENV["RHYMECRIME_PRECOMPUTE_OS_RESERVE_GB"] || "4").to_f
+
+cpu_cap = [Etc.nprocessors / 2, 1].max
+
+mem_bytes = detect_physical_memory_bytes
+mem_cap =
+  if mem_bytes && per_worker_gb.positive?
+    usable = [mem_bytes - (os_reserve_gb * 1024**3).to_i, 0].max
+    [(usable / (per_worker_gb * 1024**3)).to_i, 1].max
+  end
+
+default_threads =
+  if mem_cap
+    [cpu_cap, mem_cap].min
+  else
+    cpu_cap
+  end
 threads = default_threads
+# Declared at outer scope so the +--threads=N+ block can assign to it without
+# shadowing as a block-local; we check it below to decide whether to explain
+# the derived default.
+threads_user_supplied = false
 
 OptionParser.new do |o|
   o.on("--output=PATH", "SQLite output path") { |p| output_path = File.expand_path(p) }
   o.on("--dry-run", "Compute only; do not write") { dry_run = true }
   o.on("--max-cues=N", Integer) { |n| max_cues = n }
   o.on("--start-after=WORD") { |w| start_after = w }
-  o.on("--threads=N", Integer, "Parallel fork workers (default: #{default_threads})") { |n| threads = [n, 1].max }
+  o.on("--threads=N", Integer, "Parallel fork workers (default: #{default_threads})") do |n|
+    threads = [n, 1].max
+    threads_user_supplied = true
+  end
   o.on("--incremental", "Keep existing rows; skip cues already present in +output-path+. " \
                        "Use when widening the cue filter to avoid redoing the cues already done.") do
     incremental = true
@@ -187,6 +238,15 @@ threads = [threads, n].min if n.positive?
 threads = 1 if threads < 1
 
 puts "Precompute cues: #{n} preferred common lemmas with rhymes (#{before_n} distinct common lemmas in word_dict before filter)"
+unless threads_user_supplied
+  # Show how the default fell out so it's obvious whether CPU or RAM is the
+  # binding constraint; users with more RAM can then override with +--threads+.
+  # Reports +default_threads+ rather than +threads+ because small +--max-cues+
+  # runs clamp +threads+ down to +n+ and would otherwise hide the real default.
+  ram_gb = mem_bytes ? (mem_bytes.to_f / 1024**3).round(1) : nil
+  ram_note = ram_gb ? "RAM cap=#{mem_cap} (#{ram_gb} GB, per-worker #{per_worker_gb} GB, OS reserve #{os_reserve_gb} GB)" : "RAM cap unavailable"
+  puts "Default threads=#{default_threads}: min(CPU cap=#{cpu_cap} (nproc/2), #{ram_note}). Override with --threads=N."
+end
 puts "Scanning #{n} lemmas → #{dry_run ? '(dry-run, no file)' : output_path} with #{threads} worker#{threads == 1 ? '' : 's'} (SQLite row only when ≥1 related word)"
 
 RelatedWords.instance_variable_set(:@related_word_cache, {})

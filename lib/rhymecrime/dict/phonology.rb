@@ -231,10 +231,61 @@ def drop_abbreviation_expansion_alternates!(cmudict_flat_prons)
   dropped
 end
 
+AUTHORITATIVE_PRONUNCIATIONS_PATH = File.join(__dir__, "authoritative_pronunciations.txt")
+
+# Hand-curated pronunciation overrides. Loaded before CMUdict (and merged ahead
+# of Wiktionary/Kaikki/Inflect) so that when we have a better pronunciation for
+# a word than any corpus provides, it wins uncontested.
+#
+# File format: same as CMUdict ("WORD  PH PH PH" lines, ";;;" comments
+# ignored). Multiple lines per word allowed (alternate prons). Missing file
+# is a silent no-op — the file is optional.
+#
+# Contract: for any word listed here, the downstream loaders skip adding
+# pronunciations from any other source:
+#   * +load_cmudict+                          — early +next+ on authoritative hit
+#   * +merge_wiktionary!+                     — +next if cmudict.key?(word)+
+#   * +merge_inflected_forms!+                — +next if cmudict.key?(inflected_word)+
+#   * +merge_gdropped_in_apostrophe_forms!+   — +next if cmudict.key?(in_prime)+
+# (The last three already guard on +cmudict.key?+, which is now true for
+# authoritative words because we populate +hash+ ahead of the CMUdict load.)
+#
+# Cluster / consonant filters are *not* applied to authoritative entries: they
+# are user-vetted by definition.
+#
+# Returns a +Set+ of the authoritative words (used by +load_cmudict+ to skip
+# CMU rows) and mutates +hash+ in place.
+def load_authoritative_pronunciations!(hash)
+  words = Set.new
+  return words unless File.exist?(AUTHORITATIVE_PRONUNCIATIONS_PATH)
+
+  n_lines = 0
+  File.foreach(AUTHORITATIVE_PRONUNCIATIONS_PATH, encoding: "UTF-8") do |line|
+    next unless useful_cmudict_line?(line)
+
+    line = preprocess_cmudict_line(line)
+    tokens = line.split
+    next if tokens.length < 2
+
+    word = tokens.shift.downcase.desanitize
+    # CMUdict-style +WORD(2)+ alternate-pron suffix — strip it so multiple
+    # authoritative prons for the same word stack cleanly.
+    word = word[0...-3] if word =~ /\([0-9]\)\Z/
+    pron = Pronunciation.new(tokens)
+    push_pronunciation_unless_duplicate!(hash[word], pron)
+    words.add(word)
+    n_lines += 1
+  end
+  puts "Loaded #{n_lines} authoritative pronunciations for #{words.size} words from #{File.basename(AUTHORITATIVE_PRONUNCIATIONS_PATH)}" if n_lines > 0
+  words
+end
+
 def load_cmudict()
   # word => [pronunciation1, pronunciation2 ...]
   # pronunciation = [syllable1, syllable1, ...]
   hash = Hash.new {|h,k| h[k] = [] } # hash of arrays
+  authoritative_words = load_authoritative_pronunciations!(hash)
+  cmu_overridden = 0
   File.foreach(CMUDICT_FILENAME, encoding: "UTF-8") { |line|
     if(useful_cmudict_line?(line))
       line = preprocess_cmudict_line(line)
@@ -244,6 +295,11 @@ def load_cmudict()
       word = word.desanitize
       if(word =~ /\([0-9]\)\Z/)
         word = word[0...-3]
+      end
+      if authoritative_words.include?(word)
+        cmu_overridden += 1
+        dict_trace_puts(word, "Ignoring CMU pron (authoritative override): #{pron}") if dict_trace_word?(word)
+        next
       end
       unless ignore_cmudict_word?(word, hash)
         # ignore nonstandard initial and final consonant clusters. They're mostly names and a handful of loan words, and they'll rhyme with nothing or just each other, so we lose little to nothing by excluding them.

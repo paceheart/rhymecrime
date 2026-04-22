@@ -428,6 +428,17 @@ def inflection_suffix_kind_from_base(base, inflected)
     return :ings if Inflect.send(:match_suffix_kind, base, ing_form) == :ing
   end
 
+  # Colloquial g-drop: +fooin'+/+gluin'+/+stoppin'+/+tryin'+ share the same +base+
+  # as the corresponding +-ing+ form (see +Inflect.gdropped_in_apostrophe_spelling+).
+  # Reconstitute the +-ing+ surface and lean on the existing +:ing+ probe so every
+  # branch (silent-e, y-stem, doubling) stays authoritative in one place. A distinct
+  # kind lets +rhyming_tuple_kind_preferred?+ strictly prefer the non-apostrophe
+  # spelling via +RHYMING_TUPLE_SIBLING_KIND_RANK+.
+  if inflected.end_with?("in'") && inflected.bytesize >= 4
+    ing_form = inflected[0...-3] + "ing"
+    return :ing_gdrop if Inflect.send(:match_suffix_kind, base, ing_form) == :ing
+  end
+
   nil
 end
 
@@ -476,7 +487,13 @@ end
 # same absent base, the tuple with the lower-ranked kind wins (more basic inflections are kept).
 # Example: +breezier / sleazier+ (kind +:er+, rank 4) beats +breeziest / sleaziest+ (+:est+, rank
 # 5) when neither +breezy / sleazy+ is present in the input.
-RHYMING_TUPLE_SIBLING_KIND_RANK = { s: 1, ed: 2, ing: 3, er: 4, est: 5, ly: 6, ful: 7 }.freeze
+# Sibling-kind preference ladder. Lower rank wins when +rhyming_tuples_share_hidden_base+
+# finds two tuples parallel-inflected off the same hidden base via two different kinds.
+# +:ing_gdrop+ sits strictly *below* +:ing+ so +making / faking / taking+ beats
+# +makin' / fakin' / takin'+ (and every analogous g-drop pair) — the apostrophe form
+# is a colloquial surface of the same inflection, and we never want to render it when
+# the canonical spelling is available.
+RHYMING_TUPLE_SIBLING_KIND_RANK = { s: 1, ed: 2, ing: 3, er: 4, est: 5, ly: 6, ful: 7, ing_gdrop: 8 }.freeze
 
 def rhyming_tuple_kind_preferred?(preferred, other)
   return false if preferred.nil? || other.nil? || preferred == other
@@ -501,15 +518,19 @@ def rhyming_tuples_share_hidden_base(a, b)
   return nil if candidates_per_slot.any?(&:empty?)
 
   candidates_per_slot.first.each do |b0|
-    ka = Inflect.send(:match_suffix_kind, b0, a.first)
-    kb = Inflect.send(:match_suffix_kind, b0, b.first)
+    # Uses +inflection_suffix_kind_from_base+ (not +Inflect.match_suffix_kind+) so
+    # superset kinds like +:ings+ and +:ing_gdrop+ (see that wrapper) participate in
+    # hidden-base parallelism — otherwise +making / taking+ vs +makin' / takin'+
+    # would go undetected and the g-drop tuple would slip past the pruner.
+    ka = inflection_suffix_kind_from_base(b0, a.first)
+    kb = inflection_suffix_kind_from_base(b0, b.first)
     next if ka.nil? || kb.nil? || ka == kb
 
     matches_all = true
     (1...a.size).each do |i|
       found = candidates_per_slot[i].any? do |bi|
-        Inflect.send(:match_suffix_kind, bi, a[i]) == ka &&
-          Inflect.send(:match_suffix_kind, bi, b[i]) == kb
+        inflection_suffix_kind_from_base(bi, a[i]) == ka &&
+          inflection_suffix_kind_from_base(bi, b[i]) == kb
       end
       unless found
         matches_all = false

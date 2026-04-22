@@ -171,6 +171,17 @@ module Inflect
       add_cand.call(inflected.byteslice(0, il - 3))
     end
 
+    # Colloquial g-drop: +fooin'+/+gluin'+/+stoppin'+/+tryin'+ share a base with
+    # +fooing+/+gluing+/+stopping+/+trying+. Mirror the surface rule by recursing on
+    # the reconstituted +-ing+ form (one level deep — the +-ing+ form no longer ends
+    # in +in'+) and merging the candidates the +-ing+ case would have produced. Kept
+    # as a recursion rather than copy-pasted case analysis so the silent-e / y-stem /
+    # consonant-doubling branches stay authoritative in one place.
+    if inflected.end_with?("in'") && il >= 4
+      ing_form = inflected.byteslice(0, il - 3) + "ing"
+      raw_candidate_bases_for_inflected(ing_form).each { |b| cands.add(b) }
+    end
+
     cands
   end
 

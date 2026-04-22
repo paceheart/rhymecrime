@@ -159,7 +159,10 @@ describe 'prune_suffix_redundant_rhyming_tuples' do
   context 'stop words' do
     prune_entire_rhyming_tuple 'above / of' # prune tuples that are entirely stop words
     allow_entire_rhyming_tuple 'above / dove / of' # a single go-word allows it to live
-    
-    prune_entire_rhyming_tuple 'a / 
+  end
+
+  # -'in is a lil dodgy, so prefer -ing
+  context "g-drop vs -ing — keep the -ing tuple" do
+    prune_rhyming_tuple 'faking / making / taking', "fakin' / makin' / takin'"
   end
 end
