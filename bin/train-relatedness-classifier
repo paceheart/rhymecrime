@@ -7,7 +7,12 @@
 # Output: generated/relatedness_classifier.json
 #           common: { feature_names, model_type, threshold, training }
 #           logreg: { means, stds, weights }
-#           gbt:    { bias, lr, trees: [ [ {f, t, l, r} | {v} , ... ], ... ] }
+#           gbt:    { bias, lr, tree_format: "parallel_v1",
+#                     trees: [ { f: [...], t: [...], l: [...], r: [...] }, ... ] }
+#             Parallel arrays per tree (one entry per node, pre-order). +f[i] == -1+
+#             marks a leaf and +t[i]+ carries the leaf value (threshold and value
+#             share the same float slot — they're never both meaningful). +l[i]+ /
+#             +r[i]+ are child node indices for internal nodes, unused for leaves.
 #
 # Two supported model types (--model):
 #   logreg  L2-regularized logistic regression (linear combiner, small file, fast).
@@ -280,7 +285,27 @@ def find_best_split(x_rows, g, h, feature_indices, rows, total_g, total_h, lambd
   best
 end
 
-def build_tree_node(nodes, x_rows, g, h, features, rows, depth, max_depth, lambda_leaf, min_child_hessian)
+# Parallel-array tree: +f+ (feature idx, -1 for leaves), +t+ (threshold for internal
+# nodes, leaf value for leaves — unioned into the same float slot), +l+ / +r+ (child
+# indices, 0 for leaves). Building via +append_*+ helpers keeps all four arrays the
+# same length and lets the recursion return the just-appended node's index.
+def append_leaf(tree, value)
+  tree["f"] << -1
+  tree["t"] << value
+  tree["l"] << 0
+  tree["r"] << 0
+  tree["f"].size - 1
+end
+
+def append_internal(tree, f, t)
+  tree["f"] << f
+  tree["t"] << t
+  tree["l"] << 0
+  tree["r"] << 0
+  tree["f"].size - 1
+end
+
+def build_tree_node(tree, x_rows, g, h, features, rows, depth, max_depth, lambda_leaf, min_child_hessian)
   total_g = 0.0
   total_h = 0.0
   rows.each do |i|
@@ -297,10 +322,7 @@ def build_tree_node(nodes, x_rows, g, h, features, rows, depth, max_depth, lambd
   end
 
   if split.nil?
-    leaf_value = -total_g / (total_h + lambda_leaf)
-    node_idx = nodes.size
-    nodes << { "v" => leaf_value }
-    return node_idx
+    return append_leaf(tree, -total_g / (total_h + lambda_leaf))
   end
 
   left_rows = []
@@ -316,27 +338,31 @@ def build_tree_node(nodes, x_rows, g, h, features, rows, depth, max_depth, lambd
   end
 
   if left_rows.empty? || right_rows.empty?
-    leaf_value = -total_g / (total_h + lambda_leaf)
-    node_idx = nodes.size
-    nodes << { "v" => leaf_value }
-    return node_idx
+    return append_leaf(tree, -total_g / (total_h + lambda_leaf))
   end
 
-  node_idx = nodes.size
-  nodes << { "f" => f, "t" => t, "l" => nil, "r" => nil }
-  left_idx = build_tree_node(nodes, x_rows, g, h, features, left_rows, depth + 1, max_depth, lambda_leaf, min_child_hessian)
-  right_idx = build_tree_node(nodes, x_rows, g, h, features, right_rows, depth + 1, max_depth, lambda_leaf, min_child_hessian)
-  nodes[node_idx]["l"] = left_idx
-  nodes[node_idx]["r"] = right_idx
+  node_idx = append_internal(tree, f, t)
+  left_idx = build_tree_node(tree, x_rows, g, h, features, left_rows, depth + 1, max_depth, lambda_leaf, min_child_hessian)
+  right_idx = build_tree_node(tree, x_rows, g, h, features, right_rows, depth + 1, max_depth, lambda_leaf, min_child_hessian)
+  tree["l"][node_idx] = left_idx
+  tree["r"][node_idx] = right_idx
   node_idx
 end
 
-def predict_tree(nodes, row)
+def empty_tree
+  { "f" => [], "t" => [], "l" => [], "r" => [] }
+end
+
+def predict_tree(tree, row)
+  f = tree["f"]
+  t = tree["t"]
+  l = tree["l"]
+  r = tree["r"]
   idx = 0
   loop do
-    node = nodes[idx]
-    return node["v"] if node.key?("v")
-    idx = row[node["f"]] <= node["t"] ? node["l"] : node["r"]
+    fi = f[idx]
+    return t[idx] if fi < 0
+    idx = row[fi] <= t[idx] ? l[idx] : r[idx]
   end
 end
 
@@ -377,17 +403,17 @@ def fit_gbt(x_rows, y, sample_weights, trees:, depth:, lr:, lambda_leaf:, min_ch
       features = all_features
     end
 
-    nodes = []
+    tree = empty_tree
     build_tree_node(
-      nodes, x_rows, g, h, features, (0...n).to_a, 0, depth,
+      tree, x_rows, g, h, features, (0...n).to_a, 0, depth,
       lambda_leaf, min_child_hessian
     )
 
     n.times do |i|
-      margins[i] += lr * predict_tree(nodes, x_rows[i])
+      margins[i] += lr * predict_tree(tree, x_rows[i])
     end
 
-    ensemble << nodes
+    ensemble << tree
 
     if verbose && (t % 25).zero?
       loss = 0.0
@@ -411,10 +437,10 @@ end
 
 def gbt_feature_importance(trees, n_features)
   gains = Array.new(n_features, 0.0)
-  trees.each do |nodes|
-    nodes.each do |node|
-      next if node.key?("v")
-      gains[node["f"]] += 1.0
+  trees.each do |tree|
+    tree["f"].each do |fi|
+      next if fi < 0
+      gains[fi] += 1.0
     end
   end
   gains
@@ -618,6 +644,7 @@ when "logreg"
 when "gbt"
   common["bias"] = model_data[:bias]
   common["lr"] = model_data[:lr]
+  common["tree_format"] = "parallel_v1"
   common["trees"] = model_data[:trees]
   common["training"].merge!(
     "trees" => options[:trees],

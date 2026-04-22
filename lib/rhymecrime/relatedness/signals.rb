@@ -145,13 +145,62 @@ def conceptnet_neighbors(word)
   conceptnet_adjacency[hyphens_to_underscores(word)] || Set.new
 end
 
+# Maximum shortest-path distance considered "meaningful" in the ConceptNet graph.
+# BFS is clipped here and distances >= CN_MAX_HOPS are coded in-band (see
+# +conceptnet_shortest_hops+). Exposed at top level so the source-cache helpers
+# below can reference it without forward-referring to +PairSignals+.
+CN_MAX_HOPS = 4 unless defined?(CN_MAX_HOPS)
+
+# Source-fixed BFS cache. When a scan loop is about to evaluate thousands of pairs
+# against a single cue, it can call +prepare_cn_hops_source!(cue)+ to precompute the
+# full distance table from the cue once (single-source BFS, ~50ms) and then
+# +conceptnet_shortest_hops+ short-circuits to a hash lookup for any pair where one
+# endpoint is that cue. Scoped to the current process; +clear_cn_hops_source!+ or
+# replacing with +nil+ disables the fast path.
+$cn_hops_source = nil
+
+# Precompute and cache the shortest-path distance from +cue+ to every ConceptNet
+# node reachable within +max_hops+. Idempotent: replaces any previously cached
+# source. Safe to call when +cue+ has no ConceptNet node (the cache is cleared so
+# the fast path is skipped and the generic BFS still returns +max_hops + 2+).
+def prepare_cn_hops_source!(cue, max_hops = ::CN_MAX_HOPS)
+  adj = conceptnet_adjacency
+  key = hyphens_to_underscores(cue)
+  if adj[key].nil?
+    $cn_hops_source = nil
+    return
+  end
+  table = { key => 0 }
+  frontier = [key]
+  depth = 0
+  while depth < max_hops && !frontier.empty?
+    depth += 1
+    next_frontier = []
+    frontier.each do |node|
+      adj[node]&.each do |neigh|
+        next if table.key?(neigh)
+        table[neigh] = depth
+        next_frontier << neigh
+      end
+    end
+    frontier = next_frontier
+  end
+  $cn_hops_source = { cue: key, table: table, max_hops: max_hops }
+end
+
+def clear_cn_hops_source!
+  $cn_hops_source = nil
+end
+
 # Shortest path length in the undirected ConceptNet graph between two words, clipped
 # at +max_hops+. 1 = direct edge, 2 = one bridge, etc. +max_hops + 1+ means "not
 # reachable within +max_hops+". +max_hops + 2+ means at least one endpoint has no
 # node in the graph at all — distinct from "reachable but far" so the classifier can
 # condition on data availability the way it does with +model_both_in_vocab?+.
 # Bidirectional BFS: alternately expands the smaller frontier, so worst-case work
-# scales like +degree**(max_hops/2)+ instead of +degree**max_hops+.
+# scales like +degree**(max_hops/2)+ instead of +degree**max_hops+. When a source
+# cache built by +prepare_cn_hops_source!+ is active and one endpoint matches the
+# cached cue, the BFS is replaced by a single hash lookup.
 def conceptnet_shortest_hops(word1, word2, max_hops = 4)
   adj = conceptnet_adjacency
   a = hyphens_to_underscores(word1)
@@ -159,6 +208,17 @@ def conceptnet_shortest_hops(word1, word2, max_hops = 4)
   return max_hops + 2 if adj[a].nil? || adj[b].nil?
   return 0 if a == b
   return 1 if adj[a].include?(b)
+
+  src = $cn_hops_source
+  if src && src[:max_hops] >= max_hops
+    if a == src[:cue]
+      dist = src[:table][b]
+      return dist && dist <= max_hops ? dist : max_hops + 1
+    elsif b == src[:cue]
+      dist = src[:table][a]
+      return dist && dist <= max_hops ? dist : max_hops + 1
+    end
+  end
 
   seen_a = { a => 0 }
   seen_b = { b => 0 }
@@ -276,12 +336,22 @@ end
 
 # --- Numberbatch vectors (pre-normalized) ---
 
+# Numberbatch vectors are loaded once and cast to +Numo::SFloat+ at load time
+# (see +model_sense_vectors_table+ for the same treatment of MPNet vectors and
+# the rationale). Ruby-array dot products in the per-pair hot path scaled as
+# +O(candidates × dim)+ pure-Ruby multiplies; +Numo#dot+ delegates to native
+# BLAS and collapses the 300-dim (Numberbatch) and 768-dim (MPNet) cosines into
+# a single FFI call apiece. Float32 cast is lossless for cosine purposes — the
+# +(* 100).round+ quantization at the call sites absorbs any LSB drift.
 $numberbatch = nil
 def numberbatch
   return $numberbatch unless $numberbatch.nil?
   path = NUMBERBATCH_VEC_PATH
   if File.exist?(path)
-    $numberbatch = MessagePack.unpack(File.binread(path))
+    raw = MessagePack.unpack(File.binread(path))
+    nb = {}
+    raw.each { |k, v| nb[k] = Numo::SFloat.cast(v) if v && !v.empty? }
+    $numberbatch = nb
     puts "loaded #{$numberbatch.size} Numberbatch vectors from #{path}"
   else
     $numberbatch = {}
@@ -301,9 +371,7 @@ def numberbatch_cosine(word1, word2)
   v1 = nb[hyphens_to_underscores(word1)]
   v2 = nb[hyphens_to_underscores(word2)]
   return 0.0 if v1.nil? || v2.nil?
-  dot = 0.0
-  v1.size.times { |i| dot += v1[i] * v2[i] }
-  dot
+  v1.dot(v2).to_f
 end
 
 # True if +lemma(word)+ has a row in the Numberbatch export (+save_numberbatch_vectors!+ keys, underscore-normalized).
@@ -499,9 +567,7 @@ def validated_derivations(word)
     v1 = nb[w_key]
     v2 = nb[d_key]
     next false unless v1 && v2
-    dot = 0.0
-    v1.size.times { |i| dot += v1[i] * v2[i] }
-    dot >= 0.40
+    v1.dot(v2) >= 0.40
   end
 end
 
@@ -535,58 +601,65 @@ GLOSS_STOP_WORDS = Set.new(%w[
   through during up down out off away back make made used one
 ]).freeze
 
+# Cached per-word sense-vector matrix: either a +Numo::SFloat(K, dim)+ of K
+# L2-normalized sense vectors (one row per WordNet synset whose gloss contained
+# at least 2 Numberbatch-indexed content words) or +nil+ when the word has no
+# qualifying senses. Returning a single 2-D matrix lets callers fuse K per-sense
+# cosines into one BLAS +dot+ call instead of a Ruby +each+ + scalar-loop dot
+# per sense (see +directional_sense_cosines+).
 $sense_vectors_cache = {}
 def sense_vectors(word, max_senses = $SENSE_VECTOR_MAX_SENSES)
   key = [word, max_senses]
   return $sense_vectors_cache[key] if $sense_vectors_cache.key?(key)
 
   nb = numberbatch_table
-  vecs = []
-  count = 0
+  rows = []
   WordNet::Lemma.find_all(word).each do |lemma|
     lemma.synsets.each do |synset|
-      break if count >= max_senses
+      break if rows.size >= max_senses
       content_words = synset.gloss.downcase.scan(/[a-z]+/) - GLOSS_STOP_WORDS.to_a
       embeds = content_words.filter_map do |gw|
         gk = word_dict_includes_headword?(gw) ? hyphens_to_underscores(lemma(gw)) : hyphens_to_underscores(gw)
         nb[gk]
       end
       next if embeds.size < 2
-      dim = embeds.first.size
-      avg = Array.new(dim, 0.0)
-      embeds.each { |v| dim.times { |i| avg[i] += v[i] } }
-      mag = Math.sqrt(avg.sum { |x| x * x })
+      stacked = Numo::SFloat.vstack(embeds)
+      avg = stacked.sum(0)
+      mag = Math.sqrt(avg.dot(avg))
       next if mag < 1e-9
-      vecs << avg.map! { |x| x / mag }
-      count += 1
+      avg /= mag
+      rows << avg
     end
+    break if rows.size >= max_senses
   end
-  $sense_vectors_cache[key] = vecs
-  vecs
+
+  result = rows.empty? ? nil : Numo::SFloat.vstack(rows)
+  $sense_vectors_cache[key] = result
+  result
 end
 
 def directional_sense_cosines(word1, word2)
-  best_1to2 = 0
-  best_2to1 = 0
   nb = numberbatch_table
-
+  best_1to2 = 0
   v2_raw = nb[hyphens_to_underscores(word2)]
   if v2_raw
-    sense_vectors(word1).each do |sv|
-      dot = 0.0
-      sv.size.times { |i| dot += sv[i] * v2_raw[i] }
-      score = (dot * 100).round
-      best_1to2 = score if score > best_1to2
+    m1 = sense_vectors(word1)
+    if m1
+      # Matrix (K, dim) × vector (dim,) → vector (K,); max picks the best sense.
+      best = m1.dot(v2_raw).max.to_f
+      score = (best * 100).round
+      best_1to2 = score if score > 0
     end
   end
 
+  best_2to1 = 0
   v1_raw = nb[hyphens_to_underscores(word1)]
   if v1_raw
-    sense_vectors(word2).each do |sv|
-      dot = 0.0
-      sv.size.times { |i| dot += sv[i] * v1_raw[i] }
-      score = (dot * 100).round
-      best_2to1 = score if score > best_2to1
+    m2 = sense_vectors(word2)
+    if m2
+      best = m2.dot(v1_raw).max.to_f
+      score = (best * 100).round
+      best_2to1 = score if score > 0
     end
   end
 
@@ -600,70 +673,68 @@ end
 # Morphy-resolved sense vectors for inflected forms (plurals, verb conjugations)
 # that lack direct WordNet lemma entries. Only used as a fallback when
 # sense_vectors returns empty.
+# Morphy-derived sense-vector matrix (or +nil+), analogous to +sense_vectors+
+# but resolves inflected forms (plurals, verb conjugations) through WordNet's
+# morphy. Same return shape so both feed the same +directional_sense_cosines+
+# matrix-dot fast path.
 $morphy_sv_cache = {}
 def sense_vectors_morphy(word, max_senses = $SENSE_VECTOR_MAX_SENSES)
   return $morphy_sv_cache[word] if $morphy_sv_cache.key?(word)
   nb = numberbatch_table
   morphs = (WordNet::Synset.morphy_all(word) rescue []).uniq - [word]
-  vecs = []
-  count = 0
+  rows = []
   morphs.each do |form|
-    break if count >= max_senses
+    break if rows.size >= max_senses
     WordNet::Lemma.find_all(form).each do |lemma|
-      break if count >= max_senses
+      break if rows.size >= max_senses
       lemma.synsets.each do |synset|
-        break if count >= max_senses
+        break if rows.size >= max_senses
         content_words = synset.gloss.downcase.scan(/[a-z]+/) - GLOSS_STOP_WORDS.to_a
         embeds = content_words.filter_map do |gw|
           gk = word_dict_includes_headword?(gw) ? hyphens_to_underscores(lemma(gw)) : hyphens_to_underscores(gw)
           nb[gk]
         end
         next if embeds.size < 2
-        dim = embeds.first.size
-        avg = Array.new(dim, 0.0)
-        embeds.each { |v| dim.times { |i| avg[i] += v[i] } }
-        mag = Math.sqrt(avg.sum { |x| x * x })
+        stacked = Numo::SFloat.vstack(embeds)
+        avg = stacked.sum(0)
+        mag = Math.sqrt(avg.dot(avg))
         next if mag < 1e-9
-        vecs << avg.map! { |x| x / mag }
-        count += 1
+        avg /= mag
+        rows << avg
       end
     end
   end
-  $morphy_sv_cache[word] = vecs
-  vecs
+  result = rows.empty? ? nil : Numo::SFloat.vstack(rows)
+  $morphy_sv_cache[word] = result
+  result
 end
 
 def morphy_directional_sense_cosines(word1, word2)
+  # Only fall back to morphy when the side has NO direct sense vectors at all.
   sv1_orig = sense_vectors(word1)
   sv2_orig = sense_vectors(word2)
-  sv1_morphy = sv1_orig.empty? ? sense_vectors_morphy(word1) : []
-  sv2_morphy = sv2_orig.empty? ? sense_vectors_morphy(word2) : []
-  return nil if sv1_morphy.empty? && sv2_morphy.empty?
+  sv1_morphy = sv1_orig.nil? ? sense_vectors_morphy(word1) : nil
+  sv2_morphy = sv2_orig.nil? ? sense_vectors_morphy(word2) : nil
+  return nil if sv1_morphy.nil? && sv2_morphy.nil?
 
   d1, d2 = directional_sense_cosines(word1, word2)
   nb = numberbatch_table
 
-  if sv1_morphy.any?
+  if sv1_morphy
     v2_raw = nb[hyphens_to_underscores(word2)]
     if v2_raw
-      sv1_morphy.each do |sv|
-        dot = 0.0
-        sv.size.times { |i| dot += sv[i] * v2_raw[i] }
-        score = (dot * 100).round
-        d1 = score if score > d1
-      end
+      best = sv1_morphy.dot(v2_raw).max.to_f
+      score = (best * 100).round
+      d1 = score if score > d1
     end
   end
 
-  if sv2_morphy.any?
+  if sv2_morphy
     v1_raw = nb[hyphens_to_underscores(word1)]
     if v1_raw
-      sv2_morphy.each do |sv|
-        dot = 0.0
-        sv.size.times { |i| dot += sv[i] * v1_raw[i] }
-        score = (dot * 100).round
-        d2 = score if score > d2
-      end
+      best = sv2_morphy.dot(v1_raw).max.to_f
+      score = (best * 100).round
+      d2 = score if score > d2
     end
   end
 
@@ -722,7 +793,12 @@ def unigram_pair_feature_names
 end
 
 # Memoized per-word: the same word usually appears in many pairs (O(n) scans, cue
-# broadcasts, etc.) so we compute the unigram bundle once per word.
+# broadcasts, etc.) so we compute the unigram bundle once per word. Retained in
+# Hash form (keyed by +UNIGRAM_FEATURE_NAMES+) so callers / diagnostics that want
+# a labelled bundle still have one. The hot +unigram_pair_feature_values+ path
+# goes through +word_unigram_feature_values+ below, which caches the same data
+# as a parallel +Array<Float>+ indexed by position — no string-key hash lookups
+# per pair.
 $word_unigram_features_cache = {}
 def word_unigram_features(word)
   $word_unigram_features_cache[word] ||= begin
@@ -732,7 +808,7 @@ def word_unigram_features(word)
       "length" => word.length,
       "log_freq" => Math.log10(freq + 1).round(4),
       "is_rare" => rare?(word) ? 1 : 0,
-      "sense_count" => sense_vectors(word).size,
+      "sense_count" => (sv = sense_vectors(word)) ? sv.shape[0] : 0,
       "model_sense_count" => (mv = model_sense_vectors_of(word)) ? mv.shape[0] : 0,
       "wordnet_lemma_count" => (WordNet::Lemma.find_all(word).size rescue 0),
       "cn_degree" => (conceptnet_adjacency[hyphens_to_underscores(word)]&.size || 0),
@@ -744,16 +820,45 @@ def word_unigram_features(word)
   end
 end
 
+# Parallel-array view of +word_unigram_features+: positions match
+# +UNIGRAM_FEATURE_NAMES+, values are pre-cast to Float. Avoids 11 string-key
+# +Hash+ lookups and an +Integer#to_f+ boxing per (word, pair) inside the hot
+# +unigram_pair_feature_values+ path. Cached per word, so the 36k-pair scan
+# loop pays the conversion once per cue and once per candidate (2×N total).
+$word_unigram_feature_values_cache = {}
+def word_unigram_feature_values(word)
+  $word_unigram_feature_values_cache[word] ||= begin
+    h = word_unigram_features(word)
+    UNIGRAM_FEATURE_NAMES.map { |n| h[n].to_f }
+  end
+end
+
 # Mechanical (min, max, diff) expansion of every unigram for a pair; appended to
 # the learned feature vector in the same order as +unigram_pair_feature_names+.
+# Writes into a pre-sized output array (vs. a +flat_map+ that allocates 11
+# intermediate 3-element arrays plus the concatenated result per call).
 def unigram_pair_feature_values(word_a, word_b)
-  fa = word_unigram_features(word_a)
-  fb = word_unigram_features(word_b)
-  UNIGRAM_FEATURE_NAMES.flat_map do |name|
-    va = fa[name].to_f
-    vb = fb[name].to_f
-    [va < vb ? va : vb, va > vb ? va : vb, (va - vb).abs]
+  fa = word_unigram_feature_values(word_a)
+  fb = word_unigram_feature_values(word_b)
+  n = UNIGRAM_FEATURE_NAMES.size
+  out = Array.new(n * 3)
+  i = 0
+  j = 0
+  while i < n
+    va = fa[i]
+    vb = fb[i]
+    if va < vb
+      out[j] = va
+      out[j + 1] = vb
+    else
+      out[j] = vb
+      out[j + 1] = va
+    end
+    out[j + 2] = (va - vb).abs
+    i += 1
+    j += 3
   end
+  out
 end
 
 class PairSignals
@@ -860,14 +965,18 @@ class PairSignals
   end
 
   # Count of WordNet senses that produced a usable gloss-average embedding.
+  # +sense_vectors+ returns a +Numo::SFloat(K, dim)+ matrix or +nil+; we want
+  # K (the per-word sense count), not total element count.
   def sv_a_count
     return @sv_a_count if defined?(@sv_a_count)
-    @sv_a_count = sense_vectors(@a).size
+    sv = sense_vectors(@a)
+    @sv_a_count = sv ? sv.shape[0] : 0
   end
 
   def sv_b_count
     return @sv_b_count if defined?(@sv_b_count)
-    @sv_b_count = sense_vectors(@b).size
+    sv = sense_vectors(@b)
+    @sv_b_count = sv ? sv.shape[0] : 0
   end
 
   # Morphy-resolved directional cosines (0..100), or +nil+ when neither side needed
@@ -937,10 +1046,12 @@ class PairSignals
   # codings so GBT can split on each independently), and (b) the count of nodes
   # adjacent to *both* sides (a Jaccard-style corroboration signal).
 
-  CN_MAX_HOPS = 4
+  # Legacy alias for +::CN_MAX_HOPS+; kept for existing +PairSignals::CN_MAX_HOPS+
+  # call sites outside this file.
+  CN_MAX_HOPS = ::CN_MAX_HOPS
 
   def cn_hops
-    @cn_hops ||= conceptnet_shortest_hops(@a, @b, CN_MAX_HOPS)
+    @cn_hops ||= conceptnet_shortest_hops(@a, @b, ::CN_MAX_HOPS)
   end
 
   def cn_shared_neighbors

@@ -93,7 +93,7 @@ describe 'RHYMES' do
     ought_not_rhyme 'axolotls', 'bottles'  # stress mismatch, but I don't hate it
     oughta_rhyme 'spiral', 'viral'
     ought_not_rhyme 'eyes', 'sees' # this was a bug due to two pronunciations of 'reprise'
-    ought_not_rhyme 'biopic', 'myopic', not_working_message: "stress mismatch, TODO: fix bad pronunciation"
+    ought_not_rhyme 'biopic', 'myopic'
     oughta_rhyme 'poor', 'pure' # P vs. PY is different enough
   end
 
@@ -338,10 +338,10 @@ describe 'RHYMES' do
     oughta_rhyme 'action', 'attraction' # attr- is not a prefix
     oughta_rhyme 'traction', 'attraction' # arguable
     oughta_rhyme 'attribution', 'distribution' # arguable
-    oughta_rhyme 'nest', 'finessed', not_working_message: "identical rhyme"
+    oughta_rhyme 'nest', 'finessed'
     oughta_rhyme 'keto', 'mosquito', not_working_message: "bad wiktionary pron for keto"
     oughta_rhyme 'cord', 'record', not_working_message: 'splash damage: re- prefix filter (record is etymologically re+cord)'
-    oughta_rhyme 'chord', 'record', not_working_message: 'splash damage: re- prefix filter (record is etymologically re+cord)'
+    oughta_rhyme 'chord', 'record'
     # hemiola isn't in our lexicon at all; mandolin/violin have genuinely different rimes
     # (+AE_N_D_AH_L_AH_N+ vs +IH_N+ -- the stress lands in different places), so they
     # can't rhyme under the current primary-stress-rime model.
@@ -361,7 +361,8 @@ describe 'RHYMES' do
     # filters them. Accepting as splash damage.
     oughta_rhyme 'serve', 'deserve', not_working_message: 'splash damage: de- prefix filter'
     oughta_rhyme 'served', 'deserved', not_working_message: 'splash damage: de- prefix filter'
-    oughta_rhyme 'served', 'undeserved', not_working_message: 'splash damage: un- prefix filter'
+    oughta_rhyme 'served', 'undeserved'
+    ought_not_rhyme 'served', 'underserved'
   end
 
   context "spelling variants ought not count as rhymes" do
@@ -557,7 +558,7 @@ describe 'RHYMES' do
   
   context 'apostrophes' do
     oughta_rhyme "hits", "its"
-    oughta_rhyme "hits", "it's", not_working_message: "it's is missing from word_dict"
+    oughta_rhyme "hits", "it's"
     ought_not_rhyme "its", "it's"
     oughta_rhyme "f'd", "bereft", not_working_message: "f'd is missing from word_dict"
     oughta_rhyme "you're", 'secure'
@@ -580,7 +581,7 @@ describe 'RHYMES' do
     oughta_rhyme 'papier-mache', 'way', not_working_message: "papier-mache is missing from word_dict"
     oughta_rhyme 'tutti-frutti', 'booty', not_working_message: "tutti-frutti is missing from word_dict"
     oughta_rhyme 'willy-nilly', 'silly'
-    oughta_rhyme 'roly-poly', 'holy', not_working_message: "roly-poly is missing from word_dict"
+    oughta_rhyme 'roly-poly', 'holy'
     ought_not_rhyme 'roly-poly', 'poly'
     oughta_rhyme 'hara-kiri', 'weary', not_working_message: "hara-kiri is missing from word_dict"
     oughta_rhyme 'queer', 'peer-to-peer'
@@ -617,8 +618,8 @@ describe 'RHYMES' do
     oughta_rhyme 'foster', 'impostor' # foster [AA S T ER] imposter [AO S T ER]
     oughta_rhyme 'curry', 'hurry' # curry [K AH1 R IY0] hurry [HH ER1 IY0]
     oughta_rhyme 'errors', 'terrors' # errors [EH1 R ER0 Z] terrors [T EH1 R AH0 R Z]
-    oughta_rhyme 'array', 'hurray', not_working_message: "array [ER0 EY1] hurray [HH AH0 R EY1]"
-    oughta_rhyme 'array', 'moray', not_working_message: "array [ER0 EY1] moray [M ER0 EY1]"
+    oughta_rhyme 'array', 'hurray'
+    oughta_rhyme 'array', 'moray'
     oughta_rhyme "taken", 'waken' # taken [T EY1 K IH0 N], waken [W EY1 K AH0 N]
     oughta_rhyme "takin'", 'waken' # takin' [T EY1 K IH0 N], waken [W EY1 K AH0 N]
     oughta_rhyme 'tons', 'funds' # [T AH1 N Z] [F AH1 N D Z], N D Z gets collapsed to N Z
@@ -631,8 +632,8 @@ describe 'RHYMES' do
   end
 
   context "-in'" do
-    oughta_rhyme "winnin'", "linen", not_working_message: "winnin' is missing from word_dict"
-    oughta_rhyme "failin'", "wailin'", not_working_message: "failin'/wailin' are missing from word_dict"
+    oughta_rhyme "winnin'", "linen"
+    oughta_rhyme "failin'", "wailin'"
     oughta_rhyme "makin'", "bacon"
     oughta_rhyme "huffin'", "puffin"
     oughta_rhyme "huffin'", "puffin'"

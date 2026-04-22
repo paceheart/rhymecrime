@@ -41,23 +41,32 @@ class RelatedWords
       results = []
       l1 = lemma(word)
       debug "Finding words related to #{word}... "
-      words_we_care_about(include_rhymeless, common_only).each do |w|
-        next if w == word
+      # Precompute the ConceptNet single-source distance table from the cue so
+      # every per-candidate +cn_hops+ call collapses to a hash lookup instead of
+      # a bidirectional BFS. Cleared after the scan so unrelated callers fall
+      # back to the generic BFS.
+      prepare_cn_hops_source!(l1)
+      begin
+        words_we_care_about(include_rhymeless, common_only).each do |w|
+          next if w == word
 
-        # Stop words (+stop_word?+) are related to every other word; mirror
-        # +thematically_related?+'s short-circuit so the scan's output matches
-        # the predicate exactly.
-        if stop_word?(word) || stop_word?(w)
-          results << [w, 100]
-          next
+          # Stop words (+stop_word?+) are related to every other word; mirror
+          # +thematically_related?+'s short-circuit so the scan's output matches
+          # the predicate exactly.
+          if stop_word?(word) || stop_word?(w)
+            results << [w, 100]
+            next
+          end
+
+          l2 = lemma(w)
+          a, b = l1 <= l2 ? [l1, l2] : [l2, l1]
+          score = relatedness_score(PairSignals.new(a, b))
+          next if score < RELATEDNESS_SCORE_THRESHOLD
+
+          results << [w, score]
         end
-
-        l2 = lemma(w)
-        a, b = l1 <= l2 ? [l1, l2] : [l2, l1]
-        score = relatedness_score(PairSignals.new(a, b))
-        next if score < RELATEDNESS_SCORE_THRESHOLD
-
-        results << [w, score]
+      ensure
+        clear_cn_hops_source!
       end
       debug "#{results.length}\n"
       results

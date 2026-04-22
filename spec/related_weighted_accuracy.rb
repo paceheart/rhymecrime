@@ -33,9 +33,77 @@
 repo = File.expand_path("..", __dir__)
 $LOAD_PATH.unshift File.join(repo, "lib")
 
+# Cue → surface forms that should yield identical (or very nearly identical)
+# thematic-relatedness classifications. Human judgment, not predicate output:
+# if the human who annotated +related.csv+ thinks +pirate+ is related (or
+# unrelated) to +X+, they'd make the same call for every form in the list,
+# because these derivational / inflectional variants share a single thematic
+# neighborhood in ordinary usage.
+#
+# Used to clone +related.csv+ rows inline: every row where either side is a
+# key here spawns extra rows with each variant substituted in, letting the
+# evaluation expose pipeline regressions on derived forms that the existing
+# +compute_lemma_map+ (which only canonicalizes inflectional morphology)
+# doesn't canonicalize to the base.
+OUGHTA_BE_IDENTICAL = {
+# TODO: investigate different ways of handling inflected/derived forms wrt relatedness
+#  "pirate" => %w[pirates piracy pirating piratical],
+#  "music"  => %w[musical],
+#  "cat"    => %w[cats],
+#  "gay"    => %w[gayer gayest],
+#  "crime"  => %w[crimes criminal criminals criminality],
+#  "food"   => %w[foods],
+#  "water"  => %w[waters watery],
+}.freeze
+
 def ish_kind?(kind)
   k = kind.to_s.strip
   k == "related_ish" || k == "unrelated_ish"
+end
+
+# Expand +rows+ by cloning each row once per derived-form variant of its
+# +word1+ / +word2+ cells, per +OUGHTA_BE_IDENTICAL+. Each side is expanded
+# independently (no cross-product) — for a row +(pirate, crime)+, we emit
+# the original plus +(pirates, crime)+, +(piracy, crime)+, ..., +(pirate,
+# crimes)+, +(pirate, criminal)+, etc. The +kind+ / +notes+ / ish-ness are
+# copied verbatim; the cloning is by construction a no-op on human judgment
+# (that's why +OUGHTA_BE_IDENTICAL+ is a human-curated assertion, not a
+# derived-from-predicate list).
+def expanded_rows_with_clones(rows)
+  out = []
+  clones = 0
+  rows.each do |r|
+    out << r
+    w1 = r["word1"].to_s.strip.downcase
+    w2 = r["word2"].to_s.strip.downcase
+    if OUGHTA_BE_IDENTICAL.key?(w1)
+      OUGHTA_BE_IDENTICAL[w1].each do |variant|
+        dup = r.dup
+        dup["word1"] = variant
+        out << dup
+        clones += 1
+      end
+    end
+    if OUGHTA_BE_IDENTICAL.key?(w2)
+      OUGHTA_BE_IDENTICAL[w2].each do |variant|
+        dup = r.dup
+        dup["word2"] = variant
+        out << dup
+        clones += 1
+      end
+    end
+  end
+  [out, clones]
+end
+
+# For a scored row, the "cue family" for per-family reporting: if either side
+# is a +OUGHTA_BE_IDENTICAL+ key or any of its variants, the family is that
+# key. nil means the row has no pirate/cat/crime/... cue on either side and
+# is irrelevant to the breakdown. If both sides are cue keys (e.g. a row
+# +(pirate, crime)+), we pick +word1+'s family — arbitrary but stable; the
+# breakdown is descriptive, not an error partition.
+def cue_family_for(w1, w2, family_of_surface)
+  family_of_surface[w1] || family_of_surface[w2]
 end
 
 want_profile = ARGV.include?("--profile") || ENV["RELATED_PROFILE"] == "1"
@@ -79,7 +147,16 @@ Dir.chdir(repo) do
   require_relative "inclusive_profiler" if want_profile
 
   path = File.join(repo, "spec", "related.csv")
-  rows = CSV.parse(File.read(path, encoding: "UTF-8"), headers: true)
+  raw_rows = CSV.parse(File.read(path, encoding: "UTF-8"), headers: true)
+  rows, clone_count = expanded_rows_with_clones(raw_rows)
+
+  # Reverse index: every surface form (key or variant) -> cue-family key.
+  # Built once so the scoring loop's family lookup is O(1).
+  family_of_surface = {}
+  OUGHTA_BE_IDENTICAL.each do |key, variants|
+    family_of_surface[key] = key
+    variants.each { |v| family_of_surface[v] = key }
+  end
 
   tp = tn = fp = fn = 0
   pos = neg = 0
@@ -88,6 +165,13 @@ Dir.chdir(repo) do
   composite = 0
   weighted_total = 0
   weighted_correct = 0
+
+  # Per-family error tracking so you can see which cue family (pirate, crime,
+  # music, ...) is dragging the aggregate down. Populated only for rows where
+  # at least one side is an +OUGHTA_BE_IDENTICAL+ surface form.
+  family_stats = Hash.new do |h, k|
+    h[k] = { rows: 0, correct: 0, sfn: 0, ifn: 0, sfp: 0, ifp: 0, composite: 0 }
+  end
 
   failures_strong_fn = []
   failures_ish_fn = []
@@ -130,18 +214,35 @@ Dir.chdir(repo) do
     weighted_total += row_w
     weighted_correct += row_w if act == exp
 
+    family = cue_family_for(
+      r["word1"].to_s.strip.downcase,
+      r["word2"].to_s.strip.downcase,
+      family_of_surface,
+    )
+    fs = family ? family_stats[family] : nil
+    fs[:rows] += 1 if fs
+
     if exp
       if act
         tp += 1
+        fs[:correct] += 1 if fs
       else
         fn += 1
         if ish
           ish_fn += 1
           composite += -3
+          if fs
+            fs[:ifn] += 1
+            fs[:composite] += -3
+          end
           failures_ish_fn << related_failure_diagnostic_line(r["word1"], r["word2"], kind) if want_failures
         else
           strong_fn += 1
           composite += -9
+          if fs
+            fs[:sfn] += 1
+            fs[:composite] += -9
+          end
           failures_strong_fn << related_failure_diagnostic_line(r["word1"], r["word2"], kind) if want_failures
         end
       end
@@ -150,14 +251,23 @@ Dir.chdir(repo) do
       if ish
         ish_fp += 1
         composite += -1
+        if fs
+          fs[:ifp] += 1
+          fs[:composite] += -1
+        end
         failures_ish_fp << related_failure_diagnostic_line(r["word1"], r["word2"], kind) if want_failures
       else
         strong_fp += 1
         composite += -3
+        if fs
+          fs[:sfp] += 1
+          fs[:composite] += -3
+        end
         failures_strong_fp << related_failure_diagnostic_line(r["word1"], r["word2"], kind) if want_failures
       end
     else
       tn += 1
+      fs[:correct] += 1 if fs
     end
   end
 
@@ -172,6 +282,7 @@ Dir.chdir(repo) do
   prec = (tp + fp).zero? ? 0.0 : (tp.to_f / (tp + fp))
 
   puts "spec/related.csv  n=#{n}  positive=#{pos}  negative=#{neg}  (+#{skipped_whatever} whatever rows skipped)"
+  puts "  raw rows=#{raw_rows.size}  +#{clone_count} OUGHTA_BE_IDENTICAL clones across #{OUGHTA_BE_IDENTICAL.size} cue families"
   puts
   correct = tp + tn
 
@@ -196,6 +307,21 @@ Dir.chdir(repo) do
   puts format("TPR (related)           %.6f", tpr)
   puts format("TNR (unrelated)         %.6f", tnr)
   puts format("precision (related)     %.6f", prec)
+
+  unless family_stats.empty?
+    puts
+    puts "=== Per-cue-family breakdown (OUGHTA_BE_IDENTICAL) ==="
+    puts format("%-10s %6s %8s %6s %4s %4s %4s %4s %9s",
+      "family", "rows", "correct", "acc%", "sFN", "iFN", "sFP", "iFP", "composite")
+    ordered = OUGHTA_BE_IDENTICAL.keys.select { |k| family_stats.key?(k) }
+    ordered.each do |fam|
+      s = family_stats[fam]
+      acc = s[:rows].zero? ? 0.0 : (100.0 * s[:correct] / s[:rows])
+      puts format("%-10s %6d %8d %5.1f%% %4d %4d %4d %4d %9d",
+        fam, s[:rows], s[:correct], acc,
+        s[:sfn], s[:ifn], s[:sfp], s[:ifp], s[:composite])
+    end
+  end
 
   if want_failures
     [

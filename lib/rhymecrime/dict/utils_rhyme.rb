@@ -201,13 +201,31 @@ end
 # Lexicon headwords (+ optional +WORDS_NEEDED_FOR_TESTING+). When +include_rhymeless+ is false,
 # keep only words for which +has_rhyming_word?+ is true. When +common_only+ is true, drop +rare?+
 # headwords (+frequency+ at or below +RARE_FREQ_MAX+). Both predicates need +crime.rb+ loaded.
+#
+# Memoized per +(include_rhymeless, common_only)+ flag combination (4 possible
+# keys total) because the hot path in +bin/precompute-relatedness+ calls
+# +words_we_care_about(false, true)+ once per cue (~4000x per worker), and
+# rebuilding the ~20k-element filtered list — which includes a
+# +has_rhyming_word?+ pronunciations / rdict probe per candidate — dominated
+# the per-cue overhead. +word_dict+ is loaded once and treated as immutable
+# at runtime, so the memo is safe; dict-build scripts that mutate
+# +word_dict+ do not call this function.
+#
+# The parent in +bin/precompute-relatedness+ primes this memo before +fork+
+# so all worker processes inherit the filled entry via copy-on-write instead
+# of each rebuilding it from scratch.
+$words_we_care_about_memo = {}
 def words_we_care_about(include_rhymeless = true, common_only = false)
+  cache_key = [include_rhymeless, common_only]
+  cached = $words_we_care_about_memo[cache_key]
+  return cached if cached
+
   keys = word_dict.keys
   keys |= WORDS_NEEDED_FOR_TESTING if defined?(WORDS_NEEDED_FOR_TESTING)
   keys = keys.uniq
   keys = keys.select { |w| has_rhyming_word?(w) } unless include_rhymeless
   keys = keys.reject { |w| rare?(w) } if common_only
-  keys
+  $words_we_care_about_memo[cache_key] = keys.freeze
 end
 
 # Returns UK spelling for a US (z) headword, or nil if not applicable.

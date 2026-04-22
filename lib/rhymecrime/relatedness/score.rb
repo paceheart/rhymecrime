@@ -25,6 +25,12 @@ require_relative "signals"
 
 RELATEDNESS_CLASSIFIER_PATH = generated_dict_path(RELATEDNESS_CLASSIFIER_FILENAME) unless defined?(RELATEDNESS_CLASSIFIER_PATH)
 
+# On-disk GBT tree format this loader understands. When +bin/train-relatedness-classifier+
+# emits a different +tree_format+, the classifier is rejected at load time (loud
+# warning, rule-based mode takes over) rather than silently misbehaving. Bump in
+# lock-step with the trainer whenever the node layout changes.
+SUPPORTED_GBT_TREE_FORMAT = "parallel_v1" unless defined?(SUPPORTED_GBT_TREE_FORMAT)
+
 def related_trace_memo?
   ENV["RELATED_TRACE_MEMO"].to_s == "1"
 end
@@ -168,6 +174,14 @@ def relatedness_classifier
     return nil
   end
 
+  if (clf["model_type"] || "logreg") == "gbt"
+    fmt = clf["tree_format"]
+    unless fmt == SUPPORTED_GBT_TREE_FORMAT
+      warn "related: unsupported GBT tree_format=#{fmt.inspect} in #{path} (expected #{SUPPORTED_GBT_TREE_FORMAT.inspect}); retrain via bin/retrain-relatedness."
+      return nil
+    end
+  end
+
   $relatedness_classifier = clf
   type = clf["model_type"] || "logreg"
   extra = if type == "gbt"
@@ -189,14 +203,21 @@ def learned_sigmoid(z)
   end
 end
 
-# Walk a flat tree (trainer emits one array of nodes per tree, leaves have "v",
-# internal nodes have "f"/"t"/"l"/"r"). Left branch = <=, right branch = >.
-def learned_tree_predict(nodes, row)
+# Walk a parallel-array tree (trainer emits one +{f, t, l, r}+ hash per tree).
+# +f[i] == -1+ marks a leaf and +t[i]+ carries the leaf value (threshold and leaf
+# value share the slot — an internal node's +t+ is a threshold, a leaf's +t+ is
+# its return value). Hoist all four arrays once per tree so the hot loop is pure
+# integer indexing. Left branch = <=, right branch = >.
+def learned_tree_predict(tree, row)
+  f = tree["f"]
+  t = tree["t"]
+  l = tree["l"]
+  r = tree["r"]
   idx = 0
   loop do
-    node = nodes[idx]
-    return node["v"] if node.key?("v")
-    idx = row[node["f"]] <= node["t"] ? node["l"] : node["r"]
+    fi = f[idx]
+    return t[idx] if fi < 0
+    idx = row[fi] <= t[idx] ? l[idx] : r[idx]
   end
 end
 
@@ -230,12 +251,14 @@ def learned_relatedness_probability(signals)
   end
 end
 
-# Classifier probability → 0..100 score, calibrated so that +p == threshold+ maps
-# to +RELATEDNESS_SCORE_THRESHOLD+ exactly. Piecewise linear in +p+; avoids wasting
-# dynamic range on the mostly-empty tail above/below the decision boundary.
-def learned_relatedness_score(signals)
-  p = learned_relatedness_probability(signals)
-  return nil if p.nil?
+# Piecewise-linear map from classifier probability in +[0, 1]+ to the public
+# 0..100 relatedness score. Calibrated so +p == threshold+ maps to
+# +RELATEDNESS_SCORE_THRESHOLD+ exactly — that way changing the classifier's
+# operating point (its +threshold+ field) moves only the confidence-to-score
+# curve, never the cross-over between "related" and "not related". Extracted
+# into its own helper so callers that already have +p+ in hand don't have to
+# re-invoke the 200-tree GBT just to compute the display score.
+def probability_to_learned_score(p)
   clf = $relatedness_classifier
   t = clf["threshold"].to_f
   t = 0.5 if t <= 0 || t >= 1
@@ -244,6 +267,15 @@ def learned_relatedness_score(signals)
   else
     (RELATEDNESS_SCORE_THRESHOLD + (100 - RELATEDNESS_SCORE_THRESHOLD) * (p - t) / (1 - t)).round
   end
+end
+
+# Classifier probability → 0..100 score, calibrated so that +p == threshold+ maps
+# to +RELATEDNESS_SCORE_THRESHOLD+ exactly. Piecewise linear in +p+; avoids wasting
+# dynamic range on the mostly-empty tail above/below the decision boundary.
+def learned_relatedness_score(signals)
+  p = learned_relatedness_probability(signals)
+  return nil if p.nil?
+  probability_to_learned_score(p)
 end
 
 # Returns an array of +[score, reason]+ tuples: one per rule whose preconditions are
@@ -258,10 +290,15 @@ def relatedness_contributions(signals)
 
   # Learned-classifier replace mode: the logistic regression over all phase-1
   # signals is the *only* contribution (except the stop-word short-circuit above).
+  #
+  # Score and reason both need the classifier probability, but the GBT is the
+  # hot-path bottleneck in +bin/precompute-relatedness+ (~70% of per-cue scan
+  # time). Compute +p+ once and derive the display score from it rather than
+  # calling the classifier twice.
   if $RELATED_LEARNED_MODE == "replace"
-    learned = learned_relatedness_score(signals)
-    if learned
-      p = learned_relatedness_probability(signals)
+    p = learned_relatedness_probability(signals)
+    if p
+      learned = probability_to_learned_score(p)
       return [[learned, format("learned_replace: p=%.3f", p)]]
     end
   end
@@ -338,10 +375,9 @@ def relatedness_contributions(signals)
   # contributes one more rule. Max-over-contributions means it can only rescue
   # pairs the hand rules missed, never veto them — safe to enable alongside.
   if $RELATED_LEARNED_MODE == "additive"
-    learned = learned_relatedness_score(signals)
-    if learned
-      p = learned_relatedness_probability(signals)
-      contributions << [learned, format("learned: p=%.3f", p)]
+    p = learned_relatedness_probability(signals)
+    if p
+      contributions << [probability_to_learned_score(p), format("learned: p=%.3f", p)]
     end
   end
 

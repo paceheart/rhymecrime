@@ -45,9 +45,7 @@ def numberbatch_cosine_raw_spellings(k1, k2)
   v2 = nb[hyphens_to_underscores(k2)]
   return 0.0 if v1.nil? || v2.nil?
 
-  dot = 0.0
-  v1.size.times { |i| dot += v1[i] * v2[i] }
-  dot
+  v1.dot(v2).to_f
 end
 
 Dir.chdir(repo) do

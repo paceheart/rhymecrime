@@ -205,6 +205,7 @@ module Inflect
 
   def self.each_derivable_form(base)
     return if base.nil? || base.empty?
+    return if base.end_with?("'")
 
     bl = base.bytesize
     # Character length for [-1]/[-2] indexing (bytesize can be ≥2 while .length is 1, e.g. one UTF-8 letter).
