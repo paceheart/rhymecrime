@@ -24,11 +24,17 @@
 #   --output=PATH          Override SQLite path (default: generated/rhymecrime_local.sqlite3)
 #   --dry-run              Compute only; print progress, do not write a file
 #   --max-cues=N           Only process first N lemmas (smoke test)
-#   --start-after=WORD     Skip lemmas until after this string (lexicographic)
+#   --start-after=WORD     Resume-after-crash: skip lemmas up through this one in
+#                          the current processing order (freq-desc, alpha within band).
+                           This will do the wrong thing if the word frequencies change.
 #   --threads=N            Parallel workers (fork-based). Default: half of +Etc.nprocessors+.
 #   --incremental          Keep existing rows in the target DB and only process cues
 #                          not already present. Use after widening the cue filter so
 #                          you don't redo cues the stored rows already cover.
+#
+# Ordering: cues are processed frequency-descending, alphabetical within band.
+# This front-loads the high-value common cues so a Ctrl-C partway through still
+# leaves the hub lemmas persisted; the long tail of lower-freq cues runs last.
 #
 # Threading notes: the compute is pure-Ruby CPU-bound, so we fork worker processes
 # rather than native threads (MRI's GVL prevents parallel Ruby execution). All
@@ -127,16 +133,31 @@ lemmas = rep.keys.select do |lem|
   next false unless wd.key?(lem)
 
   cue_word?(lem, wd)
-end.sort
-lemmas.select! { |l| l > start_after } if start_after
-lemmas = lemmas.first(max_cues) if max_cues
-
+end
+# Process high-frequency cues first so a mid-run Ctrl-C leaves the hub lemmas
+# persisted. +frequency+ is heavily quantized in +word_dict+ (mostly 99 vs
+# ~10), so this degenerates into a two-bucket priority queue with a
+# deterministic alpha sort inside each band (handy for diffing progress logs
+# between runs).
+lemmas.sort_by! { |l| [-wd[l][0].to_i, l] }
 # Stop words are related to every other word (see +thematically_related?+), so their
 # precompute entry would be the full candidate list — ~20k headwords per stop word.
 # The runtime in +RelatedWords.find_all_thematically_related_words+ short-circuits
-# stop-word lookups to +words_we_care_about+ directly, so no row is needed.
+# stop-word lookups to +words_we_care_about+ directly, so no row is needed. Peel
+# them off before +--start-after+ / +--max-cues+ apply so a +--max-cues=5+ smoke
+# test doesn't burn its entire budget on +a+/+about+/+above+ (all freq-99 stop
+# words that sort ahead of the real work).
 stopword_lemmas, lemmas = lemmas.partition { |l| stop_word?(l) }
 puts "Skipping #{stopword_lemmas.size} stop-word lemmas (runtime short-circuits to words_we_care_about): #{stopword_lemmas.inspect}" if stopword_lemmas.any?
+
+if start_after
+  # Resume-after-crash: drop everything up through +start_after+ in the current
+  # sort order (freq-desc, alpha). Pre-reorder this compared lexicographically,
+  # which no longer matches the processing order.
+  idx = lemmas.index(start_after)
+  lemmas = idx ? lemmas[(idx + 1)..] : []
+end
+lemmas = lemmas.first(max_cues) if max_cues
 
 # +--incremental+: keep the existing +output_path+ DB and only process cues
 # not already present. Used to grow the precompute table after widening the
