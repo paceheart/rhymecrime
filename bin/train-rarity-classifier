@@ -336,10 +336,6 @@ def predict_linreg(raw_row, w, means, stds)
   z
 end
 
-def predict_logreg(raw_row, w, means, stds)
-  sigmoid(predict_linreg(raw_row, w, means, stds))
-end
-
 # --- GBT (binary classification + regression) ------------------------------
 
 def find_best_split_gbt(x_rows, g, h, feature_indices, rows, total_g, total_h, lambda_leaf:, min_child_hessian:)

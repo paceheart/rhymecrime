@@ -159,14 +159,6 @@ def wn_parse_synset_header_fields(header)
   { words: words, ptrs: ptrs }
 end
 
-def wn_header_lists_lemma?(header, base)
-  st = wn_parse_synset_header_fields(header)
-  return false if st.nil?
-
-  want = [base.to_s.downcase, hyphens_to_underscores(base).downcase, base.to_s.tr("_", "-").downcase].uniq
-  st[:words].any? { |w| want.include?(w) }
-end
-
 # All member lemmas (lowercase) in synsets reached by 1-hop derivation pointers from any sense of +word+.
 def wn_derivation_target_lemmas_for_word(word)
   names = Set.new

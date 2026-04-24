@@ -465,22 +465,6 @@ def wiktionary_pair_is_useful?(a, b, rows, wordfreq_hash)
   end
 end
 
-# A +form_of+ sense is worth keeping only when its tags signal spelling variation rather
-# than inflection. Kaikki marks plain inflections with +plural+/+past+/+participle+/etc.;
-# the alt-spelling side is usually tagged +alternative+/+alt-form+/+archaic+/+obsolete+/
-# +dialectal+/+nonstandard+/+rare+/+dated+/+standard+ (the latter when one spelling is the
-# "standard" version of a nonstandard form).
-def variant_tags_look_like_spelling?(tags)
-  return false if tags.nil? || tags.empty?
-  tags.any? { |t| SPELLING_VARIANT_TAG_HINTS.include?(t) }
-end
-
-SPELLING_VARIANT_TAG_HINTS = Set.new(%w[
-  alternative alt-form altform alt-spelling alt-of
-  archaic obsolete dated rare dialectal nonstandard informal
-  standard spelling Eye-dialect eye-dialect Latinization
-])
-
 # Pick the preferred spelling for a Wiktionary-attested pair, given a set of directional
 # evidence rows {variant:, target:, source:, tags:}. Rules in precedence order:
 #

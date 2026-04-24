@@ -136,9 +136,6 @@ def word_dict()
 end
 
 WORDS_NEEDED_FOR_TESTING = ['arpeggio', 'asterisk', 'blackmail', 'bobcat', 'burglar', 'burglary', 'cat', 'celebrity', 'costume', 'crime', 'doubloons', 'drumsticks', 'fanciers', 'feline', 'fortissimo', 'galaxy', 'glissando', 'halloween', 'hemiola', 'homicide', 'item', 'jaguar', 'mandolin', 'music', 'overtone', 'pianissimo', 'pirate', 'pussy', 'repertoire', 'ritardando', 'scurvy', 'star', 'thing', 'tree', 'treetop', 'trespassing', 'whiskers', 'wildcat', 'xylophone'] # include these even if they don't have any rhymes
-def needed_for_testing?(word)
-  WORDS_NEEDED_FOR_TESTING.include?(word)
-end  
 
 $rdict = nil # rime (underscore ARPABET key) -> words hash
 def rdict
@@ -267,10 +264,6 @@ def prefix_words(words, focal_word)
   return result
 end
 
-def any_rhyming_words?(word)
-  !find_rhyming_words(word).empty?
-end
-
 def find_rhyming_words(word, identical_ok=true)
   # merges multiple pronunciations of WORD
   # use our compiled rime dictionary
@@ -355,26 +348,6 @@ end
 
 def filter_out_rhymeless_words(words)
   words.select { |word| has_rhyming_word?(word) }
-end
-
-#
-# WordNet stuff
-#
-
-def find_synsets(word)
-  lemmas = WordNet::Lemma.find_all(word)
-  synsets = lemmas.map { |lemma| lemma.synsets }
-  return synsets.flatten || [ ]
-end
-
-def find_synonyms(word)
-  results = Array.new
-  for synset in find_synsets(word) do
-    for word in synset.words do
-      results << word
-    end
-  end
-  return results.uniq!.sort!
 end
 
 #
@@ -1242,17 +1215,6 @@ def filter_out_rare_tuples(tuples)
   return good, bad
 end
 
-def rare_pair?(pair)
-  rare_tuple?(pair, 2)
-end
-
-def filter_out_rare_pairs(tuples)
-  # A pair only gets to be common if both its words are common
-  good = tuples.reject{ |t| rare_pair?(t) }
-  bad = tuples.select { |t| rare_pair?(t) }
-  return good, bad
-end
-
 def print_word(word, focal_word=false)
   word = word.gsub(/\(.*\)/, '') # remove stuff in parentheses
   got_rhymes = !pronunciations(word).empty?
@@ -1363,17 +1325,3 @@ def related?(word1, word2, include_self=false)
   not explicitly_forbidden?(word1) and not explicitly_forbidden?(word2) and thematically_related?(word1, word2)
 end
 
-# Human-oriented debug line: why +related?+ is true, or +nil+ if it is false.
-# Applies the same +preferred_form+ and forbid rules as +related?+.
-def why_related?(word1, word2, include_self = false)
-  w1 = preferred_form(word1)
-  w2 = preferred_form(word2)
-  return "forbidden headword: #{w1}" if explicitly_forbidden?(w1)
-  return "forbidden headword: #{w2}" if explicitly_forbidden?(w2)
-  why_thematically_related?(w1, w2, include_self)
-end
-
-def rhymes?(word1, word2, identical_ok=true)
-  # Does word1 rhyme with word2?
-  find_rhyming_words(word1, identical_ok).include?(word2)
-end

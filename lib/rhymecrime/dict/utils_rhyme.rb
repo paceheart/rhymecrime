@@ -124,10 +124,6 @@ def load_forbid_list_as_array
   lines
 end
 
-def delete_explicitly_forbidden_words_from_array(array)
-  return array.reject { |word| explicitly_forbidden?(word) }
-end
-
 #
 # spelling variants
 #
@@ -195,16 +191,6 @@ def word_dict_includes_pronounced_headword?(w)
   return false unless entry
   prons = entry[1]
   prons.is_a?(Array) && !prons.empty?
-end
-
-# Headwords to consider when expanding topical relatedness (RhymeCrime lexicon + test extras).
-# Requires crime.rb to have defined +word_dict+ and optionally WORDS_NEEDED_FOR_TESTING.
-def word_we_care_about?(word)
-  w = word.to_s.downcase.strip
-  return false if w.empty?
-  return false if explicitly_forbidden?(w)
-  return true if defined?(WORDS_NEEDED_FOR_TESTING) && WORDS_NEEDED_FOR_TESTING.include?(w)
-  word_dict_includes_headword?(w)
 end
 
 # Lexicon headwords (+ optional +WORDS_NEEDED_FOR_TESTING+). When +include_rhymeless+ is false,
@@ -426,20 +412,6 @@ def us_uk_ll_parse(word)
     return [pseudo_base, suf]
   end
   nil
-end
-
-def us_to_uk_ll_spelling(us_word)
-  parsed = us_uk_ll_parse(us_word)
-  return nil unless parsed
-  pseudo_base, suf = parsed
-  pseudo_base + "l" + suf
-end
-
-def uk_to_us_ll_spelling(uk_word)
-  parsed = us_uk_ll_parse(uk_word)
-  return nil unless parsed
-  pseudo_base, suf = parsed
-  pseudo_base + suf
 end
 
 # Reject (filed, filled)-style collisions where the "real" base is a silent-e verb rather than

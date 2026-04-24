@@ -197,19 +197,6 @@ class Pronunciation
     @rime = rime_array.join("_").freeze
   end
 
-  # Consonants immediately before the primary-stressed vowel (same syllable); stress digits stripped.
-  def primary_stressed_syllable_onset_bases
-    ph = @phonemes
-    i = ph.index { |p| !p.syllable_boundary? && p.vowel? && p.include?("1") }
-    return [] if i.nil?
-    onset = []
-    (i - 1).downto(0) do |j|
-      break if ph[j].syllable_boundary?
-      onset.unshift(ph[j].tr("0-2", "")) unless ph[j].vowel?
-    end
-    onset
-  end
-
   def rhyme_syllables_array
     return @rhyme_syllables_array if defined?(@rhyme_syllables_array)
 

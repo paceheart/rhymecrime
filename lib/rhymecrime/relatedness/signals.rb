@@ -141,10 +141,6 @@ def conceptnet_adjacency
   adj
 end
 
-def conceptnet_neighbors(word)
-  conceptnet_adjacency[hyphens_to_underscores(word)] || Set.new
-end
-
 # Maximum shortest-path distance considered "meaningful" in the ConceptNet graph.
 # BFS is clipped here and distances >= CN_MAX_HOPS are coded in-band (see
 # +conceptnet_shortest_hops+). Exposed at top level so the source-cache helpers
@@ -666,13 +662,6 @@ def directional_sense_cosines(word1, word2)
   [best_1to2, best_2to1]
 end
 
-def max_sense_cosine(word1, word2)
-  directional_sense_cosines(word1, word2).max
-end
-
-# Morphy-resolved sense vectors for inflected forms (plurals, verb conjugations)
-# that lack direct WordNet lemma entries. Only used as a fallback when
-# sense_vectors returns empty.
 # Morphy-derived sense-vector matrix (or +nil+), analogous to +sense_vectors+
 # but resolves inflected forms (plurals, verb conjugations) through WordNet's
 # morphy. Same return shape so both feed the same +directional_sense_cosines+

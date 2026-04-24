@@ -127,10 +127,6 @@ def print_html_percent_similarity(word, focal_word)
   cgi_print " <span style='color: #{word_similarity_color(word, focal_word)}'>(#{percent_similarity(word, focal_word)})</span>"
 end
 
-def print_similarity(word1, word2)
-  puts "#{word1} #{word2}: #{similarity(word1, word2)}"
-end
-
 # --- Thematic relatedness predicate ---
 
 # True iff the two headwords are topically related. Symmetric. Stop words are

@@ -9,10 +9,6 @@ module Phoneme
     @pool[s] ||= s.dup.freeze
   end
 
-  def self.intern_tokens(tokens)
-    tokens.map { |t| intern(t) }
-  end
-
   # Strip stress digits (0–2) from an ARPAbet token; memoized per interned phone.
   def self.bare_base(str)
     s = str.to_s
