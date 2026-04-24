@@ -1,0 +1,213 @@
+#!/usr/bin/env ruby
+# encoding: UTF-8
+# Active-learning helper: append +TARGET_PAIRS+ new untagged (word1, word2) rows
+# to +spec/related.csv+ whose hand-labels would be most informative for the
+# relatedness classifier. Pairs are sampled by uncertainty.
+#
+# Tracks:
+#   pos (borderline-positive): the precomputed relatedness store says the
+#        classifier barely thinks these are related (score in
+#        [TRACK_A_LOW, TRACK_A_HIGH], just above the 50 threshold).
+#   neg (borderline-negative): among each cue's Numberbatch-nearest headwords,
+#        the classifier's learned score falls just below threshold
+#        ([TRACK_B_LOW, TRACK_B_HIGH]) — "almost related, but not quite".
+#
+# De-duplication is lemma-normalized and order-insensitive: +(foo, bar)+ and
+# +(bars, foo)+ collapse to the same key.
+#
+# Knobs (env vars):
+#   MODE           pos | neg | mixed   (default: mixed)
+#   TARGET_PAIRS   integer   (default: 1000)
+#   NB_K           integer   (default: 800 mixed / 4000 neg) top-K NB cosine scan
+#   TRACK_A_LOW/HIGH, TRACK_B_LOW/HIGH
+#   MAX_PER_CUE    integer   (default: 15)
+#
+# Usage:
+#   bundle exec bin/suggest-untagged-relatedness                 # mixed
+#   MODE=neg NB_K=4000 bundle exec bin/suggest-untagged-relatedness
+
+Encoding.default_external = Encoding::UTF_8
+$LOAD_PATH.unshift(File.expand_path("../lib", __dir__))
+
+require "csv"
+require "set"
+require "rhymecrime/crime"
+require "rhymecrime/relatedness/signals"
+require "rhymecrime/relatedness/score"
+require "rhymecrime/store"
+
+MODE                 = (ENV["MODE"] || "mixed").downcase
+TARGET_PAIRS         = (ENV["TARGET_PAIRS"] || "1000").to_i
+CSV_PATH             = File.expand_path("../spec/related.csv", __dir__)
+TRACK_A_LOW          = (ENV["TRACK_A_LOW"]  || "50").to_i
+TRACK_A_HIGH         = (ENV["TRACK_A_HIGH"] || "65").to_i
+TRACK_B_LOW          = (ENV["TRACK_B_LOW"]  || (MODE == "neg" ? "25" : "30")).to_i
+TRACK_B_HIGH         = (ENV["TRACK_B_HIGH"] || "49").to_i
+NB_NEIGHBORS_PER_CUE = (ENV["NB_K"] || (MODE == "neg" ? "4000" : "800")).to_i
+MAX_PER_CUE          = (ENV["MAX_PER_CUE"] || "15").to_i
+MAX_TRACK_A_PER_CUE  = MODE == "neg"   ? 0          : 10
+MAX_TRACK_B_PER_CUE  = MODE == "pos"   ? 0          : (MODE == "neg" ? MAX_PER_CUE : 5)
+
+# Mix of topical areas, chosen to (a) broaden cue diversity beyond the
+# +cat / gay / food / pirate+ concentration in the existing CSV and
+# (b) exercise classifier behaviour on everyday words that any hand-tagger
+# can label confidently.
+CUES = %w[
+  dog bird horse snake bear wolf fox rabbit shark eagle spider bee lion tiger
+  pizza bread cake chocolate coffee apple wine meat rice cheese
+  river tree mountain ocean forest desert storm cloud sky moon
+  snow sun wind fire
+  love fear anger joy sadness hate
+  eye heart hand foot skin blood bone ear
+  run swim sing laugh write read sleep cook
+  book car phone chair clock hammer knife
+  city school hospital church park beach kitchen bedroom
+  time death freedom justice truth dream memory soul
+  guitar piano song dance
+  atom galaxy chemistry biology gravity
+  robot internet satellite battery
+  doctor teacher lawyer farmer soldier
+  soccer tennis boxing chess
+  ghost dragon witch angel demon
+  president election vote war peace
+  red blue yellow green black
+  baby family friend enemy
+  money art science religion
+  garden factory museum
+].uniq.freeze
+
+def pair_key(a, b)
+  la = (lemma(a) || a).to_s
+  lb = (lemma(b) || b).to_s
+  la <= lb ? "#{la}\t#{lb}" : "#{lb}\t#{la}"
+end
+
+# Hand-taggable-quality gate: dict-common (freq > +RARE_FREQ_MAX+) and on the
+# preferred-spelling side of any variant pair. Drops UK variants, rare proper
+# nouns, NB-vocab-only tokens — all things the classifier shouldn't be asked
+# to generalize from.
+def common_preferred?(w)
+  word_common_preferred_for_tuple_or_pair?(w.to_s)
+end
+
+def load_existing_pairs
+  seen = Set.new
+  CSV.foreach(CSV_PATH, headers: true) do |row|
+    w1 = row["word1"].to_s.strip.downcase
+    w2 = row["word2"].to_s.strip.downcase
+    next if w1.empty? || w2.empty?
+    seen << pair_key(w1, w2)
+  end
+  seen
+end
+
+def track_a_candidates(cue_raw, cue_lemma, seen_pairs, max)
+  return [] if max <= 0
+  return [] unless common_preferred?(cue_raw)
+  tuples = Rhymecrime::Store.fetch_related_tuples(cue_lemma)
+  pool = tuples.map { |(w, s)| [w.to_s, s.to_i] }
+                .select { |(w, s)| s >= TRACK_A_LOW && s <= TRACK_A_HIGH && w != cue_lemma && w != cue_raw }
+  pool.sort_by! { |(_, s)| s }
+  picks = []
+  pool.each do |(w, s)|
+    key = pair_key(cue_raw, w)
+    next if seen_pairs.include?(key)
+    next if stop_word?(w)
+    next unless common_preferred?(w)
+    picks << [w, s, :pos]
+    seen_pairs << key
+    break if picks.size >= max
+  end
+  picks
+end
+
+# Scan the +NB_NEIGHBORS_PER_CUE+ Numberbatch-nearest candidates, score them
+# with the classifier, keep those whose learned score lands in the
+# [+TRACK_B_LOW+, +TRACK_B_HIGH+] uncertainty band. Ordered by highest-score
+# (closest to threshold) first — those are the most informative to label.
+def track_b_candidates(cue_raw, cue_lemma, seen_pairs, max)
+  return [] if max <= 0
+  return [] unless common_preferred?(cue_raw)
+  nb = numberbatch_table
+  v_cue = nb[hyphens_to_underscores(cue_raw)] || nb[hyphens_to_underscores(cue_lemma)]
+  return [] if v_cue.nil?
+
+  scored = nb.map { |w, v| [w, v_cue.dot(v).to_f] }
+  scored.sort_by! { |(_, c)| -c }
+
+  hits = []
+  scored.first(NB_NEIGHBORS_PER_CUE).each do |(w, _cos)|
+    next if w == cue_raw || w == cue_lemma || w == hyphens_to_underscores(cue_raw)
+    next unless word_dict_includes_headword?(w)
+    next if stop_word?(w)
+    next unless common_preferred?(w)
+
+    key = pair_key(cue_raw, w)
+    next if seen_pairs.include?(key)
+
+    signals = PairSignals.new(cue_raw, w)
+    next if signals.involves_stop_word?
+    s = learned_relatedness_score(signals)
+    next if s.nil?
+    next unless s >= TRACK_B_LOW && s <= TRACK_B_HIGH
+
+    hits << [w, s]
+  end
+
+  # Rank by learned score descending — highest (closest to threshold) first.
+  hits.sort_by! { |(_, s)| -s }
+  picks = []
+  hits.each do |(w, s)|
+    key = pair_key(cue_raw, w)
+    next if seen_pairs.include?(key)
+    picks << [w, s, :neg]
+    seen_pairs << key
+    break if picks.size >= max
+  end
+  picks
+end
+
+warn "mode=#{MODE} target=#{TARGET_PAIRS} NB_K=#{NB_NEIGHBORS_PER_CUE} B=[#{TRACK_B_LOW},#{TRACK_B_HIGH}]"
+warn "Loading existing pairs from #{CSV_PATH}..."
+seen_pairs = load_existing_pairs
+warn "#{seen_pairs.size} existing pairs"
+
+warn "Warming dict / numberbatch / classifier..."
+word_dict
+numberbatch_table
+relatedness_classifier
+
+cues = CUES.shuffle(random: Random.new(17))
+rows = []
+
+cues.each_with_index do |cue, i|
+  break if rows.size >= TARGET_PAIRS
+  cue_lemma = (lemma(cue) || cue).to_s
+  next if cue_lemma.empty?
+
+  # Warm with the RAW cue so +cn_hops+ inside +PairSignals.new(cue, w)+ hits
+  # the source-fixed cache, not the slow fall-through.
+  prepare_cn_hops_source!(cue)
+
+  begin
+    a = track_a_candidates(cue, cue_lemma, seen_pairs, MAX_TRACK_A_PER_CUE)
+    b_budget = [MAX_TRACK_B_PER_CUE, MAX_PER_CUE - a.size].min
+    b = track_b_candidates(cue, cue_lemma, seen_pairs, b_budget)
+  ensure
+    clear_cn_hops_source!
+  end
+
+  (a + b).each do |(w, s, track)|
+    rows << [cue, w, "", "active-learn #{track}:#{s}"]
+  end
+  warn "[#{i + 1}/#{cues.size}] cue=#{cue} lemma=#{cue_lemma} +#{a.size}pos +#{b.size}neg (total=#{rows.size})"
+end
+
+rows = rows.first(TARGET_PAIRS)
+warn "Appending #{rows.size} rows to #{CSV_PATH}"
+
+CSV.open(CSV_PATH, "a") do |csv|
+  rows.each { |r| csv << r }
+end
+
+warn "Done. New total: #{`wc -l #{CSV_PATH}`.strip}"

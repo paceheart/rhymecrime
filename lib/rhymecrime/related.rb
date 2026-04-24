@@ -43,6 +43,16 @@ def related_trace_memo?
   ENV["RELATED_TRACE_MEMO"].to_s == "1"
 end
 
+# Diagnostic knob for +spec/related_weighted_accuracy.rb+ and ad-hoc eval work:
+# when set, +thematically_related?+ / +why_thematically_related?+ skip the
+# precomputed Store lookup and always run the compute pipeline. Lets
+# post-retrain evals measure the *current* classifier + rules against
+# +spec/related.csv+ without waiting for a full +bin/precompute-relatedness+
+# rebuild. Never consulted at Lambda runtime (production never sets the var).
+def related_bypass_store?
+  ENV["RELATED_BYPASS_STORE"].to_s == "1"
+end
+
 # Lazy-require the full relatedness compute pipeline. Only invoked when the
 # Store has no answer (local-dev / spec fallback). Once loaded, heavy
 # knowledge bases (Numberbatch, ConceptNet, WordNet, etc.) stay in memory for
@@ -148,13 +158,15 @@ def thematically_related?(word1, word2, include_self = false)
   a, b = l1 <= l2 ? [l1, l2] : [l2, l1]
   puts "  -> lemma key #{a} #{b}" if related_trace_memo?
 
-  return true if RelatedWords.pair_in_store?(a, b)
+  unless related_bypass_store?
+    return true if RelatedWords.pair_in_store?(a, b)
 
-  # DDB is authoritative: "missing means unrelated," no compute fallback in
-  # Lambda. The LocalStore is a dev cache — it may not cover every pair (eval
-  # scripts routinely probe rare cues + rhymeless lemmas), so a miss there
-  # falls through to the compute pipeline.
-  return false if store_authoritative?
+    # DDB is authoritative: "missing means unrelated," no compute fallback in
+    # Lambda. The LocalStore is a dev cache — it may not cover every pair (eval
+    # scripts routinely probe rare cues + rhymeless lemmas), so a miss there
+    # falls through to the compute pipeline.
+    return false if store_authoritative?
+  end
 
   relatedness_lazy_load_compute!
   thematically_related_pair_memoized?(a, b)
@@ -172,10 +184,12 @@ def why_thematically_related?(word1, word2, include_self = false)
   l2 = lemma(word2)
   a, b = l1 <= l2 ? [l1, l2] : [l2, l1]
 
-  score = RelatedWords.lookup_score_by_lemmas(a, b)
-  return "precomputed: topically related (score=#{score})" if score >= RELATEDNESS_SCORE_THRESHOLD
+  unless related_bypass_store?
+    score = RelatedWords.lookup_score_by_lemmas(a, b)
+    return "precomputed: topically related (score=#{score})" if score >= RELATEDNESS_SCORE_THRESHOLD
 
-  return nil if store_authoritative?
+    return nil if store_authoritative?
+  end
 
   relatedness_lazy_load_compute!
   why_thematically_related_full?(word1, word2, include_self)

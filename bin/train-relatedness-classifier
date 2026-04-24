@@ -518,33 +518,53 @@ ENV["RELATED_LEARNED_MODE"] = "off"
 path = File.join(repo, "spec", "related.csv")
 raw_rows = CSV.parse(File.read(path, encoding: "UTF-8"), headers: true)
 
+# Drop stop-word rows up front: phase 3's stop-word short-circuit makes the
+# predicate trivially-true for any pair where either side is a stop word, so
+# these rows can't teach the classifier anything useful (they'd just inject
+# easy positives and confuse the negative half if labeled +unrelated+). Filter
+# on both surface form and lemma — users write "running" but the short-circuit
+# checks +stop_word?("running")+ only after phase 3 computes +lemma+.
+skipped_stopword = 0
+rows = raw_rows.reject do |r|
+  w1 = r["word1"]
+  w2 = r["word2"]
+  next false if w1.nil? || w2.nil?
+  drop = stop_word?(w1) || stop_word?(w2) || stop_word?(lemma(w1)) || stop_word?(lemma(w2))
+  skipped_stopword += 1 if drop
+  drop
+end
+
 features_list = []
 labels = []
 weights = []
 ish_flags = []
 
-skipped_stopword = 0
+# Experimental knob: treat +whatever+ rows ("either answer is fine") as soft
+# negatives (+unrelated_ish+) instead of skipping them. Ish-strength, not
+# strong: the annotator specifically declined to make a confident call, so
+# strong-unrelated would over-claim. The hypothesis is that adding 200-ish
+# gentle negatives gives the classifier more middle-ground coverage without
+# penalizing it too hard if it does fire on them.
+whatever_as_unrelated = ENV["RELATED_WHATEVER_AS_UNRELATED"] == "1"
 skipped_whatever = 0
+relabeled_whatever = 0
 
-raw_rows.each do |r|
+rows.each do |r|
   kind = r["oughta be related?"].to_s.strip
   if kind == "whatever"
-    skipped_whatever += 1
-    next
+    if whatever_as_unrelated
+      kind = "unrelated_ish"
+      relabeled_whatever += 1
+    else
+      skipped_whatever += 1
+      next
+    end
   end
 
   w1 = r["word1"]
   w2 = r["word2"]
-  if stop_word?(w1) || stop_word?(w2)
-    skipped_stopword += 1
-    next
-  end
   l1 = lemma(w1)
   l2 = lemma(w2)
-  if stop_word?(l1) || stop_word?(l2)
-    skipped_stopword += 1
-    next
-  end
 
   a, b = l1 <= l2 ? [l1, l2] : [l2, l1]
   signals = PairSignals.new(a, b)
@@ -564,9 +584,16 @@ raw_rows.each do |r|
   ish_flags << ish
 end
 
+pos_weight_mass = weights.each_with_index.sum { |w, i| labels[i] == 1.0 ? w : 0.0 }
+neg_weight_mass = weights.each_with_index.sum { |w, i| labels[i] == 0.0 ? w : 0.0 }
 puts "model: #{options[:model]}"
-puts "training examples: #{features_list.size}  (+#{skipped_whatever} whatever, #{skipped_stopword} stop-word pairs skipped)"
+whatever_note = whatever_as_unrelated ? "#{relabeled_whatever} whatever→unrelated_ish (RELATED_WHATEVER_AS_UNRELATED=1)" : "+#{skipped_whatever} whatever skipped"
+puts "training examples: #{features_list.size}  (#{whatever_note}, #{skipped_stopword} stop-word pairs filtered at load)"
 puts "positives: #{labels.count(1.0)}  negatives: #{labels.count(0.0)}"
+puts format(
+  "class asymmetry: fn_weight=%.2f (pos weight mass %.0f vs neg %.0f)  fn_penalty=%.2f",
+  options[:fn_weight], pos_weight_mass, neg_weight_mass, options[:fn_penalty]
+)
 puts "feature count: #{features_list.first.size}  (#{LEARNED_FEATURE_NAMES.join(', ')})"
 puts
 
@@ -656,6 +683,8 @@ common = {
     "rows" => features_list.size,
     "positives" => labels.count(1.0),
     "negatives" => labels.count(0.0),
+    "fn_weight" => options[:fn_weight],
+    "fn_penalty" => options[:fn_penalty],
     "seed" => options[:seed],
     "cv_folds" => options[:folds],
     "cv_pooled_composite" => pooled_composite,

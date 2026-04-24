@@ -19,13 +19,32 @@
 # and for principled threshold / signal work.
 #
 # 1) Composite score (MAXIMIZE — 0 is perfect)
-#    Penalties per mistake:
-#      strong false negative  -9   (expected related, not an "ish" row)
-#      ish    false negative  -3   (expected related, notes contain word "ish")
+#    Base penalties per mistake:
+#      strong false negative  -3   (expected related, not an "ish" row)
+#      ish    false negative  -1   (expected related, notes contain word "ish")
 #      strong false positive  -3   (expected unrelated, not ish)
 #      ish    false positive  -1   (expected unrelated, ish)
 #    Rows are "ish" when the +oughta be related?+ column is +related_ish+ or +unrelated_ish+.
 #    Rows marked +whatever+ are skipped (either answer is acceptable).
+#
+#    Two env-var levers let the evaluator mirror training-time class asymmetry
+#    (+bin/train-relatedness-classifier+'s +--fn-weight+ / +--fn-penalty+):
+#      RELATED_FN_WEIGHT   multiplies the "weighted accuracy" row weights for
+#                          positive rows (default 1.0 → symmetric; set to 3.0 to
+#                          reproduce the pre-2026 strong-related=9 banner).
+#      RELATED_FN_PENALTY  multiplies the FN composite terms (default 1.0; set to
+#                          3.0 to reproduce strong-FN=-9 / ish-FN=-3 scoring).
+#    Neither knob changes +thematically_related?+'s runtime behavior — they only
+#    re-weight the report for apples-to-apples comparison with a given training
+#    configuration.
+#
+#    RELATED_BYPASS_STORE=1   force the compute pipeline (live classifier + rule
+#                             bundle) instead of the precomputed SQLite store.
+#                             Set this after retraining to evaluate the *current*
+#                             pipeline; without it, rows whose precomputed score
+#                             is stale (built against an older classifier) are
+#                             judged on that stale answer rather than the retrained
+#                             one, and the eval can't see your training changes.
 #
 # 2) Balanced accuracy: 0.5 * TPR + 0.5 * TNR
 #
@@ -109,6 +128,19 @@ end
 want_profile = ARGV.include?("--profile") || ENV["RELATED_PROFILE"] == "1"
 want_failures = ARGV.include?("--failures") || ENV["RELATED_DUMP_FAILURES"] == "1"
 
+# Class-asymmetry knobs (see header). Defaults to symmetric; set to 3.0 each to
+# reproduce the historical 3:1 banner.
+fn_weight = (ENV["RELATED_FN_WEIGHT"] || "1.0").to_f
+fn_penalty = (ENV["RELATED_FN_PENALTY"] || "1.0").to_f
+
+# Experimental knob (mirrors +bin/train-relatedness-classifier+): treat
+# +whatever+ rows as +unrelated_ish+ instead of skipping them. Scoring them as
+# ish-strength negatives honors the "either answer is fine" spirit of the
+# annotation while still penalizing overgeneration on them. Set this together
+# with the trainer's equivalent +RELATED_WHATEVER_AS_UNRELATED=1+ for matched
+# train/eval semantics.
+whatever_as_unrelated = ENV["RELATED_WHATEVER_AS_UNRELATED"] == "1"
+
 # Diagnostic line for a single failure: shows lemma pair, every phase-1 signal, the
 # phase-2 composite +relatedness_score+, and the +why_thematically_related?+ reason
 # (may be non-nil on a false-positive row, nil on a false-negative row).
@@ -150,6 +182,22 @@ Dir.chdir(repo) do
   raw_rows = CSV.parse(File.read(path, encoding: "UTF-8"), headers: true)
   rows, clone_count = expanded_rows_with_clones(raw_rows)
 
+  # Drop stop-word rows up front. +thematically_related?+ short-circuits any
+  # pair involving a stop word to +true+ (contentless glue), which means a row
+  # like +("gay", "while", unrelated)+ is an unavoidable FP at the predicate
+  # level — it tells us nothing about the classifier or rule bundle and just
+  # pads the composite with noise. Mirror the trainer's load-time filter for
+  # apples-to-apples numbers. Filter on both surface form and lemma.
+  skipped_stopword = 0
+  rows = rows.reject do |r|
+    w1 = r["word1"]
+    w2 = r["word2"]
+    next false if w1.nil? || w2.nil?
+    drop = stop_word?(w1) || stop_word?(w2) || stop_word?(lemma(w1)) || stop_word?(lemma(w2))
+    skipped_stopword += 1 if drop
+    drop
+  end
+
   # Reverse index: every surface form (key or variant) -> cue-family key.
   # Built once so the scoring loop's family lookup is O(1).
   family_of_surface = {}
@@ -186,9 +234,25 @@ Dir.chdir(repo) do
     t_wall = Process.clock_gettime(Process::CLOCK_MONOTONIC)
   end
 
+  # Composite penalty schedule: base +-3 / -1+ for "strong / ish", then multiplied
+  # by +fn_penalty+ only on FN arms. With both env vars at defaults (1.0) the
+  # penalties are symmetric −3/−1/−3/−1; with +RELATED_FN_PENALTY=3+ they revert
+  # to the pre-2026 banner (−9/−3/−3/−1).
+  ifn_penalty = -1.0 * fn_penalty
+  sfn_penalty = -3.0 * fn_penalty
+  ifp_penalty = -1.0
+  sfp_penalty = -3.0
+
   skipped_whatever = 0
+  relabeled_whatever = 0
   rows.each do |r|
     kind = r["oughta be related?"].to_s.strip
+    if kind == "whatever"
+      if whatever_as_unrelated
+        kind = "unrelated_ish"
+        relabeled_whatever += 1
+      end
+    end
     exp = case kind
           when "related", "related_ish" then true
           when "unrelated", "unrelated_ish" then false
@@ -206,11 +270,8 @@ Dir.chdir(repo) do
     exp ? (pos += 1) : (neg += 1)
     act = thematically_related?(r["word1"], r["word2"], false)
 
-    row_w = if exp
-              ish ? 3 : 9
-            else
-              ish ? 1 : 3
-            end
+    base_row_w = ish ? 1.0 : 3.0
+    row_w = exp ? base_row_w * fn_weight : base_row_w
     weighted_total += row_w
     weighted_correct += row_w if act == exp
 
@@ -230,18 +291,18 @@ Dir.chdir(repo) do
         fn += 1
         if ish
           ish_fn += 1
-          composite += -3
+          composite += ifn_penalty
           if fs
             fs[:ifn] += 1
-            fs[:composite] += -3
+            fs[:composite] += ifn_penalty
           end
           failures_ish_fn << related_failure_diagnostic_line(r["word1"], r["word2"], kind) if want_failures
         else
           strong_fn += 1
-          composite += -9
+          composite += sfn_penalty
           if fs
             fs[:sfn] += 1
-            fs[:composite] += -9
+            fs[:composite] += sfn_penalty
           end
           failures_strong_fn << related_failure_diagnostic_line(r["word1"], r["word2"], kind) if want_failures
         end
@@ -250,18 +311,18 @@ Dir.chdir(repo) do
       fp += 1
       if ish
         ish_fp += 1
-        composite += -1
+        composite += ifp_penalty
         if fs
           fs[:ifp] += 1
-          fs[:composite] += -1
+          fs[:composite] += ifp_penalty
         end
         failures_ish_fp << related_failure_diagnostic_line(r["word1"], r["word2"], kind) if want_failures
       else
         strong_fp += 1
-        composite += -3
+        composite += sfp_penalty
         if fs
           fs[:sfp] += 1
-          fs[:composite] += -3
+          fs[:composite] += sfp_penalty
         end
         failures_strong_fp << related_failure_diagnostic_line(r["word1"], r["word2"], kind) if want_failures
       end
@@ -281,7 +342,8 @@ Dir.chdir(repo) do
   balanced = (tpr + tnr) / 2.0
   prec = (tp + fp).zero? ? 0.0 : (tp.to_f / (tp + fp))
 
-  puts "spec/related.csv  n=#{n}  positive=#{pos}  negative=#{neg}  (+#{skipped_whatever} whatever rows skipped)"
+  whatever_note = whatever_as_unrelated ? "#{relabeled_whatever} whatever→unrelated_ish" : "+#{skipped_whatever} whatever skipped"
+  puts "spec/related.csv  n=#{n}  positive=#{pos}  negative=#{neg}  (#{whatever_note}, #{skipped_stopword} stop-word pairs filtered at load)"
   puts "  raw rows=#{raw_rows.size}  +#{clone_count} OUGHTA_BE_IDENTICAL clones across #{OUGHTA_BE_IDENTICAL.size} cue families"
   puts
   correct = tp + tn
@@ -291,14 +353,20 @@ Dir.chdir(repo) do
   puts "=== Composite (MAXIMIZE — 0 is perfect, mistakes add negative weight) ==="
   puts "rows correct: #{correct} / #{n}"
   puts format(
-    "weighted accuracy       %.1f%%  (row weights: related strong 9, related ish 3, unrelated strong 3, unrelated ish 1)",
-    weighted_pct
+    "class asymmetry: fn_weight=%.2f  fn_penalty=%.2f  (both 1.0 = symmetric; env: RELATED_FN_WEIGHT / RELATED_FN_PENALTY)",
+    fn_weight, fn_penalty
   )
-  puts format("total composite score: %d", composite)
-  puts "  strong false negatives: #{strong_fn}  @ -9 → #{strong_fn * -9}"
-  puts "  ish    false negatives: #{ish_fn}  @ -3 → #{ish_fn * -3}"
-  puts "  strong false positives: #{strong_fp}  @ -3 → #{strong_fp * -3}"
-  puts "  ish    false positives: #{ish_fp}  @ -1 → #{ish_fp * -1}"
+  pos_strong_w = 3.0 * fn_weight
+  pos_ish_w = 1.0 * fn_weight
+  puts format(
+    "weighted accuracy       %.1f%%  (row weights: related strong %.2f, related ish %.2f, unrelated strong 3.00, unrelated ish 1.00)",
+    weighted_pct, pos_strong_w, pos_ish_w
+  )
+  puts format("total composite score: %.1f", composite)
+  puts format("  strong false negatives: %d  @ %.1f → %.1f", strong_fn, sfn_penalty, strong_fn * sfn_penalty)
+  puts format("  ish    false negatives: %d  @ %.1f → %.1f", ish_fn, ifn_penalty, ish_fn * ifn_penalty)
+  puts format("  strong false positives: %d  @ %.1f → %.1f", strong_fp, sfp_penalty, strong_fp * sfp_penalty)
+  puts format("  ish    false positives: %d  @ %.1f → %.1f", ish_fp, ifp_penalty, ish_fp * ifp_penalty)
   puts
   puts "=== Confusion ==="
   puts "TP=#{tp}  FN=#{fn}  FP=#{fp}  TN=#{tn}"
@@ -317,7 +385,7 @@ Dir.chdir(repo) do
     ordered.each do |fam|
       s = family_stats[fam]
       acc = s[:rows].zero? ? 0.0 : (100.0 * s[:correct] / s[:rows])
-      puts format("%-10s %6d %8d %5.1f%% %4d %4d %4d %4d %9d",
+      puts format("%-10s %6d %8d %5.1f%% %4d %4d %4d %4d %9.1f",
         fam, s[:rows], s[:correct], acc,
         s[:sfn], s[:ifn], s[:sfp], s[:ifp], s[:composite])
     end

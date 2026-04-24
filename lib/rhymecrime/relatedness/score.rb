@@ -150,11 +150,29 @@ end
 # When the file is absent the existing rule-based combiner runs unchanged.
 #
 # Mode controlled by +$RELATED_LEARNED_MODE+ / env +RELATED_LEARNED_MODE+:
-#   +additive+  (default) learned score joins the max-over-rules — can only add TPs.
-#   +replace+             learned score is the *only* rule (except stop-word short-circuit).
+#   +replace+   (default) learned score is the *only* rule (except stop-word short-circuit).
+#   +additive+            learned score joins the max-over-rules — can only add TPs.
 #   +off+                 ignore classifier even if present.
+#
+# +replace+ is the default because the hand rules composed via max-over-contributions
+# overgenerate: +cooccurrence+ + +sense_vectors+ + +similarity+ between them produced
+# ~330 of the ~380 strong FPs on the live pipeline (2026-04 eval on +spec/related.csv+),
+# compared to 80 strong FPs with the classifier alone. The learned combiner sees all
+# 67 phase-1 features (gloss_match, usf_twohop, sv_max/min, edge_present, cn_hops,
+# contextualized-model signals, per-word priors) and composes them coherently under
+# the symmetric training objective (+--fn-weight 1 --fn-penalty 1+), so it doesn't
+# need the hand rules to catch genuine positives.
+#
+# +additive+ and +off+ remain available for debugging: +additive+ to compare the
+# combined score with the learned component, +off+ to isolate the rule bundle.
+#
+# NOTE: flipping the default only affects live compute (local-dev fallback, spec
+# eval with +RELATED_BYPASS_STORE=1+, +bin/precompute-relatedness+). Runtime lookups
+# via +Rhymecrime::Store+ still read whatever scores the most recent precompute
+# wrote — rebuild the store with +bin/precompute-relatedness+ to materialize the
+# replace-mode scores for production.
 
-$RELATED_LEARNED_MODE = ENV["RELATED_LEARNED_MODE"] || "additive"
+$RELATED_LEARNED_MODE = ENV["RELATED_LEARNED_MODE"] || "replace"
 
 $relatedness_classifier = nil
 $relatedness_classifier_loaded = false
