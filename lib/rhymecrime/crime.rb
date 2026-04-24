@@ -579,13 +579,28 @@ def rhyming_tuple_bases_all_inflect_into?(bases, inflecteds)
   true
 end
 
+# Per-request memo for +rhyming_tuple_word_bases+. The function is pure over
+# +word_dict+ / +Inflect+ (both load-time-stable) so the memo is safe to hold
+# across a whole page render. +prune_suffix_redundant_rhyming_tuples+ calls
+# +rhyming_tuple_word_bases+ repeatedly for the same word across multiple
+# pruning passes (subset check, canonical base, all-spelling-variants), so
+# caching drops cold-render time by ~25s for large rhyme sets. Cleared in
+# +RelatedWords.reset_caches!+ alongside the other per-render caches.
+$rhyming_tuple_word_bases_cache = {}
+
 # Set of valid-looking base headwords for +word+ — +word+ itself (when it is a headword), its
 # stored lemma, and any +Inflect.raw_candidate_bases_for_inflected+ candidate that is a headword.
 # Recurses one level (e.g. +foistings+ → +foisting+ → +foist+) so chained inflections stay
 # connected. Used by the hidden-base pruning path in +prune_suffix_redundant_rhyming_tuples+.
 def rhyming_tuple_word_bases(word)
+  cached = $rhyming_tuple_word_bases_cache[word]
+  return cached unless cached.nil?
+
   result = Set.new
-  return result if word.nil? || word.empty?
+  if word.nil? || word.empty?
+    $rhyming_tuple_word_bases_cache[word] = result
+    return result
+  end
   result.add(word) if word_dict_includes_headword?(word)
   lem = lemma(word)
   result.add(lem) if lem && word_dict_includes_headword?(lem)
@@ -601,7 +616,7 @@ def rhyming_tuple_word_bases(word)
       result.add(c) if word_dict_includes_headword?(c)
     end
   end
-  result
+  $rhyming_tuple_word_bases_cache[word] = result
 end
 
 # Shortest headword in +rhyming_tuple_word_bases+, tie-broken lex. Returns +word+ itself when no

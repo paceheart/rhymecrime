@@ -5,12 +5,21 @@ require "json"
 require "msgpack"
 require "set"
 require_relative "phoneme.rb"
+require_relative "../pace_utils"
 
 # Rhyming utilities for RhymeCrime
 # Used both in preprocessing and at runtime
 
 RIME_DICT_FILENAME = "rime_dict.txt"
 WORD_DICT_FILENAME = "word_dict.txt"
+# Flat +{word => canonical_lemma}+ table, emitted by dict-build right after
+# +save_word_dict+ and read into +$word_to_lemma+ at runtime. Exists so the
+# hot +lemma(w)+ path (hit thousands of times per page render while coloring
+# +set_related+ tuples) is a single Hash lookup, instead of walking through
+# +lexicon_word_entry+ → +DataSource.dynamodb?+ → +word_dict[w]+ → +entry[2]+
+# on every call. Shipping this msgpack in the Lambda deploy bundle also lets
+# DDB mode answer +lemma(w)+ without a per-word +GetItem+.
+WORD_LEMMA_MAP_FILENAME = "word_lemma_map.msgpack"
 # Local-dev key/value store that mirrors the DynamoDB schema used in Lambda:
 # the +related+ table is keyed by +"related#<lemma>"+ with parallel +words+ and
 # +scores+ JSON arrays. Single SQLite file, no daemon; boot is O(open file) and
@@ -1623,6 +1632,7 @@ def load_word_dict()
   end
   clear_spelling_variant_hyphen_caches!
   $lemma_to_words = nil
+  $word_to_lemma = nil
   $thematically_related_memo = nil
   word_dict
 end
@@ -1632,7 +1642,35 @@ def lexicon_word_entry(word)
   word_dict[word]
 end
 
+# Flat +{word => lemma}+ lookup loaded from +WORD_LEMMA_MAP_FILENAME+ (built by
+# dict-build). Only stores +word != lemma+ pairs to keep the file small
+# (~40% of headwords have a non-self lemma); every missing key means "lemma
+# is the word itself", matching the nil-collapse rule in +save_word_dict+ and
+# +lexicon_word_entry+. A +false+ sentinel means "already checked and the
+# file isn't on disk" — avoids re-stat'ing on every +lemma+ call.
+#
+# Must stay a top-level global (not a module constant) so +load_word_dict+
+# can reset it as part of its invalidation handshake.
+$word_to_lemma = nil
+def load_word_to_lemma!
+  path = generated_dict_path(WORD_LEMMA_MAP_FILENAME)
+  $word_to_lemma = File.exist?(path) ? MessagePackUtils.load_and_unpack(path) : false
+end
+
+# Hot-path inner loop for +RelatedWords+ pair lookups (called thousands of
+# times per page render while coloring +set_related+ tuples). The +$word_to_
+# lemma+ global is checked inline rather than via a helper method so the
+# common warm-path case is one Hash lookup plus one nil check, not two method
+# dispatches. The +lexicon_word_entry+ fallback only fires when the msgpack
+# hasn't been generated yet (pre-dict-build checkout).
 def lemma(word)
+  map = $word_to_lemma
+  load_word_to_lemma! if map.nil?
+  map = $word_to_lemma
+  if map
+    m = map[word]
+    return m || word
+  end
   entry = lexicon_word_entry(word)
   return word unless entry
   entry[2] || word
@@ -1685,6 +1723,22 @@ def save_word_dict(word_dict, lemma_map = nil)
     f.puts
   end
   f.close
+end
+
+# Emit the runtime +word → canonical_lemma+ msgpack consumed by +word_to_lemma+.
+# Called right after +save_word_dict+ in dict-build; only stores entries where
+# the lemma differs from the word (matches +lemma(w)+'s "unknown → word"
+# collapse and keeps the file small — ~40% of headwords have a non-self lemma).
+def save_word_lemma_map!(word_dict, lemma_map)
+  ensure_generated_dict_dir!
+  path = generated_dict_path_under_dict_dir(WORD_LEMMA_MAP_FILENAME)
+  obj = {}
+  word_dict.each_key do |word|
+    lem = lemma_map ? lemma_map[word] : word_dict[word][2]
+    obj[word] = lem if lem && lem != word
+  end
+  MessagePackUtils.pack_and_save(path, obj)
+  puts "Wrote #{obj.size} word→lemma entries to #{path} (#{File.size(path)} bytes)"
 end
 
 def save_part_of_speech_map(pos_map)

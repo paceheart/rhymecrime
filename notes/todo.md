@@ -74,7 +74,9 @@ Each of them is almost entirely redundant with the other two, but each tuple has
 
 loppings / toppings
 What happened to lopping / topping?
-same with snipings / wipings
+same with:
+- snipings / wipings
+- antagonists / protagonists
 
 harshly / partially
 
@@ -87,3 +89,7 @@ hecking / reckon should be heckin'
 tutu / voodoo should not rhyme
 
 /api/v2/analytics/media_engagements.json?media_id=17920935594312679
+
+eliminate ♥
+
+ensure train-relatedness-classifier is somewhere in the build pipeline

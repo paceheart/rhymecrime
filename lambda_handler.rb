@@ -9,7 +9,7 @@ require "rhymecrime/frontend"
 
 def handler(event:, context:)
   Rhymecrime::DynamoRuntime.clear_session_cache!
-  RelatedWords.instance_variable_set(:@related_word_cache, {}) if defined?(RelatedWords)
+  RelatedWords.reset_caches! if defined?(RelatedWords)
 
   path = event["rawPath"] || event.dig("requestContext", "http", "path") || "/"
   params = event["queryStringParameters"] || {}

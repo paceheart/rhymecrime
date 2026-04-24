@@ -249,7 +249,7 @@ unless threads_user_supplied
 end
 puts "Scanning #{n} lemmas → #{dry_run ? '(dry-run, no file)' : output_path} with #{threads} worker#{threads == 1 ? '' : 's'} (SQLite row only when ≥1 related word)"
 
-RelatedWords.instance_variable_set(:@related_word_cache, {})
+RelatedWords.reset_caches!
 
 # Wall-clock timer covers warm-up + scan + merge; reported at the end alongside
 # the worker count so run-to-run comparisons (e.g. --threads=4 vs --threads=8)
@@ -268,7 +268,7 @@ run_started_at = Process.clock_gettime(Process::CLOCK_MONOTONIC)
 reset_per_cue_caches = lambda do
   $thematically_related_memo = nil
   $gloss_negative_pair_cache = Set.new
-  RelatedWords.instance_variable_set(:@related_word_cache, {})
+  RelatedWords.reset_caches!
 end
 
 # Process a single cue: full-scan path captures the +relatedness_score+ computed

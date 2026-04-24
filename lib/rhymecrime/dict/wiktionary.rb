@@ -40,7 +40,8 @@ def empty_kaikki_verb_morphology
 end
 
 # Load kaikki.org filtered JSONL.
-# Returns [pron_hash, forms_map, pos_map, kaikki_verb_morph, kaikki_capitalized_only, kaikki_variant_map]
+# Returns [pron_hash, forms_map, pos_map, kaikki_verb_morph, kaikki_capitalized_only,
+#          kaikki_variant_map, kaikki_obsolete_alt_of_only]
 #   pron_hash: { word => [Pronunciation, ...] }  (same format as load_cmudict)
 #   forms_map: { base_word => [[inflected_form, base_word], ...] }
 #   pos_map: { word => Set<String> } union of Kaikki "pos" per lemma (Layer A ∩ WordNet in dict.rb)
@@ -53,12 +54,16 @@ end
 #     One entry per sense that carries an +alt_of+ pointer, or whose gloss/tags identify the
 #     headword as a spelling variant, misspelling, or obsolete/archaic/dialectal form of another
 #     headword. Consumed by +corpus_variants.rb+ to emit +generated/spelling_variants_auto.txt+.
+#   kaikki_obsolete_alt_of_only: { headword => target_headword } for Kaikki records whose every
+#     JSONL row was purely +alt-of obsolete/archaic/dated → target+. Paradigm contributions
+#     (forms_map, pron_hash, pos_map, verb_morph) are already suppressed in this loader; dict.rb
+#     additionally prunes the headword from +word_dict+ when the target survives the build.
 def load_wiktionary
   path = WIKTIONARY_DATA_PATH
   unless File.exist?(path)
     puts "Wiktionary data not found at #{path}; skipping."
     m = empty_kaikki_verb_morphology
-    return [{}, {}, {}, m, Set.new, {}]
+    return [{}, {}, {}, m, Set.new, {}, {}]
   end
 
   pron_hash = Hash.new { |h, k| h[k] = [] }
@@ -68,6 +73,13 @@ def load_wiktionary
   kaikki_has_capitalized = Set.new
   kaikki_has_lowercase = Set.new
   variant_map = Hash.new { |h, k| h[k] = [] }
+  # Kaikki splits multi-POS words across rows (e.g. +asse+ has an "Obsolete spelling of ass"
+  # noun row AND a "Cape fox" rare-noun row). A word is classified obsolete-only iff _every_
+  # row for it was obsolete-only. We maintain that as: +obsolete_only_candidate[word] = target+
+  # on the first obsolete-only row, and retract + +obsolete_only_blocked.add(word)+ the moment
+  # any non-obsolete row shows up (or two obsolete rows disagree on target).
+  obsolete_only_candidate = {}
+  obsolete_only_blocked = Set.new
   total = 0; converted = 0; skipped = 0
 
   Zlib::GzipReader.open(path, encoding: 'UTF-8') do |gz|
@@ -88,6 +100,36 @@ def load_wiktionary
 
       pos = obj["pos"].to_s
       next if pos == "name"
+
+      # Detect "Kaikki ghost" rows: Early Modern English spellings (+appeare+, +blesse+,
+      # +ladie+, …) whose only sense is +alt-of obsolete/archaic/dated+ → modern canonical.
+      # Their paradigms (+appeared+, +appearing+, +appeares+) are mirrors of the modern
+      # lemma's paradigm, so letting them seed +forms_map+ / +pron_hash+ / +verb_morph+
+      # causes +$inflection_base_words+ last-write-wins to mis-route +appeared → appeare+
+      # in +compute_lemma_map+ Source A. Suppress the paradigm contribution here and let
+      # +prune_obsolete_alt_of_only_headwords!+ in dict.rb drop the ghost from word_dict.
+      # +collect_variant_senses+ still runs below so the evidence is available to
+      # +corpus_variants.rb+ (harmless; its +headwords_share_rime?+ gate already filters).
+      obsolete_target = kaikki_record_obsolete_alt_of_only_target(obj, word)
+      if obsolete_target && !obsolete_only_blocked.include?(word)
+        existing = obsolete_only_candidate[word]
+        if existing && existing != obsolete_target
+          obsolete_only_candidate.delete(word)
+          obsolete_only_blocked.add(word)
+        else
+          obsolete_only_candidate[word] = obsolete_target
+        end
+        collect_variant_senses(obj, word, variant_map)
+        next
+      end
+
+      # Non-obsolete-only row: this row carries a real definitional meaning (or an
+      # active alt-of / misspelling / regional variant). Retract any prior obsolete
+      # candidacy for +word+ so we don't prune a headword that has a live sense.
+      if obsolete_only_candidate.key?(word)
+        obsolete_only_candidate.delete(word)
+        obsolete_only_blocked.add(word)
+      end
 
       (pos_map[word] ||= Set.new).add(pos) unless pos.empty?
 
@@ -139,7 +181,8 @@ def load_wiktionary
   kaikki_capitalized_only = kaikki_has_capitalized - kaikki_has_lowercase
   puts "Wiktionary: #{kaikki_capitalized_only.size} headwords only ever capitalized (proper-noun signal)"
   puts "Wiktionary: #{variant_map.size} headwords with alt-spelling / variant pointers"
-  [pron_hash, forms_map, pos_map, verb_morph, kaikki_capitalized_only, variant_map]
+  puts "Wiktionary: #{obsolete_only_candidate.size} obsolete-only alt-of headwords (suppressed paradigm, queued for word_dict prune)"
+  [pron_hash, forms_map, pos_map, verb_morph, kaikki_capitalized_only, variant_map, obsolete_only_candidate]
 end
 
 # Sense-tag whitelist / blacklist for classifying +alt_of+ pointers as genuine spelling
@@ -327,6 +370,114 @@ def extract_region_tags_from_gloss(text)
   parts.map do |p|
     p.gsub(/[\s]/, "-")  # "New Zealand" → "New-Zealand", "South Africa" → "South-Africa"
   end
+end
+
+# Subset of +VARIANT_ACCEPT_TAGS+ that mark an +alt-of+ sense as a _historical_ pointer
+# (Early Modern English spelling, obsolete typography) rather than a still-active regional
+# or orthographic variant. Same list as +STRUCTURED_ALT_OF_DECAY_TAGS+ in corpus_variants.rb;
+# kept as a local copy so +load_wiktionary+ can classify senses without a cross-file constant
+# dependency. When every sense of a record is an obsolete/archaic/dated +alt-of+ pointer at a
+# single modern target, the whole record is a Kaikki "ghost" we want to suppress from
+# +forms_map+ / +pron_hash+ and prune from the final +word_dict+.
+OBSOLETE_DECAY_TAGS = Set.new(%w[archaic obsolete dated])
+
+# Gloss-prefix qualifiers that mark a sense as "Obsolete/Archaic/Dated (form|spelling) of X".
+# Matches the decay arm of +VARIANT_GLOSS_QUALIFIER_RE+ in +collect_variant_senses+.
+OBSOLETE_GLOSS_QUALIFIER_RE = /Archaic|Obsolete|Dated/i.freeze
+
+# Whole-gloss pattern: "Obsolete spelling of appear.", "Archaic form of bless", etc.
+# Narrower than +VARIANT_GLOSS_PATTERNS+ (doesn't allow Alternative/Dialectal/Nonstandard/etc.
+# prefixes, because those are live variants that the +corpus_variants+ pipeline still wants
+# to emit and we must not prune).
+OBSOLETE_GLOSS_PATTERN = /
+  \A\s*
+  (?:#{OBSOLETE_GLOSS_QUALIFIER_RE})
+  \s+(?:form|spelling|capitalisation|capitalization|variant)\s+of\s+
+  #{VARIANT_GLOSS_TARGET_RE}
+/ix.freeze
+
+# Classify a single sense for the obsolete-only detector. Returns:
+#   [:decay, target]  — sense is a historical +alt-of+ or "Obsolete/Archaic/Dated spelling of X"
+#                       gloss pointing at +target+ (!= headword).
+#   :skip             — sense is empty / pure-inflection +form-of+ / reject-tagged; doesn't
+#                       disqualify the record but doesn't contribute a target either.
+#   :other            — sense carries meaning that isn't obsolete-alt-of (definitional gloss,
+#                       live +alt-of+ without decay tag, modern regional variant, misspelling).
+#                       A single +:other+ sense disqualifies the whole record.
+def classify_sense_for_obsolete_detector(sense, word)
+  return :skip unless sense.is_a?(Hash)
+  tags = sense["tags"] || []
+  return :other if tags.any? { |t| VARIANT_REJECT_TAGS.include?(t) }
+
+  alt_of = sense["alt_of"] || []
+  form_of = sense["form_of"] || []
+  gloss = (sense["glosses"] || []).first.to_s
+  is_alt = tags.include?("alt-of")
+  is_misspelling = tags.include?("misspelling")
+  has_decay = tags.any? { |t| OBSOLETE_DECAY_TAGS.include?(t) }
+
+  # Misspelling is a live canonicalization hint, not a historical one. Leave these to the
+  # corpus_variants pipeline; don't let a +misspelling+ sense make the record "obsolete-only".
+  return :other if is_misspelling
+
+  if is_alt && has_decay
+    targets = alt_of.map { |x| x.is_a?(Hash) ? x["word"].to_s.downcase.strip : x.to_s.downcase.strip }
+    targets.reject! { |t| t.empty? || t.include?(" ") || t == word }
+    return [:decay, targets.first] if targets.size == 1
+    return :other
+  end
+
+  if is_alt && !has_decay
+    return :other
+  end
+
+  # Pure inflection (+form-of+ without +alt-of+) — doesn't signal meaning either way.
+  return :skip if tags.include?("form-of")
+
+  if gloss.empty?
+    return :skip if tags.empty? && alt_of.empty? && form_of.empty?
+    return :other
+  end
+
+  if (m = OBSOLETE_GLOSS_PATTERN.match(gloss))
+    target = m.captures.last.to_s.downcase.strip
+    return [:decay, target] if !target.empty? && !target.include?(" ") && target != word
+    return :other
+  end
+
+  :other
+end
+
+# Returns the single canonical target T when every sense of +obj+ is an obsolete/archaic/dated
+# +alt-of+ pointer (or "Obsolete spelling of T" gloss) pointing at the same T, with T != word.
+# Returns nil for records that carry any non-obsolete meaning (definitional gloss, live
+# regional variant, misspelling, mixed targets). Caller is expected to additionally verify
+# T is in +cmudict+ / +word_dict+ before acting on the result — we don't want to suppress a
+# headword whose only canonical target isn't even in the lexicon.
+def kaikki_record_obsolete_alt_of_only_target(obj, word)
+  senses = obj["senses"]
+  return nil if senses.nil? || senses.empty?
+  target = nil
+  saw_decay = false
+  senses.each do |s|
+    result = classify_sense_for_obsolete_detector(s, word)
+    case result
+    when :skip
+      next
+    when :other
+      return nil
+    when Array # [:decay, t]
+      t = result[1]
+      return nil if t.nil? || t.empty?
+      if target.nil?
+        target = t
+        saw_decay = true
+      elsif target != t
+        return nil
+      end
+    end
+  end
+  saw_decay ? target : nil
 end
 
 def add_variant_evidence(variant_map, word, target, source, tags, seen)

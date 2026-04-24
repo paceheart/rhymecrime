@@ -21,11 +21,16 @@
 #           signal interactions that logistic regression can't. Larger JSON (~100KB
 #           per 200 trees × depth 4) and ~1ms per pair at inference.
 #
-# Both optimize weighted log-loss whose sample weights mirror the evaluation
-# objective in +spec/related_weighted_accuracy.rb+: strong-related 9, ish-related 3,
-# strong-unrelated 3, ish-unrelated 1. After fitting, sweeps the decision threshold
-# over [0.05, 0.95] and picks the probability cutoff maximizing composite (3:1
-# FN:FP penalty ratio).
+# Both optimize weighted log-loss. Base sample weights capture the "strong vs ish"
+# confidence asymmetry (+strong = 3+, +ish = 1+). The +--fn-weight+ knob (default
+# +1.0+, i.e. symmetric) further multiplies positive-class rows, turning the
+# historical 3:1 pro-positive pull into an adjustable lever. After fitting, sweeps
+# the decision threshold over [0.05, 0.95] and picks the probability cutoff
+# maximizing composite; +--fn-penalty+ (default +1.0+) independently scales the FN
+# terms in that composite so threshold-selection asymmetry can be tuned apart from
+# fit asymmetry. Historical behavior is reproducible with
+# +--fn-weight 3 --fn-penalty 3+ and was identified as a major driver of
+# thematic-relatedness overgeneration (see notes/todo.md).
 #
 # Reports N-fold CV composite for an honest generalization estimate, then fits once
 # on the full labeled set for deployment.
@@ -33,10 +38,13 @@
 #   ruby bin/train-relatedness-classifier                    # gbt (default)
 #   ruby bin/train-relatedness-classifier --model logreg
 #   ruby bin/train-relatedness-classifier --model gbt --trees 400 --depth 5
+#   ruby bin/train-relatedness-classifier --fn-weight 3 --fn-penalty 3  # pre-2026 asymmetry
 #   ruby bin/train-relatedness-classifier --dry-run
 #
 # After training, run +spec/related_weighted_accuracy.rb+ to see the lift
 # (default +RELATED_LEARNED_MODE=additive+; +=replace+ for pure learned combiner).
+# The evaluator reads +RELATED_FN_WEIGHT+ / +RELATED_FN_PENALTY+ env vars so its
+# composite score matches whatever asymmetry was used for training.
 
 $LOAD_PATH.unshift File.expand_path("../lib", __dir__)
 
@@ -50,6 +58,17 @@ options = {
   seed: 42,
   dry_run: false,
   verbose: false,
+
+  # Class-asymmetry knobs. Historical behavior of this script was +fn_weight = fn_penalty = 3+
+  # (sample weights 9/3/3/1, composite −9/−3/−3/−1), which compounded a ~3× positive pull
+  # in the fit with a matching 3× FN:FP skew in the threshold sweep. That stacked bias was
+  # identified as a major driver of thematic-relatedness overgeneration; defaults are now
+  # symmetric (+1.0+ each) and the old behavior is reproducible with +--fn-weight 3
+  # --fn-penalty 3+. The evaluator +spec/related_weighted_accuracy.rb+ reads matching env
+  # vars (+RELATED_FN_WEIGHT+ / +RELATED_FN_PENALTY+) so training CV numbers stay comparable
+  # to post-hoc scoring.
+  fn_weight: 1.0,   # sample-weight multiplier on positive-class rows (strong_pos / ish_pos)
+  fn_penalty: 1.0,  # composite-score multiplier on FN terms during threshold selection
 
   # logreg hyperparams
   epochs: 600,
@@ -71,6 +90,9 @@ OptionParser.new do |opt|
   opt.on("--seed N", Integer) { |v| options[:seed] = v }
   opt.on("--dry-run") { options[:dry_run] = true }
   opt.on("--verbose") { options[:verbose] = true }
+
+  opt.on("--fn-weight F", Float) { |v| options[:fn_weight] = v }
+  opt.on("--fn-penalty F", Float) { |v| options[:fn_penalty] = v }
 
   opt.on("--epochs N", Integer) { |v| options[:epochs] = v }
   opt.on("--lr F", Float) { |v| options[:lr] = v }
@@ -109,15 +131,22 @@ def sigmoid(z)
 end
 
 # Composite score for a prediction set at a given probability threshold. +rows+ is
-# an array of {y:, ish:, p:}.
-def composite_at(rows, threshold)
-  comp = 0
-  weighted_correct = 0
-  weighted_total = 0
+# an array of {y:, ish:, p:}. +fn_penalty+ (default +1.0+) multiplies the FN terms
+# so threshold selection can be tuned independently of the sample-weight lever that
+# shapes the fit itself — useful for isolating which half of the pro-positive bias
+# is driving a given set of failures. The row-weight schedule used for the
+# "weighted_pct" readout still mirrors the evaluator's 3/1-tier "strong vs ish"
+# confidence asymmetry so the two scripts report comparable numbers.
+def composite_at(rows, threshold, fn_penalty: 1.0)
+  comp = 0.0
+  weighted_correct = 0.0
+  weighted_total = 0.0
   strong_fn = ish_fn = strong_fp = ish_fp = 0
   rows.each do |r|
     pred = r[:p] >= threshold
     truth = r[:y] == 1.0
+    # Report-side weights (unchanged by +fn_penalty+) — used only for the
+    # human-readable "weighted accuracy" percentage printed in logs.
     row_w = if truth
               r[:ish] ? 3 : 9
             else
@@ -129,10 +158,10 @@ def composite_at(rows, threshold)
     elsif truth
       if r[:ish]
         ish_fn += 1
-        comp += -3
+        comp += -1.0 * fn_penalty
       else
         strong_fn += 1
-        comp += -9
+        comp += -3.0 * fn_penalty
       end
     else
       if r[:ish]
@@ -154,11 +183,11 @@ def composite_at(rows, threshold)
   }
 end
 
-def best_threshold(rows)
+def best_threshold(rows, fn_penalty: 1.0)
   best = nil
   (5..95).step(1).each do |pct|
     t = pct / 100.0
-    c = composite_at(rows, t)
+    c = composite_at(rows, t, fn_penalty: fn_penalty)
     if best.nil? || c[:composite] > best[:stats][:composite]
       best = { threshold: t, stats: c }
     end
@@ -522,11 +551,12 @@ raw_rows.each do |r|
 
   y = (kind == "related" || kind == "related_ish") ? 1.0 : 0.0
   ish = (kind == "related_ish" || kind == "unrelated_ish")
-  sw = if y == 1.0
-         ish ? 3.0 : 9.0
-       else
-         ish ? 1.0 : 3.0
-       end
+  # Base weight encodes the "strong vs ish" confidence asymmetry (3× for strong labels).
+  # +fn_weight+ (CLI default 1.0) multiplies only positive-class rows, turning the historical
+  # 3:1 pro-positive pull on the fit into a knob; the symmetric default means the gradients
+  # see a balanced problem regardless of class-count drift as more data arrives.
+  base_w = ish ? 1.0 : 3.0
+  sw = y == 1.0 ? base_w * options[:fn_weight] : base_w
 
   features_list << learned_feature_vector(signals)
   labels << y
@@ -559,11 +589,11 @@ folds.each_with_index do |test_ids, fi|
     { y: labels[i], ish: ish_flags[i], p: predict.call(features_list[i]) }
   end
 
-  best = best_threshold(test_scored)
+  best = best_threshold(test_scored, fn_penalty: options[:fn_penalty])
   cv_composites << best
   s = best[:stats]
   puts format(
-    "  fold %d  t=%.2f  composite=%d  weighted=%.1f%%  sfn=%d ifn=%d sfp=%d ifp=%d",
+    "  fold %d  t=%.2f  composite=%.1f  weighted=%.1f%%  sfn=%d ifn=%d sfp=%d ifp=%d",
     fi, best[:threshold], s[:composite], s[:weighted_pct],
     s[:strong_fn], s[:ish_fn], s[:strong_fp], s[:ish_fp]
   )
@@ -572,7 +602,7 @@ end
 pooled_composite = cv_composites.sum { |c| c[:stats][:composite] }
 avg_thr = cv_composites.sum { |c| c[:threshold] } / cv_composites.size.to_f
 avg_weighted = cv_composites.sum { |c| c[:stats][:weighted_pct] } / cv_composites.size.to_f
-puts format("  CV pooled composite = %d  mean threshold = %.2f  mean weighted = %.1f%%",
+puts format("  CV pooled composite = %.1f  mean threshold = %.2f  mean weighted = %.1f%%",
   pooled_composite, avg_thr, avg_weighted)
 puts
 
@@ -584,10 +614,10 @@ predict, model_data = fit_model(options[:model], features_list, labels, weights,
 scored = (0...features_list.size).map do |i|
   { y: labels[i], ish: ish_flags[i], p: predict.call(features_list[i]) }
 end
-best = best_threshold(scored)
+best = best_threshold(scored, fn_penalty: options[:fn_penalty])
 s = best[:stats]
 puts format(
-  "  in-sample  t=%.2f  composite=%d  weighted=%.1f%%  sfn=%d ifn=%d sfp=%d ifp=%d",
+  "  in-sample  t=%.2f  composite=%.1f  weighted=%.1f%%  sfn=%d ifn=%d sfp=%d ifp=%d",
   best[:threshold], s[:composite], s[:weighted_pct],
   s[:strong_fn], s[:ish_fn], s[:strong_fp], s[:ish_fp]
 )

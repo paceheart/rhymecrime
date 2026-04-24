@@ -363,6 +363,8 @@ describe 'RHYMES' do
     oughta_rhyme 'served', 'deserved', not_working_message: 'splash damage: de- prefix filter'
     oughta_rhyme 'served', 'undeserved'
     ought_not_rhyme 'served', 'underserved'
+    ought_not_rhyme 'millionaire', 'multimillionaire'
+    ought_not_rhyme 'meter', 'multimeter'
   end
 
   context "spelling variants ought not count as rhymes" do

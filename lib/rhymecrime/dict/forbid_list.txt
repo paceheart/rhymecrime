@@ -265,9 +265,6 @@ jap's
 jewboy
 jewboys
 jewboy's
-jig
-jigs
-jig's
 jigaboo
 jigaboos
 jigaboo's
@@ -320,6 +317,7 @@ niggar's
 nigger
 niggers
 nigger's
+niggering
 niggette
 niggettes
 niggette's
@@ -429,6 +427,7 @@ surtout
 tock
 twill
 vang
+ah
 uh
 uhh
 the
@@ -439,3 +438,13 @@ ru
 dfw
 non-u
 isu
+ain
+ains
+artic
+asse
+bff 
+brasse
+fe 
+fum 
+quicky
+tallie

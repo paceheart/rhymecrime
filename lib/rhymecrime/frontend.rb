@@ -169,7 +169,7 @@ end
 # (greyed out via +output_tuple_pruned+) instead of silently dropped.
 def build_rhymecrime_page(word1, word2, debug: false)
   Rhymecrime::DynamoRuntime.clear_session_cache! if defined?(Rhymecrime::DynamoRuntime) && Rhymecrime::DataSource.dynamodb?
-  RelatedWords.instance_variable_set(:@related_word_cache, {}) if defined?(RelatedWords)
+  RelatedWords.reset_caches! if defined?(RelatedWords)
   $debug_pruning = debug
   $debug_pruned_tuples = debug ? Set.new : nil
   buf = +""
@@ -250,7 +250,7 @@ end
 
 def build_similar_page(word1, word2)
   Rhymecrime::DynamoRuntime.clear_session_cache! if defined?(Rhymecrime::DynamoRuntime) && Rhymecrime::DataSource.dynamodb?
-  RelatedWords.instance_variable_set(:@related_word_cache, {}) if defined?(RelatedWords)
+  RelatedWords.reset_caches! if defined?(RelatedWords)
   buf = +""
   Thread.current[:html_output_buffer] = buf
   w1, w2 = parse_query_words(word1, word2)

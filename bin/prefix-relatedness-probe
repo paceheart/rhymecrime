@@ -1,0 +1,207 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# prefix-relatedness-probe — empirical calibration of +COMMON_PREFIXES+.
+#
+# For each prefix P in +COMMON_PREFIXES+ we enumerate headword pairs
+# +(base, P+base)+ where both forms are +cue_word?+-eligible and +base.length
+# >= 3+ (anti-splash on +a+/+jar+ = +ajar+ etc.). We deterministic-sample up to
+# +--cap=N+ pairs per prefix and record two signals per pair:
+#
+#   * thematic   — +relatedness_score(PairSignals.new(lemma(base), lemma(derived)))+,
+#                  the same 0..100 Numberbatch-dominated score the precompute
+#                  pipeline (+scan.rb+) and the runtime predicate
+#                  (+thematically_related_pair_uncached?+) see. Antonyms tend to
+#                  score high here because Numberbatch clusters by context.
+#   * synset_overlap — +WordNet::Lemma.find_all(w).flat_map(&:synsets)+ intersected
+#                      by +[pos, pos_offset]+. Non-empty iff the two words share
+#                      a WordNet sense (same-meaning test). This is the stricter
+#                      signal for the "safe to merge lemmas" question — +happy+ /
+#                      +unhappy+ will score high thematically but overlap no
+#                      synset, whereas +herald+ / +heraldic+ will score high on
+#                      both because WN's derivational-related-form pointer
+#                      surfaces shared-synset entries.
+#
+# Output:
+#   spec/prefix_relatedness_probe.csv  — one row per sampled pair.
+#   stdout                              — per-prefix summary table.
+#
+# Usage:
+#   ruby bin/prefix-relatedness-probe [--cap=N] [--seed=N] [--output=PATH]
+#
+# Defaults: +--cap=50+, +--seed=1+, +--output=spec/prefix_relatedness_probe.csv+.
+#
+# Computation uses only local generated/ files (no DynamoDB). Loads the full
+# relatedness pipeline (Numberbatch, ConceptNet, WordNet, USF, MPNet, classifier)
+# so the score we record matches what +bin/precompute-relatedness+ would see;
+# expect ~1 minute of startup + a few seconds of pair scoring per prefix.
+
+$LOAD_PATH.unshift File.expand_path("../lib", __dir__)
+
+ENV.delete("RHYMECRIME_DATA_SOURCE")
+
+require "csv"
+require "fileutils"
+require "optparse"
+require_relative "../lib/rhymecrime/dict/utils_rhyme"
+require_relative "../lib/rhymecrime/frontend"
+require_relative "../lib/rhymecrime/dict/rime"
+require_relative "../lib/rhymecrime/relatedness/signals"
+require_relative "../lib/rhymecrime/relatedness/score"
+
+cap = 50
+seed = 1
+output_path = File.expand_path("../spec/prefix_relatedness_probe.csv", __dir__)
+
+OptionParser.new do |o|
+  o.on("--cap=N", Integer, "Max pairs sampled per prefix (default: #{cap})") { |n| cap = [n, 1].max }
+  o.on("--seed=N", Integer, "Random seed for deterministic sampling (default: #{seed})") { |n| seed = n }
+  o.on("--output=PATH", "CSV output path (default: #{output_path})") { |p| output_path = File.expand_path(p) }
+end.parse!
+
+word_path = generated_dict_path(WORD_DICT_FILENAME)
+unless File.exist?(word_path)
+  warn "Missing #{word_path} — run bin/dict-build first."
+  exit 1
+end
+
+wd = word_dict
+
+headwords = wd.keys.select { |w| cue_word?(w, wd) }.to_set
+puts "Loaded #{headwords.size} cue-eligible headwords from #{File.basename(word_path)}"
+
+# +[pos, pos_offset]+ set — stable WN synset identity; empty iff the word has no
+# WordNet lemma entry.
+def wn_synset_keys(word)
+  WordNet::Lemma.find_all(word).flat_map(&:synsets).map { |s| [s.pos, s.pos_offset] }.uniq
+end
+
+rng = Random.new(seed)
+rows = []
+summary = []
+
+COMMON_PREFIXES.each do |prefix|
+  # Enumerate deterministically (headwords are keys of a Ruby hash, already
+  # insertion-ordered, so sort explicitly for reproducibility across runs).
+  candidates = []
+  headwords.each do |base|
+    next if base.length < 3 # anti-splash: +a+/+jar+ = +ajar+, +a+/+corn+ = +acorn+, etc.
+    derived = prefix + base
+    next unless headwords.include?(derived)
+    candidates << [base, derived]
+  end
+  # Deterministic sample: shuffle with the seeded RNG, then take +cap+.
+  sampled = candidates.sort.shuffle(random: rng).first(cap)
+
+  thematic_scores = []
+  same_synset_count = 0
+
+  sampled.each do |base, derived|
+    lb = lemma(base)
+    ld = lemma(derived)
+    a, b = lb <= ld ? [lb, ld] : [ld, lb]
+    score = relatedness_score(PairSignals.new(a, b))
+    base_syn = wn_synset_keys(base)
+    derived_syn = wn_synset_keys(derived)
+    shared = base_syn & derived_syn
+    same_synset = !shared.empty?
+    thematic_scores << score
+    same_synset_count += 1 if same_synset
+    rows << {
+      prefix: prefix,
+      base: base,
+      derived: derived,
+      base_lemma: lb,
+      derived_lemma: ld,
+      thematic_score: score,
+      shared_synsets: shared.size,
+      same_synset: same_synset ? 1 : 0,
+      base_freq: wd[base][0].to_i,
+      derived_freq: wd[derived][0].to_i,
+      base_in_wn: base_syn.any? ? 1 : 0,
+      derived_in_wn: derived_syn.any? ? 1 : 0,
+    }
+  end
+
+  n = thematic_scores.size
+  if n.positive?
+    sorted = thematic_scores.sort
+    median = sorted[n / 2]
+    p25 = sorted[n / 4]
+    p75 = sorted[(3 * n / 4).clamp(0, n - 1)]
+    mean = (sorted.sum.to_f / n).round(1)
+    pct_thr = (100.0 * sorted.count { |s| s >= RELATEDNESS_SCORE_THRESHOLD } / n).round(1)
+    pct_synset = (100.0 * same_synset_count / n).round(1)
+  else
+    median = p25 = p75 = mean = pct_thr = pct_synset = nil
+  end
+  summary << {
+    prefix: prefix,
+    n_pairs_total: candidates.size,
+    n_sampled: n,
+    thematic_median: median,
+    thematic_mean: mean,
+    thematic_p25: p25,
+    thematic_p75: p75,
+    pct_above_thr: pct_thr,
+    pct_same_synset: pct_synset,
+  }
+  puts format(
+    "  %-6s n=%-4d sampled=%-3d thematic median=%-4s mean=%-6s p25=%-4s p75=%-4s >=thr=%-5s same_synset=%s",
+    prefix, candidates.size, n,
+    median.to_s, mean.to_s, p25.to_s, p75.to_s,
+    pct_thr ? "#{pct_thr}%" : "-",
+    pct_synset ? "#{pct_synset}%" : "-",
+  )
+end
+
+FileUtils.mkdir_p(File.dirname(output_path))
+CSV.open(output_path, "w") do |csv|
+  csv << rows.first.keys if rows.any?
+  rows.each { |r| csv << r.values }
+end
+puts "\nWrote #{rows.size} rows to #{output_path}"
+
+puts "\nPer-prefix summary (sorted by pct_same_synset desc, then thematic_median desc):"
+puts format("  %-8s %-10s %-10s %-8s %-7s %-7s %-7s %-8s %-12s",
+  "prefix", "n_total", "n_sampled", "median", "mean", "p25", "p75", ">=thr", "same_synset")
+summary
+  .sort_by { |s| [-(s[:pct_same_synset] || -1.0), -(s[:thematic_median] || -1)] }
+  .each do |s|
+    puts format(
+      "  %-8s %-10d %-10d %-8s %-7s %-7s %-7s %-8s %-12s",
+      s[:prefix],
+      s[:n_pairs_total],
+      s[:n_sampled],
+      s[:thematic_median].to_s,
+      s[:thematic_mean].to_s,
+      s[:thematic_p25].to_s,
+      s[:thematic_p75].to_s,
+      s[:pct_above_thr] ? "#{s[:pct_above_thr]}%" : "-",
+      s[:pct_same_synset] ? "#{s[:pct_same_synset]}%" : "-",
+    )
+  end
+
+# Top-level sanity readouts: where in the space of COMMON_PREFIXES does each
+# "semantics-preserving" candidate fall? If no prefix in the list scores
+# appreciably above the rest on +pct_same_synset+, the hand-drawn split is
+# probably not justifiable and we should stick with the current single list.
+# Quick-read bands, grouped on +pct_same_synset+ (the stricter "same-sense" signal;
+# the thematic score is Numberbatch-dominated and will score +unhappy+ / +happy+
+# high even though they overlap no WN synset). Prefixes with +n_sampled < 5+ are
+# suppressed — too thin to draw conclusions from.
+puts "\nQuick-read bands (pct_same_synset, n_sampled >= 5):"
+BANDS = [
+  [">=80%",  80.0, 101.0],
+  ["60-80%", 60.0,  80.0],
+  ["40-60%", 40.0,  60.0],
+  ["20-40%", 20.0,  40.0],
+  ["<20%",    0.0,  20.0],
+].freeze
+BANDS.each do |label, lo, hi|
+  hit = summary.select do |s|
+    s[:n_sampled] >= 5 && s[:pct_same_synset] && s[:pct_same_synset] >= lo && s[:pct_same_synset] < hi
+  end
+  next if hit.empty?
+  puts "  #{label}: #{hit.map { |h| h[:prefix] }.sort.join(', ')}"
+end

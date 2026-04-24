@@ -193,19 +193,60 @@ end
 # authoritative (local-dev with incomplete precompute).
 class RelatedWords
   class << self
-    # Membership test for a lemma pair. Tries the +related#lemma_a+ row first,
-    # then +related#lemma_b+ — only one side needs to be a cached cue (scores
-    # are symmetric). The +lemma(w) == lemma_b+ check covers the common case
-    # where the row stores a surface headword whose lemma is the other side
-    # (e.g. row for +car+ contains +cars+; query is +cars+/+car+).
+    # Clears every in-process cache derived from +Rhymecrime::Store+ data.
+    # Call sites: every request entry point (Sinatra, Lambda, CLI) plus the
+    # +bin/precompute-relatedness+ shard loop that invalidates between cues
+    # to keep worker RSS bounded. Keep this list in sync with the caches
+    # below so freshly-added memoization doesn't accidentally survive across
+    # invalidations.
+    def reset_caches!
+      @related_word_cache = {}
+      @lemma_score_map_cache = {}
+      $rhyming_tuple_word_bases_cache = {} if defined?($rhyming_tuple_word_bases_cache)
+    end
+
+    # Lemma-indexed score hash for a cue's precompute row. Built lazily and
+    # cached so that repeated +lookup_score_by_lemmas+ calls against the same
+    # focal cue (the common pattern — every colored word in a +set_related+
+    # tuple is compared against the same input word) collapse from O(N) tuple
+    # scans to O(1) hash lookups. Returns +nil+ when the cue has no row.
+    #
+    # We only build this for the *second* arg to +lookup_score_by_lemmas+
+    # (the focal side), not the first: the first side is typically a distinct
+    # surface word per call with an empty row, so building a map for it would
+    # just thrash allocations and GC.
+    def lemma_score_map_for(lemma_key)
+      return nil if lemma_key.nil?
+
+      @lemma_score_map_cache ||= {}
+      return @lemma_score_map_cache[lemma_key] if @lemma_score_map_cache.key?(lemma_key)
+
+      tuples = Rhymecrime::Store.fetch_related_tuples(lemma_key)
+      return @lemma_score_map_cache[lemma_key] = nil if tuples.empty?
+
+      map = {}
+      tuples.each do |(w, s)|
+        score = s.to_i
+        map[w] = score unless map.key?(w) && map[w] >= score
+        l = lemma(w)
+        if l && l != w
+          map[l] = score unless map.key?(l) && map[l] >= score
+        end
+      end
+      @lemma_score_map_cache[lemma_key] = map
+    end
+
+    # Membership test for a lemma pair. Tries the +related#lemma_a+ row first
+    # via a linear scan (cheap — usually an empty row), then consults the
+    # focal-side score map for +lemma_b+ (O(1)).
     def pair_in_store?(lemma_a, lemma_b)
       return false if lemma_a.nil? || lemma_b.nil?
 
       tuples = Rhymecrime::Store.fetch_related_tuples(lemma_a)
       return true if tuples.any? { |(w, _s)| w == lemma_b || lemma(w) == lemma_b }
 
-      tuples = Rhymecrime::Store.fetch_related_tuples(lemma_b)
-      tuples.any? { |(w, _s)| w == lemma_a || lemma(w) == lemma_a }
+      map = lemma_score_map_for(lemma_b)
+      !map.nil? && map.key?(lemma_a)
     end
 
     # Stored +relatedness_score+ (0..100) for (word1, word2), or 0 when
@@ -217,13 +258,15 @@ class RelatedWords
     def lookup_score_by_lemmas(lemma_a, lemma_b)
       return 0 if lemma_a.nil? || lemma_b.nil?
 
+      # First side: usually an empty row for the tuple's candidate word;
+      # skip straight to the focal-side map on miss.
       tuples = Rhymecrime::Store.fetch_related_tuples(lemma_a)
       tuples.each { |(w, s)| return s.to_i if w == lemma_b || lemma(w) == lemma_b }
 
-      tuples = Rhymecrime::Store.fetch_related_tuples(lemma_b)
-      tuples.each { |(w, s)| return s.to_i if w == lemma_a || lemma(w) == lemma_a }
-
-      0
+      map = lemma_score_map_for(lemma_b)
+      return 0 if map.nil?
+      s = map[lemma_a]
+      s ? s : 0
     end
 
     # +max_candidates+ default +SIMILAR_MAX+ caps the list by stored

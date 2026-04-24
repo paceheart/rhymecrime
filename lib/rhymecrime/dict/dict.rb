@@ -152,13 +152,56 @@ def compute_lemma_map(word_dict)
   lemma_map
 end
 
+# Drop Kaikki "obsolete-only" ghost headwords (+appeare+, +blesse+, +ladie+, +maide+,
+# +cherrie+, +saile+, +wolfe+, +eate+, +businesse+, …) from +word_dict+ and +rdict+ when
+# their modern canonical target survives the build.
+#
+# These leak into +word_dict+ via +wordfreq.tsv+ Zipf rows (Project Gutenberg / KJV /
+# Shakespeare-era corpora list them in running text) even though +load_wiktionary+ now
+# suppresses their paradigm contribution. Without a post-build prune, +compute_lemma_map+
+# Source B would still consider them as valid bases for shared inflected forms, and
+# runtime +related?+ / UI paths would surface them as dict-headword suggestions.
+#
+# Safe ordering: must run after +build_word_dict+ (word_dict is frozen at that point) and
+# before +compute_lemma_map+ (so Source A's +word_dict.key?(kaikki_base)+ gate correctly
+# falls through to the modern canonical). Only drop when the +target+ is itself in word_dict;
+# if the canonical didn't survive (e.g. a rare archaic pair whose modern form is also missing),
+# leaving the obsolete headword gives runtime _something_ to resolve to.
+def prune_obsolete_alt_of_only_headwords!(word_dict, rdict, obsolete_alt_of_only)
+  return 0 if obsolete_alt_of_only.nil? || obsolete_alt_of_only.empty?
+  dropped = 0
+  dropped_pron_orphans = 0
+  obsolete_alt_of_only.each do |ghost, target|
+    next unless word_dict.key?(ghost)
+    next unless word_dict.key?(target)
+
+    dropped_pron_orphans += 1 if word_dict[ghost][1].nil? || word_dict[ghost][1].empty?
+    word_dict.delete(ghost)
+    dropped += 1
+  end
+
+  if dropped > 0
+    before_rdict_n = rdict.values.sum(&:size)
+    rdict.each_value do |words|
+      next if words.nil? || words.empty?
+      words.reject! { |w| obsolete_alt_of_only.key?(w) && !word_dict.key?(w) }
+    end
+    rdict.delete_if { |_rime, words| words.nil? || words.empty? }
+    after_rdict_n = rdict.values.sum(&:size)
+    stripped = before_rdict_n - after_rdict_n
+    puts "Pruned #{dropped} Kaikki obsolete-alt-of ghost headwords from word_dict " \
+         "(#{dropped_pron_orphans} pronunciation-less), stripped #{stripped} from rdict"
+  end
+  dropped
+end
+
 def rebuild_rhymecrime_dictionaries()
   clear_wordnet_lemma_cache!
   ensure_conceptnet_lemma_cache_for_build!
   cmudict = load_cmudict
   original_cmudict_headwords = cmudict.keys.each_with_object(Set.new) { |k, s| s.add(k) }
   wordfreq_hash = load_wordfreq
-  wiktionary_prons, forms_map, pos_map, kaikki_verb_morph, kaikki_capitalized_only, kaikki_variant_map = load_wiktionary
+  wiktionary_prons, forms_map, pos_map, kaikki_verb_morph, kaikki_capitalized_only, kaikki_variant_map, kaikki_obsolete_alt_of_only = load_wiktionary
   varcon_variant_map = load_varcon
   wiktionary_headwords = wiktionary_prons.keys
   apply_lexical_pos_layer_a!(pos_map)
@@ -190,10 +233,12 @@ def rebuild_rhymecrime_dictionaries()
   puts "Removed #{hyp_cmudict_edge} cmudict headwords with a leading or trailing '-'" if hyp_cmudict_edge > 0
   rdict = build_rime_dict(cmudict)
   word_dict = build_word_dict(cmudict, rdict, subtlex_hash, subtlex_total_hash, wordfreq_hash, wiktionary_words, pos_map, forms_map, kaikki_verb_morph, original_cmudict_headwords, kaikki_capitalized_only, kaikki_variant_map, varcon_variant_map)
+  prune_obsolete_alt_of_only_headwords!(word_dict, rdict, kaikki_obsolete_alt_of_only)
   hyphen_fold_build_keys = word_dict.keys
   lemma_map = compute_lemma_map(word_dict)
   save_string_hash(rdict, generated_dict_path_under_dict_dir(RIME_DICT_FILENAME), RIME_DICT_HEADER)
   save_word_dict(word_dict, lemma_map)
+  save_word_lemma_map!(word_dict, lemma_map)
   save_hyphen_variant_map!(hyphen_fold_build_keys, exported_keys: word_dict.keys)
   if skip_conceptnet_numberbatch_dict_exports?
     puts "Skipping ConceptNet edge map and Numberbatch vectors (RHYMECRIME_DICT_SKIP_CONCEPTNET_NUMBERBATCH is set)"
