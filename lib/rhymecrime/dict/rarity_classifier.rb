@@ -473,6 +473,8 @@ def rarity_rescore_and_dump!(hash, **ctx_kwargs)
       sig = extract_rarity_signals(word, ctx)
       sig.post_propagation_freq = entry[0]
 
+      dict_trace_puts(word, "Phase12 rarity_rescore: enter freq=#{entry[0]}") if dict_trace_word?(word)
+
       if dump_file
         features = learned_rarity_feature_vector(sig)
         dump_file.puts JSON.generate(
@@ -486,19 +488,27 @@ def rarity_rescore_and_dump!(hash, **ctx_kwargs)
 
       if entry[0] > RARITY_CLASSIFIER_RESCORE_MAX_FREQ
         skipped_sentinel += 1
+        dict_trace_puts(word, "Phase12 rarity_rescore: skip (sentinel freq=#{entry[0]} > #{RARITY_CLASSIFIER_RESCORE_MAX_FREQ})") if dict_trace_word?(word)
         next
       end
 
       result = rarity_classify(sig)
-      next if result.nil?
+      if result.nil?
+        dict_trace_puts(word, "Phase12 rarity_rescore: classify returned nil") if dict_trace_word?(word)
+        next
+      end
 
       new_cat, new_freq = result
       if new_cat == :forbidden
+        dict_trace_puts(word, "Phase12 rarity_rescore: DELETE (classified :forbidden, was freq=#{entry[0]})") if dict_trace_word?(word)
         hash.delete(word)
         deleted += 1
       elsif entry[0] != new_freq
+        dict_trace_puts(word, "Phase12 rarity_rescore: rescored #{entry[0]} -> #{new_freq} (cat=#{new_cat})") if dict_trace_word?(word)
         entry[0] = new_freq
         rescored += 1
+      else
+        dict_trace_puts(word, "Phase12 rarity_rescore: kept freq=#{entry[0]} (cat=#{new_cat})") if dict_trace_word?(word)
       end
     end
   ensure

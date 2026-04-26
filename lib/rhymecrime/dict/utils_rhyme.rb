@@ -1187,10 +1187,44 @@ end
 
 SPELLING_CSV_PATH = File.join(REPO_ROOT, "spec", "spelling.csv")
 
+# A spelling.csv column counts as a word-form (rather than a free-text notes value)
+# when it consists entirely of letters, hyphens, and apostrophes (e.g. +color+,
+# +'til+, +rock'n'roll+, +acknowledgement+). Anything containing whitespace, digits,
+# +#+, or other punctuation is treated as the start of the optional notes column.
+SPELLING_CSV_FORM_RE = /\A['[:alpha:]][[:alpha:]'\-]*\z/
+
+# Split a comma-separated spelling.csv row into [forms, notes_or_nil].
+# Forms are stripped and consumed left-to-right until the first column that does
+# not look like a word-form (per +SPELLING_CSV_FORM_RE+); from there to end-of-line
+# is the notes payload, rejoined with commas so embedded commas inside notes survive.
+def split_spelling_row(line)
+  raw = line.split(",")
+  forms = []
+  notes_start = nil
+  raw.each_with_index do |col, i|
+    stripped = col.strip
+    if stripped.empty?
+      forms << stripped # let downstream strip empties; an early empty stays a column boundary
+      next
+    end
+    if stripped =~ SPELLING_CSV_FORM_RE
+      forms << stripped
+    else
+      notes_start = i
+      break
+    end
+  end
+  forms = forms.reject(&:empty?)
+  notes = notes_start ? raw[notes_start..].join(",").strip : nil
+  [forms, notes]
+end
+
 # Returns an array of form-arrays: each inner array is +[preferred, alt1[, alt2, ...]]+.
 # Sources, in order:
 #   * +spec/spelling.csv+        — hand-edited list, CSV (comma-separated) with +#+ comment
-#                                   header lines.
+#                                   header lines and an optional trailing free-text notes
+#                                   column (silently dropped at load time; see
+#                                   +split_spelling_row+).
 #   * +generated/spelling_variants_auto.txt+ — emitted by dict-build, whitespace-separated
 #                                   +preferred alt+ pairs. Optional (skipped when missing,
 #                                   e.g. on a fresh checkout before the first build).
@@ -1200,7 +1234,7 @@ def load_variants_raw
   result = []
   File.foreach(SPELLING_CSV_PATH, chomp: true, encoding: "UTF-8") do |line|
     next unless line =~ /\A[[:alpha:]]/
-    forms = line.split(",").map(&:strip).reject(&:empty?)
+    forms, _notes = split_spelling_row(line)
     result << forms unless forms.empty?
   end
   auto_path = generated_dict_path(SPELLING_VARIANTS_AUTO_FILENAME)

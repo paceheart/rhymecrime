@@ -11,12 +11,15 @@
 
 SPELLING_CSV_SPEC_PATH = File.join(__dir__, "spelling.csv")
 
-# Parse +spec/spelling.csv+: each non-comment line is +preferred,alt1[,alt2,...]+; we yield
-# every +(preferred, alt)+ pair. The +#+-prefixed comment header at the top is skipped.
+# Parse +spec/spelling.csv+: each non-comment line is
+# +preferred,alt1[,alt2,...][,free-text notes]+. We yield every +(preferred, alt)+ pair.
+# The +#+-prefixed comment header at the top is skipped, and an optional trailing notes
+# column (any column containing whitespace / punctuation / digits — i.e. not matching
+# +split_spelling_row+'s word-form regex) is silently dropped here.
 def each_spelling_csv_pair
   File.foreach(SPELLING_CSV_SPEC_PATH, chomp: true, encoding: "UTF-8") do |line|
     next unless line =~ /\A[[:alpha:]]/
-    forms = line.split(",").map(&:strip).reject(&:empty?)
+    forms, _notes = split_spelling_row(line)
     next if forms.size < 2
     preferred = forms.first
     forms[1..].each { |alt| yield preferred, alt }

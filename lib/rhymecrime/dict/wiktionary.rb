@@ -125,11 +125,16 @@ def load_wiktionary
 
       # Non-obsolete-only row: this row carries a real definitional meaning (or an
       # active alt-of / misspelling / regional variant). Retract any prior obsolete
-      # candidacy for +word+ so we don't prune a headword that has a live sense.
-      if obsolete_only_candidate.key?(word)
-        obsolete_only_candidate.delete(word)
-        obsolete_only_blocked.add(word)
-      end
+      # candidacy for +word+ and block future obsolete rows from re-establishing one
+      # so we don't prune a headword that has a live sense. Blocking unconditionally
+      # (not only when a candidate already exists) covers the case where the live
+      # rows for +word+ arrive before the obsolete row — e.g. *I*'s personal-pronoun
+      # +pos: "pron"+ + ego +pos: "noun"+ + letter +pos: "character"+ rows precede the
+      # +pos: "intj"+ row whose only sense is "Obsolete spelling of aye." Without the
+      # unconditional block, the late obsolete row would set a fresh candidate that
+      # +prune_obsolete_alt_of_only_headwords!+ then deletes from word_dict.
+      obsolete_only_candidate.delete(word) if obsolete_only_candidate.key?(word)
+      obsolete_only_blocked.add(word)
 
       (pos_map[word] ||= Set.new).add(pos) unless pos.empty?
 

@@ -57,7 +57,6 @@ hey
 him
 himself
 his
-hisself
 how
 huh
 i
@@ -400,7 +399,7 @@ instead
 meanwhile
 otherwise
 indeed
-er
+# er: rare because ER
 eh
 mm
 mhm

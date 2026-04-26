@@ -457,6 +457,7 @@ def prune_obsolete_alt_of_only_headwords!(word_dict, rdict, obsolete_alt_of_only
     next unless word_dict.key?(ghost)
     next unless word_dict.key?(target)
 
+    dict_trace_puts(ghost, "prune_obsolete_alt_of: DELETE (target=#{target})") if dict_trace_word?(ghost)
     dropped_pron_orphans += 1 if word_dict[ghost][1].nil? || word_dict[ghost][1].empty?
     word_dict.delete(ghost)
     dropped += 1

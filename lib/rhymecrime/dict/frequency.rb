@@ -307,6 +307,7 @@ def filter_word_dict_disconnected!(word_dict, rdict, subtlex_hash, wordfreq_hash
                r
              end
       next if keep
+      dict_trace_puts(w, "filter_disconnected round=#{rounds}: DELETE (freq=0, no rescue)") if dict_trace_word?(w)
       word_dict.delete(w)
       removed += 1
     end
@@ -669,6 +670,7 @@ def add_frequency_info(cmudict, subtlex_hash, subtlex_total_hash, wordfreq_hash,
       count += 1
     end
     hash[word] = [freq, prons]
+    dict_trace_puts(word, "Phase1 (cmudict pass): freq=#{freq}") if dict_trace_word?(word)
   end
   puts "#{count} of those entries have frequency data (from cmudict/wiktionary words)"
 
@@ -1317,6 +1319,7 @@ def add_frequency_info(cmudict, subtlex_hash, subtlex_total_hash, wordfreq_hash,
     stem_entry = hash[stem]
     stem_freq = stem_entry ? stem_entry[0] : 0
     next if stem_freq > 0
+    dict_trace_puts(word, "possessive_scrub: DELETE (stem='#{stem}' freq=#{stem_freq})") if dict_trace_word?(word)
     hash.delete(word)
     possessive_scrub += 1
   end
@@ -1338,6 +1341,7 @@ def add_frequency_info(cmudict, subtlex_hash, subtlex_total_hash, wordfreq_hash,
     entry = hash[word]
     next unless entry && entry[0] == 0
     next unless morph_spurious_plural_s_on_invariant_noun?(word)
+    dict_trace_puts(word, "invariant_plural_scrub: DELETE") if dict_trace_word?(word)
     hash.delete(word)
     invariant_plural_scrub += 1
   end
@@ -1352,6 +1356,7 @@ def add_frequency_info(cmudict, subtlex_hash, subtlex_total_hash, wordfreq_hash,
     lexnames = wn_noun_synsets_unified(word.tr("-", "_")).map { |s| wn_synset_noun_lexname(s) }.compact.uniq
     next if lexnames.empty?
     next unless lexnames.all? { |l| proper_lexfiles.include?(l) }
+    dict_trace_puts(word, "hyphenated_proper_scrub: DELETE") if dict_trace_word?(word)
     hash.delete(word)
     hyphenated_proper_scrub += 1
   end
@@ -1360,6 +1365,7 @@ def add_frequency_info(cmudict, subtlex_hash, subtlex_total_hash, wordfreq_hash,
   forbidden_scrub = 0
   hash.keys.each do |word|
     next unless explicitly_forbidden?(word)
+    dict_trace_puts(word, "forbidden_scrub: DELETE (in forbid_list)") if dict_trace_word?(word)
     hash.delete(word)
     forbidden_scrub += 1
   end
