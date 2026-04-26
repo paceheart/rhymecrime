@@ -50,9 +50,9 @@ module Rhymecrime
       end
       vf = variants[w]
       if vf
-        io.puts "spelling_variants.txt: #{vf.inspect}"
+        io.puts "spelling.csv: #{vf.inspect}"
       else
-        io.puts "dict/spelling_variants.txt: no row for this key (variants()[#{w.inspect}] is nil)"
+        io.puts "spec/spelling.csv: no row for this key (variants()[#{w.inspect}] is nil)"
       end
       io.puts
 

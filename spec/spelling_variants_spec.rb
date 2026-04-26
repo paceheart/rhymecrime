@@ -1,13 +1,27 @@
 # Surface-spelling preference expectations: the dictionary should normalize each documented
 # pair to a single preferred form via +preferred_form+. Covers both:
 #
-#   - manually declared variants (+lib/rhymecrime/dict/spelling_variants.txt+), and
+#   - manually declared variants (+spec/spelling.csv+), and
 #   - automatically detected morphology pairs (+us_uk_morphology_pair+ and friends).
 #
 # Per-pair semantics: if the non-preferred form is not a headword in +word_dict+ there is nothing
 # to normalize away, so the example passes vacuously. When the variant IS a headword, we assert
 # it normalizes to the preferred form, AND that the preferred form is itself a fixed point (so a
 # future regression that flips the preference shows up as a spec failure either way).
+
+SPELLING_CSV_SPEC_PATH = File.join(__dir__, "spelling.csv")
+
+# Parse +spec/spelling.csv+: each non-comment line is +preferred,alt1[,alt2,...]+; we yield
+# every +(preferred, alt)+ pair. The +#+-prefixed comment header at the top is skipped.
+def each_spelling_csv_pair
+  File.foreach(SPELLING_CSV_SPEC_PATH, chomp: true, encoding: "UTF-8") do |line|
+    next unless line =~ /\A[[:alpha:]]/
+    forms = line.split(",").map(&:strip).reject(&:empty?)
+    next if forms.size < 2
+    preferred = forms.first
+    forms[1..].each { |alt| yield preferred, alt }
+  end
+end
 
 # Assert that +preferred_form(alt) == preferred+ (and that +preferred+ is a fixed point).
 # Passes vacuously when +alt+ is not in +word_dict+ — there is nothing the dict could normalize.
@@ -22,7 +36,43 @@ def prefer_spelling(preferred, alt)
   end
 end
 
+def dont_prefer_spelling(first, second)
+  it "does not prefer '#{first}' over '#{second}'" do
+    expect(preferred_form(second)).to_not eq(first),
+      "expected preferred_form('#{second}') to not be '#{first}', but it was"
+  end
+end
+
 describe "SPELLING VARIANTS" do
+  context "-ize/-ise US/UK" do
+    prefer_spelling 'standardize', 'standardise'
+    prefer_spelling 'standardized', 'standardised'
+    prefer_spelling 'standardizes', 'standardises'
+    prefer_spelling 'standardizing', 'standardising'
+    prefer_spelling 'aggrandize', 'aggrandise'
+  end
+  
+  context "-or/-our US/UK" do
+    prefer_spelling 'behavior', 'behaviour'
+    prefer_spelling 'color', 'colour'
+    prefer_spelling 'harbor', 'harbour'
+    prefer_spelling 'recolor', 'recolour'
+    dont_prefer_spelling 'tor', 'tour'
+    dont_prefer_spelling 'for', 'four'
+    dont_prefer_spelling 'or', 'our'
+    context "plus -ize / -ise" do
+      prefer_spelling 'colorize', 'colourize'
+      prefer_spelling 'colorize', 'colourise'
+      prefer_spelling 'colorize', 'colorise'
+      prefer_spelling 'recolorize', 'recolorise'
+      prefer_spelling 'recolorize', 'recolourize'
+      prefer_spelling 'recolorize', 'recolourise'
+      prefer_spelling 'recolorized', 'recolorised'
+      prefer_spelling 'recolorized', 'recolourized'
+      prefer_spelling 'recolorized', 'recolourised'
+    end
+  end
+
   # Loanwords from Spanish / Italian with a native -o plural. English dictionaries list both
   # -oes and -os forms, but the -os spelling is the better-attested modern choice for these
   # specific stems. (Contrast with the native -o nouns below, which prefer -oes.)
@@ -54,7 +104,24 @@ describe "SPELLING VARIANTS" do
     prefer_spelling "parroted", "parrotted"
   end
 
+  context "-l/-ll US/UK" do
+    prefer_spelling 'counselor', 'counsellor'
+    prefer_spelling 'traveling', 'travelling'
+    prefer_spelling 'traveler', 'traveller'
+    prefer_spelling 'fulfill', 'fulfil'
+    prefer_spelling 'distill', 'distil'
+    prefer_spelling 'distills', 'distils'
+    prefer_spelling 'enroll', 'enrol'
+    prefer_spelling 'enrolls', 'enrols'
+  end
+
   context "words ending in e" do
     prefer_spelling "icing", "iceing"
+  end
+
+  context "manual list (spec/spelling.csv)" do
+    each_spelling_csv_pair do |preferred, alt|
+      prefer_spelling preferred, alt
+    end
   end
 end

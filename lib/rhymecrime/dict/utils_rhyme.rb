@@ -58,8 +58,9 @@ NUMBERBATCH_VECTORS_FILENAME = "numberbatch_vectors.msgpack"
 # USF cue→target association strengths (FSG); place under generated/ for runtime (e.g. built from corpora/usf/).
 USF_ASSOCIATIONS_FILENAME = "usf_associations.json"
 # Auto-detected lexical spelling variant pairs (e.g. -oes/-os), emitted by dict-build from corpus
-# frequency data. Same line format as the hand-edited +spelling_variants.txt+; loaded at runtime
-# via +load_variants_raw+ so no corpus I/O leaks into the runtime path.
+# frequency data. Whitespace-separated +preferred alt+ pairs (legacy format kept for the auto
+# file; the hand-edited list lives at +spec/spelling.csv+ in CSV form). Both are loaded at
+# runtime via +load_variants_raw+ so no corpus I/O leaks into the runtime path.
 SPELLING_VARIANTS_AUTO_FILENAME = "spelling_variants_auto.txt"
 # Learned phase-2 relatedness combiner (logistic regression over +PairSignals+ features);
 # built by bin/train-relatedness-classifier, consumed in related.rb.
@@ -107,10 +108,26 @@ end
 # stop words
 #
 
-STOP_WORDS = ["i", "me", "my", "myself", "we", "our", "ours", "ourselves", "you", "your", "yours", "yourself", "yourselves", "he", "him", "his", "himself", "she", "her", "hers", "herself", "it", "its", "itself", "they", "them", "their", "theirs", "themself", "themselves", "what", "which", "who", "whom", "this", "that", "these", "those", "am", "is", "are", "was", "were", "be", "been", "being", "have", "has", "had", "having", "do", "does", "did", "doing", "a", "an", "the", "and", "but", "if", "or", "as", "of", "at", "by", "for", "with", "to", "from", "then", "so", "than", "i'd", "i've", "i'll", "we'd", "we've", "we'll", "you'd", "you've", "you'll", "he'd", "he'll", "she's", "she'd", "she'll", "it's", "it'd", "it'll", "they'd", "they've", "they'll", "that's", "that'd", "that've", "that'll", "what's", "what've", "what'll", "who's", "who'd", "who've", "who'll", "this'd", "this'll", "that's", "that'd", "that've", "that'll", "because", "until", "while", "about", "against", "between", "into", "through", "during", "before", "after", "above", "below", "up", "down", "in", "out", "on", "off", "over", "under", "again", "further", "once", "here", "there", "when", "where", "why", "how", "all", "any", "both", "each", "few", "more", "most", "other", "some", "such", "no", "nor", "not", "only", "own", "same", "too", "very", "can", "will", "just", "dont", "should", "now", "else", "huh", "ah"] # based on https://gist.github.com/sebleier/554280
+$stop_words = nil
+
+# Lazily load +lib/rhymecrime/dict/stop_words.txt+ into a +Set+ for O(1) lookups.
+# +#+ comment lines and blank lines are skipped; trailing whitespace on each entry is
+# stripped (so e.g. +"hey "+ in the file matches the word +"hey"+).
+def stop_words
+  $stop_words ||= begin
+    set = Set.new
+    path = File.join(__dir__, "stop_words.txt")
+    File.foreach(path, chomp: true, encoding: "UTF-8") do |line|
+      w = line.strip
+      next if w.empty? || w.start_with?("#")
+      set << w
+    end
+    set
+  end
+end
 
 def stop_word?(word)
-  return STOP_WORDS.include?(word)
+  stop_words.include?(word)
 end
 
 #
@@ -258,7 +275,6 @@ end
 def uk_to_us_ize_spelling(uk_word)
   w = uk_word.to_s
   return nil if w.empty?
-  return "sizable" if w == "sizeable" # TODO: load this from spelling_variants.txt instead of hardcoding it
   US_UK_YZE_SUFFIXES.each do |us_s, uk_s|
     next unless w.end_with?(uk_s)
     return w[0...-uk_s.length] + us_s
@@ -526,9 +542,8 @@ end
 # otherwise uses +$word_dict+ or scans word_dict.txt (fallback when JSON cache is missing).
 def build_hyphen_multi_fold_map(explicit_word_keys = nil)
   buckets = {}
-  load_variants_raw.each do |line|
-    next unless line =~ /\A[[:alpha:]]/
-    line.split.each { |w| ingest_word_into_hyphen_fold_buckets!(buckets, w) }
+  load_variants_raw.each do |forms|
+    forms.each { |w| ingest_word_into_hyphen_fold_buckets!(buckets, w) }
   end
   if explicit_word_keys
     explicit_word_keys.each { |w| ingest_word_into_hyphen_fold_buckets!(buckets, w) }
@@ -1170,27 +1185,39 @@ def all_forms(word)
   [word]
 end
 
+SPELLING_CSV_PATH = File.join(REPO_ROOT, "spec", "spelling.csv")
+
+# Returns an array of form-arrays: each inner array is +[preferred, alt1[, alt2, ...]]+.
+# Sources, in order:
+#   * +spec/spelling.csv+        — hand-edited list, CSV (comma-separated) with +#+ comment
+#                                   header lines.
+#   * +generated/spelling_variants_auto.txt+ — emitted by dict-build, whitespace-separated
+#                                   +preferred alt+ pairs. Optional (skipped when missing,
+#                                   e.g. on a fresh checkout before the first build).
+# Comment lines (starting with +#+) and lines that don't begin with an alphabetic character
+# are skipped at parse time, matching the legacy +/A[[:alpha:]]/+ filter.
 def load_variants_raw
-  lines = []
-  manual_path = File.join(__dir__, "spelling_variants.txt")
-  File.foreach(manual_path, chomp: true, encoding: "UTF-8") { |line| lines << line }
+  result = []
+  File.foreach(SPELLING_CSV_PATH, chomp: true, encoding: "UTF-8") do |line|
+    next unless line =~ /\A[[:alpha:]]/
+    forms = line.split(",").map(&:strip).reject(&:empty?)
+    result << forms unless forms.empty?
+  end
   auto_path = generated_dict_path(SPELLING_VARIANTS_AUTO_FILENAME)
   if File.exist?(auto_path)
-    File.foreach(auto_path, chomp: true, encoding: "UTF-8") { |line| lines << line }
+    File.foreach(auto_path, chomp: true, encoding: "UTF-8") do |line|
+      next unless line =~ /\A[[:alpha:]]/
+      forms = line.split.map(&:strip).reject(&:empty?)
+      result << forms unless forms.empty?
+    end
   end
-  lines
+  result
 end
 
 def load_variants
-  variants_array = load_variants_raw
-  hash = Hash.new
-  for line in variants_array
-    if line =~ /\A[[:alpha:]]/ # ignore lines that start with comment characters, punctuation, or numbers
-      all_forms = line.split
-      for word in all_forms
-        hash[word] = all_forms
-      end
-    end
+  hash = {}
+  load_variants_raw.each do |forms|
+    forms.each { |word| hash[word] = forms }
   end
   hash
 end
