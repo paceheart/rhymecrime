@@ -6,10 +6,19 @@
 # +generated/model_sense_vectors.msgpack+ which supplies the modern-embedding
 # signals in +PairSignals+ (see +MODEL_SENSE_VECTORS_FILENAME+, +related.rb+).
 #
-# Each headword contributes one "headword" item (+sense_idx = -1+, +text+ is just the
-# headword itself) plus up to +--max-senses+ "sense" items, one per WordNet gloss
-# (+text+ is +"{word}: {gloss}"+). When a word has no direct WordNet senses, we try
-# morphy-resolved inflected forms (same fallback as +sense_vectors_morphy+).
+# Each headword contributes:
+#   - one "headword" item (+sense_idx = -1+, +text+ is just the headword itself)
+#   - one "definition" item (+sense_idx = -2+, +text+ is the headword followed by
+#     all its WordNet glosses pooled into a single sentence-transformer input,
+#     +"{word}. {gloss1}. {gloss2}. ..."+). This gives the encoder a *definition-
+#     aware* embedding that disambiguates polysemous bare words ("bear"-the-animal
+#     vs "bear"-the-verb) — feeds the +def_cos+ classifier feature. Falls back to
+#     the bare headword text when no glosses are available, so +definition[word]+
+#     is always populated for in-vocab lemmas.
+#   - up to +--max-senses+ "sense" items (+sense_idx >= 0+), one per WordNet gloss
+#     (+text+ is +"{word}: {gloss}"+).
+# When a word has no direct WordNet senses, we try morphy-resolved inflected forms
+# (same fallback as +sense_vectors_morphy+).
 #
 # Scope:
 #   +--limit-csv CSV+  only dump words referenced in the CSV's +word1+/+word2+ columns.
@@ -100,6 +109,17 @@ def wordnet_glosses_for(word, max_senses, include_morphy)
   glosses
 end
 
+# Pooled-definition text fits comfortably in MPNet's 512-token input even for the
+# most polysemous lemmas (~10 short glosses). We don't bother truncating; encoder
+# already handles overflow by truncation if it ever happened.
+def pooled_definition_text(word, glosses)
+  return word if glosses.empty?
+  parts = glosses.map { |g| g.to_s.strip.chomp(".") }
+  parts.reject!(&:empty?)
+  return word if parts.empty?
+  "#{word}. #{parts.join('. ')}."
+end
+
 written = 0
 headword_only = 0
 File.open(options[:output], "w") do |f|
@@ -109,6 +129,13 @@ File.open(options[:output], "w") do |f|
 
     glosses = wordnet_glosses_for(word, options[:max_senses], options[:include_morphy])
     headword_only += 1 if glosses.empty?
+
+    f.puts JSON.generate(
+      "word" => word,
+      "sense_idx" => -2,
+      "text" => pooled_definition_text(word, glosses),
+    )
+    written += 1
 
     glosses.each_with_index do |g, i|
       f.puts JSON.generate(

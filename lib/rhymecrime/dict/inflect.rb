@@ -171,6 +171,15 @@ module Inflect
       add_cand.call(inflected.byteslice(0, il - 3))
     end
 
+    # Hebrew-derived plurals: +-im+ → ∅. Surfaces +seraphim+→+seraph+,
+    # +kibbutzim+→+kibbutz+, +cherubim+→+cherub+ (cherubim works without this
+    # rule because Wiktionary's +forms_map+ already links it; the rule fills in
+    # the same coverage for less-attested cognates). Min length 4 keeps it from
+    # touching short coincidences (+aim+, +dim+, +rim+).
+    if inflected.end_with?("im") && il >= 4
+      add_cand.call(inflected.byteslice(0, il - 2))
+    end
+
     # Colloquial g-drop: +fooin'+/+gluin'+/+stoppin'+/+tryin'+ share a base with
     # +fooing+/+gluing+/+stopping+/+trying+. Mirror the surface rule by recursing on
     # the reconstituted +-ing+ form (one level deep — the +-ing+ form no longer ends
@@ -508,6 +517,10 @@ module Inflect
     case rest_len
     when 1
       return :s if inflected.getbyte(bl) == 115 # "s"
+      # +-ee+ verbs take past tense via bare +d+ (+agree+→+agreed+, +free+→+freed+,
+      # +flee+→+fleed+). The silent-e branch above excludes +-ee+ to avoid fake
+      # +free→fred+ stems, so handle the genuine +d+ suffix here.
+      return :ed if inflected.getbyte(bl) == 100 && base.end_with?("ee") # "d"
     when 2
       b0 = inflected.getbyte(bl)
       b1 = inflected.getbyte(bl + 1)
@@ -517,6 +530,11 @@ module Inflect
       return :ed if b0 == 101 && b1 == 100
       return :er if b0 == 101 && b1 == 114
       return :ly if b0 == 108 && b1 == 121 # "ly"
+      # Hebrew-derived plural +-im+ (+seraph+→+seraphim+). Distinct from +:s+ on
+      # purpose: forward-direction callers in +morphology+ / +frequency+ never
+      # synthesize +-im+ surfaces from a base, and +Inflect.derive+ has no English
+      # phonology rule for it, so we only want backward lemma resolution to fire.
+      return :im if b0 == 105 && b1 == 109 && bl >= 2 # "im"
     when 3
       return :ing if inflected.end_with?("ing")
       return :est if inflected.end_with?("est")

@@ -1,0 +1,70 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# build-semantic-base-map — rebuild +word_semantic_base_map.{msgpack,txt}+
+# from the existing +word_dict.txt+ + +word_lemma_map.msgpack+ without
+# re-running the full +bin/dict-build+ pipeline.
+#
+# Useful for iterating on +SEMANTIC_BASE_SUFFIX_RULES+ / the gates in
+# +lib/rhymecrime/dict/dict.rb+: edit, run this, +diff+ the .txt against the
+# previous version, repeat. The full +bin/dict-build+ regenerates the same
+# artefacts as a side-effect of +rebuild_rhymecrime_dictionaries+ — this is a
+# fast path that skips ConceptNet / Numberbatch / SUBTLEX I/O.
+#
+# Usage:
+#   bundle exec bin/build-semantic-base-map [--dry-run]
+
+$LOAD_PATH.unshift File.expand_path("../lib", __dir__)
+ENV.delete("RHYMECRIME_DATA_SOURCE")
+
+require "optparse"
+require_relative "../lib/rhymecrime/dict/utils_rhyme"
+require_relative "../lib/rhymecrime/frontend"
+require_relative "../lib/rhymecrime/dict/lexical"
+require_relative "../lib/rhymecrime/dict/dict"
+
+dry_run = false
+no_cosine_guard = false
+OptionParser.new do |o|
+  o.on("--dry-run", "Don't write the msgpack/txt; just print stats") { dry_run = true }
+  o.on("--no-cosine-guard", "Skip the Numberbatch cosine guard (legacy / debugging)") { no_cosine_guard = true }
+end.parse!
+
+puts "Loading word_dict and lemma map..."
+wd = word_dict
+lemma_map = {}
+wd.each_key do |w|
+  l = lemma(w)
+  lemma_map[w] = l if l && l != w
+end
+puts "  #{wd.size} headwords, #{lemma_map.size} have a non-self lemma"
+
+nb_vectors = nil
+unless no_cosine_guard
+  nb_path = generated_dict_path(NUMBERBATCH_VECTORS_FILENAME)
+  if File.exist?(nb_path)
+    require "msgpack"
+    raw = MessagePack.unpack(File.binread(nb_path))
+    nb_vectors = raw
+    puts "Loaded #{nb_vectors.size} Numberbatch vectors for cosine guard from #{nb_path}"
+  else
+    puts "WARN: #{nb_path} not present — skipping NB cosine guard. Run +bin/dict-build+ once first."
+  end
+end
+
+t0 = Time.now
+map, transforms = compute_semantic_base_map(wd, lemma_map, nb_vectors: nb_vectors)
+puts "Done in #{(Time.now - t0).round(1)}s"
+
+counts = Hash.new(0)
+transforms.each_value { |t| counts[t] += 1 }
+puts "\nTop 20 transforms by hit count:"
+counts.sort_by { |_t, n| -n }.first(20).each do |t, n|
+  puts format("  %-20s %5d", t, n)
+end
+
+if dry_run
+  puts "\n--dry-run set; not writing files."
+else
+  save_word_semantic_base_map!(wd, map, transform_for: transforms)
+end

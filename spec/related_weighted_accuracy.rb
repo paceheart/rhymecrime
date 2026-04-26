@@ -256,7 +256,7 @@ Dir.chdir(repo) do
     exp = case kind
           when "related", "related_ish" then true
           when "unrelated", "unrelated_ish" then false
-          when "whatever" then nil
+          when "whatever", "" then nil
           else raise "bad oughta be related? #{r['oughta be related?'].inspect} in #{r}"
           end
 

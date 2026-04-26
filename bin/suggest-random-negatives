@@ -1,0 +1,220 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+# encoding: UTF-8
+#
+# Negative oversampling helper: append +TARGET+ random (a, b) pairs to
+# spec/related.csv, pre-labelled +unrelated+, drawn from the universe of
+# +relatedness_target_word?+ lemma pairs and stratified across three
+# classifier-score buckets so the classifier sees the empirical "random
+# pair = unrelated" prior at a range of decision-confidence levels:
+#
+#   easy    score in [0, EASY_HI]      (default <=15)   — reinforce baseline prior
+#   medium  score in [MED_LO, MED_HI]  (default 15..30) — informative but safe
+#   border  score in [BOR_LO, BOR_HI]  (default 30..49) — highest info per row,
+#                                                          + extra signal-level
+#                                                          filters to dodge
+#                                                          accidental homonym /
+#                                                          polysemy positives.
+#
+# Why this exists: the FP error analysis on +spec/related.csv+ found that
+# ~71% of FPs were "Composite_weak" — pairs where four-five modest signals
+# each pushed slightly upward and the GBT learned to trust their sum.
+# Hand-curated negatives are dominated by *near-positives* (the human picks
+# things that "feel close"), so the classifier never sees enough of the
+# baseline "random pair" distribution to learn that modest signal everywhere
+# is the *normal* state for unrelated pairs. This script fills that gap.
+#
+# Safety: every candidate pair is gated through several "is this *actually*
+# unrelated?" checks before being auto-labelled — no direct USF supervision,
+# no high-confidence ConceptNet edge, +cn_hops>=2+, and (for the border bucket
+# only) additional NB-cos / def_cos caps. Mislabel rate is expected to be
+# low single digits; rows are tagged in +notes+ so they're easy to audit
+# or filter out later.
+#
+# Knobs (env vars):
+#   TARGET        integer  total rows to add        (default 2000)
+#   EASY_TARGET   integer  override per-bucket count
+#   MED_TARGET    integer
+#   BORDER_TARGET integer
+#   EASY_HI       integer  upper bound for easy bucket   (default 15)
+#   MED_LO/HI     integer  bounds for medium bucket      (default 15..30)
+#   BOR_LO/HI     integer  bounds for border bucket      (default 30..49)
+#   MAX_ATTEMPTS  integer  per-bucket sample budget      (default 200000)
+#   SEED          integer  RNG seed                      (default 31)
+#
+# Usage:
+#   bundle exec bin/suggest-random-negatives
+#   TARGET=3000 SEED=42 bundle exec bin/suggest-random-negatives
+Encoding.default_external = Encoding::UTF_8
+$LOAD_PATH.unshift(File.expand_path("../lib", __dir__))
+
+require "csv"
+require "set"
+require "rhymecrime/crime"
+require "rhymecrime/dict/rime"
+require "rhymecrime/relatedness/signals"
+require "rhymecrime/relatedness/score"
+
+TARGET        = (ENV["TARGET"]        || "2000").to_i
+EASY_TGT      = ENV["EASY_TARGET"]&.to_i
+MED_TGT       = ENV["MED_TARGET"]&.to_i
+BORDER_TGT    = ENV["BORDER_TARGET"]&.to_i
+
+EASY_HI       = (ENV["EASY_HI"] || "15").to_i
+MED_LO        = (ENV["MED_LO"]  || "15").to_i
+MED_HI        = (ENV["MED_HI"]  || "30").to_i
+BOR_LO        = (ENV["BOR_LO"]  || "30").to_i
+BOR_HI        = (ENV["BOR_HI"]  || "49").to_i
+
+MAX_ATTEMPTS  = (ENV["MAX_ATTEMPTS"] || "1500000").to_i
+SEED          = (ENV["SEED"]      || "31").to_i
+
+CSV_PATH = File.expand_path("../spec/related.csv", __dir__)
+
+def pair_key(a, b)
+  la = (lemma(a) || a).to_s
+  lb = (lemma(b) || b).to_s
+  la <= lb ? "#{la}\t#{lb}" : "#{lb}\t#{la}"
+end
+
+def load_existing_pairs
+  seen = Set.new
+  CSV.foreach(CSV_PATH, headers: true, encoding: "UTF-8") do |row|
+    w1 = row["word1"].to_s.strip.downcase
+    w2 = row["word2"].to_s.strip.downcase
+    next if w1.empty? || w2.empty?
+    seen << pair_key(w1, w2)
+  end
+  seen
+end
+
+# Default 50/37.5/12.5 split: easy and medium scale cheaply (random pairs
+# fall mostly in the [0, 30] score band so quotas fill in tens of thousands
+# of attempts), but the border bucket [30, 49] is sparse — about 1 in
+# 2500 random pairs lands there *and* survives the strict safety filter.
+# Quotas reflect that: enough border rows to teach the model the high-info
+# signal, but few enough that we don't blow MAX_ATTEMPTS chasing them.
+if EASY_TGT && MED_TGT && BORDER_TGT
+  easy_n   = EASY_TGT
+  med_n    = MED_TGT
+  border_n = BORDER_TGT
+else
+  easy_n   = (TARGET * 0.50).round
+  med_n    = (TARGET * 0.375).round
+  border_n = TARGET - easy_n - med_n
+end
+
+warn "target: total=#{TARGET}  easy=#{easy_n} med=#{med_n} border=#{border_n}"
+warn "buckets: easy[0,#{EASY_HI}]  medium[#{MED_LO},#{MED_HI}]  border[#{BOR_LO},#{BOR_HI}]"
+warn "warming dict / rdict / numberbatch / classifier / sense vectors / ConceptNet..."
+wd = word_dict
+rd = rdict
+numberbatch_table
+relatedness_classifier
+model_sense_vectors_table
+conceptnet_adjacency
+
+target_pool = wd.each_key.select { |w| relatedness_target_word?(w, wd, rd) }
+warn "candidate pool: #{target_pool.size} relatedness-target lemmas"
+
+seen_pairs = load_existing_pairs
+warn "#{seen_pairs.size} existing CSV pairs"
+
+# Returns +true+ when there's enough independent evidence the pair is *not*
+# silently related (homonyms, light polysemy collisions, niche associations).
+# The bar is intentionally conservative: we'd rather drop a borderline-OK
+# pair than label a truly-related one as +unrelated+. The +strict+ flag
+# tightens the gloss / cosine ceilings for the border bucket where the
+# classifier is already leaning positive.
+def safe_to_label_unrelated?(signals, strict:)
+  return false if signals.usf_direct_max.to_i > 0
+  return false if signals.usf_twohop_validated?
+  return false if signals.edge_weight.to_f >= 0.5
+  return false if (signals.cn_hops || 99) <= 1
+  if strict
+    return false if signals.cos_pct.to_i >= 25
+    return false if signals.def_both_in_vocab? && signals.def_cos_pct.to_i >= 35
+  end
+  true
+end
+
+rng = Random.new(SEED)
+
+picks_easy   = []
+picks_med    = []
+picks_border = []
+picked_keys  = Set.new
+
+attempts = 0
+filtered_signal = 0
+filtered_dup = 0
+filtered_score_oob = 0
+loop do
+  break if picks_easy.size >= easy_n && picks_med.size >= med_n && picks_border.size >= border_n
+  break if attempts >= MAX_ATTEMPTS
+
+  attempts += 1
+  warn "  attempts=#{attempts}  easy=#{picks_easy.size}/#{easy_n}  med=#{picks_med.size}/#{med_n}  border=#{picks_border.size}/#{border_n}" if attempts % 10000 == 0
+
+  a = target_pool[rng.rand(target_pool.size)]
+  b = target_pool[rng.rand(target_pool.size)]
+  next if a == b
+  la = (lemma(a) || a).to_s
+  lb = (lemma(b) || b).to_s
+  next if la == lb
+  key = pair_key(a, b)
+  if seen_pairs.include?(key) || !picked_keys.add?(key)
+    filtered_dup += 1
+    next
+  end
+
+  signals = PairSignals.new(a, b)
+  next if signals.involves_stop_word?
+  s = learned_relatedness_score(signals)
+  next if s.nil?
+
+  if s <= EASY_HI && picks_easy.size < easy_n
+    if safe_to_label_unrelated?(signals, strict: false)
+      picks_easy << [a, b, s]
+    else
+      filtered_signal += 1
+    end
+  elsif s >= MED_LO && s <= MED_HI && picks_med.size < med_n
+    if safe_to_label_unrelated?(signals, strict: false)
+      picks_med << [a, b, s]
+    else
+      filtered_signal += 1
+    end
+  elsif s >= BOR_LO && s <= BOR_HI && picks_border.size < border_n
+    if safe_to_label_unrelated?(signals, strict: true)
+      picks_border << [a, b, s]
+    else
+      filtered_signal += 1
+    end
+  else
+    filtered_score_oob += 1
+  end
+end
+
+total = picks_easy.size + picks_med.size + picks_border.size
+warn ""
+warn "sampled #{total} rows after #{attempts} attempts"
+warn "  easy=#{picks_easy.size}/#{easy_n}  medium=#{picks_med.size}/#{med_n}  border=#{picks_border.size}/#{border_n}"
+warn "  rejected: dup=#{filtered_dup}  signal-related=#{filtered_signal}  score-out-of-band=#{filtered_score_oob}"
+
+if total.zero?
+  warn "no rows produced; aborting (no append)"
+  exit 1
+end
+
+rows = []
+picks_easy.each   { |(a, b, s)| rows << [a, b, "unrelated", "auto-random-negative:easy:#{s}"] }
+picks_med.each    { |(a, b, s)| rows << [a, b, "unrelated", "auto-random-negative:medium:#{s}"] }
+picks_border.each { |(a, b, s)| rows << [a, b, "unrelated", "auto-random-negative:border:#{s}"] }
+
+warn "appending #{rows.size} rows to #{CSV_PATH}"
+CSV.open(CSV_PATH, "a", encoding: "UTF-8") do |csv|
+  rows.each { |r| csv << r }
+end
+
+warn "done. new total: #{`wc -l #{CSV_PATH}`.strip}"

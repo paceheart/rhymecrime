@@ -154,8 +154,26 @@ module Rhymecrime
         # handle safely; WAL mode means precompute can write while we read.
         handle = SQLite3::Database.new(database_path, readonly: true)
         handle.execute("PRAGMA query_only = 1")
+        announce_cache_age!
         handle
       end
+    end
+
+    # Print the cache path + creation/modification time exactly once per
+    # process. Loud-on-load so we never silently consume a stale precompute
+    # again when retraining the classifier or changing the score recipe — the
+    # runtime predicate happily returns whatever scores the SQLite file holds,
+    # which previously masked a +10pp+ accuracy delta in the live classifier
+    # behind a "looks fine" eval banner.
+    def announce_cache_age!
+      return if @announced
+      @announced = true
+      path = database_path
+      mtime = File.mtime(path) rescue nil
+      size_mb = (File.size(path).to_f / 1024 / 1024).round(1) rescue nil
+      stamp = mtime ? mtime.strftime("%Y-%m-%d %H:%M:%S %z") : "unknown"
+      warn "[related-cache] loading precomputed store from #{path} " \
+           "(built #{stamp}, #{size_mb} MB) — set RELATED_BYPASS_STORE=1 to force live compute"
     end
 
     # Returns +[[word, score], ...]+ for the +related#<lemma>+ row, or +[]+.

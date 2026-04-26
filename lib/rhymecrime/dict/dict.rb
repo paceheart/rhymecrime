@@ -81,6 +81,50 @@ def wn_accept_inflection_lemma_pair?(word, base)
     wn_derivationally_related_to_base?(word, base)
 end
 
+# Suppress collapsing +-ing+ adjectives that have gained independent semantic
+# weight onto their verbal base. WN often lists them as adj-only senses, but
+# the morphology-aware fallback in +compute_lemma_map+ would still happily map
+# +cloying → cloy+ and lose the adjective register at runtime. Heuristic:
+#   * surface ends in +-ing+,
+#   * surface has a WN entry,
+#   * none of the surface's WN POSes is +"v"+ (so adjectival sense is dominant),
+#   * a candidate +-ing+ base exists in word_dict and passes the WN gate,
+#   * surface is at least 5 freq buckets below the candidate base — i.e. the
+#     adjective use is the dominant living surface (wide enough margin that
+#     pure verb-form drift like +running+/+run+ doesn't qualify).
+# Returns +true+ to short-circuit the lemma assignment (keeps surface as a
+# self-lemma).
+def independent_ing_adj_surface?(word, word_dict)
+  return false unless word.end_with?("ing")
+  return false unless wn_has_entry?(word)
+  poses = wn_lemma_find_all_cached(word).map(&:pos).uniq
+  return false if poses.empty? || poses.include?("v")
+  surface_entry = word_dict[word]
+  return false unless surface_entry
+  surface_freq = surface_entry[0]
+  candidate_bases = Inflect.raw_candidate_bases_for_inflected(word).to_a
+  ka_base = $inflection_base_words[word]
+  candidate_bases << ka_base if ka_base && !candidate_bases.include?(ka_base)
+  candidate_bases.any? do |b|
+    next false if b == word
+    next false unless word_dict.key?(b)
+    next false unless Inflect.send(:match_suffix_kind, b, word) == :ing
+    next false unless wn_accept_inflection_lemma_pair?(word, b)
+    (surface_freq - word_dict[b][0]) >= 5
+  end
+end
+
+# Funnel a chosen lemma target through +preferred_form+ so the on-disk lemma
+# map stores the canonical American spelling even when the inflectional path
+# produced a British / variant base. +fulfilled → fulfil → fulfill+ is the
+# canonical case; without this hop the map would point users at the variant
+# spelling that may not have downstream artifacts (NB vector, CN edges).
+def canonicalize_lemma_target(base, word_dict)
+  pref = preferred_form(base)
+  return base unless pref && pref != base && word_dict.key?(pref)
+  pref
+end
+
 # Build a hash mapping each word_dict headword to its base/lemma form.
 # Source A: $inflection_base_words (Kaikki forms_map — populated earlier in rebuild).
 # Source B: Inflect.each_candidate_base_for_inflected picks the best base already in word_dict.
@@ -90,17 +134,252 @@ end
 # or unique verbal morphy for Inflect *-ed* / *-ing*). This blocks false stems like crew→crow when
 # no link matches.
 # Fallback: self-lemma (word is its own base).
+# Derivational suffixes used by +compute_semantic_base_map+. Each entry is
+# +{ suffix: <derived-side ending>, base_suffix: <base-side ending> }+; the
+# rule fires when +source = stem + suffix+ and +candidate = stem + base_suffix+.
+# Order matters: longer suffixes come first so +-ically+ wins over +-ly+.
+#
+# Curated to cover the recurring derivational families in +word_dict+. Every
+# rule must also pass a WordNet derivation pointer (+wn_derivation_target_lemmas_for_word+)
+# at runtime, so an over-broad allowlist won't synthesize spurious mappings —
+# the WN gate is the safety net.
+SEMANTIC_BASE_SUFFIX_RULES = [
+  { suffix: "ically", base_suffix: "ic" },
+  { suffix: "ication", base_suffix: "ic" },
+  { suffix: "ication", base_suffix: "ify" },
+  { suffix: "ication", base_suffix: "y" },
+  { suffix: "ization", base_suffix: "" },
+  { suffix: "ization", base_suffix: "ize" },
+  { suffix: "isation", base_suffix: "" },
+  { suffix: "isation", base_suffix: "ise" },
+  { suffix: "ation", base_suffix: "" },
+  { suffix: "ation", base_suffix: "e" },
+  { suffix: "ation", base_suffix: "ate" },
+  { suffix: "tion", base_suffix: "" },
+  { suffix: "tion", base_suffix: "te" },
+  { suffix: "tion", base_suffix: "t" },
+  { suffix: "sion", base_suffix: "se" },
+  { suffix: "sion", base_suffix: "d" },
+  { suffix: "ility", base_suffix: "ile" },
+  { suffix: "ility", base_suffix: "le" },
+  { suffix: "bility", base_suffix: "ble" },
+  { suffix: "ity", base_suffix: "" },
+  { suffix: "ity", base_suffix: "e" },
+  { suffix: "ical", base_suffix: "y" },
+  { suffix: "ical", base_suffix: "" },
+  { suffix: "atic", base_suffix: "a" },
+  { suffix: "etic", base_suffix: "y" },
+  { suffix: "etic", base_suffix: "" },
+  { suffix: "ic", base_suffix: "" },
+  { suffix: "ic", base_suffix: "y" },
+  { suffix: "ic", base_suffix: "e" },
+  { suffix: "ize", base_suffix: "" },
+  { suffix: "ize", base_suffix: "e" },
+  { suffix: "ize", base_suffix: "y" },
+  { suffix: "ise", base_suffix: "" },
+  { suffix: "ise", base_suffix: "e" },
+  { suffix: "ise", base_suffix: "y" },
+  { suffix: "ify", base_suffix: "" },
+  { suffix: "ify", base_suffix: "y" },
+  { suffix: "able", base_suffix: "" },
+  { suffix: "able", base_suffix: "e" },
+  { suffix: "ible", base_suffix: "" },
+  { suffix: "ible", base_suffix: "e" },
+  { suffix: "ness", base_suffix: "" },
+  { suffix: "iness", base_suffix: "y" },
+  { suffix: "ment", base_suffix: "" },
+  { suffix: "ement", base_suffix: "e" },
+  { suffix: "er", base_suffix: "" },
+  { suffix: "er", base_suffix: "e" },
+  { suffix: "or", base_suffix: "" },
+  { suffix: "or", base_suffix: "e" },
+  { suffix: "or", base_suffix: "ate" },
+  { suffix: "eer", base_suffix: "" },
+  { suffix: "eer", base_suffix: "y" },
+  { suffix: "ery", base_suffix: "" },
+  { suffix: "ery", base_suffix: "e" },
+  { suffix: "ry", base_suffix: "" },
+  { suffix: "al", base_suffix: "" },
+  { suffix: "al", base_suffix: "e" },
+  { suffix: "ial", base_suffix: "" },
+  { suffix: "ial", base_suffix: "y" },
+  { suffix: "orial", base_suffix: "or" },
+  { suffix: "orial", base_suffix: "" },
+  { suffix: "ous", base_suffix: "" },
+  { suffix: "ous", base_suffix: "y" },
+  { suffix: "ance", base_suffix: "ant" },
+  { suffix: "ance", base_suffix: "" },
+  { suffix: "ence", base_suffix: "ent" },
+  { suffix: "ence", base_suffix: "" },
+  { suffix: "y", base_suffix: "" },
+  { suffix: "th", base_suffix: "" },
+  { suffix: "ly", base_suffix: "" },
+].freeze
+
+# Floor on source-word length: below 6 chars the +-y+, +-ly+, +-al+, +-ic+
+# rules start firing on coincidences (+ally+ -> +all+, +ily+ -> +i+).
+SEMANTIC_BASE_MIN_SOURCE_LEN = 6
+# Floor on candidate-base length: stops degenerate strips like +pity+ -> +p+.
+SEMANTIC_BASE_MIN_BASE_LEN = 3
+# Shared-prefix floor: discriminates the WN gate from accidental targets that
+# happen to be in word_dict but share no surface morphology with the source.
+SEMANTIC_BASE_MIN_SHARED_PREFIX = 3
+# Frequency guard: derived may be at most this many freq buckets MORE common
+# than the candidate base. Catches drift like +cloying+ (freq 10) vs +cloy+
+# (freq 2). Asymmetric — base may be arbitrarily more common than derived.
+SEMANTIC_BASE_MAX_FREQ_RISE = 4
+# Minimum Numberbatch cosine between source and base for the derivation to be
+# accepted. Catches semantic-shift cases that pass every surface filter but
+# the words have drifted apart (presentation/present, waiter/wait). Only
+# enforced when the caller passes +nb_vectors:+ to +compute_semantic_base_map+;
+# if either side has no NB vector the guard is silently bypassed.
+SEMANTIC_BASE_MIN_NB_COSINE = 0.50
+
+def semantic_base_shared_prefix_len(a, b)
+  n = [a.bytesize, b.bytesize].min
+  i = 0
+  i += 1 while i < n && a.getbyte(i) == b.getbyte(i)
+  i
+end
+
+def semantic_base_classify_suffix(source, candidate)
+  return nil if source == candidate
+  return nil if source.length < SEMANTIC_BASE_MIN_SOURCE_LEN
+  return nil if candidate.length < SEMANTIC_BASE_MIN_BASE_LEN
+
+  SEMANTIC_BASE_SUFFIX_RULES.each do |rule|
+    suf = rule[:suffix]
+    bsuf = rule[:base_suffix]
+    next unless source.end_with?(suf)
+    base_part = source[0...source.length - suf.length]
+    if bsuf.empty?
+      next unless candidate == base_part
+    else
+      next unless candidate == base_part + bsuf
+    end
+    return bsuf.empty? ? "+#{suf}" : "-#{bsuf}/+#{suf}"
+  end
+  nil
+end
+
+def semantic_base_safe_derivation?(source, candidate, source_freq, candidate_freq)
+  return false if candidate.length >= source.length
+  return false if semantic_base_shared_prefix_len(source, candidate) < SEMANTIC_BASE_MIN_SHARED_PREFIX
+  return false if (source_freq - candidate_freq) > SEMANTIC_BASE_MAX_FREQ_RISE
+
+  semantic_base_classify_suffix(source, candidate)
+end
+
+# +nb_vectors+ when non-nil maps +hyphens_to_underscores(word) -> Array<Float>+
+# (or +Numo::SFloat+; both produce a scalar dot). Returns +nil+ when either
+# side is missing — caller treats +nil+ as "guard bypassed".
+def semantic_base_nb_cosine(nb_vectors, a, b)
+  return nil unless nb_vectors
+  va = nb_vectors[hyphens_to_underscores(a)]
+  vb = nb_vectors[hyphens_to_underscores(b)]
+  return nil unless va && vb
+  if va.respond_to?(:dot) && !va.is_a?(Array)
+    va.dot(vb).to_f
+  else
+    sum = 0.0
+    i = 0
+    n = va.length
+    while i < n
+      sum += va[i] * vb[i]
+      i += 1
+    end
+    sum
+  end
+end
+
+def best_semantic_base_target(source, source_freq, word_dict, nb_vectors: nil)
+  targets = wn_derivation_target_lemmas_for_word(source)
+  return nil if targets.nil? || targets.empty?
+
+  best = nil
+  targets.each do |t|
+    next unless word_dict.key?(t)
+    next if t == source
+    entry = word_dict[t]
+    next unless entry
+
+    candidate_freq = entry[0]
+    transform = semantic_base_safe_derivation?(source, t, source_freq, candidate_freq)
+    next unless transform
+
+    cos = semantic_base_nb_cosine(nb_vectors, source, t)
+    next if cos && cos < SEMANTIC_BASE_MIN_NB_COSINE
+
+    rank = [-candidate_freq, t.length, t]
+    if best.nil? || (rank <=> best[:rank]) < 0
+      best = { target: t, transform: transform, rank: rank, cos: cos }
+    end
+  end
+  best
+end
+
+# Build the +word -> derivational_base+ map used by +semantic_base+ in the
+# relatedness pipeline (R3). Composes on top of +compute_lemma_map+: only
+# self-lemma headwords (+lemma(w) == w+) get an entry, since inflected
+# surfaces resolve through the lemma layer first at runtime. Walks WordNet
+# +wn_derivation_target_lemmas_for_word+ pointers and applies the curated
+# suffix allowlist + frequency / length / shared-prefix gates above.
+#
+# +nb_vectors:+ enables the cosine guard (see +SEMANTIC_BASE_MIN_NB_COSINE+).
+# Pass the unpacked +numberbatch_vectors.msgpack+ — keys must already be
+# +hyphens_to_underscores+'d, values may be +Array<Float>+ or +Numo::SFloat+.
+#
+# Returns +[map, transforms]+ where +map+ is +word -> base+ and +transforms+
+# is +word -> "+suffix"+/etc. for the audit dump.
+def compute_semantic_base_map(word_dict, lemma_map, nb_vectors: nil)
+  map = {}
+  transforms = {}
+  rejected_by_cosine = 0
+  begin
+    word_dict.each_key do |w|
+      next if lemma_map.key?(w) && lemma_map[w] != w
+
+      source_freq = word_dict[w][0]
+      best = best_semantic_base_target(w, source_freq, word_dict, nb_vectors: nb_vectors)
+      unless best
+        if nb_vectors
+          fallback = best_semantic_base_target(w, source_freq, word_dict, nb_vectors: nil)
+          rejected_by_cosine += 1 if fallback
+        end
+        next
+      end
+
+      map[w] = best[:target]
+      transforms[w] = best[:transform]
+    end
+  ensure
+    $wn_synset_line_index_by_path = nil
+  end
+
+  guard_note = nb_vectors ? " (NB cosine guard enforced; #{rejected_by_cosine} candidates rejected for cos < #{SEMANTIC_BASE_MIN_NB_COSINE})" : " (no NB cosine guard)"
+  puts "Semantic-base map: #{map.size} word -> derivational_base entries#{guard_note}"
+  [map, transforms]
+end
+
 def compute_lemma_map(word_dict)
   lemma_map = {}
   begin
     word_dict.each_key do |word|
+      # +independent_ing_adj_surface?+ skips lemma assignment for adj-only +-ing+
+      # surfaces that have drifted from their verbal root (cloying, harrowing, …)
+      # — see helper docs above for the gate.
+      if independent_ing_adj_surface?(word, word_dict)
+        next
+      end
+
       # Source A: Kaikki-derived base (Wiktionary explicitly lists the relationship).
       # When the word has a WN entry, require +wn_accept_inflection_lemma_pair?+ — Kaikki can link
       # archaic/dialectal inflections (crew→crow, feed→fee) that mislead the common-sense lemma.
       kaikki_base = $inflection_base_words[word]
       if kaikki_base && kaikki_base != word && word_dict.key?(kaikki_base)
         if !wn_has_entry?(word) || wn_accept_inflection_lemma_pair?(word, kaikki_base)
-          lemma_map[word] = kaikki_base
+          chosen = canonicalize_lemma_target(kaikki_base, word_dict)
+          lemma_map[word] = chosen if chosen != word
           next
         end
       end
@@ -141,7 +420,10 @@ def compute_lemma_map(word_dict)
         end
       end
 
-      lemma_map[word] = best_base if best_base && best_base != word
+      if best_base && best_base != word
+        chosen = canonicalize_lemma_target(best_base, word_dict)
+        lemma_map[word] = chosen if chosen != word
+      end
     end
   ensure
     $wn_synset_line_index_by_path = nil
@@ -247,6 +529,15 @@ def rebuild_rhymecrime_dictionaries()
     save_conceptnet_edge_map!(word_dict.keys, lemma_map)
     save_numberbatch_vectors!(rel_bases)
   end
+
+  # Build the semantic base map AFTER Numberbatch is on disk so the cosine
+  # guard in +compute_semantic_base_map+ has data to consult. First-run
+  # bootstrap (no prior NB msgpack) is fine: when the file is missing the
+  # guard silently no-ops and we get the surface-only filtered map; the next
+  # build will tighten it.
+  nb_vectors_for_guard = load_numberbatch_vectors_for_semantic_base_guard
+  semantic_base_map, semantic_base_transforms = compute_semantic_base_map(word_dict, lemma_map, nb_vectors: nb_vectors_for_guard)
+  save_word_semantic_base_map!(word_dict, semantic_base_map, transform_for: semantic_base_transforms)
 
   common_n = 0
   common_base_forms = Set.new

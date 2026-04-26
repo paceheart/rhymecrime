@@ -563,8 +563,13 @@ rows.each do |r|
 
   w1 = r["word1"]
   w2 = r["word2"]
-  l1 = lemma(w1)
-  l2 = lemma(w2)
+  # Normalization mode (must agree with the runtime predicate in
+  # +lib/rhymecrime/related.rb+):
+  #   * +RELATED_SKIP_LEMMA=1+ -> raw surfaces.
+  #   * default                -> inflectional +lemma(w)+.
+  # Mismatch tanks TPR (see the +bin/_lemma_ablation+ writeup).
+  l1 = ENV["RELATED_SKIP_LEMMA"] == "1" ? w1 : lemma(w1)
+  l2 = ENV["RELATED_SKIP_LEMMA"] == "1" ? w2 : lemma(w2)
 
   a, b = l1 <= l2 ? [l1, l2] : [l2, l1]
   signals = PairSignals.new(a, b)

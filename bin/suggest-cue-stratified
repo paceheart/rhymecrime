@@ -1,0 +1,187 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+# encoding: UTF-8
+#
+# Active-learning helper: append +TARGET+ untagged (CUE, w) rows to
+# spec/related.csv, sampled evenly across three classifier-score strata so the
+# human annotator can refute or confirm the model's beliefs across the entire
+# decision-confidence range — not just the borderline band that
+# +bin/suggest-untagged-relatedness+ targets.
+#
+# Strata (default 333/333/334 → 1000 total):
+#   strong      learned_relatedness_score(cue, w) >= STRONG_LO   (default 75)
+#   borderline  BORDER_LO <= score <= BORDER_HI                  (default 40..60)
+#   unrelated   score <= UNREL_HI                                 (default 25)
+#
+# Candidate universe: every word that can actually appear as a +related+ in
+# the live UI (+relatedness_target_word?+). That's stricter than dict-common-
+# preferred — it adds the rhyme-partner check, dropping rhymeless lemmas the
+# user can never see (e.g. +music+, +concerto+, +algebra+) and proper-noun
+# fragments. Same predicate the precompute uses to filter each cue's relateds
+# list, so every sampled candidate is one a human could plausibly hand-tag
+# against the cue without contortion. Excludes stop words, the cue itself,
+# and any (cue, w) pair already in the CSV (lemma-normalized, order-
+# insensitive). Scores are recomputed live from the current classifier;
+# warming +prepare_cn_hops_source!(cue)+ keeps the BFS-bounded ConceptNet path
+# query off the hot loop. Sampling within each stratum is uniform random with a
+# fixed seed so reruns are deterministic.
+#
+# Knobs (env vars):
+#   CUE          string    (default "cat")
+#   TARGET       integer   (default 1000)
+#   STRONG_LO    integer   (default 75)
+#   BORDER_LO    integer   (default 40)
+#   BORDER_HI    integer   (default 60)
+#   UNREL_HI     integer   (default 25)
+#   SEED         integer   (default 17)
+#
+# Usage:
+#   bundle exec bin/suggest-cue-stratified
+#   CUE=pirate TARGET=600 bundle exec bin/suggest-cue-stratified
+
+Encoding.default_external = Encoding::UTF_8
+$LOAD_PATH.unshift(File.expand_path("../lib", __dir__))
+
+require "csv"
+require "set"
+require "rhymecrime/crime"
+require "rhymecrime/dict/rime"
+require "rhymecrime/relatedness/signals"
+require "rhymecrime/relatedness/score"
+
+CUE        = (ENV["CUE"]       || "cat").downcase
+TARGET     = (ENV["TARGET"]    || "1000").to_i
+# Per-bucket overrides (set any/all to bias the stratification — the FN
+# drill-down on cat showed the cluster with the most lift comes from the
+# strong-band, since the live classifier's strong band yields a high TP rate
+# for normal cues; skewing toward strong harvests confirmed positives faster).
+# When all three are set their sum overrides TARGET. When unset the script
+# falls back to even thirds of TARGET.
+STRONG_TGT = ENV["STRONG_TARGET"]&.to_i
+BORDER_TGT = ENV["BORDER_TARGET"]&.to_i
+UNREL_TGT  = ENV["UNREL_TARGET"]&.to_i
+STRONG_LO  = (ENV["STRONG_LO"] || "75").to_i
+BORDER_LO  = (ENV["BORDER_LO"] || "40").to_i
+BORDER_HI  = (ENV["BORDER_HI"] || "60").to_i
+UNREL_HI   = (ENV["UNREL_HI"]  || "25").to_i
+SEED       = (ENV["SEED"]      || "17").to_i
+
+CSV_PATH = File.expand_path("../spec/related.csv", __dir__)
+
+def pair_key(a, b)
+  la = (lemma(a) || a).to_s
+  lb = (lemma(b) || b).to_s
+  la <= lb ? "#{la}\t#{lb}" : "#{lb}\t#{la}"
+end
+
+def relatedness_target?(w, wd, rd)
+  relatedness_target_word?(w.to_s, wd, rd)
+end
+
+def load_existing_pairs
+  seen = Set.new
+  CSV.foreach(CSV_PATH, headers: true, encoding: "UTF-8") do |row|
+    w1 = row["word1"].to_s.strip.downcase
+    w2 = row["word2"].to_s.strip.downcase
+    next if w1.empty? || w2.empty?
+    seen << pair_key(w1, w2)
+  end
+  seen
+end
+
+warn "cue=#{CUE.inspect}  target=#{TARGET}  buckets: strong>=#{STRONG_LO}  border=[#{BORDER_LO},#{BORDER_HI}]  unrel<=#{UNREL_HI}"
+warn "warming dict / rdict / numberbatch / classifier..."
+wd = word_dict
+rd = rdict
+numberbatch_table
+relatedness_classifier
+model_sense_vectors_table
+
+cue_lemma = (lemma(CUE) || CUE).to_s
+# Cue eligibility is intentionally looser than partner eligibility: the cue
+# only has to be a real headword we can compute signals against. Partners,
+# in contrast, must be +relatedness_target_word?+ so they could actually be
+# surfaced by the precompute. (Some valid cues like +pirate+ fail the
+# rhyme-partner check that +relatedness_target_word?+ enforces.)
+unless wd.key?(CUE)
+  warn "cue #{CUE.inspect} is not in word_dict; bailing"
+  exit 1
+end
+
+seen_pairs = load_existing_pairs
+warn "#{seen_pairs.size} existing CSV pairs"
+
+prepare_cn_hops_source!(CUE)
+begin
+  candidates = []
+  picked_keys = Set.new
+  scanned = 0
+  examined = 0
+  wd.each_key do |w|
+    examined += 1
+    next if w == CUE || w == cue_lemma
+    next if stop_word?(w)
+    next unless relatedness_target?(w, wd, rd)
+    key = pair_key(CUE, w)
+    next if seen_pairs.include?(key)
+    # +wd+ keeps inflectional variants as separate keys (e.g. prance / prancing)
+    # that share a lemma, which would otherwise lemma-collide once appended.
+    next unless picked_keys.add?(key)
+
+    signals = PairSignals.new(CUE, w)
+    next if signals.involves_stop_word?
+    s = learned_relatedness_score(signals)
+    next if s.nil?
+
+    candidates << [w, s]
+    scanned += 1
+    warn "examined=#{examined} scored=#{scanned} candidates=#{candidates.size}" if scanned % 5000 == 0
+  end
+ensure
+  clear_cn_hops_source!
+end
+
+warn "scored #{candidates.size} unique candidates against #{CUE.inspect}"
+
+strong = candidates.select { |(_, s)| s >= STRONG_LO }
+border = candidates.select { |(_, s)| s >= BORDER_LO && s <= BORDER_HI }
+unrel  = candidates.select { |(_, s)| s <= UNREL_HI }
+
+warn "pool sizes: strong=#{strong.size}  border=#{border.size}  unrel=#{unrel.size}"
+
+if STRONG_TGT && BORDER_TGT && UNREL_TGT
+  strong_n = STRONG_TGT
+  border_n = BORDER_TGT
+  unrel_n  = UNREL_TGT
+else
+  per_bucket = TARGET / 3
+  remainder  = TARGET - per_bucket * 3
+  strong_n = per_bucket + (remainder > 0 ? 1 : 0); remainder -= 1 if remainder > 0
+  border_n = per_bucket + (remainder > 0 ? 1 : 0); remainder -= 1 if remainder > 0
+  unrel_n  = per_bucket + (remainder > 0 ? 1 : 0)
+end
+
+rng = Random.new(SEED)
+def sample_uniform(pool, n, rng)
+  return pool.dup if pool.size <= n
+  pool.shuffle(random: rng).first(n)
+end
+
+picks_strong = sample_uniform(strong, strong_n, rng)
+picks_border = sample_uniform(border, border_n, rng)
+picks_unrel  = sample_uniform(unrel,  unrel_n,  rng)
+
+actual = picks_strong.size + picks_border.size + picks_unrel.size
+warn "picked: strong=#{picks_strong.size}  border=#{picks_border.size}  unrel=#{picks_unrel.size}  total=#{actual}"
+
+rows = []
+picks_strong.each { |(w, s)| rows << [CUE, w, "", "active-learn #{CUE}:strong:#{s}"] }
+picks_border.each { |(w, s)| rows << [CUE, w, "", "active-learn #{CUE}:border:#{s}"] }
+picks_unrel.each  { |(w, s)| rows << [CUE, w, "", "active-learn #{CUE}:unrel:#{s}"] }
+
+warn "appending #{rows.size} rows to #{CSV_PATH}"
+CSV.open(CSV_PATH, "a", encoding: "UTF-8") do |csv|
+  rows.each { |r| csv << r }
+end
+
+warn "done. new total: #{`wc -l #{CSV_PATH}`.strip}"

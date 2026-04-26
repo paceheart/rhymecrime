@@ -75,6 +75,8 @@ LEARNED_FEATURE_NAMES = (
     model_sv_max_x_sv_min
     model_cos_x_base
     model_sv_max_x_usf
+    def_in_vocab
+    def_cos
     cn_hops
     cn_shared_neighbors
     usf_direct_max
@@ -100,6 +102,12 @@ def learned_feature_vector(signals)
   m_sv_max = m_both_sv ? signals.model_sv_max : 0
   m_sv_min = m_both_sv ? signals.model_sv_min : 0
   m_ss_max = m_both_sv ? signals.model_sense_sense_max : 0
+
+  # Pooled-definition (cross-encoder) cosine. Same in-vocab gating pattern as
+  # +model_*+: feed 0 when out-of-vocab and let the +def_in_vocab+ flag
+  # condition the learner. See +PairSignals#def_cos_pct+.
+  d_in = signals.def_both_in_vocab?
+  d_cos = d_in ? signals.def_cos_pct : 0
 
   [
     1.0,
@@ -132,6 +140,8 @@ def learned_feature_vector(signals)
     m_sv_max * m_sv_min / 100.0,
     m_cos * base / 100.0,
     m_sv_max * usf / 10.0,
+    d_in ? 1.0 : 0.0,
+    d_cos.to_f,
     signals.cn_hops.to_f,
     signals.cn_shared_neighbors.to_f,
     signals.usf_direct_max.to_f,
@@ -441,8 +451,8 @@ def thematically_related_full?(word1, word2, include_self = false)
   return true if include_self && (word1 == word2 || lemma(word1) == lemma(word2))
   return true if stop_word?(word1) || stop_word?(word2)
 
-  l1 = lemma(word1)
-  l2 = lemma(word2)
+  l1 = ENV["RELATED_SKIP_LEMMA"] == "1" ? word1 : lemma(word1)
+  l2 = ENV["RELATED_SKIP_LEMMA"] == "1" ? word2 : lemma(word2)
   a, b = l1 <= l2 ? [l1, l2] : [l2, l1]
   thematically_related_pair_memoized?(a, b)
 end
@@ -455,8 +465,8 @@ def why_thematically_related_full?(word1, word2, include_self = false)
   return "self: same headword" if include_self && word1 == word2
   return "self: same lexeme (lemma)" if include_self && lemma(word1) == lemma(word2)
 
-  l1 = lemma(word1)
-  l2 = lemma(word2)
+  l1 = ENV["RELATED_SKIP_LEMMA"] == "1" ? word1 : lemma(word1)
+  l2 = ENV["RELATED_SKIP_LEMMA"] == "1" ? word2 : lemma(word2)
   a, b = l1 <= l2 ? [l1, l2] : [l2, l1]
   contributions = relatedness_contributions(PairSignals.new(a, b))
   return nil if contributions.empty?

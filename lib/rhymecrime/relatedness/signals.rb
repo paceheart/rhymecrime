@@ -412,10 +412,14 @@ def model_sense_vectors_table
   return nil unless File.exist?(path)
   raw = MessagePack.unpack(File.binread(path))
   hw_raw = raw["headword"] || {}
+  df_raw = raw["definition"] || {}
   sn_raw = raw["senses"] || {}
 
   hw = {}
   hw_raw.each { |k, v| hw[k] = Numo::SFloat.cast(v) if v && !v.empty? }
+
+  df = {}
+  df_raw.each { |k, v| df[k] = Numo::SFloat.cast(v) if v && !v.empty? }
 
   sn = {}
   total_senses = 0
@@ -429,11 +433,12 @@ def model_sense_vectors_table
     "model" => raw["model"],
     "dim" => raw["dim"],
     "headword" => hw,
+    "definition" => df,
     "senses" => sn,
   }
   puts "loaded model sense vectors from #{path} " \
        "(model=#{raw['model']} dim=#{raw['dim']} " \
-       "headwords=#{hw.size} senses=#{total_senses})"
+       "headwords=#{hw.size} definitions=#{df.size} senses=#{total_senses})"
   $model_sense_vectors
 end
 
@@ -444,6 +449,30 @@ def model_headword_vector(word)
   return nil if t.nil?
   h = t["headword"]
   h.nil? ? nil : h[word]
+end
+
+# Pooled-definition embedding: MPNet over +"{word}. {gloss1}. {gloss2}..."+ (see
+# +bin/dump-sense-glosses+). Disambiguates polysemous bare words ("bear",
+# "match", "bank") that the +headword+ vector — which only sees the word in
+# isolation — collapses to an averaged sense the classifier has trouble using.
+# Returns 1-D +Numo::SFloat(dim)+ or +nil+ when out of vocab. Falls back at
+# *build* time to the bare-word text when the word has no WordNet glosses, so
+# +definition[word]+ is populated whenever the word is in vocab at all.
+def model_definition_vector(word)
+  t = model_sense_vectors_table
+  return nil if t.nil?
+  d = t["definition"]
+  d.nil? ? nil : d[word]
+end
+
+# Definition-vs-definition cosine under the contextualized model (-1..1). Returns
+# 0.0 when either side is out-of-vocab — pair with +def_both_in_vocab?+ so the
+# classifier can distinguish "low similarity" from "no data".
+def model_definition_cosine(word1, word2)
+  v1 = model_definition_vector(word1)
+  v2 = model_definition_vector(word2)
+  return 0.0 if v1.nil? || v2.nil?
+  v1.dot(v2).to_f
 end
 
 # Returns the word's sense vectors as a 2-D +Numo::SFloat+ of shape +[K, dim]+,
@@ -777,8 +806,31 @@ UNIGRAM_FEATURE_NAMES = %w[
 
 PAIR_REDUCTIONS = %i[min max diff].freeze
 
+# Env-var ablation hook: comma-separated list of unigram names whose
+# +_min/_max/_diff+ reductions should be excluded from the learned feature
+# vector entirely. Read once at first call and cached so training and
+# inference see the same filter (both consult this method when assembling
+# +LEARNED_FEATURE_NAMES+ and +learned_feature_vector+). Used to A/B test
+# whether confounder-y unigram features (length, cn_degree, usf_out_degree,
+# is_rare) are helping or hurting the GBT — see +bin/_compare_feature_ablations+.
+def dropped_unigram_set
+  @dropped_unigram_set ||= begin
+    raw = ENV["RELATED_DROP_UNIGRAMS"].to_s.strip
+    raw.empty? ? [].to_set : raw.split(/\s*,\s*/).to_set
+  end
+end
+
+def kept_unigram_indices
+  @kept_unigram_indices ||= UNIGRAM_FEATURE_NAMES.each_index.reject do |i|
+    dropped_unigram_set.include?(UNIGRAM_FEATURE_NAMES[i])
+  end
+end
+
 def unigram_pair_feature_names
-  UNIGRAM_FEATURE_NAMES.flat_map { |n| PAIR_REDUCTIONS.map { |r| "#{n}_#{r}" } }
+  kept_unigram_indices.flat_map do |i|
+    n = UNIGRAM_FEATURE_NAMES[i]
+    PAIR_REDUCTIONS.map { |r| "#{n}_#{r}" }
+  end
 end
 
 # Memoized per-word: the same word usually appears in many pairs (O(n) scans, cue
@@ -829,11 +881,10 @@ end
 def unigram_pair_feature_values(word_a, word_b)
   fa = word_unigram_feature_values(word_a)
   fb = word_unigram_feature_values(word_b)
-  n = UNIGRAM_FEATURE_NAMES.size
-  out = Array.new(n * 3)
-  i = 0
+  kept = kept_unigram_indices
+  out = Array.new(kept.size * 3)
   j = 0
-  while i < n
+  kept.each do |i|
     va = fa[i]
     vb = fb[i]
     if va < vb
@@ -844,7 +895,6 @@ def unigram_pair_feature_values(word_a, word_b)
       out[j + 1] = va
     end
     out[j + 2] = (va - vb).abs
-    i += 1
     j += 3
   end
   out
@@ -1027,6 +1077,24 @@ class PairSignals
 
   def model_sense_sense_max
     @model_sense_sense_max ||= model_sense_sense_max_cosine(@a, @b, model_headword_cos)
+  end
+
+  # --- Pooled-definition (cross-encoder) signals ---
+  # +model_headword_*+ above embeds bare words ("bear") and so collapses polysemy
+  # into one averaged sense the classifier struggles to use as a negative-evidence
+  # signal. The definition vector is MPNet over +"{word}. {gloss1}. {gloss2}..."+
+  # — the concatenation of WordNet glosses — which the encoder can attend across,
+  # producing a definition-aware embedding. +def_both_in_vocab?+ lets the
+  # classifier condition on data availability the same way +model_both_in_vocab?+
+  # does. Falls back at build time to the bare-word text when no glosses exist,
+  # so populated whenever the word is in vocab at all.
+  def def_both_in_vocab?
+    return @def_both_in_vocab if defined?(@def_both_in_vocab)
+    @def_both_in_vocab = !model_definition_vector(@a).nil? && !model_definition_vector(@b).nil?
+  end
+
+  def def_cos_pct
+    @def_cos_pct ||= (model_definition_cosine(@a, @b) * 100).round
   end
 
   # --- ConceptNet graph-structure signals ---

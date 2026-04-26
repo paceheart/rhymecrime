@@ -32,9 +32,25 @@ module Rhymecrime
     end
 
     def client
-      @client ||= Aws::DynamoDB::Client.new(
+      return @client if @client
+      @client = Aws::DynamoDB::Client.new(
         region: ENV.fetch("AWS_REGION", "us-east-1")
       )
+      announce_cache_source!
+      @client
+    end
+
+    # Print the DynamoDB table identity once per process. Mirrors
+    # +LocalStore#announce_cache_age!+ so any precompute-cache consumer
+    # surfaces the data source it's about to trust — DDB doesn't expose a
+    # cheap "last write" timestamp without a +describe_table+ round-trip, so
+    # we just identify the table and region.
+    def announce_cache_source!
+      return if @announced
+      @announced = true
+      warn "[related-cache] using DynamoDB precomputed store table=#{table_name} " \
+           "region=#{ENV.fetch('AWS_REGION', 'us-east-1')} — " \
+           "set RELATED_BYPASS_STORE=1 to force live compute"
     end
 
     def table_name

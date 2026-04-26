@@ -1,0 +1,33 @@
+Hey friends!
+
+I'm dusting off my RhymeCrime project and I could use your help! RhymeCrime is a web service that finds semantically related rhymes. Like for instance, if you input 'pirate', it'll come back with:
+crypto / tiptoe
+french / wench
+handsome / ransom
+etc.
+
+The hardest part is getting the semantic relatedness to return good things and not dumb things. I need more human-reviewed data. That's where you come in! I've got a big list of word pairs like
+
+pirate,ado
+pirate,bagel
+pirate,bandersnatch
+pirate,crypto
+pirate,daffodil
+pirate,dancing
+pirate,french
+pirate,handsome
+pirate,mountain
+pirate,ransom
+pirate,rhombus
+pirate,skulls
+pirate,tadpoles
+pirate,tiptoe
+pirate,tuft
+pirate,wench
+
+and I could use your help marking each one. The criterion is: if I asked for pirate-related words and this was included in the list:
+- **y**: sure, that's pirate-related
+- **n**: nope, not really pirate-related
+- **?**: I don't know... sorta kinda maybe?
+- You can also leave it blank if you're unsure or if you're not familiar with the word. There are a bunch of obscure words in there.
+

@@ -236,19 +236,30 @@ def wn_productive_affix_lemma_pair?(word, base)
   true
 end
 
-# Regular verbal *-ed* / *-ing* surfaces whose unique verbal morphy stem matches +base+ and
-# +Inflect+ agrees on the suffix shape (+deafened+→+deafen+, +bumbling+→+bumble+). Rescues cases
-# where WordNet lists the inflected form as its own adj/gerund head (so +wn_share_synset?+ /
-# +wn_derivationally_related_to_base?+ return false) but the verbal relationship is still sound.
-# Requires a single morphy verb stem so ambiguous stems don't fire: +feed+→{+feed+,+fee+} blocks
-# +-ed+; +singing+→{+sing+,+singe+} blocks +-ing+.
+# Regular verbal *-ed* / *-ing* / *-s* surfaces whose unique verbal morphy stem matches +base+
+# and +Inflect+ agrees on the suffix shape (+deafened+→+deafen+, +bumbling+→+bumble+,
+# +needs+ adv→+need+ verb). Rescues cases where WordNet lists the inflected form as its own
+# adj/gerund/adverb head (so +wn_share_synset?+ / +wn_derivationally_related_to_base?+ return
+# false) but the verbal relationship is still sound.
+#
+# Stems are deduped by spelling-variant +preferred_form+ before the unique-base check: WordNet's
+# morphy returns both spellings of a single lexeme (+morphy(fulfilled,verb)=[fulfil,fulfill]+,
+# +morphy(travelled,verb)=[travel,travelled]+) which would otherwise look like an ambiguous stem.
+# Genuine ambiguity (+feed+→{+feed+,+fee+}, +singing+→{+sing+,+singe+}) still blocks because the
+# stems map to different preferred forms.
 def wn_verb_stem_via_morphy?(word, base)
   kind = Inflect.send(:match_suffix_kind, base, word)
-  return false unless kind == :ed || kind == :ing
+  return false unless %i[ed ing s].include?(kind)
   return false unless wn_base_has_verb?(base)
 
   stems = (WordNet::Synset.morphy(word, "verb") rescue [])
-  stems.size == 1 && stems.first == base
+  return false if stems.empty?
+
+  canonical_stems = stems.map { |s| preferred_form(s) || s }.uniq
+  return false unless canonical_stems.size == 1
+
+  base_canonical = preferred_form(base) || base
+  canonical_stems.first == base_canonical
 end
 
 # True if WordNet lists the base as a verb (any sense). Used to avoid Phase 8 giving

@@ -20,6 +20,18 @@ WORD_DICT_FILENAME = "word_dict.txt"
 # on every call. Shipping this msgpack in the Lambda deploy bundle also lets
 # DDB mode answer +lemma(w)+ without a per-word +GetItem+.
 WORD_LEMMA_MAP_FILENAME = "word_lemma_map.msgpack"
+# Derivational-base map used by the relatedness pipeline only (R3). Composes
+# on top of +lemma(w)+ at runtime: +semantic_base(w) = derivation_map[lemma(w)]
+# || lemma(w)+. Built from WordNet derivation pointers + a curated suffix
+# allowlist in +compute_semantic_base_map+. Keys are inflectional-base headwords
+# (i.e. self-lemmas — +artistic+, +criminality+); values are the derivational
+# root (+artist+, +criminal+). Inflected surfaces aren't keys here because
+# they compose through +lemma(w)+ first. Loaded lazily into
+# +$word_to_semantic_base+ on the first +semantic_base(w)+ call.
+WORD_SEMANTIC_BASE_MAP_FILENAME = "word_semantic_base_map.msgpack"
+# Sorted +"word\\tbase\\ttransform"+ dump emitted alongside the msgpack so the
+# map is auditable by eye. Not loaded at runtime.
+WORD_SEMANTIC_BASE_MAP_TXT_FILENAME = "word_semantic_base_map.txt"
 # Local-dev key/value store that mirrors the DynamoDB schema used in Lambda:
 # the +related+ table is keyed by +"related#<lemma>"+ with parallel +words+ and
 # +scores+ JSON arrays. Single SQLite file, no daemon; boot is O(open file) and
@@ -1605,6 +1617,7 @@ def load_word_dict()
   clear_spelling_variant_hyphen_caches!
   $lemma_to_words = nil
   $word_to_lemma = nil
+  $word_to_semantic_base = nil
   $thematically_related_memo = nil
   word_dict
 end
@@ -1646,6 +1659,78 @@ def lemma(word)
   entry = lexicon_word_entry(word)
   return word unless entry
   entry[2] || word
+end
+
+# Lazy +$word_to_semantic_base+ load mirroring +load_word_to_lemma!+. Map keys
+# are self-lemmas (lookup composes +lemma(w)+ first), values are derivational
+# roots. Missing on disk → +false+ sentinel so subsequent +semantic_base+ calls
+# don't re-stat the file. Reset by +load_word_dict+ when the dictionary is
+# reloaded.
+$word_to_semantic_base = nil
+def load_word_to_semantic_base!
+  path = generated_dict_path(WORD_SEMANTIC_BASE_MAP_FILENAME)
+  $word_to_semantic_base = File.exist?(path) ? MessagePackUtils.load_and_unpack(path) : false
+end
+
+# Hot path for relatedness lookups (R3). Returns the derivational root when
+# WordNet pointed to one and the suffix-allowlist gates passed during
+# +compute_semantic_base_map+; otherwise falls back to the inflectional
+# +lemma(w)+. Composes the two normalization layers in one call so callers
+# don't have to memorize the order.
+#
+# +RELATED_SKIP_DERIVATION=1+ disables the derivational hop (returns plain
+# +lemma(w)+) — used by A/B harnesses to measure R3's contribution against the
+# pre-R3 normalization regime. Layered with +RELATED_SKIP_LEMMA=1+ at the
+# call sites: +RELATED_SKIP_LEMMA+ skips this entirely (passes the raw
+# surface), +RELATED_SKIP_DERIVATION+ skips just the derivational layer.
+def semantic_base(word)
+  base = lemma(word)
+  return base if ENV["RELATED_SKIP_DERIVATION"] == "1"
+  map = $word_to_semantic_base
+  load_word_to_semantic_base! if map.nil?
+  map = $word_to_semantic_base
+  return base unless map
+  m = map[base]
+  m || base
+end
+
+# One-shot loader for the Numberbatch cosine guard in
+# +compute_semantic_base_map+. Returns the +word_underscored -> Array<Float>+
+# hash from +numberbatch_vectors.msgpack+ (already L2-normalized at save time
+# by +save_numberbatch_vectors!+, so cosine = dot product), or +nil+ when the
+# file is absent. Independent of +signals.rb+'s +numberbatch_table+ — that
+# path casts to +Numo::SFloat+ for hot-path BLAS, but the map build runs once
+# and only needs the dot product, so plain Ruby arrays are fine here. Skipping
+# +Numo+ also keeps +dict.rb+ free of the relatedness pipeline's heavy deps.
+def load_numberbatch_vectors_for_semantic_base_guard
+  path = generated_dict_path(NUMBERBATCH_VECTORS_FILENAME)
+  return nil unless File.exist?(path)
+  raw = MessagePack.unpack(File.binread(path))
+  raw
+end
+
+def save_word_semantic_base_map!(word_dict, semantic_base_map, transform_for: nil)
+  ensure_generated_dict_dir!
+  msgpack_path = generated_dict_path_under_dict_dir(WORD_SEMANTIC_BASE_MAP_FILENAME)
+  txt_path = generated_dict_path_under_dict_dir(WORD_SEMANTIC_BASE_MAP_TXT_FILENAME)
+
+  obj = {}
+  semantic_base_map.each do |w, target|
+    next unless target && target != w
+    next unless word_dict.key?(w) && word_dict.key?(target)
+    obj[w] = target
+  end
+  MessagePackUtils.pack_and_save(msgpack_path, obj)
+  puts "Wrote #{obj.size} word→semantic_base entries to #{msgpack_path} (#{File.size(msgpack_path)} bytes)"
+
+  File.open(txt_path, "w", encoding: "UTF-8") do |f|
+    f.puts "# word\tsemantic_base\ttransform"
+    obj.keys.sort.each do |w|
+      transform = transform_for ? transform_for[w] : ""
+      f.puts "#{w}\t#{obj[w]}\t#{transform}"
+    end
+  end
+  puts "Wrote sorted dump to #{txt_path}"
 end
 
 # Reverse map: lemma → array of all word_dict headwords that share that lemma (including the lemma

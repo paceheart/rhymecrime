@@ -153,8 +153,18 @@ def thematically_related?(word1, word2, include_self = false)
 
   puts "thematically_related? #{word1} #{word2}" if related_trace_memo?
 
-  l1 = lemma(word1)
-  l2 = lemma(word2)
+  # Two normalization modes on the way in:
+  #   * +RELATED_SKIP_LEMMA=1+ -> raw surfaces (no normalization).
+  #   * default                -> inflectional +lemma(w)+.
+  # Signals (Numberbatch, MPNet, ConceptNet, USF) are looked up under the
+  # resolved key, so training and inference have to agree on which layer is
+  # active. The +SKIP_LEMMA+ A/B in +bin/_lemma_ablation+ proved that mismatched
+  # layers tank TPR. (R3 derivational collapse via +semantic_base+ was
+  # explored — see +word_semantic_base_map.{msgpack,txt}+ — and net-regressed
+  # weighted accuracy under the cosine guard sweep, so the runtime stayed on
+  # plain +lemma+.)
+  l1 = ENV["RELATED_SKIP_LEMMA"] == "1" ? word1 : lemma(word1)
+  l2 = ENV["RELATED_SKIP_LEMMA"] == "1" ? word2 : lemma(word2)
   a, b = l1 <= l2 ? [l1, l2] : [l2, l1]
   puts "  -> lemma key #{a} #{b}" if related_trace_memo?
 
@@ -180,8 +190,8 @@ def why_thematically_related?(word1, word2, include_self = false)
   return "stop_word: #{word1.inspect} is a stop word (related to everything)" if stop_word?(word1)
   return "stop_word: #{word2.inspect} is a stop word (related to everything)" if stop_word?(word2)
 
-  l1 = lemma(word1)
-  l2 = lemma(word2)
+  l1 = ENV["RELATED_SKIP_LEMMA"] == "1" ? word1 : lemma(word1)
+  l2 = ENV["RELATED_SKIP_LEMMA"] == "1" ? word2 : lemma(word2)
   a, b = l1 <= l2 ? [l1, l2] : [l2, l1]
 
   unless related_bypass_store?

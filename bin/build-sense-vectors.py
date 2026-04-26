@@ -4,14 +4,16 @@ and write generated/model_sense_vectors.msgpack.
 
 Input JSONL (one object per line): {"word": str, "sense_idx": int, "text": str}
   sense_idx == -1  -> headword embedding (text is usually just the word)
-  sense_idx >= 0   -> per-sense embedding (text is "{word}: {gloss}")
+  sense_idx == -2  -> pooled-definition embedding ("{word}. {gloss1}. {gloss2}...")
+  sense_idx >=  0  -> per-sense embedding (text is "{word}: {gloss}")
 
 Output msgpack:
   {
-    "model":    str,              # e.g. "sentence-transformers/all-mpnet-base-v2"
-    "dim":      int,
-    "headword": {word: [float,...]},
-    "senses":   {word: [[float,...], [float,...], ...]},  # ordered by sense_idx
+    "model":      str,            # e.g. "sentence-transformers/all-mpnet-base-v2"
+    "dim":        int,
+    "headword":   {word: [float,...]},
+    "definition": {word: [float,...]},   # pooled-gloss embedding, fallback = headword text
+    "senses":     {word: [[float,...], [float,...], ...]},  # ordered by sense_idx
   }
 
 Vectors are L2-normalized, so Ruby can treat cosine-similarity as a dot product.
@@ -119,13 +121,16 @@ def main():
     )
 
     headword: dict[str, list[float]] = {}
+    definition: dict[str, list[float]] = {}
     senses_raw: dict[str, dict[int, list[float]]] = {}
     for item, vec in zip(items, embeddings):
         word = item["word"]
         idx = int(item["sense_idx"])
         vf = [float(x) for x in vec.tolist()]
-        if idx < 0:
+        if idx == -1:
             headword[word] = vf
+        elif idx == -2:
+            definition[word] = vf
         else:
             senses_raw.setdefault(word, {})[idx] = vf
 
@@ -137,6 +142,7 @@ def main():
         "model": args.model,
         "dim": dim,
         "headword": headword,
+        "definition": definition,
         "senses": senses,
     }
 
@@ -149,7 +155,8 @@ def main():
     size_mb = args.output.stat().st_size / 1024.0 / 1024.0
     print(
         f"wrote {args.output} ({size_mb:.1f} MB): "
-        f"{len(headword)} headwords, {sum(len(v) for v in senses.values())} sense vectors",
+        f"{len(headword)} headwords, {len(definition)} definitions, "
+        f"{sum(len(v) for v in senses.values())} sense vectors",
         file=sys.stderr,
     )
 
