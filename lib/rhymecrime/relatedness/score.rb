@@ -14,7 +14,8 @@
 #     (plus the learned score in +additive+ / +replace+ modes) that composes phase-1
 #     signals into an integer 0..100.
 #   - +thematically_related_pair_uncached?+ + +..._memoized?+ — the predicate at
-#     +RELATEDNESS_SCORE_THRESHOLD+, symmetric in +(a, b)+, memoized by lemma pair.
+#     +RELATEDNESS_SCORE_THRESHOLD+, directional in +(cue, related)+, memoized by
+#     ordered lemma pair (callers must not pre-canonicalize).
 #
 # Not required at Lambda runtime. The runtime shim in +lib/rhymecrime/related.rb+
 # lazy-requires this file only when neither DynamoDB nor the precompute JSONL has
@@ -77,11 +78,18 @@ LEARNED_FEATURE_NAMES = (
     model_sv_max_x_usf
     def_in_vocab
     def_cos
-    def_cos_when_base_low
     cn_hops
     cn_shared_neighbors
     usf_direct_max
     usf_direct_min
+    sv_cue_to_related
+    sv_related_to_cue
+    morphy_sv_cue_to_related
+    morphy_sv_related_to_cue
+    model_sv_cue_to_related
+    model_sv_related_to_cue
+    usf_direct_cue_to_related
+    usf_direct_related_to_cue
   ] + unigram_pair_feature_names
 ).freeze
 
@@ -91,8 +99,8 @@ def learned_feature_vector(signals)
   sv_min = both_sv ? signals.sv_min : 0
   usf = signals.usf_twohop_validated? ? 1.0 : 0.0
   base = signals.base_similarity
-  ca = signals.sv_a_count
-  cb = signals.sv_b_count
+  cue_count = signals.sv_cue_count
+  related_count = signals.sv_related_count
 
   # Contextualized-model signals. Gated on +model_both_in_vocab?+ so out-of-vocab
   # pairs don't inject a misleading "cos = 0" into the linear combination — the
@@ -110,16 +118,23 @@ def learned_feature_vector(signals)
   d_in = signals.def_both_in_vocab?
   d_cos = d_in ? signals.def_cos_pct : 0
 
-  # Gloss-similarity vote that fires only when base similarity is weak. Lets the
-  # learner credit high +def_cos+ as standalone positive evidence in the regime
-  # where Numberbatch cosine has nothing to say — i.e. associative / thematic
-  # pairs like +pirate/ruse+, +gay/diva+, +food/presentation+ where humans see
-  # an obvious relation but the vector space doesn't. Without this explicit
-  # cross, the GBT has to discover the (high +def_cos+ × low +base+) interaction
-  # implicitly via tree splits, which it does poorly when training-set density
-  # in that quadrant is low. Threshold 10 was chosen because the post-audit
-  # strong-FN cluster with +def_cos >= 20+ all have +base_similarity+ in [-3, 8].
-  d_cos_low_base = base < 10 ? d_cos.to_f : 0.0
+  # Directional unfolds. The +sv_max+ / +sv_min+ / +morphy_sv_*+ / +model_sv_*+ /
+  # +usf_direct_*+ pairs above fold each directional signal through a symmetric
+  # +max+/+min+ reduction; here we feed the raw cue→related and related→cue values
+  # alongside so the classifier can split on which orientation matches. None of
+  # the directional unfolds carry the +both_sv+ / +model_both_in_vocab?+ /
+  # +def_in_vocab+ gating that the symmetric reductions get — the underlying
+  # +*_directional+ helpers already return 0 for the missing-data side, and the
+  # in-vocab booleans are already in the feature vector for the learner to gate
+  # on. For +morphy_sv_*+ the gate is +morphy_available?+.
+  sv_c2r = signals.sv_cue_to_related
+  sv_r2c = signals.sv_related_to_cue
+  msv_c2r = signals.morphy_sv_cue_to_related
+  msv_r2c = signals.morphy_sv_related_to_cue
+  m_sv_c2r = signals.model_sv_cue_to_related
+  m_sv_r2c = signals.model_sv_related_to_cue
+  usf_c2r = signals.usf_direct_cue_to_related
+  usf_r2c = signals.usf_direct_related_to_cue
 
   [
     1.0,
@@ -133,8 +148,8 @@ def learned_feature_vector(signals)
     base.to_f,
     sv_max.to_f,
     sv_min.to_f,
-    (ca < cb ? ca : cb).to_f,
-    (ca > cb ? ca : cb).to_f,
+    (cue_count < related_count ? cue_count : related_count).to_f,
+    (cue_count > related_count ? cue_count : related_count).to_f,
     signals.morphy_sv_max.to_f,
     signals.morphy_sv_min.to_f,
     base * sv_max / 100.0,
@@ -154,12 +169,19 @@ def learned_feature_vector(signals)
     m_sv_max * usf / 10.0,
     d_in ? 1.0 : 0.0,
     d_cos.to_f,
-    d_cos_low_base,
     signals.cn_hops.to_f,
     signals.cn_shared_neighbors.to_f,
     signals.usf_direct_max.to_f,
     signals.usf_direct_min.to_f,
-  ].concat(unigram_pair_feature_values(signals.a, signals.b))
+    sv_c2r.to_f,
+    sv_r2c.to_f,
+    msv_c2r.to_f,
+    msv_r2c.to_f,
+    m_sv_c2r.to_f,
+    m_sv_r2c.to_f,
+    usf_c2r.to_f,
+    usf_r2c.to_f,
+  ].concat(unigram_pair_feature_values(signals.cue, signals.related))
 end
 
 # --- Learned phase-2 combiner (optional) ---
@@ -325,7 +347,7 @@ def relatedness_contributions(signals)
   # Stop words are contentless glue: related to every other word. Fully saturates
   # the composite score so no other signal is consulted.
   if signals.involves_stop_word?
-    stop = signals.stop_word_a? ? signals.a : signals.b
+    stop = signals.stop_word_cue? ? signals.cue : signals.related
     return [[100, "stop_word: #{stop.inspect} is a stop word (related to everything)"]]
   end
 
@@ -408,7 +430,7 @@ def relatedness_contributions(signals)
   if cooccur > 0
     contributions << [
       cooccur.round,
-      "cooccurrence: base=#{base} sv=(#{signals.sv_d1},#{signals.sv_d2}) usf=#{signals.usf_twohop_validated?}",
+      "cooccurrence: base=#{base} sv=(cue->related=#{signals.sv_cue_to_related},related->cue=#{signals.sv_related_to_cue}) usf=#{signals.usf_twohop_validated?}",
     ]
   end
 
@@ -435,53 +457,62 @@ end
 
 # --- Phase 3: Threshold → boolean predicate ---
 
-# Memo keyed by sorted dictionary lemma pair (see +thematically_related?+). Cleared when +load_word_dict+ runs.
+# Memo keyed by the ordered +(cue_lemma, related_lemma)+ pair (see
+# +thematically_related?+). Now that the predicate is directional, +(cue, related)+
+# and +(related, cue)+ are distinct keys with potentially distinct answers — both
+# orientations are computed and cached independently. Cleared when +load_word_dict+
+# runs.
 $thematically_related_memo = nil
 
-# Uncached predicate on two dictionary lemmas. Symmetric in +a+ / +b+.
-def thematically_related_pair_uncached?(a, b)
-  puts "related? #{a} #{b}" if related_trace_memo?
-  relatedness_score(PairSignals.new(a, b)) >= RELATEDNESS_SCORE_THRESHOLD
+# Uncached predicate on two dictionary lemmas. Directional in +(cue, related)+: the
+# pair is fed to +PairSignals+ in the caller-supplied order and any directional
+# signals downstream see them as +PairSignals#cue+ and +PairSignals#related+.
+def thematically_related_pair_uncached?(cue, related)
+  puts "related? #{cue} -> #{related}" if related_trace_memo?
+  relatedness_score(PairSignals.new(cue, related)) >= RELATEDNESS_SCORE_THRESHOLD
 end
 
-# +a+ and +b+ are dictionary lemmas in lexicographic order (+a+ <= +b+); see +thematically_related?+.
-def thematically_related_pair_memoized?(a, b)
+# +cue+ and +related+ are dictionary lemmas in caller-supplied order — *not*
+# canonicalized. See +thematically_related?+.
+def thematically_related_pair_memoized?(cue, related)
   memo = ($thematically_related_memo ||= {})
-  key = [a, b]
+  key = [cue, related]
   if memo.key?(key)
-    puts "  cache hit #{a} #{b}" if related_trace_memo?
+    puts "  cache hit #{cue} -> #{related}" if related_trace_memo?
     return memo[key]
   end
 
-  puts "thematically_related_pair_uncached? #{a} #{b}" if related_trace_memo?
-  memo[key] = thematically_related_pair_uncached?(a, b)
+  puts "thematically_related_pair_uncached? #{cue} -> #{related}" if related_trace_memo?
+  memo[key] = thematically_related_pair_uncached?(cue, related)
 end
 
 # Full-pipeline thematic relatedness predicate. Used by the local-dev / spec fallback
 # in +lib/rhymecrime/related.rb+ when no precomputed data (DynamoDB or JSONL) is
 # available. At Lambda runtime the runtime shim's DDB lookup handles this path.
-def thematically_related_full?(word1, word2, include_self = false)
-  return true if include_self && (word1 == word2 || lemma(word1) == lemma(word2))
-  return true if stop_word?(word1) || stop_word?(word2)
+#
+# Directional: +cue+ is the input word, +related+ is the candidate output word. No
+# lex-order canonicalization — see +thematically_related_pair_memoized?+.
+def thematically_related_full?(cue, related, include_self = false)
+  return true if include_self && (cue == related || lemma(cue) == lemma(related))
+  return true if stop_word?(cue) || stop_word?(related)
 
-  l1 = ENV["RELATED_SKIP_LEMMA"] == "1" ? word1 : lemma(word1)
-  l2 = ENV["RELATED_SKIP_LEMMA"] == "1" ? word2 : lemma(word2)
-  a, b = l1 <= l2 ? [l1, l2] : [l2, l1]
-  thematically_related_pair_memoized?(a, b)
+  cue_lemma = ENV["RELATED_SKIP_LEMMA"] == "1" ? cue : lemma(cue)
+  related_lemma = ENV["RELATED_SKIP_LEMMA"] == "1" ? related : lemma(related)
+  thematically_related_pair_memoized?(cue_lemma, related_lemma)
 end
 
 # Same decision as +thematically_related_full?+, but returns a short reason string
 # when true (the highest-scoring rule from +relatedness_contributions+), or +nil+
 # when false. Used at seed-time (precompute + spec diagnostics) and by the local-dev
-# fallback in +lib/rhymecrime/related.rb+.
-def why_thematically_related_full?(word1, word2, include_self = false)
-  return "self: same headword" if include_self && word1 == word2
-  return "self: same lexeme (lemma)" if include_self && lemma(word1) == lemma(word2)
+# fallback in +lib/rhymecrime/related.rb+. Directional in +(cue, related)+ — see
+# +thematically_related_full?+.
+def why_thematically_related_full?(cue, related, include_self = false)
+  return "self: same headword" if include_self && cue == related
+  return "self: same lexeme (lemma)" if include_self && lemma(cue) == lemma(related)
 
-  l1 = ENV["RELATED_SKIP_LEMMA"] == "1" ? word1 : lemma(word1)
-  l2 = ENV["RELATED_SKIP_LEMMA"] == "1" ? word2 : lemma(word2)
-  a, b = l1 <= l2 ? [l1, l2] : [l2, l1]
-  contributions = relatedness_contributions(PairSignals.new(a, b))
+  cue_lemma = ENV["RELATED_SKIP_LEMMA"] == "1" ? cue : lemma(cue)
+  related_lemma = ENV["RELATED_SKIP_LEMMA"] == "1" ? related : lemma(related)
+  contributions = relatedness_contributions(PairSignals.new(cue_lemma, related_lemma))
   return nil if contributions.empty?
 
   best_score, best_reason = contributions.max_by(&:first)

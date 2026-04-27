@@ -71,8 +71,8 @@ Dir.chdir(repo) do
     next unless exp
     next if ish_kind?(kind)
 
-    w1 = r["word1"].to_s.strip
-    w2 = r["word2"].to_s.strip
+    w1 = r["cue"].to_s.strip
+    w2 = r["related"].to_s.strip
     next if w1.empty? || w2.empty?
 
     surf = thematically_related_surface_uncached?(w1, w2)

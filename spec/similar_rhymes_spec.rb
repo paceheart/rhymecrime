@@ -341,6 +341,22 @@ describe 'SET_RELATED' do
     set_related_oughta_contain 'music', 'symphony', 'timpani', not_working_message: "this would only work if we dwim a non-final consonant"
   end
 
+  context 'cat' do
+    set_related_oughta_contain 'cat', 'kitten', 'bitten'
+    set_related_oughta_contain 'cat', 'kitten', 'mitten'
+    set_related_oughta_contain 'cat', 'barn', 'yarn'
+    set_related_oughta_contain 'cat', 'pet', 'vet'
+    set_related_oughta_contain 'cat', 'hiss', 'piss'
+    set_related_oughta_contain 'cat', 'muzzle', 'nuzzle'
+    set_related_oughta_contain 'cat', 'fur', 'purr'
+    set_related_oughta_contain 'cat', 'neighbor', 'saber'
+    set_related_oughta_contain 'cat', 'cuddle', "what'll"
+    set_related_oughta_contain 'cat', 'meow', 'now'
+    set_related_oughta_contain 'cat', 'arboreal', 'territorial'
+    set_related_oughta_contain 'cat', 'beagle', 'seagull'
+    set_related_oughta_contain 'cat', 'bird', 'purred'
+  end
+
   context 'no spelling variants' do
     set_related_ought_not_contain 'funeral', 'eulogize', 'eulogise'
     set_related_ought_not_contain 'courtroom', 'honor', 'honour'

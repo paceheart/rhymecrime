@@ -410,7 +410,11 @@ def model_sense_vectors_table
   $model_sense_vectors_loaded = true
   path = generated_dict_path(MODEL_SENSE_VECTORS_FILENAME)
   return nil unless File.exist?(path)
-  raw = MessagePack.unpack(File.binread(path))
+  # Stream-decode instead of +File.binread(path)+: macOS' +read(2)+ syscall caps a
+  # single read at +INT_MAX+ (2 GiB), so once the full-vocab msgpack passes that
+  # threshold (~136k headwords × 768 fp32 ≈ 2.3 GB), +File.binread+ raises
+  # +Errno::EINVAL+. +MessagePack::Unpacker+ on an open IO handles chunking.
+  raw = File.open(path, "rb") { |f| MessagePack::Unpacker.new(f).read }
   hw_raw = raw["headword"] || {}
   df_raw = raw["definition"] || {}
   sn_raw = raw["senses"] || {}
@@ -783,12 +787,14 @@ end
 #
 # Phase 2 (+relatedness_score+) is the only place feature weights / scaling live.
 # --- Unigram feature registry ---
-# Each entry here yields three columns in the final feature vector, one per pair
-# reduction in +PAIR_REDUCTIONS+ (+min+ / +max+ / +diff+, which behave as AND / OR /
-# XOR for 0/1-valued booleans and as the obvious aggregates for numerics). Add a
-# new signal by extending +word_unigram_features+ and +UNIGRAM_FEATURE_NAMES+; the
-# classifier will pick it up on the next retrain and prune it implicitly if it
-# can't split on it usefully.
+# Each entry here yields one column per pair reduction in +PAIR_REDUCTIONS+
+# (+min+ / +max+ / +diff+, which behave as AND / OR / XOR for 0/1-valued booleans
+# and as the obvious aggregates for numerics; plus +cue+ / +related+ — the raw
+# directional values, kept alongside the symmetric reductions so the classifier
+# can split on per-side priors when the +(cue, related)+ orientation matters).
+# Add a new signal by extending +word_unigram_features+ and +UNIGRAM_FEATURE_NAMES+;
+# the classifier will pick it up on the next retrain and prune it implicitly if
+# it can't split on it usefully.
 
 UNIGRAM_FEATURE_NAMES = %w[
   length
@@ -804,7 +810,15 @@ UNIGRAM_FEATURE_NAMES = %w[
   pos_count
 ].freeze
 
-PAIR_REDUCTIONS = %i[min max diff].freeze
+# +min+ / +max+ / +diff+ are symmetric reductions that pre-date the directional
+# split (and stay in place so the existing classifier file's feature-name guard
+# only flags the *new* directional columns as added, not the old slots as moved).
+# +cue+ / +related+ unfold the pair into its raw orientation: +cue+ is +word_a+'s
+# value, +related+ is +word_b+'s value. Distinct from +min+ / +max+ because the
+# classifier can now learn that, e.g., +cue+'s +log_freq+ matters more than the
+# candidate's, or that +cue cn_degree+ has a different shape than +related
+# cn_degree+ — patterns that the symmetric reductions deliberately erase.
+PAIR_REDUCTIONS = %i[min max diff cue related].freeze
 
 # Env-var ablation hook: comma-separated list of unigram names whose
 # +_min/_max/_diff+ reductions should be excluded from the learned feature
@@ -874,15 +888,18 @@ def word_unigram_feature_values(word)
   end
 end
 
-# Mechanical (min, max, diff) expansion of every unigram for a pair; appended to
-# the learned feature vector in the same order as +unigram_pair_feature_names+.
-# Writes into a pre-sized output array (vs. a +flat_map+ that allocates 11
-# intermediate 3-element arrays plus the concatenated result per call).
+# Mechanical +(min, max, diff, cue, related)+ expansion of every unigram for a
+# pair; appended to the learned feature vector in the same order as
+# +unigram_pair_feature_names+. +cue+ / +related+ are the raw directional values
+# (+word_a+ is the cue, +word_b+ is the related candidate) so the classifier can
+# learn cue-vs-candidate priors that the symmetric +min+ / +max+ / +diff+ collapse
+# erases. Writes into a pre-sized output array (vs. a +flat_map+ that allocates
+# intermediate per-feature arrays plus the concatenated result per call).
 def unigram_pair_feature_values(word_a, word_b)
   fa = word_unigram_feature_values(word_a)
   fb = word_unigram_feature_values(word_b)
   kept = kept_unigram_indices
-  out = Array.new(kept.size * 3)
+  out = Array.new(kept.size * PAIR_REDUCTIONS.size)
   j = 0
   kept.each do |i|
     va = fa[i]
@@ -895,43 +912,45 @@ def unigram_pair_feature_values(word_a, word_b)
       out[j + 1] = va
     end
     out[j + 2] = (va - vb).abs
-    j += 3
+    out[j + 3] = va
+    out[j + 4] = vb
+    j += PAIR_REDUCTIONS.size
   end
   out
 end
 
 class PairSignals
-  attr_reader :a, :b
+  attr_reader :cue, :related
 
-  def initialize(a, b)
-    @a = a
-    @b = b
+  def initialize(cue, related)
+    @cue = cue
+    @related = related
   end
 
   # --- boolean features ---
 
-  def stop_word_a?
-    return @stop_word_a if defined?(@stop_word_a)
-    @stop_word_a = stop_word?(@a)
+  def stop_word_cue?
+    return @stop_word_cue if defined?(@stop_word_cue)
+    @stop_word_cue = stop_word?(@cue)
   end
 
-  def stop_word_b?
-    return @stop_word_b if defined?(@stop_word_b)
-    @stop_word_b = stop_word?(@b)
+  def stop_word_related?
+    return @stop_word_related if defined?(@stop_word_related)
+    @stop_word_related = stop_word?(@related)
   end
 
   def involves_stop_word?
-    stop_word_a? || stop_word_b?
+    stop_word_cue? || stop_word_related?
   end
 
   def gloss_match?
     return @gloss_match if defined?(@gloss_match)
-    @gloss_match = bidirectional_gloss_contains?(@a, @b)
+    @gloss_match = bidirectional_gloss_contains?(@cue, @related)
   end
 
   def usf_twohop_validated?
     return @usf_twohop if defined?(@usf_twohop)
-    @usf_twohop = usf_twohop_bridge_validated?(@a, @b)
+    @usf_twohop = usf_twohop_bridge_validated?(@cue, @related)
   end
 
   # Direct (1-hop) USF forward-association strengths, asymmetric.
@@ -939,7 +958,7 @@ class PairSignals
   # (the usual "are these associated?" question). +usf_direct_min+ is non-zero only
   # when *both* directions fired, i.e. mutual association — a stronger signal.
   def usf_direct_strengths
-    @usf_direct_strengths ||= usf_direct_association_strengths(@a, @b)
+    @usf_direct_strengths ||= usf_direct_association_strengths(@cue, @related)
   end
 
   def usf_direct_max
@@ -950,8 +969,22 @@ class PairSignals
     usf_direct_strengths.min
   end
 
+  # Directional unfolds: raw cue→related and related→cue forward-association
+  # strengths (+usf_direct_max+ / +usf_direct_min+ above are the symmetric
+  # reductions). Useful because USF is asymmetric in human data — "cat" cues
+  # "dog" much more strongly than "dog" cues "cat" in free-association — and
+  # collapsing to max/min discards exactly the orientation signal that
+  # distinguishes "X reminds people of Y" from "Y reminds people of X".
+  def usf_direct_cue_to_related
+    usf_direct_strengths[0]
+  end
+
+  def usf_direct_related_to_cue
+    usf_direct_strengths[1]
+  end
+
   def both_have_sense_vectors?
-    sv_a_count > 0 && sv_b_count > 0
+    sv_cue_count > 0 && sv_related_count > 0
   end
 
   def morphy_available?
@@ -962,13 +995,13 @@ class PairSignals
 
   # Numberbatch cosine as a 0..100 centile (may be negative when vectors disagree).
   def cos_pct
-    @cos_pct ||= (numberbatch_cosine(@a, @b) * 100).round
+    @cos_pct ||= (numberbatch_cosine(@cue, @related) * 100).round
   end
 
   # Raw ConceptNet edge weight (0.0 if no edge recorded).
   def edge_weight
     return @edge_weight if defined?(@edge_weight)
-    @edge_weight = conceptnet_edge_weight(@a, @b)
+    @edge_weight = conceptnet_edge_weight(@cue, @related)
   end
 
   def edge_present?
@@ -982,16 +1015,20 @@ class PairSignals
   end
 
   # Directional sense-vector cosines (0..100 centiles): +sv_directional.first+ is
-  # word1's sense embeddings vs. word2's Numberbatch vector; second is the reverse.
+  # the cue's sense embeddings vs. the related candidate's Numberbatch vector;
+  # +sv_directional.last+ is the reverse. +sv_max+ / +sv_min+ are the symmetric
+  # reductions; +sv_cue_to_related+ / +sv_related_to_cue+ expose the raw
+  # directional cosines so the classifier can split on which orientation
+  # matched.
   def sv_directional
-    @sv_directional ||= directional_sense_cosines(@a, @b)
+    @sv_directional ||= directional_sense_cosines(@cue, @related)
   end
 
-  def sv_d1
+  def sv_cue_to_related
     sv_directional[0]
   end
 
-  def sv_d2
+  def sv_related_to_cue
     sv_directional[1]
   end
 
@@ -1006,16 +1043,16 @@ class PairSignals
   # Count of WordNet senses that produced a usable gloss-average embedding.
   # +sense_vectors+ returns a +Numo::SFloat(K, dim)+ matrix or +nil+; we want
   # K (the per-word sense count), not total element count.
-  def sv_a_count
-    return @sv_a_count if defined?(@sv_a_count)
-    sv = sense_vectors(@a)
-    @sv_a_count = sv ? sv.shape[0] : 0
+  def sv_cue_count
+    return @sv_cue_count if defined?(@sv_cue_count)
+    sv = sense_vectors(@cue)
+    @sv_cue_count = sv ? sv.shape[0] : 0
   end
 
-  def sv_b_count
-    return @sv_b_count if defined?(@sv_b_count)
-    sv = sense_vectors(@b)
-    @sv_b_count = sv ? sv.shape[0] : 0
+  def sv_related_count
+    return @sv_related_count if defined?(@sv_related_count)
+    sv = sense_vectors(@related)
+    @sv_related_count = sv ? sv.shape[0] : 0
   end
 
   # Morphy-resolved directional cosines (0..100), or +nil+ when neither side needed
@@ -1023,7 +1060,7 @@ class PairSignals
   # usable sense vector.
   def morphy_sv_directional
     return @morphy_sv_directional if defined?(@morphy_sv_directional)
-    @morphy_sv_directional = morphy_directional_sense_cosines(@a, @b)
+    @morphy_sv_directional = morphy_directional_sense_cosines(@cue, @related)
   end
 
   def morphy_sv_max
@@ -1036,6 +1073,19 @@ class PairSignals
     m ? m.min : 0
   end
 
+  # Directional unfolds of the morphy-resolved sense-vector cosines; +0+ when
+  # neither side needed morphy fallback. Matching index convention with
+  # +sv_directional+: +[0]+ is cue→related, +[1]+ is related→cue.
+  def morphy_sv_cue_to_related
+    m = morphy_sv_directional
+    m ? m[0] : 0
+  end
+
+  def morphy_sv_related_to_cue
+    m = morphy_sv_directional
+    m ? m[1] : 0
+  end
+
   # --- Modern sentence-transformer signals ---
   # Mirror the Numberbatch-based signals above but use contextualized MPNet embeddings
   # (see +model_sense_vectors_table+). +model_both_in_vocab?+ lets the combiner treat
@@ -1043,7 +1093,7 @@ class PairSignals
 
   def model_both_in_vocab?
     return @model_both_in_vocab if defined?(@model_both_in_vocab)
-    @model_both_in_vocab = !model_headword_vector(@a).nil? && !model_headword_vector(@b).nil?
+    @model_both_in_vocab = !model_headword_vector(@cue).nil? && !model_headword_vector(@related).nil?
   end
 
   # Raw headword-headword cosine in [-1, 1]. Computed once per pair and reused by
@@ -1051,7 +1101,7 @@ class PairSignals
   # +model_sense_sense_max_cosine+ — a tiny +Numo#dot+ but nice to only do once.
   def model_headword_cos
     return @model_headword_cos if defined?(@model_headword_cos)
-    @model_headword_cos = model_headword_cosine(@a, @b)
+    @model_headword_cos = model_headword_cosine(@cue, @related)
   end
 
   def model_cos_pct
@@ -1059,7 +1109,7 @@ class PairSignals
   end
 
   def model_sv_directional
-    @model_sv_directional ||= model_directional_sense_cosines(@a, @b, model_headword_cos)
+    @model_sv_directional ||= model_directional_sense_cosines(@cue, @related, model_headword_cos)
   end
 
   def model_sv_max
@@ -1070,13 +1120,26 @@ class PairSignals
     model_sv_directional.min
   end
 
+  # Directional unfolds of the contextualized-model directional cosines;
+  # +[0]+ is cue's sense vectors vs. related's headword embedding, +[1]+ is
+  # the reverse. Same +0+-when-out-of-vocab semantics as +model_sv_max+ /
+  # +model_sv_min+ — pair with +model_both_in_vocab?+ if you want to
+  # distinguish "low cosine" from "no data".
+  def model_sv_cue_to_related
+    model_sv_directional[0]
+  end
+
+  def model_sv_related_to_cue
+    model_sv_directional[1]
+  end
+
   def model_both_have_sense_vectors?
     return @model_both_have_sv if defined?(@model_both_have_sv)
-    @model_both_have_sv = !model_sense_vectors_of(@a).nil? && !model_sense_vectors_of(@b).nil?
+    @model_both_have_sv = !model_sense_vectors_of(@cue).nil? && !model_sense_vectors_of(@related).nil?
   end
 
   def model_sense_sense_max
-    @model_sense_sense_max ||= model_sense_sense_max_cosine(@a, @b, model_headword_cos)
+    @model_sense_sense_max ||= model_sense_sense_max_cosine(@cue, @related, model_headword_cos)
   end
 
   # --- Pooled-definition (cross-encoder) signals ---
@@ -1090,11 +1153,11 @@ class PairSignals
   # so populated whenever the word is in vocab at all.
   def def_both_in_vocab?
     return @def_both_in_vocab if defined?(@def_both_in_vocab)
-    @def_both_in_vocab = !model_definition_vector(@a).nil? && !model_definition_vector(@b).nil?
+    @def_both_in_vocab = !model_definition_vector(@cue).nil? && !model_definition_vector(@related).nil?
   end
 
   def def_cos_pct
-    @def_cos_pct ||= (model_definition_cosine(@a, @b) * 100).round
+    @def_cos_pct ||= (model_definition_cosine(@cue, @related) * 100).round
   end
 
   # --- ConceptNet graph-structure signals ---
@@ -1108,10 +1171,10 @@ class PairSignals
   CN_MAX_HOPS = ::CN_MAX_HOPS
 
   def cn_hops
-    @cn_hops ||= conceptnet_shortest_hops(@a, @b, ::CN_MAX_HOPS)
+    @cn_hops ||= conceptnet_shortest_hops(@cue, @related, ::CN_MAX_HOPS)
   end
 
   def cn_shared_neighbors
-    @cn_shared_neighbors ||= conceptnet_shared_neighbor_count(@a, @b)
+    @cn_shared_neighbors ||= conceptnet_shared_neighbor_count(@cue, @related)
   end
 end

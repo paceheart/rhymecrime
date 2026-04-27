@@ -21,7 +21,7 @@
 # (same fallback as +sense_vectors_morphy+).
 #
 # Scope:
-#   +--limit-csv CSV+  only dump words referenced in the CSV's +word1+/+word2+ columns.
+#   +--limit-csv CSV+  only dump words referenced in the CSV's +cue+/+related+ columns.
 #                      Useful for iterating on spec/related.csv fast.
 #   default            all dictionary base lemmas with Numberbatch vectors (~65k; Python
 #                      encoding this many at MPNet pace is ~30 min on Apple Silicon MPS).
@@ -69,7 +69,7 @@ if options[:limit_csv]
   require "csv"
   rows = CSV.parse(File.read(options[:limit_csv], encoding: "UTF-8"), headers: true)
   rows.each do |r|
-    %w[word1 word2].each do |col|
+    %w[cue related].each do |col|
       next unless r[col]
       w = r[col].to_s.strip
       next if w.empty?
@@ -130,12 +130,21 @@ File.open(options[:output], "w") do |f|
     glosses = wordnet_glosses_for(word, options[:max_senses], options[:include_morphy])
     headword_only += 1 if glosses.empty?
 
-    f.puts JSON.generate(
-      "word" => word,
-      "sense_idx" => -2,
-      "text" => pooled_definition_text(word, glosses),
-    )
-    written += 1
+    # Only emit a definition embedding when there's an *actual* gloss. Otherwise
+    # +pooled_definition_text+ would fall back to the bare headword, producing a
+    # vector ~identical to the +sense_idx=-1+ headword embedding — making
+    # +def_cos+ effectively redundant with +model_cos+ for senseless words and
+    # destroying the +def_in_vocab+ gate's signal value. Senseless words now get
+    # +definition[word] = nil+ in the encoded msgpack, so +def_both_in_vocab?+
+    # correctly returns false for any pair touching them.
+    unless glosses.empty?
+      f.puts JSON.generate(
+        "word" => word,
+        "sense_idx" => -2,
+        "text" => pooled_definition_text(word, glosses),
+      )
+      written += 1
+    end
 
     glosses.each_with_index do |g, i|
       f.puts JSON.generate(

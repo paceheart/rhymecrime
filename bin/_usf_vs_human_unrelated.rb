@@ -22,8 +22,8 @@ twohop_only = []
 neg_total = 0
 
 raw.each do |r|
-  w1 = r["word1"].to_s.strip.downcase
-  w2 = r["word2"].to_s.strip.downcase
+  w1 = r["cue"].to_s.strip.downcase
+  w2 = r["related"].to_s.strip.downcase
   next if w1.empty? || w2.empty?
   kind = r["oughta be related?"].to_s.strip
   next unless kind == "unrelated" || kind == "unrelated_ish"

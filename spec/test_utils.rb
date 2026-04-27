@@ -25,7 +25,7 @@ def relatedness_test_cases
   $cases ||= load_relatedness_test_cases
 end
 
-# word1, word2, oughta be related?, notes
+# cue, related, oughta be related?, notes
 def load_relatedness_test_cases
   cases = CSV.parse(File.read("spec/related.csv", encoding: 'UTF-8'), headers: true) or raise "Could not read/parse related.csv"
   for c in cases
@@ -45,10 +45,10 @@ def repair_relatedness_test_case(c)
 end
 
 def validate_relatedness_test_case(c)
-  word1 = c['word1']
-  word?(word1) or raise "Malformed word1 '#{word1}' in #{c}"
-  word2 = c['word2']
-  word?(word2) or raise "Malformed word2 '#{word2}' in #{c}"
+  cue = c['cue']
+  word?(cue) or raise "Malformed cue '#{cue}' in #{c}"
+  related = c['related']
+  word?(related) or raise "Malformed related '#{related}' in #{c}"
   kind = c['oughta be related?'].to_s.strip
   RELATEDNESS_KINDS.include?(kind) or raise "Malformed oughta_be_related? '#{kind}' in #{c} (expected one of #{RELATEDNESS_KINDS.join(', ')})"
   notes = c['notes']
@@ -60,9 +60,9 @@ def define_relatedness_test_case(c)
   return if kind == "whatever"
   context c["notes"] do
     if relatedness_expected_boolean(kind)
-      oughta_be_related c["word1"], c["word2"]
+      oughta_be_related c["cue"], c["related"]
     else
-      ought_not_be_related c["word1"], c["word2"]
+      ought_not_be_related c["cue"], c["related"]
     end
   end
 end
@@ -74,7 +74,7 @@ end
 def relatedness_test_passes?(test_case)
   expected = relatedness_expected_boolean(test_case['oughta be related?'])
   return true if expected.nil?
-  actual = thematically_related?(test_case["word1"], test_case["word2"], false)
+  actual = thematically_related?(test_case["cue"], test_case["related"], false)
   debug expected == actual ? "." : "F"
   return expected == actual
 end

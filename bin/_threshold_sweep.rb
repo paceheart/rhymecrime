@@ -45,8 +45,8 @@ raw_rows = CSV.parse(File.read(path, encoding: "UTF-8"), headers: true)
 
 skipped_stopword = 0
 rows = raw_rows.reject do |r|
-  w1 = r["word1"]
-  w2 = r["word2"]
+  w1 = r["cue"]
+  w2 = r["related"]
   next true if w1.nil? || w2.nil?
   drop = stop_word?(w1) || stop_word?(w2) || stop_word?(lemma(w1)) || stop_word?(lemma(w2))
   skipped_stopword += 1 if drop
@@ -74,10 +74,11 @@ rows.each do |r|
   ish = (kind == "related_ish" || kind == "unrelated_ish")
   exp ? (n_pos += 1) : (n_neg += 1)
 
-  l1 = lemma(r["word1"])
-  l2 = lemma(r["word2"])
-  a, b = l1 <= l2 ? [l1, l2] : [l2, l1]
-  p = learned_relatedness_probability(PairSignals.new(a, b)) || 0.0
+  cue_lemma = lemma(r["cue"])
+  related_lemma = lemma(r["related"])
+  # Directional: +word1+ = cue, +word2+ = related candidate, matching the
+  # trainer and runtime predicate (see +bin/train-relatedness-classifier+).
+  p = learned_relatedness_probability(PairSignals.new(cue_lemma, related_lemma)) || 0.0
   scored << { p: p, exp: exp, ish: ish }
 end
 

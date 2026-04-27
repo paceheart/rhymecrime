@@ -81,7 +81,7 @@ def ish_kind?(kind)
 end
 
 # Expand +rows+ by cloning each row once per derived-form variant of its
-# +word1+ / +word2+ cells, per +OUGHTA_BE_IDENTICAL+. Each side is expanded
+# +cue+ / +related+ cells, per +OUGHTA_BE_IDENTICAL+. Each side is expanded
 # independently (no cross-product) — for a row +(pirate, crime)+, we emit
 # the original plus +(pirates, crime)+, +(piracy, crime)+, ..., +(pirate,
 # crimes)+, +(pirate, criminal)+, etc. The +kind+ / +notes+ / ish-ness are
@@ -93,12 +93,12 @@ def expanded_rows_with_clones(rows)
   clones = 0
   rows.each do |r|
     out << r
-    w1 = r["word1"].to_s.strip.downcase
-    w2 = r["word2"].to_s.strip.downcase
+    w1 = r["cue"].to_s.strip.downcase
+    w2 = r["related"].to_s.strip.downcase
     if OUGHTA_BE_IDENTICAL.key?(w1)
       OUGHTA_BE_IDENTICAL[w1].each do |variant|
         dup = r.dup
-        dup["word1"] = variant
+        dup["cue"] = variant
         out << dup
         clones += 1
       end
@@ -106,7 +106,7 @@ def expanded_rows_with_clones(rows)
     if OUGHTA_BE_IDENTICAL.key?(w2)
       OUGHTA_BE_IDENTICAL[w2].each do |variant|
         dup = r.dup
-        dup["word2"] = variant
+        dup["related"] = variant
         out << dup
         clones += 1
       end
@@ -119,7 +119,7 @@ end
 # is a +OUGHTA_BE_IDENTICAL+ key or any of its variants, the family is that
 # key. nil means the row has no pirate/cat/crime/... cue on either side and
 # is irrelevant to the breakdown. If both sides are cue keys (e.g. a row
-# +(pirate, crime)+), we pick +word1+'s family — arbitrary but stable; the
+# +(pirate, crime)+), we pick the cue's family — arbitrary but stable; the
 # breakdown is descriptive, not an error partition.
 def cue_family_for(w1, w2, family_of_surface)
   family_of_surface[w1] || family_of_surface[w2]
@@ -145,9 +145,12 @@ whatever_as_unrelated = ENV["RELATED_WHATEVER_AS_UNRELATED"] == "1"
 # phase-2 composite +relatedness_score+, and the +why_thematically_related?+ reason
 # (may be non-nil on a false-positive row, nil on a false-negative row).
 def related_failure_diagnostic_line(word1, word2, kind)
-  l1 = lemma(word1)
-  l2 = lemma(word2)
-  a, b = l1 <= l2 ? [l1, l2] : [l2, l1]
+  # Directional: +word1+ = cue, +word2+ = related candidate, matching the
+  # trainer and runtime predicate. The diagnostic must mirror what the predict
+  # path actually saw or its +sv_cue_to_related+ / unigram +cue+ / +related+
+  # columns will read out backwards on cue-vs-candidate failures.
+  a = lemma(word1)
+  b = lemma(word2)
   signals = PairSignals.new(a, b)
 
   morphy = signals.both_have_sense_vectors? ? nil : signals.morphy_sv_directional
@@ -160,7 +163,7 @@ def related_failure_diagnostic_line(word1, word2, kind)
     word1, word2, kind, a, b,
     relatedness_score(signals), signals.base_similarity, signals.cos_pct, signals.edge_weight,
     signals.gloss_match?.to_s,
-    signals.sv_d1, signals.sv_d2, signals.sv_a_count, signals.sv_b_count,
+    signals.sv_cue_to_related, signals.sv_related_to_cue, signals.sv_cue_count, signals.sv_related_count,
     morphy.inspect,
     usf_cue_a, usf_cue_b,
     reason
@@ -190,9 +193,9 @@ Dir.chdir(repo) do
   # apples-to-apples numbers. Filter on both surface form and lemma.
   skipped_stopword = 0
   rows = rows.reject do |r|
-    w1 = r["word1"]
-    w2 = r["word2"]
-    next false if w1.nil? || w2.nil?
+    w1 = r["cue"]
+    w2 = r["related"]
+    next true if w1.nil? || w2.nil?
     drop = stop_word?(w1) || stop_word?(w2) || stop_word?(lemma(w1)) || stop_word?(lemma(w2))
     skipped_stopword += 1 if drop
     drop
@@ -268,7 +271,7 @@ Dir.chdir(repo) do
     ish = ish_kind?(kind)
 
     exp ? (pos += 1) : (neg += 1)
-    act = thematically_related?(r["word1"], r["word2"], false)
+    act = thematically_related?(r["cue"], r["related"], false)
 
     base_row_w = ish ? 1.0 : 3.0
     row_w = exp ? base_row_w * fn_weight : base_row_w
@@ -276,8 +279,8 @@ Dir.chdir(repo) do
     weighted_correct += row_w if act == exp
 
     family = cue_family_for(
-      r["word1"].to_s.strip.downcase,
-      r["word2"].to_s.strip.downcase,
+      r["cue"].to_s.strip.downcase,
+      r["related"].to_s.strip.downcase,
       family_of_surface,
     )
     fs = family ? family_stats[family] : nil
@@ -296,7 +299,7 @@ Dir.chdir(repo) do
             fs[:ifn] += 1
             fs[:composite] += ifn_penalty
           end
-          failures_ish_fn << related_failure_diagnostic_line(r["word1"], r["word2"], kind) if want_failures
+          failures_ish_fn << related_failure_diagnostic_line(r["cue"], r["related"], kind) if want_failures
         else
           strong_fn += 1
           composite += sfn_penalty
@@ -304,7 +307,7 @@ Dir.chdir(repo) do
             fs[:sfn] += 1
             fs[:composite] += sfn_penalty
           end
-          failures_strong_fn << related_failure_diagnostic_line(r["word1"], r["word2"], kind) if want_failures
+          failures_strong_fn << related_failure_diagnostic_line(r["cue"], r["related"], kind) if want_failures
         end
       end
     elsif act
@@ -316,7 +319,7 @@ Dir.chdir(repo) do
           fs[:ifp] += 1
           fs[:composite] += ifp_penalty
         end
-        failures_ish_fp << related_failure_diagnostic_line(r["word1"], r["word2"], kind) if want_failures
+        failures_ish_fp << related_failure_diagnostic_line(r["cue"], r["related"], kind) if want_failures
       else
         strong_fp += 1
         composite += sfp_penalty
@@ -324,7 +327,7 @@ Dir.chdir(repo) do
           fs[:sfp] += 1
           fs[:composite] += sfp_penalty
         end
-        failures_strong_fp << related_failure_diagnostic_line(r["word1"], r["word2"], kind) if want_failures
+        failures_strong_fp << related_failure_diagnostic_line(r["cue"], r["related"], kind) if want_failures
       end
     else
       tn += 1

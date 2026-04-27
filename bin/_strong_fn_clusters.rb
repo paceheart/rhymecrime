@@ -55,7 +55,7 @@ raw_rows = CSV.parse(File.read(path, encoding: "UTF-8"), headers: true)
 
 skipped_stopword = 0
 rows = raw_rows.reject do |r|
-  w1 = r["word1"]; w2 = r["word2"]
+  w1 = r["cue"]; w2 = r["related"]
   next true if w1.nil? || w2.nil?
   drop = stop_word?(w1) || stop_word?(w2) || stop_word?(lemma(w1)) || stop_word?(lemma(w2))
   skipped_stopword += 1 if drop
@@ -67,9 +67,11 @@ strong_fns = []
 rows.each do |r|
   kind = r["oughta be related?"].to_s.strip
   next unless kind == "related" # strong (not ish, not whatever)
-  l1 = lemma(r["word1"])
-  l2 = lemma(r["word2"])
-  a, b = l1 <= l2 ? [l1, l2] : [l2, l1]
+  # Directional: +word1+ = cue, +word2+ = related candidate, matching the
+  # trainer and runtime predicate. (Pre-2026-04 this script lex-canonicalized,
+  # which only stayed coherent because every signal was symmetric in +(a, b)+.)
+  a = lemma(r["cue"])
+  b = lemma(r["related"])
   signals = PairSignals.new(a, b)
   p = learned_relatedness_probability(signals)
   pred = (p || 0.0) >= threshold
@@ -91,7 +93,7 @@ rows.each do |r|
     end
 
   strong_fns << {
-    word1: r["word1"], word2: r["word2"], a: a, b: b,
+    cue: r["cue"], related: r["related"], a: a, b: b,
     p: p || 0.0,
     base: signals.base_similarity, cos_pct: signals.cos_pct, edge: signals.edge_weight,
     gloss: signals.gloss_match?,
@@ -130,7 +132,7 @@ end
 if want_tsv
   out_path = File.join(repo, "notes", "strong-fn-audit.tsv")
   cols = %w[
-    decision word1 word2 p bucket
+    decision cue related p bucket
     base cos_pct edge gloss sv_max sv_min def_cos
     usf_a usf_b in_nb_a in_nb_b def_both_in_vocab
     lemma_a lemma_b notes
@@ -140,7 +142,7 @@ if want_tsv
     strong_fns.sort_by { |r| r[:p] }.each do |r|
       vals = {
         "decision" => "",
-        "word1" => r[:word1], "word2" => r[:word2],
+        "cue" => r[:cue], "related" => r[:related],
         "p" => format("%.3f", r[:p]), "bucket" => r[:bucket],
         "base" => r[:base], "cos_pct" => r[:cos_pct], "edge" => format("%.2f", r[:edge]),
         "gloss" => r[:gloss] ? 1 : 0,

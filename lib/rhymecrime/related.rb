@@ -139,19 +139,26 @@ end
 
 # --- Thematic relatedness predicate ---
 
-# True iff the two headwords are topically related. Symmetric. Stop words are
-# treated as related to every other word (contentless glue). At runtime the
-# predicate is answered via +RelatedWords.pair_in_store?+; the local-dev
-# fallback lazy-loads the compute pipeline when the Store is absent.
-def thematically_related?(word1, word2, include_self = false)
+# True iff +cue+ is topically related to +related+. Directional in
+# +(cue, related)+ — see +thematically_related_pair_memoized?+ in
+# +relatedness/score.rb+. Stop words are treated as related to every other
+# word (contentless glue). At runtime the predicate is answered via
+# +RelatedWords.pair_in_store?+; the local-dev fallback lazy-loads the compute
+# pipeline when the Store is absent.
+#
+# Note: the precomputed Store was built under a symmetric predicate, so
+# +pair_in_store?+ effectively returns the OR of both orientations. Until the
+# Store is rebuilt directionally that's a slight permissiveness gap vs. the
+# compute path, hidden behind +RELATED_BYPASS_STORE=1+ for eval work.
+def thematically_related?(cue, related, include_self = false)
   if ENV["RELATED_TRACE_THEMATIC"] == "1"
-    warn "thematically_related? word1=#{word1.inspect} word2=#{word2.inspect} include_self=#{include_self.inspect}"
+    warn "thematically_related? cue=#{cue.inspect} related=#{related.inspect} include_self=#{include_self.inspect}"
   end
 
-  return true if include_self && (word1 == word2 || lemma(word1) == lemma(word2))
-  return true if stop_word?(word1) || stop_word?(word2)
+  return true if include_self && (cue == related || lemma(cue) == lemma(related))
+  return true if stop_word?(cue) || stop_word?(related)
 
-  puts "thematically_related? #{word1} #{word2}" if related_trace_memo?
+  puts "thematically_related? #{cue} -> #{related}" if related_trace_memo?
 
   # Two normalization modes on the way in:
   #   * +RELATED_SKIP_LEMMA=1+ -> raw surfaces (no normalization).
@@ -163,13 +170,15 @@ def thematically_related?(word1, word2, include_self = false)
   # explored — see +word_semantic_base_map.{msgpack,txt}+ — and net-regressed
   # weighted accuracy under the cosine guard sweep, so the runtime stayed on
   # plain +lemma+.)
-  l1 = ENV["RELATED_SKIP_LEMMA"] == "1" ? word1 : lemma(word1)
-  l2 = ENV["RELATED_SKIP_LEMMA"] == "1" ? word2 : lemma(word2)
-  a, b = l1 <= l2 ? [l1, l2] : [l2, l1]
-  puts "  -> lemma key #{a} #{b}" if related_trace_memo?
+  cue_lemma = ENV["RELATED_SKIP_LEMMA"] == "1" ? cue : lemma(cue)
+  related_lemma = ENV["RELATED_SKIP_LEMMA"] == "1" ? related : lemma(related)
+  puts "  -> lemma key #{cue_lemma} -> #{related_lemma}" if related_trace_memo?
 
   unless related_bypass_store?
-    return true if RelatedWords.pair_in_store?(a, b)
+    # Store is symmetric internally (queries both endpoints' rows). Pass the
+    # cue/related lemmas as-is; the OR-of-orientations semantics is intentional
+    # while the Store predates the directional refactor.
+    return true if RelatedWords.pair_in_store?(cue_lemma, related_lemma)
 
     # DDB is authoritative: "missing means unrelated," no compute fallback in
     # Lambda. The LocalStore is a dev cache — it may not cover every pair (eval
@@ -179,30 +188,29 @@ def thematically_related?(word1, word2, include_self = false)
   end
 
   relatedness_lazy_load_compute!
-  thematically_related_pair_memoized?(a, b)
+  thematically_related_pair_memoized?(cue_lemma, related_lemma)
 end
 
 # Same decision as +thematically_related?+, but returns a short reason string
-# when true, or +nil+ when false.
-def why_thematically_related?(word1, word2, include_self = false)
-  return "self: same headword" if include_self && word1 == word2
-  return "self: same lexeme (lemma)" if include_self && lemma(word1) == lemma(word2)
-  return "stop_word: #{word1.inspect} is a stop word (related to everything)" if stop_word?(word1)
-  return "stop_word: #{word2.inspect} is a stop word (related to everything)" if stop_word?(word2)
+# when true, or +nil+ when false. Directional in +(cue, related)+.
+def why_thematically_related?(cue, related, include_self = false)
+  return "self: same headword" if include_self && cue == related
+  return "self: same lexeme (lemma)" if include_self && lemma(cue) == lemma(related)
+  return "stop_word: #{cue.inspect} is a stop word (related to everything)" if stop_word?(cue)
+  return "stop_word: #{related.inspect} is a stop word (related to everything)" if stop_word?(related)
 
-  l1 = ENV["RELATED_SKIP_LEMMA"] == "1" ? word1 : lemma(word1)
-  l2 = ENV["RELATED_SKIP_LEMMA"] == "1" ? word2 : lemma(word2)
-  a, b = l1 <= l2 ? [l1, l2] : [l2, l1]
+  cue_lemma = ENV["RELATED_SKIP_LEMMA"] == "1" ? cue : lemma(cue)
+  related_lemma = ENV["RELATED_SKIP_LEMMA"] == "1" ? related : lemma(related)
 
   unless related_bypass_store?
-    score = RelatedWords.lookup_score_by_lemmas(a, b)
+    score = RelatedWords.lookup_score_by_lemmas(cue_lemma, related_lemma)
     return "precomputed: topically related (score=#{score})" if score >= RELATEDNESS_SCORE_THRESHOLD
 
     return nil if store_authoritative?
   end
 
   relatedness_lazy_load_compute!
-  why_thematically_related_full?(word1, word2, include_self)
+  why_thematically_related_full?(cue, related, include_self)
 end
 
 # --- RelatedWords: cue -> related headwords (+ stored scores) ---

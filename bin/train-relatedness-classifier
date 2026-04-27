@@ -526,9 +526,9 @@ raw_rows = CSV.parse(File.read(path, encoding: "UTF-8"), headers: true)
 # checks +stop_word?("running")+ only after phase 3 computes +lemma+.
 skipped_stopword = 0
 rows = raw_rows.reject do |r|
-  w1 = r["word1"]
-  w2 = r["word2"]
-  next false if w1.nil? || w2.nil?
+  w1 = r["cue"]
+  w2 = r["related"]
+  next true if w1.nil? || w2.nil?
   drop = stop_word?(w1) || stop_word?(w2) || stop_word?(lemma(w1)) || stop_word?(lemma(w2))
   skipped_stopword += 1 if drop
   drop
@@ -561,8 +561,8 @@ rows.each do |r|
     end
   end
 
-  w1 = r["word1"]
-  w2 = r["word2"]
+  w1 = r["cue"]
+  w2 = r["related"]
   # Normalization mode (must agree with the runtime predicate in
   # +lib/rhymecrime/related.rb+):
   #   * +RELATED_SKIP_LEMMA=1+ -> raw surfaces.
@@ -571,8 +571,13 @@ rows.each do |r|
   l1 = ENV["RELATED_SKIP_LEMMA"] == "1" ? w1 : lemma(w1)
   l2 = ENV["RELATED_SKIP_LEMMA"] == "1" ? w2 : lemma(w2)
 
-  a, b = l1 <= l2 ? [l1, l2] : [l2, l1]
-  signals = PairSignals.new(a, b)
+  # +PairSignals+ is now directional: the +cue+ column is the cue, +related+
+  # is the related candidate (see +spec/related.csv+'s 2026-04 orientation
+  # pass). Do NOT canonicalize lex-order here — that would feed lex order into
+  # the directional +sv_cue_to_related+ / +usf_direct_cue_to_related+ /
+  # unigram +cue+ / +related+ columns and turn them into noise that the GBT
+  # can only fit overfit-style.
+  signals = PairSignals.new(l1, l2)
 
   y = (kind == "related" || kind == "related_ish") ? 1.0 : 0.0
   ish = (kind == "related_ish" || kind == "unrelated_ish")

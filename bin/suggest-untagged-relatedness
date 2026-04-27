@@ -93,8 +93,8 @@ end
 def load_existing_pairs
   seen = Set.new
   CSV.foreach(CSV_PATH, headers: true) do |row|
-    w1 = row["word1"].to_s.strip.downcase
-    w2 = row["word2"].to_s.strip.downcase
+    w1 = row["cue"].to_s.strip.downcase
+    w2 = row["related"].to_s.strip.downcase
     next if w1.empty? || w2.empty?
     seen << pair_key(w1, w2)
   end
