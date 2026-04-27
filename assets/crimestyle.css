@@ -97,49 +97,81 @@ a:visited {
 
 /* Inline thumbs-up / thumbs-down widget rendered after every "related word"
    surface (see +emit_relatedness_feedback_widget+ in lib/rhymecrime/crime.rb).
-   Buttons are intentionally tiny and low-saturation so they don't compete
-   visually with the words themselves; once a vote lands they latch into a
-   colored "voted" state via the data-feedback attribute set by feedback.js. */
+   Icons are inline SVGs whose +fill+ is +currentColor+, so the color rules
+   below (mint #00fa9a for up, hot pink-red #ff355e for down) drive both the
+   resting and voted states without any tinting/filter tricks. The buttons
+   are low-opacity at rest so they don't compete with the words; they bloom
+   on row hover and latch fully visible once a vote lands. */
 .feedback-thumbs {
-    margin-left: 4px;
+    margin-left: 0.25em;
+    /* Negative trailing margin so the down-thumb sits closer to the
+       following +/+ tuple separator (or end-of-line) than to the leading
+       word. The leading +" / "+ string still renders normally; we just
+       eat ~0.15em of its leading space. The space AFTER +/+ is unaffected,
+       preserving an asymmetric "thumbs hug the slash, slash hugs the next
+       word naturally" feel. */
+    margin-right: -0.15em;
     white-space: nowrap;
-    font-size: 0.8em;
-    opacity: 0.45;
-    transition: opacity 0.15s ease-in-out;
-}
-
-.output_p:hover .feedback-thumbs,
-.feedback-thumbs.has-vote {
-    opacity: 1;
+    font-size: 0.85em;
+    line-height: 1;
 }
 
 .feedback-thumbs .thumb {
     background: transparent;
     border: 0;
-    padding: 0 2px;
+    /* Asymmetric padding: zero on the leading edge of the up button (so it
+       sits flush against the word it's voting on), 1px between the two
+       buttons, zero trailing on the down button (so the next word starts
+       at its natural " / " separator without compounding gap). */
+    padding: 0;
     margin: 0;
     cursor: pointer;
-    color: inherit;
     font: inherit;
-    line-height: 1;
-    filter: grayscale(1);
-    transition: filter 0.15s ease-in-out, transform 0.05s ease-in-out;
+    line-height: 0;
+    vertical-align: -0.15em;
+    opacity: 0.28;
+    transition: opacity 0.15s ease-in-out, transform 0.05s ease-in-out;
 }
 
+.feedback-thumbs .thumb-up   { color: #00fa9a; padding-right: 1px; }
+.feedback-thumbs .thumb-down { color: #ff355e; padding-left:  1px; }
+
+/* svg inherits +color+ via +fill="currentColor"+; nothing more to set here. */
+.feedback-thumbs .thumb svg {
+    display: inline-block;
+}
+
+/* Only the directly-hovered thumb lights up. We deliberately do NOT raise
+   both thumbs on row-hover, because then every cursor pass over a row of
+   results would flicker dozens of widgets at once and overwhelm the eye;
+   restricting the bloom to the single targeted button keeps the page
+   calm and makes the chosen vote target unambiguous. */
 .feedback-thumbs .thumb:hover {
-    filter: none;
+    opacity: 1;
+}
+
+/* Set by JS immediately after an undo click and cleared on +mouseleave+.
+   Without it, undoing a vote would leave the thumb visually "still chosen"
+   (because the cursor is still on top of it and the +:hover+ rule wins) —
+   contradicting the freshly-undone state. The class wins on specificity
+   (0, 3, 1) > (0, 2, 1) so it overrides the plain hover rule. */
+.feedback-thumbs .thumb.suppress-hover:hover {
+    opacity: 0.28;
 }
 
 .feedback-thumbs .thumb:active {
     transform: scale(0.9);
 }
 
-.feedback-thumbs[data-feedback="up"] .thumb-up,
+/* Latched vote: the chosen direction stays at full opacity; the rejected
+   direction fades further so the current verdict is visually obvious even
+   without hover. */
+.feedback-thumbs[data-feedback="up"]   .thumb-up,
 .feedback-thumbs[data-feedback="down"] .thumb-down {
-    filter: none;
+    opacity: 1;
 }
 
-.feedback-thumbs[data-feedback="up"] .thumb-down,
+.feedback-thumbs[data-feedback="up"]   .thumb-down,
 .feedback-thumbs[data-feedback="down"] .thumb-up {
-    opacity: 0.25;
+    opacity: 0.2;
 }

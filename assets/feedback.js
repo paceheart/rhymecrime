@@ -10,11 +10,12 @@
 // The server adds timestamp / IP / user-agent.
 //
 // We store one entry per (cue, related) in sessionStorage; clicking the
-// already-active verdict is a no-op (kept simple for v1). Re-voting the
-// other direction overwrites the prior choice both locally and on the
-// server (which is append-only — every click produces a new row, so the
-// historical sequence is preserved on the backend even though the UI
-// shows the latest).
+// already-active verdict UNDOES the vote (clears local state and posts
+// verdict: "undo" so the audit trail records the retraction). Clicking
+// the other direction overwrites the prior choice both locally and on
+// the server (which is append-only — every click produces a new row, so
+// the historical sequence is preserved on the backend even though the
+// UI only shows the latest state).
 
 (function () {
   "use strict";
@@ -46,6 +47,23 @@
 
   function saveVote(cue, related, verdict) {
     sessionStorage.setItem(storageKey(cue, related), verdict);
+  }
+
+  function clearVote(cue, related) {
+    sessionStorage.removeItem(storageKey(cue, related));
+  }
+
+  // After an undo, the cursor is still on top of the button, so the +:hover+
+  // rule would keep the just-retracted thumb at full opacity — making the
+  // undo invisible until you move the mouse. We tag the button with a class
+  // that overrides the hover rule and tear the tag off the next time the
+  // cursor leaves the button, restoring normal hover behavior afterwards.
+  function suppressHoverUntilMouseLeave(button) {
+    button.classList.add("suppress-hover");
+    button.addEventListener("mouseleave", function handler() {
+      button.classList.remove("suppress-hover");
+      button.removeEventListener("mouseleave", handler);
+    });
   }
 
   function applyVoteState(widget, verdict) {
@@ -97,12 +115,22 @@
     const cue = widget.dataset.cue;
     const related = widget.dataset.related;
     if (!cue || !related) return;
-    const verdict = button.classList.contains("thumb-up") ? "up" : "down";
+    const clickedVerdict = button.classList.contains("thumb-up") ? "up" : "down";
+    // Clicking your own active thumb retracts the vote; clicking the other
+    // direction (or a fresh pair) lands a new verdict. We post the literal
+    // action that just happened ("undo" / "up" / "down") so the server log
+    // is a faithful click-stream rather than a normalized state diff.
+    const wasActive = loadVote(cue, related) === clickedVerdict;
+    const verdict = wasActive ? "undo" : clickedVerdict;
 
-    if (loadVote(cue, related) === verdict) return;
-
-    applyVoteState(widget, verdict);
-    saveVote(cue, related, verdict);
+    if (wasActive) {
+      applyVoteState(widget, null);
+      clearVote(cue, related);
+      suppressHoverUntilMouseLeave(button);
+    } else {
+      applyVoteState(widget, clickedVerdict);
+      saveVote(cue, related, clickedVerdict);
+    }
 
     postFeedback(cue, related, verdict).catch(function (err) {
       // Soft-fail: keep the optimistic UI state even on network error.
