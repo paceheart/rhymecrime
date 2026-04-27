@@ -1409,6 +1409,7 @@ def build_word_dict(cmudict, rdict, subtlex_hash, subtlex_total_hash, wordfreq_h
   word_dict = add_frequency_info(cmudict, subtlex_hash, subtlex_total_hash, wordfreq_hash, wiktionary_words, pos_map, forms_map, kaikki_verb_morph, original_cmudict_headwords, kaikki_capitalized_only)
   append_r_to_orthographic_r_pronunciations!(word_dict, label: "word_dict")
   insert_r_before_final_d_for_red_pronunciations!(word_dict, label: "word_dict")
+  insert_r_before_final_sibilant_for_s_pronunciations!(word_dict, label: "word_dict")
   merge_word_dict_pronunciations_into_rdict!(rdict, word_dict)
   emit_spelling_variants_auto!(word_dict, wordfreq_hash, kaikki_variant_map, varcon_variant_map)
   strip_dispreferred_headwords_from_rdict!(rdict, word_dict)

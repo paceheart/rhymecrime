@@ -1044,6 +1044,15 @@ describe 'RHYMES' do
     ought_not_rhyme 'lava', 'palaver'
     ought_not_rhyme 'kappa', 'zapper'
     ought_not_rhyme 'mecca', 'pecker'
+    context "even when followed by -s" do
+      ought_not_rhyme 'fascias', 'mashers'
+      ought_not_rhyme 'lavas', 'palavers'
+      ought_not_rhyme 'kappas', 'zappers'
+      ought_not_rhyme 'meccas', 'peckers'
+      ought_not_rhyme 'chandeliers', 'fizz'  # -er stem: chandelier + s
+      ought_not_rhyme 'cars', 'because'      # mixed: catches the non-rhotic 'K AA1 Z' variant
+      oughta_rhyme 'cars', 'stars'           # sanity: both rime AA R Z post-fix
+    end
     context "even when followed by -ed" do
       ought_not_rhyme 'jabbered', 'rabid'
       ought_not_rhyme 'gendered', 'splendid' # -er stem: gender + ed

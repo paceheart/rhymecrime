@@ -562,6 +562,57 @@ def red_inflection_r_stem(word, pron_hash)
   nil
 end
 
+# +-s+/+-es+ analog of +red_inflection_r_stem+. Returns the +-r+/+-re+-final stem of an +-s+ inflection
+# (+jabbers+ → +jabber+, +goitres+ → +goitre+, +abjures+ → +abjure+) or +nil+. No double-+r+ doubling
+# occurs before +-s+ (+stirs+ / +purrs+ inherit the doubling from their bare stems), so there's no
+# +rule-C+ peel — only +chomp("s")+ ending in +r+ or +re+. Headword-presence gate excludes loanword
+# plurals whose orthography happens to end in +rs+ but whose stem isn't lexicalized (+wilfreds+,
+# hypothetical +screds+, etc.).
+def s_plural_r_stem(word, pron_hash)
+  return nil unless word.length >= 4
+  return nil unless word.end_with?("s")
+  return nil if word.end_with?("ss") # mass nouns / adjectives, not -s plurals
+  stem = word[0..-2]
+  return nil if stem.length < 3
+  return stem if (stem.end_with?("r") || stem.end_with?("re")) && pron_hash.key?(stem)
+  nil
+end
+
+# Shared inner: locate the last non-boundary phoneme of +phs+ (must equal +final+, e.g. +"D"+ for +-ed+
+# or +%w[S Z]+ for +-s+), confirm the second-to-last is non-rhotic, AND confirm no +R+ appears in the
+# last 3 non-boundary phonemes. The K=3 +R+-lookback rejects loanword plurals like +halteres+, +flores+,
+# +mores+, +rivieres+, +torres+, +libres+, +entendres+, +oeuvres+, +louvres+ whose orthographic stem
+# ends in +-re+ but whose CMU pronunciation already exposes the stem's +R+ before a final +Z+ via an
+# unstressed vowel insertion (+R IY0 Z+, +R EY2 Z+, +R AH0 Z+); inserting another +R+ before the
+# +Z+ would produce a doubly-rhotic phoneme tail. The same guard incidentally fires on +jared+ in the
+# +-red+ helper (last 3 = +R AH0 D+), kicking out a known false positive of +red_inflection_r_stem+'s
+# rule A.
+#
+# Returns the index in +phs+ where +R+ should be inserted, or +nil+ to skip.
+def r_insertion_index_before_final(phs, final)
+  finals = final.is_a?(Array) ? final : [final]
+  last_idx = nil
+  prev_idx = nil
+  third_idx = nil
+  (phs.length - 1).downto(0) do |k|
+    next if phs[k].syllable_boundary?
+    if last_idx.nil?
+      last_idx = k
+    elsif prev_idx.nil?
+      prev_idx = k
+    else
+      third_idx = k
+      break
+    end
+  end
+  return nil if last_idx.nil?
+  return nil unless finals.include?(phs[last_idx])
+  return nil if prev_idx && RHOTIC_FINAL_PHONEMES.include?(phs[prev_idx])
+  return nil if prev_idx && phs[prev_idx] == "R"
+  return nil if third_idx && phs[third_idx] == "R"
+  last_idx
+end
+
 # When a headword is the +-ed+/+-d+ inflection of a known +-r+/+-re+-final stem (+jabber+ → +jabbered+,
 # +abjure+ → +abjured+, +debar+ → +debarred+) but a pronunciation lacks the rhotic right before the
 # final +D+, splice +R+ in. The mismatch comes from the same BrE / non-rhotic Wiktionary import that
@@ -581,23 +632,10 @@ def insert_r_before_final_d_for_red_pronunciations!(pron_hash, label:)
     word_changed = false
     prons.each_with_index do |pron, idx|
       next if pron.nil? || pron.empty?
-      phs = pron.phonemes
-      last_idx = nil
-      prev_idx = nil
-      (phs.length - 1).downto(0) do |k|
-        next if phs[k].syllable_boundary?
-        if last_idx.nil?
-          last_idx = k
-        else
-          prev_idx = k
-          break
-        end
-      end
-      next if last_idx.nil?
-      next unless phs[last_idx] == "D"
-      next if prev_idx && RHOTIC_FINAL_PHONEMES.include?(phs[prev_idx])
-      new_phs = phs.dup
-      new_phs.insert(last_idx, "R")
+      ins = r_insertion_index_before_final(pron.phonemes, "D")
+      next if ins.nil?
+      new_phs = pron.phonemes.dup
+      new_phs.insert(ins, "R")
       prons[idx] = Pronunciation.new(new_phs)
       fixed_prons += 1
       word_changed = true
@@ -607,6 +645,42 @@ def insert_r_before_final_d_for_red_pronunciations!(pron_hash, label:)
   end
   if fixed_prons > 0
     puts "Inserted R before final D in #{fixed_prons} pronunciations across #{fixed_words} -ed-after-r-stem headwords (#{label})"
+  end
+  fixed_prons
+end
+
+# +-s+ counterpart of +insert_r_before_final_d_for_red_pronunciations!+. When a headword is the +-s+
+# plural / 3sg of an +-r+/+-re+-final stem (+jabber+ → +jabbers+, +goitre+ → +goitres+, +abjure+ →
+# +abjures+) but a pronunciation lacks the rhotic right before the final +S+/+Z+, splice +R+ in. The
+# canonical post-fix form is +stem-pronunciation + Z+ (e.g. +JH AE1 . B AH0 R Z+ matching +jabber+
+# +(JH AE1 . B AH0 R)+).
+#
+# Same K=3 +R+-lookback as the +-red+ helper rejects internal-+R+ loanword plurals (+halteres+,
+# +flores+, +mores+, +rivieres+, +torres+, +libres+, +entendres+, +oeuvres+, +louvres+, +abares+,
+# +bures+ when its first variant is already +B EH1 R Z+).
+def insert_r_before_final_sibilant_for_s_pronunciations!(pron_hash, label:)
+  fixed_words = 0
+  fixed_prons = 0
+  pron_hash.each do |word, entry|
+    next if s_plural_r_stem(word, pron_hash).nil?
+    prons = entry.is_a?(Array) && entry.first.is_a?(Pronunciation) ? entry : entry[1]
+    next if prons.nil? || prons.empty?
+    word_changed = false
+    prons.each_with_index do |pron, idx|
+      next if pron.nil? || pron.empty?
+      ins = r_insertion_index_before_final(pron.phonemes, %w[S Z])
+      next if ins.nil?
+      new_phs = pron.phonemes.dup
+      new_phs.insert(ins, "R")
+      prons[idx] = Pronunciation.new(new_phs)
+      fixed_prons += 1
+      word_changed = true
+      dict_trace_puts(word, "insert_r_before_s: #{pron} → #{prons[idx]}") if dict_trace_word?(word)
+    end
+    fixed_words += 1 if word_changed
+  end
+  if fixed_prons > 0
+    puts "Inserted R before final S/Z in #{fixed_prons} pronunciations across #{fixed_words} -s-after-r-stem headwords (#{label})"
   end
   fixed_prons
 end
@@ -649,6 +723,7 @@ def rebuild_rhymecrime_dictionaries()
   puts "Removed #{hyp_cmudict_edge} cmudict headwords with a leading or trailing '-'" if hyp_cmudict_edge > 0
   append_r_to_orthographic_r_pronunciations!(cmudict, label: "cmudict")
   insert_r_before_final_d_for_red_pronunciations!(cmudict, label: "cmudict")
+  insert_r_before_final_sibilant_for_s_pronunciations!(cmudict, label: "cmudict")
   rdict = build_rime_dict(cmudict)
   word_dict = build_word_dict(cmudict, rdict, subtlex_hash, subtlex_total_hash, wordfreq_hash, wiktionary_words, pos_map, forms_map, kaikki_verb_morph, original_cmudict_headwords, kaikki_capitalized_only, kaikki_variant_map, varcon_variant_map)
   prune_obsolete_alt_of_only_headwords!(word_dict, rdict, kaikki_obsolete_alt_of_only)
