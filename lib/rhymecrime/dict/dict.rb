@@ -46,6 +46,28 @@ require_relative "corpus_variants"
 
 $inflection_base_words = {}
 
+# Per-headword frequency-propagation provenance, populated by the Phase 8..11 / g-drop
+# inheritance branches in +frequency.rb+ and consumed by +rarity_rescore_and_dump!+ in
+# +rarity_classifier.rb+ to fill the corresponding +RaritySignals+ fields. Cleared at the
+# top of each +load_word_dict+ rebuild (no cross-build leakage).
+#
+# Shape: +{ surface => { phase: Symbol, donor: String, donor_anchored: Boolean } }+.
+# +phase+ ∈ +RARITY_FREQ_SOURCE_PHASES+. +donor_anchored+ records whether the donor base
+# carried independent corpus / lexical evidence at inheritance time (+common_words+,
+# WordNet entry, neol membership, or Zipf ≥ +WORDFREQ_COMMON_ZIPF+) — same notion used
+# by Phase 8's +base_has_real_anchor+ gate. The classifier reads it as
+# +received_donor_from_common_base_flag+.
+$freq_propagation_metadata = {}
+
+def record_freq_propagation!(surface, phase:, donor:, donor_anchored:)
+  return unless surface
+  $freq_propagation_metadata[surface] = {
+    phase: phase,
+    donor: donor,
+    donor_anchored: !!donor_anchored,
+  }
+end
+
 # Lazy path -> frozen Hash of 8-digit synset offset string -> full data-file line (+wn_synset_line_for_offset+).
 $wn_synset_line_index_by_path = nil
 
@@ -77,6 +99,7 @@ end
 def wn_accept_inflection_lemma_pair?(word, base)
   wn_share_synset?(word, base) ||
     wn_verb_stem_via_morphy?(word, base) ||
+    wn_noun_plural_via_morphy?(word, base) ||
     wn_productive_affix_lemma_pair?(word, base) ||
     wn_derivationally_related_to_base?(word, base)
 end
@@ -478,6 +501,116 @@ def prune_obsolete_alt_of_only_headwords!(word_dict, rdict, obsolete_alt_of_only
   dropped
 end
 
+# Phonemes that satisfy the orthographic-+r+/rhotic-final invariant.
+# +ER0/1/2+ are kept here defensively even though +apply_shared_arphabet_phoneme_string_normalizations+
+# splits +ER+ into +AH + R+ — some inputs (Inflect-derived prons, Kaikki forms) are constructed
+# token-by-token and bypass that string-level pass, so they may still arrive ER-final at this point.
+RHOTIC_FINAL_PHONEMES = %w[R ER0 ER1 ER2].to_set.freeze
+
+# When a headword's spelling ends in +r+ but a pronunciation's last non-boundary phoneme isn't
+# rhotic, append +R+ so the entry rhymes with its canonical-rhotic siblings (dasher / masher,
+# butter / brother, bar / upbar). The mismatch is overwhelmingly imported BrE non-rhotic Wiktionary
+# transcriptions where final +-r+ surfaces as schwa (+M AE1 . SH AH0+); the codebase's convention
+# (see +phonology.rb+'s +ER0 → AH0 R+ rewrite) is +vowel + R+, so a trailing +R+ is what's missing.
+#
+# Mutates +pron_hash+ (a +{word => [Pronunciation]}+ map: +cmudict+ before +build_rime_dict+, then
+# +word_dict+ entries +[freq, prons, ...]+ before +merge_word_dict_pronunciations_into_rdict!+).
+# Returns the number of pronunciations that were patched.
+def append_r_to_orthographic_r_pronunciations!(pron_hash, label:)
+  fixed_words = 0
+  fixed_prons = 0
+  pron_hash.each do |word, entry|
+    next unless word.end_with?("r")
+    prons = entry.is_a?(Array) && entry.first.is_a?(Pronunciation) ? entry : entry[1]
+    next if prons.nil? || prons.empty?
+    word_changed = false
+    prons.each_with_index do |pron, idx|
+      next if pron.nil? || pron.empty?
+      last = pron.phonemes.reverse.find { |p| !p.syllable_boundary? }
+      next if last.nil? || RHOTIC_FINAL_PHONEMES.include?(last)
+      prons[idx] = Pronunciation.new(pron.phonemes + ["R"])
+      fixed_prons += 1
+      word_changed = true
+      dict_trace_puts(word, "append_r: #{pron} → #{prons[idx]}") if dict_trace_word?(word)
+    end
+    fixed_words += 1 if word_changed
+  end
+  if fixed_prons > 0
+    puts "Appended R to #{fixed_prons} pronunciations across #{fixed_words} -r-final headwords (#{label})"
+  end
+  fixed_prons
+end
+
+# Identify the +-r+/+-re+-final stem of an +-ed+/+-d+ inflection by trying three peelings in order
+# and accepting the first one whose stem is a known headword in +pron_hash+. Returns the stem string
+# or +nil+. The headword-presence gate is what blocks the false-positive cohort that pure
+# orthographic +"ends in red"+ matching falls into: +bred+ / +cred+ / +shred+ / +fred+ / +dred+ /
+# +red+ / +infrared+ / +interbred+ / +purebred+ / +thoroughbred+ / +unbred+ / +antired+ / +wilfred+ /
+# +winfred+ — none of their candidate stems (+br+, +cr+, +shr+, +infrar+, +wilfr+, …) appear in
+# the lexicon, so we never mistake them for past tenses of an +-r+-stem verb.
+def red_inflection_r_stem(word, pron_hash)
+  return nil unless word.length >= 5
+  return nil unless word.end_with?("d")
+  if word.end_with?("ed")
+    stem_a = word[0..-3]
+    return stem_a if stem_a.length >= 3 && stem_a.end_with?("r") && pron_hash.key?(stem_a)
+    stem_c = word[0..-4]
+    return stem_c if stem_c.length >= 3 && stem_c.end_with?("r") && pron_hash.key?(stem_c)
+  end
+  stem_b = word[0..-2]
+  return stem_b if stem_b.length >= 3 && stem_b.end_with?("re") && pron_hash.key?(stem_b)
+  nil
+end
+
+# When a headword is the +-ed+/+-d+ inflection of a known +-r+/+-re+-final stem (+jabber+ → +jabbered+,
+# +abjure+ → +abjured+, +debar+ → +debarred+) but a pronunciation lacks the rhotic right before the
+# final +D+, splice +R+ in. The mismatch comes from the same BrE / non-rhotic Wiktionary import that
+# produces +-r+-final schwa drops (+jabbered+ → +JH AE1 . B AH0 D+); the canonical past-tense form is
+# +stem-pronunciation + D+, e.g. +JH AE1 . B AH0 R D+ to match +jabber+ +(JH AE1 . B AH0 R)+.
+#
+# Mutates +pron_hash+ entries +(cmudict: word => [Pronunciation], word_dict: word => [freq, prons, …])+.
+# Independent of the +-r+-final pass: stem identification keys off orthography + presence in the hash,
+# not off any pron's phoneme content.
+def insert_r_before_final_d_for_red_pronunciations!(pron_hash, label:)
+  fixed_words = 0
+  fixed_prons = 0
+  pron_hash.each do |word, entry|
+    next if red_inflection_r_stem(word, pron_hash).nil?
+    prons = entry.is_a?(Array) && entry.first.is_a?(Pronunciation) ? entry : entry[1]
+    next if prons.nil? || prons.empty?
+    word_changed = false
+    prons.each_with_index do |pron, idx|
+      next if pron.nil? || pron.empty?
+      phs = pron.phonemes
+      last_idx = nil
+      prev_idx = nil
+      (phs.length - 1).downto(0) do |k|
+        next if phs[k].syllable_boundary?
+        if last_idx.nil?
+          last_idx = k
+        else
+          prev_idx = k
+          break
+        end
+      end
+      next if last_idx.nil?
+      next unless phs[last_idx] == "D"
+      next if prev_idx && RHOTIC_FINAL_PHONEMES.include?(phs[prev_idx])
+      new_phs = phs.dup
+      new_phs.insert(last_idx, "R")
+      prons[idx] = Pronunciation.new(new_phs)
+      fixed_prons += 1
+      word_changed = true
+      dict_trace_puts(word, "insert_r_before_d: #{pron} → #{prons[idx]}") if dict_trace_word?(word)
+    end
+    fixed_words += 1 if word_changed
+  end
+  if fixed_prons > 0
+    puts "Inserted R before final D in #{fixed_prons} pronunciations across #{fixed_words} -ed-after-r-stem headwords (#{label})"
+  end
+  fixed_prons
+end
+
 def rebuild_rhymecrime_dictionaries()
   clear_wordnet_lemma_cache!
   ensure_conceptnet_lemma_cache_for_build!
@@ -514,6 +647,8 @@ def rebuild_rhymecrime_dictionaries()
   delete_explicitly_forbidden_keys_from_hash(cmudict)
   hyp_cmudict_edge = delete_headwords_with_edge_hyphen!(cmudict)
   puts "Removed #{hyp_cmudict_edge} cmudict headwords with a leading or trailing '-'" if hyp_cmudict_edge > 0
+  append_r_to_orthographic_r_pronunciations!(cmudict, label: "cmudict")
+  insert_r_before_final_d_for_red_pronunciations!(cmudict, label: "cmudict")
   rdict = build_rime_dict(cmudict)
   word_dict = build_word_dict(cmudict, rdict, subtlex_hash, subtlex_total_hash, wordfreq_hash, wiktionary_words, pos_map, forms_map, kaikki_verb_morph, original_cmudict_headwords, kaikki_capitalized_only, kaikki_variant_map, varcon_variant_map)
   prune_obsolete_alt_of_only_headwords!(word_dict, rdict, kaikki_obsolete_alt_of_only)

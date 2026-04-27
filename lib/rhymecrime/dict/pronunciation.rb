@@ -101,25 +101,60 @@ class Pronunciation
     self.class.new(out)
   end
 
-  # GA intervocalic flapping: singleton T between a sonorant (vowel / R) and an
-  # unstressed vowel merges with D. Pre-nasal T (kitten, tighten) is excluded
-  # because it surfaces as a glottal stop, not a flap.
+  # GA intervocalic flapping: singleton T between a sonorant (vowel / R) and a
+  # *reduced* vowel merges with D. Pre-nasal T (kitten, tighten) is excluded
+  # because it surfaces as a glottal stop, not a flap. Both this full-pron pass
+  # and the rime-level pass below share +flap_t_target?+ — the linguistic rule.
   def with_flapped_t
     return self if empty?
     out = @phonemes.dup
     changed = false
     out.each_with_index do |phoneme, i|
-      next unless phoneme == "T"
-      prev = (i > 0) ? out[i - 1] : nil
-      next unless prev && (prev.vowel? || prev == "R")
-      nxt = (i < out.length - 1) ? out[i + 1] : nil
-      next unless nxt && nxt.vowel? && (nxt.include?("0") || nxt.include?("2"))
-      after_nxt = (i < out.length - 2) ? out[i + 2] : nil
-      next if after_nxt == "N"
+      next unless Pronunciation.flap_t_target?(out, i)
       out[i] = Phoneme.intern("D")
       changed = true
     end
     changed ? self.class.new(out) : self
+  end
+
+  # Bases of the flap-permissible (reduced) ARPAbet vowels: schwa /ə/ (AH0),
+  # lax /ɪ/ (IH0), and morpheme-final/prevocalic /i, oʊ/ (IY/OW). Other vowels —
+  # UW (tutu, bluetooth), EY (retail), AA/AO (botox, blowtorch), EH (latex), AW
+  # (whiteout, baytown — also blocked separately by the pre-N glottal carve-out),
+  # AY/OY/AE — do not reduce, so flapping is blocked when CMU marks the post-T
+  # vowel with secondary stress in those classes. See Wikipedia on Flapping
+  # (Distribution): "the vowel following the flap must … be a reduced one
+  # (namely /ə/, morpheme-final or prevocalic /i, oʊ/, or /ɪ/ preceding /ŋ/, /k/,
+  # etc.), so words like botox, retail, and latex are not flapped …"
+  FLAP_T_REDUCIBLE_BASES = %w[AH IH IY OW].to_set.freeze
+
+  # Should the +T+ at +phonemes[i]+ flap to +D+? Operates on stress-bearing
+  # phonemes (no syllable dots) — both +with_flapped_t+ (flat pron) and
+  # +flap_t_in_rime+ (rime with stress preserved) feed it the right shape.
+  def self.flap_t_target?(phonemes, i)
+    return false unless phonemes[i] == "T"
+    prev = (i > 0) ? phonemes[i - 1] : nil
+    return false unless prev && (prev.vowel? || prev == "R")
+    nxt = (i < phonemes.length - 1) ? phonemes[i + 1] : nil
+    return false unless nxt && nxt.vowel?
+    after_nxt = (i < phonemes.length - 2) ? phonemes[i + 2] : nil
+    # Pre-nasal T (kitten, tighten) glottalizes, doesn't flap.
+    return false if after_nxt == "N"
+    base = nxt.tr("0-2", "")
+    return false unless FLAP_T_REDUCIBLE_BASES.include?(base)
+    if nxt.include?("0")
+      true
+    elsif nxt.include?("2")
+      # Stress-2 only flaps when /i, oʊ/ sit at a morpheme-final or prevocalic
+      # right edge — the potato/tomato OW2 case. Schwa never carries stress 2,
+      # and IH2 in this slot is vanishingly rare; restricting to IY/OW keeps
+      # the rule honest. (CMU's /uː/ tutu/bluetooth UW2 is full vowel and is
+      # already excluded above by the base check.)
+      (base == "IY" || base == "OW") && (after_nxt.nil? || after_nxt.vowel?)
+    else
+      # Stress 1 — never flap.
+      false
+    end
   end
 
   def rime_array
@@ -129,25 +164,22 @@ class Pronunciation
                     [].freeze
                   else
                     raw = rime_array_with_stress("1") || rime_array_with_stress("2") || rime_array_with_stress("0") or raise RuntimeError, "Pronunciation with no vowels: #{self}"
-                    flap_t_in_rime(raw).freeze
+                    flapped = flap_t_in_rime(raw)
+                    flapped.map { |p| Phoneme.intern(p.tr("0-2", "")) }.freeze
                   end
   end
 
   ARPABET_VOWELS = %w[AA AE AH AO AW AY EH EY IH IY OW OY UH UW].to_set
 
-  # T→D in the rime only (stress already stripped). AY+T+AH always merges here
-  # so recital/suicidal share a bucket; +with_flapped_t+ may still keep lexical T for rsyll.
+  # T→D in the rime, applied while stress digits are still attached so we can
+  # honor the reducibility rule (see +flap_t_target?+). +rime_array+ strips
+  # stress after this pass. AY+T+AH0 still merges here for recital/suicidal
+  # because AH0 is reducible; UW1+T+UW2 in tutu correctly does not, so the
+  # rime is +UW_T_UW+ rather than collapsing into voodoo's +UW_D_UW+.
   def flap_t_in_rime(rime)
     out = rime.dup
     out.each_with_index do |phoneme, i|
-      next unless phoneme == "T"
-      prev = (i > 0) ? out[i - 1] : nil
-      next unless prev && (ARPABET_VOWELS.include?(prev) || prev == "R")
-      nxt = (i < out.length - 1) ? out[i + 1] : nil
-      next unless nxt && ARPABET_VOWELS.include?(nxt)
-      after_nxt = (i < out.length - 2) ? out[i + 2] : nil
-      next if after_nxt == "N"
-      out[i] = Phoneme.intern("D")
+      out[i] = Phoneme.intern("D") if Pronunciation.flap_t_target?(out, i)
     end
     out
   end
@@ -156,7 +188,7 @@ class Pronunciation
     rime = Array.new
     @phonemes.reverse.each { |phoneme|
       unless(phoneme.syllable_boundary?)
-        rime.unshift(phoneme.tr("0-2", "")) # we need to remove the numbers
+        rime.unshift(phoneme) # stress digits stay; +rime_array+ strips after the flap pass
         if(phoneme.include?(stress))
           return rime # we found the phoneme with stress STRESS, we can stop now
         end

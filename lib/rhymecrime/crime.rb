@@ -30,6 +30,7 @@ require_relative "data_source"
 require_relative "dict/utils_rhyme"
 require_relative "dict/phoneme.rb"
 require_relative "dict/inflect"
+require_relative "dict/lexical"
 require_relative "dict/pronunciation.rb"
 require "memery"
 
@@ -747,6 +748,22 @@ end
 # + +healthy+ and both share the +HH EH L TH IY+ rsyll. Does not touch independent
 # same-pron homophones (+coral+/+choral+, +flour+/+flower+) since neither is a prefix
 # derivation of the other.
+#
+# Gated on +gloss_cites_base?+ for prefixes in +GLOSS_GATED_PREFIXES+ only.
+# Productive prefixes (+un+, +re+, +non+, +dis+, +mis+, ...) almost always
+# produce true derivations and we always collapse for those — WordNet glosses
+# for productive negations/repetitions describe the meaning with synonyms
+# rather than citing the base, so the gloss-citation signal is too noisy to
+# use as a gate (40-60% false-negative rate per a +un-+ sweep). The gate
+# applies to prefixes that frequently produce *lexicalized* compounds, where
+# the prefix+base surface masks an idiomatic meaning that should NOT be
+# rhyme-collapsed — +sub-+ being the headline case (+submarine+ vs +marine+,
+# +subway+ vs +way+, +subdue+ vs +due+, +submerge+ vs +merge+, +subscribe+
+# vs +scribe+, +subtract+ vs +tract+). Productive +sub-+ derivations
+# (+subset+, +submenu+, +subgroup+) cite their base in the gloss and still
+# collapse correctly.
+GLOSS_GATED_PREFIXES = Set["sub"].freeze
+
 def condense_tuple_derived_forms(tup)
   return tup if tup.size < 2
   rsyll_set_of = {}
@@ -760,16 +777,153 @@ def condense_tuple_derived_forms(tup)
       next if dropped.include?(base)
       next if (rsyll_set_of[derived] & rsyll_set_of[base]).empty?
       COMMON_PREFIXES.each do |prefix|
-        if derived.start_with?(prefix) && derived[prefix.length..] == base
-          dropped << derived
-          break
+        next unless derived.start_with?(prefix) && derived[prefix.length..] == base
+        if GLOSS_GATED_PREFIXES.include?(prefix)
+          next unless gloss_cites_base?(derived, base)
         end
+        dropped << derived
+        break
       end
       break if dropped.include?(derived)
     end
   end
   return tup if dropped.empty?
   tup - dropped.to_a
+end
+
+# Per-word cache of tokenized lowercase WordNet gloss text. Built lazily on
+# first miss; persists for the lifetime of the process. WN access is wrapped
+# so a missing or unconfigured WN install yields an empty token list rather
+# than crashing the rhyme pipeline (the caller +gloss_cites_base?+ treats
+# empty-as-collapse, so the prefix rule still fires unchanged in that case).
+# Per-word cache of WN derivationally-related lemmas (lowercase). Built lazily
+# from +wn_derivation_target_lemmas_for_word+; empty when WN is unconfigured
+# or the helper isn't loaded, in which case the citation check just falls
+# back to surface-form / inflectional matching.
+$gloss_deriv_targets_cache = {}
+def gloss_deriv_targets_for_word(word)
+  return Set.new if word.nil? || word.to_s.empty?
+
+  key = word.to_s.downcase
+  cached = $gloss_deriv_targets_cache[key]
+  return cached unless cached.nil?
+
+  Inflect.configure_wordnet_db_path! if defined?(Inflect)
+  targets =
+    begin
+      if defined?(WordNet::Lemma) &&
+          defined?(WordNet::DB) && !WordNet::DB.path.to_s.empty? &&
+          respond_to?(:wn_derivation_target_lemmas_for_word, true)
+        Set.new(wn_derivation_target_lemmas_for_word(key).map(&:to_s).map(&:downcase))
+      else
+        Set.new
+      end
+    rescue StandardError
+      Set.new
+    end
+  $gloss_deriv_targets_cache[key] = targets.freeze
+end
+
+$gloss_tokens_cache = {}
+def gloss_tokens_for_word(word)
+  cached = $gloss_tokens_cache[word]
+  return cached unless cached.nil?
+
+  Inflect.configure_wordnet_db_path! if defined?(Inflect)
+  tokens =
+    begin
+      if defined?(WordNet::Lemma) &&
+          defined?(WordNet::DB) && !WordNet::DB.path.to_s.empty?
+        # Plurals/inflected forms (+submarines+, +rewrites+) don't have their
+        # own WN gloss entries — the lemma owns the gloss. Try the surface
+        # form first, then fall back to +lemma(word)+ so +submarines+'s
+        # citation check still consults +submarine+'s "submersible warship"
+        # gloss instead of returning empty (which would default-collapse).
+        forms = [word.to_s.downcase]
+        lem = lemma(word.to_s.downcase) rescue nil
+        forms << lem if lem && !forms.include?(lem)
+        glosses = nil
+        forms.each do |f|
+          g = WordNet::Lemma.find_all(f).flat_map { |l| l.synsets.map(&:gloss) }
+          if !g.empty?
+            glosses = g
+            break
+          end
+        end
+        if glosses
+          glosses.join(" ").downcase.scan(/[a-z]+/).freeze
+        else
+          [].freeze
+        end
+      else
+        [].freeze
+      end
+    rescue StandardError
+      [].freeze
+    end
+  $gloss_tokens_cache[word] = tokens
+end
+
+# True iff +derived+'s WordNet gloss(es) cite +base+ (the base spelling, any
+# +Inflect.each_derivable_form+ surface, or — when +base.length >= 5+ — any
+# gloss token that shares the base's first 4 characters; the stem-prefix
+# branch lets +unhealthy+'s gloss "not in good health" cite +healthy+ via
+# the token "health"). The derived word's self-mention (+unhealthy+ in
+# +unhealthy+'s own gloss) is filtered out so +unhappy+'s gloss "experiencing
+# ... unhappy ..." can't trivially "cite" +happy+ via its own surface.
+#
+# Conservative on the no-signal side: when WordNet has no gloss for
+# +derived+ (proper nouns, +bedecked+, +into+), we return +true+ so the
+# existing +condense_tuple_derived_forms+ behavior is preserved.
+def gloss_cites_base?(derived, base)
+  tokens = gloss_tokens_for_word(derived)
+  return true if tokens.empty?
+
+  derived_lc = derived.to_s.downcase
+  base_lc = base.to_s.downcase
+
+  # Accept set construction:
+  #  1. base spelling and its lemma
+  #  2. their +Inflect.each_derivable_form+ surfaces (handles +restarts+ vs
+  #     +starts+: lemma-fallback gloss "start an engine again" cites +start+)
+  #  3. WN derivationally-related lemmas of base, *but only the
+  #     spelling-adjacent ones* (sharing a 4-char prefix with the base
+  #     lemma). +marine+'s WN derivations include +sea+, which is the
+  #     conceptual root but not a morphological cousin — accepting +sea+
+  #     would let submarine's 3rd-sense gloss ("attack ... beneath the
+  #     surface of the sea") falsely cite +marine+. The
+  #     spelling-adjacency filter keeps +kindness+/+kindly+ (citing +kind+)
+  #     while rejecting +sea+/+navigation+ (peripheral to +marine+).
+  accept = Set[base_lc]
+  base_lemma = (lemma(base_lc) rescue nil)
+  accept << base_lemma if base_lemma
+  if defined?(Inflect)
+    [base_lc, base_lemma].compact.uniq.each do |seed|
+      Inflect.each_derivable_form(seed) { |f| accept << f.downcase }
+    end
+  end
+  stem_seed = base_lemma || base_lc
+  spelling_adjacent_stem = stem_seed.length >= 4 ? stem_seed[0, 4] : nil
+  if spelling_adjacent_stem
+    [base_lc, base_lemma].compact.uniq.each do |seed|
+      gloss_deriv_targets_for_word(seed).each do |t|
+        accept << t if t.length >= 4 && t.start_with?(spelling_adjacent_stem)
+      end
+    end
+  end
+
+  # Stem prefix check (orthographic fallback): any gloss token sharing the
+  # base lemma's first 4 chars counts as a citation. Lowered from len>=5 so
+  # +kind+'s gloss-citation in +unkind+ matches the token "kindness" (which
+  # is also a WN deriv-target, but the stem check covers it without
+  # depending on WN being loaded).
+  stem = stem_seed.length >= 4 ? stem_seed[0, 4] : nil
+
+  tokens.any? do |t|
+    next false if t == derived_lc
+    next true if accept.include?(t)
+    !stem.nil? && t.length >= stem.length && t.start_with?(stem)
+  end
 end
 
 # Within a single rhyming tuple, break homophone clusters down to one winner.

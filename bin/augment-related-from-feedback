@@ -1,0 +1,160 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+# encoding: UTF-8
+#
+# Importer: fold thumbs-up/down clicks from +generated/feedback.csv+ into
+# +spec/related.csv+ as new hand-tag rows. Mirrors the +DynamoFeedbackStore+
+# +Scan+ → CSV importer story documented in +lib/rhymecrime/feedback_store.rb+,
+# but for the local CSV sink. Idempotent: pairs already present in
+# +spec/related.csv+ (lowercased exact match on +cue+/+related+) are left
+# untouched, so re-running after another play session only appends genuinely
+# new pairs.
+#
+# Aggregation:
+#   1. Replay each session's events in timestamp order through a tiny state
+#      machine — +up+ / +down+ set the active verdict, +undo+ clears it. The
+#      retained-but-meaningful +undo+ rows in the audit trail (per the
+#      +VALID_VERDICTS+ comment in +feedback_store.rb+) are what makes the
+#      replay accurate: a +down+ that was later +undo+'d does not count as a
+#      negative vote.
+#   2. After the replay, each (session, cue, related) cell ends in {up, down,
+#      none}. Tally the up/down sessions per pair across sessions.
+#   3. Map the tally to the +oughta be related?+ column:
+#        up_sessions > down_sessions   → "related"
+#        down_sessions > up_sessions   → "unrelated"
+#        tie / zero / pure-undo        → skipped (left untagged; a human can
+#                                        sweep them via the active-learning
+#                                        scripts later)
+#      We intentionally never emit +related_ish+ — that label captures human
+#      nuance the thumbs UI can't express, and inferring it would silently
+#      degrade the training signal.
+#
+# Knobs (env vars):
+#   FEEDBACK_CSV   path     (default: generated/feedback.csv)
+#   RELATED_CSV    path     (default: spec/related.csv)
+#   DRY_RUN        truthy   if set, print the planned diff and exit without
+#                           touching the file
+#
+# Usage:
+#   bundle exec bin/augment-related-from-feedback
+#   DRY_RUN=1 bundle exec bin/augment-related-from-feedback
+
+Encoding.default_external = Encoding::UTF_8
+
+require "csv"
+require "set"
+require "time"
+
+ROOT = File.expand_path("..", __dir__)
+FEEDBACK_CSV = ENV["FEEDBACK_CSV"] || File.join(ROOT, "generated", "feedback.csv")
+RELATED_CSV  = ENV["RELATED_CSV"]  || File.join(ROOT, "spec", "related.csv")
+DRY_RUN = !ENV["DRY_RUN"].to_s.strip.empty? && ENV["DRY_RUN"] != "0"
+
+unless File.file?(FEEDBACK_CSV)
+  warn "no feedback file at #{FEEDBACK_CSV}; nothing to import"
+  exit 0
+end
+unless File.file?(RELATED_CSV)
+  warn "missing #{RELATED_CSV}; refusing to create from scratch"
+  exit 1
+end
+
+def norm(s)
+  s.to_s.strip.downcase
+end
+
+def load_existing_pairs(path)
+  seen = Set.new
+  CSV.foreach(path, headers: true, encoding: "UTF-8") do |row|
+    cue = norm(row["cue"])
+    rel = norm(row["related"])
+    next if cue.empty? || rel.empty?
+    seen << [cue, rel]
+  end
+  seen
+end
+
+# Stream feedback rows into a per-(session, cue, related) ordered event list.
+# We bucket by session before sorting because timestamps across sessions are
+# not directly comparable (different clocks, parallel users) — only the
+# sequence within a single session encodes the user's intent for the state
+# machine.
+def replay_feedback(path)
+  by_cell = Hash.new { |h, k| h[k] = [] }
+  CSV.foreach(path, headers: true, encoding: "UTF-8") do |row|
+    cue = norm(row["cue"])
+    rel = norm(row["related"])
+    verdict = norm(row["verdict"])
+    session = row["session"].to_s
+    ts = row["timestamp"].to_s
+    next if cue.empty? || rel.empty?
+    next unless %w[up down undo].include?(verdict)
+    by_cell[[session, cue, rel]] << [ts, verdict]
+  end
+
+  # pair -> { up: Integer, down: Integer }
+  pair_tally = Hash.new { |h, k| h[k] = { up: 0, down: 0 } }
+  by_cell.each do |(_session, cue, rel), events|
+    state = nil
+    events.sort_by! { |ts, _| ts }
+    events.each do |_ts, v|
+      case v
+      when "up"   then state = :up
+      when "down" then state = :down
+      when "undo" then state = nil
+      end
+    end
+    next if state.nil?
+    pair_tally[[cue, rel]][state] += 1
+  end
+  pair_tally
+end
+
+existing = load_existing_pairs(RELATED_CSV)
+warn "loaded #{existing.size} existing (cue, related) pairs from #{RELATED_CSV}"
+
+tally = replay_feedback(FEEDBACK_CSV)
+warn "replayed feedback into #{tally.size} pair-level tallies from #{FEEDBACK_CSV}"
+
+new_rows = []
+skipped_existing = 0
+skipped_ambiguous = 0
+tally.sort.each do |(cue, rel), counts|
+  if existing.include?([cue, rel])
+    skipped_existing += 1
+    next
+  end
+  ups = counts[:up]
+  downs = counts[:down]
+  verdict =
+    if ups > downs then "related"
+    elsif downs > ups then "unrelated"
+    else
+      skipped_ambiguous += 1
+      next
+    end
+  notes = "feedback: #{ups} up / #{downs} down"
+  new_rows << [cue, rel, verdict, notes]
+end
+
+warn "new rows: #{new_rows.size}  (skipped: #{skipped_existing} already-tagged, #{skipped_ambiguous} ambiguous)"
+
+if new_rows.empty?
+  warn "nothing to append"
+  exit 0
+end
+
+if DRY_RUN
+  warn "DRY_RUN: would append the following rows to #{RELATED_CSV}"
+  new_rows.each { |r| puts r.to_csv }
+  exit 0
+end
+
+# +CSV.open+ in "a" mode would handle quoting for us, but +spec/related.csv+
+# was hand-written and most existing rows are unquoted; we match that style
+# only when no special chars need escaping, otherwise let +CSV+ quote.
+CSV.open(RELATED_CSV, "a", encoding: "UTF-8") do |csv|
+  new_rows.each { |r| csv << r }
+end
+
+warn "appended #{new_rows.size} rows to #{RELATED_CSV}"

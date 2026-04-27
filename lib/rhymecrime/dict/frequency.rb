@@ -642,11 +642,13 @@ def phase9_inherit_once!(word, listed, forward, hash, rare_words, common_words, 
     return false
   end
   entry[0] = donor
+  record_freq_propagation!(word, phase: :phase9, donor: base, donor_anchored: true)
   dict_trace_puts(word, "Phase9: set freq=#{donor} via listed=#{listed} base=#{base} infl=#{infl} suffix=#{inflection_suffix_kind}") if tr
   true
 end
 
 def add_frequency_info(cmudict, subtlex_hash, subtlex_total_hash, wordfreq_hash, wiktionary_words, pos_map, forms_map, kaikki_verb_morph = nil, original_cmudict_headwords = nil, kaikki_capitalized_only = nil)
+  $freq_propagation_metadata = {}
   count = 0
   hash = Hash.new
   rare_words = load_word_list_set(RARE_WORDS_FILENAME)
@@ -906,7 +908,8 @@ def add_frequency_info(cmudict, subtlex_hash, subtlex_total_hash, wordfreq_hash,
       next
     end
     hash[inflected][0] = base_freq
-    dict_trace_puts(inflected, "Phase8 ← #{base}: inherited freq=#{base_freq} suffix=#{inflection_suffix_kind}") if tr
+    record_freq_propagation!(inflected, phase: :phase8, donor: base, donor_anchored: base_has_real_anchor)
+    dict_trace_puts(inflected, "Phase8 ← #{base}: inherited freq=#{base_freq} suffix=#{inflection_suffix_kind} anchored=#{base_has_real_anchor}") if tr
     inherited += 1
   end
   puts "#{inherited} inflected forms inherited frequency from base words" if inherited > 0
@@ -1061,6 +1064,7 @@ def add_frequency_info(cmudict, subtlex_hash, subtlex_total_hash, wordfreq_hash,
           hash[w] = [donor, morph_derived_prons_for_promotion(base_prons, base, w)]
           dict_trace_puts(w, "Phase10 ← #{base}: new row freq=#{donor} suffix=#{inflection_suffix_kind}") if tr
         end
+        record_freq_propagation!(w, phase: :phase10, donor: base, donor_anchored: true)
         round += 1
         morph_inherited += 1
       end
@@ -1276,6 +1280,7 @@ def add_frequency_info(cmudict, subtlex_hash, subtlex_total_hash, wordfreq_hash,
           dict_trace_puts(w, "Phase11 ← #{base}: skip (not :s and !corpus_ok)") if tr
           next
         end
+        record_freq_propagation!(w, phase: :phase11, donor: base, donor_anchored: base_has_real_anchor)
         round += 1
         morph_corpus += 1
       end
@@ -1299,6 +1304,7 @@ def add_frequency_info(cmudict, subtlex_hash, subtlex_total_hash, wordfreq_hash,
     base_entry = hash[base]
     next unless base_entry && base_entry[0] > 0
     hash[word][0] = [base_entry[0], RARE_FREQ_MAX].min
+    record_freq_propagation!(word, phase: :gdrop, donor: base, donor_anchored: true)
     gdrop_inherited += 1
   end
   puts "#{gdrop_inherited} -in' g-drop surfaces inherited frequency from -ing base (rare-capped)" if gdrop_inherited > 0
@@ -1401,6 +1407,8 @@ end
 def build_word_dict(cmudict, rdict, subtlex_hash, subtlex_total_hash, wordfreq_hash, wiktionary_words, pos_map, forms_map, kaikki_verb_morph = nil, original_cmudict_headwords = nil, kaikki_capitalized_only = nil, kaikki_variant_map = nil, varcon_variant_map = nil)
   cmudict = filter_cmudict(cmudict, rdict)
   word_dict = add_frequency_info(cmudict, subtlex_hash, subtlex_total_hash, wordfreq_hash, wiktionary_words, pos_map, forms_map, kaikki_verb_morph, original_cmudict_headwords, kaikki_capitalized_only)
+  append_r_to_orthographic_r_pronunciations!(word_dict, label: "word_dict")
+  insert_r_before_final_d_for_red_pronunciations!(word_dict, label: "word_dict")
   merge_word_dict_pronunciations_into_rdict!(rdict, word_dict)
   emit_spelling_variants_auto!(word_dict, wordfreq_hash, kaikki_variant_map, varcon_variant_map)
   strip_dispreferred_headwords_from_rdict!(rdict, word_dict)

@@ -299,6 +299,7 @@ uh
 hmm
 get
 gets
+getter
 getting
 got
 gotta
@@ -414,3 +415,5 @@ heretofore
 hitherto
 thenceforth
 arguably
+put
+puts

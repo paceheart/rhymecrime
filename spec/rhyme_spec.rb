@@ -266,6 +266,12 @@ describe 'RHYMES' do
     ought_not_rhyme 'other', 'another' # arguable; an- is... kind of a prefix?
     ought_not_rhyme 'deserved', 'undeserved' # un-
     ought_not_rhyme 'legitimate', 'illegitimate' # il-
+    ought_not_rhyme 'safe', 'unsafe'
+    ought_not_rhyme 'kind', 'unkind'
+    ought_not_rhyme 'bisect', 'trisect'
+    ought_not_rhyme 'bisect', 'intersect'
+    ought_not_rhyme 'train', 'retrain'
+    ought_not_rhyme 'derive', 'rederive'
     context "unless they're not derivationally related" do
       # Pseudo-prefixes (the +re-+, +a-+, +im-+ isn't really derivational here) would need
       # lemma-aware / etymological reasoning to distinguish from real prefix rhymes. For now
@@ -299,6 +305,16 @@ describe 'RHYMES' do
       oughta_rhyme 'pound', 'impound'
       oughta_rhyme 'prove', 'improve'
       ought_not_rhyme 'pulse', 'impulse' # stress mismatch
+      oughta_rhyme 'marine', 'submarine'
+      oughta_rhyme 'tract', 'subtract'
+      oughta_rhyme 'lime', 'sublime'
+      oughta_rhyme 'due', 'subdue'
+      oughta_rhyme 'scribe', 'subscribe'
+      oughta_rhyme 'merge', 'submerge'
+      oughta_rhyme 'sect', 'intersect'
+      oughta_rhyme 'turn', 'return'
+      oughta_rhyme 'member', 'remember'
+      oughta_rhyme 'mind', 'remind'
       context "arguable" do
         oughta_rhyme 'bide', 'abide'
         oughta_rhyme 'new', 'anew'
@@ -312,6 +328,7 @@ describe 'RHYMES' do
         oughta_rhyme 'wakening', 'awakening'
         oughta_rhyme 'woke', 'awoke'
         oughta_rhyme 'woken', 'awoken'
+        ought_not_rhyme 'national', 'international'
       end
     end
   end
@@ -428,6 +445,7 @@ describe 'RHYMES' do
     oughta_rhyme 'litter', 'bidder' # arguable
     oughta_rhyme 'batter', 'madder'
     oughta_rhyme 'bottle', 'model'
+    ought_not_rhyme 'ditty', 'diddy' # these become homophones after flapping, and homophones ought not rhyme
 
     # --- Classic T/D minimal pairs (intervocalic; GA flap neutralization) ---
     context 'identical rimes' do
@@ -450,7 +468,6 @@ describe 'RHYMES' do
       ought_not_rhyme 'patter', 'padder'
       ought_not_rhyme 'liter', 'leader'
       ought_not_rhyme 'kitty', 'kiddie'
-      ought_not_rhyme 'ditty', 'diddy'
       ought_not_rhyme 'sorted', 'sordid'
       ought_not_rhyme 'latter', 'ladder'
       ought_not_rhyme 'matter', 'madder'
@@ -557,6 +574,7 @@ describe 'RHYMES' do
     ought_not_rhyme 'data', 'later' # don't elide final R in American English
     ought_not_rhyme 'beta', 'meta'
     oughta_rhyme 'beta', 'theta'
+    ought_not_rhyme 'tutu', 'voodoo'
   end
   
   context 'apostrophes' do
@@ -1014,5 +1032,24 @@ describe 'RHYMES' do
     oughta_rhyme 'desire', 'inspire'
     oughta_rhyme 'choir', 'inquire' # identical rimes
     oughta_rhyme 'acquire', 'admire'
+  end
+
+  context 'almost rhymes' do
+    oughta_rhyme 'harshly', 'partially'
+    oughta_rhyme 'normally', 'warmly'
+  end
+
+  context "don't drop final R phoneme" do
+    ought_not_rhyme 'fascia', 'masher'
+    ought_not_rhyme 'lava', 'palaver'
+    ought_not_rhyme 'kappa', 'zapper'
+    ought_not_rhyme 'mecca', 'pecker'
+    context "even when followed by -ed" do
+      ought_not_rhyme 'jabbered', 'rabid'
+      ought_not_rhyme 'gendered', 'splendid' # -er stem: gender + ed
+      ought_not_rhyme 'goitred', 'voided'    # BrE -re stem: goitre + d
+      ought_not_rhyme 'debarred', 'cod'      # double-r past: debar + red
+      oughta_rhyme 'bred', 'red'             # false-positive guard: 'br' is not a stem
+    end
   end
 end

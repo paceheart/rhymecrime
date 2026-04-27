@@ -72,14 +72,9 @@ conversed / cursed / immersed / pursed / reversed / thirst / worst
 converses / curses / immerses / purses / reverses / versus
 Each of them is almost entirely redundant with the other two, but each tuple has one word that's unique to it. Suggest one or more ways of displaying this to the user that follow best UX practices such as minimizing redundant information, grouping related things together, etc
 
-harshly / partially
-
 our / scour
 our / scour / tower
 
-preserves / turfs
-
-hecking / reckon should be heckin'
 tutu / voodoo should not rhyme
 
 eliminate ♥
@@ -92,5 +87,6 @@ review experiments/apostrophe-review.txt
 
 cetacean / confiscation / depredation / embarkation / navigation
 cetaceans / communications / confiscations / depredations / navigations
-
 why are we missing communication?
+
+wherever we use wordnet glosses, also use wiktionary glosses

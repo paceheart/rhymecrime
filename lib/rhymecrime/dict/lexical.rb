@@ -262,6 +262,31 @@ def wn_verb_stem_via_morphy?(word, base)
   canonical_stems.first == base_canonical
 end
 
+# Regular *-s* noun plurals whose WordNet noun-morphy result includes +base+.
+# Rescues lemma collapse for surfaces that have their own WN noun synset because
+# of a pluralia-tantum-derivative sense (+communications+ "telecommunications",
+# +glasses+ "spectacles", +arms+ "weapons") — +wn_share_synset?+ correctly says
+# no but the morphological plural relationship is still real and Kaikki/morphy
+# both attest it. Distinguishes these from genuine standalone nouns whose +-s+
+# ending is coincidental (+alias+, +atlas+, +basis+, +assess+, +caress+ —
+# morphy returns only the surface or an unrelated stem so the gate stays shut),
+# and from pluralia-tantum that aren't really plurals (+aerobatics+,
+# +binoculars+, +bahamas+ — morphy returns only the surface).
+#
+# +base+ is matched after +preferred_form+ canonicalization so spelling-variant
+# pairs (+colors+/+colour+) still match through.
+def wn_noun_plural_via_morphy?(word, base)
+  kind = Inflect.send(:match_suffix_kind, base, word)
+  return false unless kind == :s
+  return false unless wn_base_has_noun?(base)
+
+  stems = (WordNet::Synset.morphy(word, "noun") rescue [])
+  return false if stems.empty?
+
+  base_canonical = preferred_form(base) || base
+  stems.any? { |s| (preferred_form(s) || s) == base_canonical }
+end
+
 # True if WordNet lists the base as a verb (any sense). Used to avoid Phase 8 giving
 # noun-only stems a bogus verbal -ing frequency (kitchening, crotching, jealousing).
 # Bases with no WordNet entry still return true so modern verbs (twerk) can inherit.

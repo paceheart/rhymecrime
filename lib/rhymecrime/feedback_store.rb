@@ -14,7 +14,7 @@
 #     all feedback into +spec/related.csv+ when re-importing training data.
 #
 #   * +CsvFeedbackStore+ — local dev. Appends a row to
-#     +generated/related_feedback.csv+ on every click. Same column set as the
+#     +generated/feedback.csv+ on every click. Same column set as the
 #     DDB attrs so importer scripts can ingest either source.
 #
 # Why a separate table from the read-only +rhymecrime+ main store: the Lambda
@@ -136,7 +136,7 @@ module Rhymecrime
         # the Lambda runtime path doesn't load. We're only ever instantiated
         # in dev, so the require here is safe.
         require_relative "dict/utils_rhyme"
-        generated_dict_path("related_feedback.csv")
+        generated_dict_path("feedback.csv")
       end
     end
 

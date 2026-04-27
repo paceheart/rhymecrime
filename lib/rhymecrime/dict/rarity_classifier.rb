@@ -472,8 +472,13 @@ def rarity_rescore_and_dump!(hash, **ctx_kwargs)
 
       sig = extract_rarity_signals(word, ctx)
       sig.post_propagation_freq = entry[0]
+      meta = $freq_propagation_metadata && $freq_propagation_metadata[word]
+      if meta
+        sig.freq_source_phase = meta[:phase] || :unknown
+        sig.received_donor_from_common_base_flag = !!meta[:donor_anchored]
+      end
 
-      dict_trace_puts(word, "Phase12 rarity_rescore: enter freq=#{entry[0]}") if dict_trace_word?(word)
+      dict_trace_puts(word, "Phase12 rarity_rescore: enter freq=#{entry[0]} src=#{sig.freq_source_phase} donor_anchored=#{sig.received_donor_from_common_base_flag}") if dict_trace_word?(word)
 
       if dump_file
         features = learned_rarity_feature_vector(sig)
