@@ -36,7 +36,14 @@ module Rhymecrime
   module FeedbackStore
     module_function
 
-    VALID_VERDICTS = %w[up down].freeze
+    # +up+/+down+: the user expressed a verdict on the (cue, related) pair.
+    # +undo+: the user clicked their already-active thumb, retracting it.
+    # We keep +undo+ in the audit trail (rather than just deleting the prior
+    # row) so importer scripts can reconstruct the full click sequence and
+    # distinguish "user retracted" from "user never voted" — useful if we
+    # want to weight retracted votes differently when training, or surface
+    # ambivalence in disagreement-resolution UIs.
+    VALID_VERDICTS = %w[up down undo].freeze
 
     # Top-level entry point. Returns true on success, false on a (logged)
     # write failure — the UI treats either as "click registered" so a flaky

@@ -72,12 +72,6 @@ conversed / cursed / immersed / pursed / reversed / thirst / worst
 converses / curses / immerses / purses / reverses / versus
 Each of them is almost entirely redundant with the other two, but each tuple has one word that's unique to it. Suggest one or more ways of displaying this to the user that follow best UX practices such as minimizing redundant information, grouping related things together, etc
 
-loppings / toppings
-What happened to lopping / topping?
-same with:
-- snipings / wipings
-- antagonists / protagonists
-
 harshly / partially
 
 our / scour
@@ -88,17 +82,15 @@ preserves / turfs
 hecking / reckon should be heckin'
 tutu / voodoo should not rhyme
 
-/api/v2/analytics/media_engagements.json?media_id=17920935594312679
-
 eliminate ♥
 
 ensure train-relatedness-classifier is somewhere in the build pipeline
-
-health / stealth
-healthy / stealthy
 
 deconflate forbid_list into slurs, which should not compute relatedness, and other ones which are fine to use as cues, a lot like rare
 
 review experiments/apostrophe-review.txt
 
-break symmetry
+cetacean / confiscation / depredation / embarkation / navigation
+cetaceans / communications / confiscations / depredations / navigations
+
+why are we missing communication?

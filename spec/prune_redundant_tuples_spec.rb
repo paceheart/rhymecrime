@@ -158,6 +158,11 @@ describe 'prune_suffix_redundant_rhyming_tuples' do
       'alluded / booted / fluted / fruited / polluted / suited',
       'alluding / booting / fluting / polluting / suiting'
     )
+    prune_rhyming_tuple 'sail / whale', 'sailor / whaler'
+    prune_rhyming_tuple 'health / stealth', 'healthy / stealthy'
+    prune_rhyming_tuple 'lopping / topping', 'loppings / toppings'
+    prune_rhyming_tuple 'sniping / wiping', 'snipings / wipings'
+    prune_rhyming_tuple 'antagonist / protagonist', 'antagonists / protagonists'
   end
 
   context 'stop words' do

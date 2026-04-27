@@ -421,6 +421,38 @@ def inflection_suffix_kind_from_base(base, inflected)
     return :ing_gdrop if Inflect.send(:match_suffix_kind, base, ing_form) == :ing
   end
 
+  # Agent-noun +-or+ as an orthographic sibling of +-er+: +sail+→+sailor+,
+  # +act+→+actor+, +invent+→+inventor+. Rhymes identically (unstressed schwa
+  # +/ɚ/), and surfaces as +sailor/whaler+ alongside +sail/whale+ in real
+  # rhyming-tuple output. Reported as +:er+ rather than a distinct +:or+ so
+  # the same-length kind-lock in +rhyming_tuple_suffix_redundant_with?+
+  # treats +sail→sailor+ and +whale→whaler+ as the SAME inflection and the
+  # tuple gets pruned. Kept narrow on purpose: only fires when +Inflect+
+  # has rejected every other reading first, and only for the simplest +base
+  # + "or"+ surface (no doubling, no silent-e) to avoid trampling the
+  # +Inflect+ derivation tables, which the dict-build / frequency
+  # inheritance paths still own.
+  if inflected.end_with?("or") &&
+      inflected.bytesize == base.bytesize + 2 &&
+      inflected.start_with?(base)
+    return :er
+  end
+
+  # Denominal +-y+ adjective: +health+→+healthy+, +stealth+→+stealthy+,
+  # +dust+→+dusty+, +snow+→+snowy+. Surfaces in rhyming output as the
+  # +healthy/stealthy+ adjective tuple shadowing the +health/stealth+
+  # noun tuple. A distinct +:y_adj+ (not folded into any +Inflect+ kind)
+  # so the only path that ever sees it is the rhyming-tuple pruner —
+  # +Inflect+ derivation, dict-build, and frequency inheritance keep their
+  # current behavior, which never synthesizes a +base+y+ surface from a
+  # noun. Doubling-stem forms (+mud+→+muddy+, +sun+→+sunny+) are not
+  # covered yet; add them when a failing tuple shows up.
+  if inflected.end_with?("y") &&
+      inflected.bytesize == base.bytesize + 1 &&
+      inflected.start_with?(base)
+    return :y_adj
+  end
+
   nil
 end
 
@@ -1291,13 +1323,55 @@ def print_word(word, focal_word=false, cue: nil)
   emit_relatedness_feedback_widget(word, cue) if cue && !cue.to_s.empty? && cue != word
 end
 
+# Inline SVG so the icons inherit color via +fill="currentColor"+ and CSS
+# can drive vote-state color (up: #00fa9a, down: #ff355e). Emoji 👍/👎 were
+# rejected because their rendering is font-multicolor by default and can't
+# be re-tinted to a single brand color without filter hacks.
+#
+# Base shapes are Google Material's +thumb_up+ / +thumb_down+ (filled),
+# adopted because they're the most universally-recognized thumbs silhouette
+# and stay readable at our 0.85em inline-with-text size. Both icons are
+# tweaked identically: thumb elongated to stick out ~30% farther from the
+# palm (9.1u vs Material's 7u), while the palm + forearm geometry stays
+# exactly Material's. The viewBox is extended on the thumb-pointing side
+# to give the longer tip room to render.
+#
+# Up-thumb edits (Material path → tweaked):
+#   * viewBox +0 0 24 24+ → +0 -2 24 26+ (headroom ABOVE the icon)
+#   * +l.95-4.57+ (right-side rise into tip apex) → +l.95-6.67+
+#   * +L14.17 1+ (absolute thumb-tip endpoint) → +L14.17 -1.1+
+#
+# Down-thumb is up-thumb rotated 180° about (12, 12), so equivalent edits
+# (with directions flipped) are:
+#   * viewBox +0 0 24 24+ → +0 0 24 26+ (headroom BELOW the icon)
+#   * +l-.95 4.57+ (right-side descent into tip apex) → +l-.95 6.67+
+#   * +L9.83 23+ (absolute thumb-tip endpoint) → +L9.83 25.1+
+#   * +l6.59-6.59+ (RELATIVE return from tip to palm corner) → +l6.59-8.69+
+#     The return segment is relative in the down path (unlike up, which uses
+#     an implicit absolute lineto after L), so its delta has to absorb the
+#     additional 2.1u of thumb extension; otherwise the upper-right palm
+#     corner would shift along with the tip.
+#
+# Everything else (forearm rectangle, palm curves, finger fold, lower wrist
+# sweep) is byte-for-byte Material's, so both icons still read as the
+# Material thumbs — just with more prominent thumbs.
+THUMB_UP_SVG = '<svg viewBox="0 -2 24 26" width="1em" height="1em" aria-hidden="true" focusable="false">' \
+  '<path fill="currentColor" d="M2 21h4V9H2v12zM23 10c0-1.1-.9-2-2-2h-6.31l.95-6.67.03-.32c0-.41-.17-.79-.44-1.06L14.17 -1.1 7.59 7.59C7.22 7.95 7 8.45 7 9v10c0 1.1.9 2 2 2h9c.83 0 1.54-.5 1.84-1.22l3.02-7.05c.09-.23.14-.47.14-.73v-2z"/>' \
+  '</svg>'
+THUMB_DOWN_SVG = '<svg viewBox="0 0 24 26" width="1em" height="1em" aria-hidden="true" focusable="false">' \
+  '<path fill="currentColor" d="M15 3H6c-.83 0-1.54.5-1.84 1.22l-3.02 7.05C1.05 11.5 1 11.74 1 12v2c0 1.1.9 2 2 2h6.31l-.95 6.67-.03.32c0 .41.17.79.44 1.06L9.83 25.1l6.59-8.69C16.78 16.05 17 15.55 17 15V5c0-1.1-.9-2-2-2zm4 0v12h4V3h-4z"/>' \
+  '</svg>'
+
 def emit_relatedness_feedback_widget(word, cue)
   c = CGI.escape_html(cue.to_s)
   w = CGI.escape_html(word.to_s)
+  # No leading whitespace before +<span>+: the gap-between-word-and-thumbs is
+  # entirely controlled by +.feedback-thumbs { margin-left }+ in CSS, so a
+  # textual space would stack on top of that and widen the gap unpredictably.
   cgi_print(
-    " <span class='feedback-thumbs' data-cue='#{c}' data-related='#{w}'>" \
-    "<button type='button' class='thumb thumb-up' aria-label='thumbs up #{w} as related to #{c}'>\u{1F44D}</button>" \
-    "<button type='button' class='thumb thumb-down' aria-label='thumbs down #{w} as related to #{c}'>\u{1F44E}</button>" \
+    "<span class='feedback-thumbs' data-cue='#{c}' data-related='#{w}'>" \
+    "<button type='button' class='thumb thumb-up' aria-label='thumbs up #{w} as related to #{c}'>#{THUMB_UP_SVG}</button>" \
+    "<button type='button' class='thumb thumb-down' aria-label='thumbs down #{w} as related to #{c}'>#{THUMB_DOWN_SVG}</button>" \
     "</span>"
   )
 end

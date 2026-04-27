@@ -39,6 +39,7 @@
 #   ruby bin/train-relatedness-classifier --model logreg
 #   ruby bin/train-relatedness-classifier --model gbt --trees 400 --depth 5
 #   ruby bin/train-relatedness-classifier --fn-weight 3 --fn-penalty 3  # pre-2026 asymmetry
+#   ruby bin/train-relatedness-classifier --threshold 0.43   # pin cutoff (skip sweep)
 #   ruby bin/train-relatedness-classifier --dry-run
 #
 # After training, run +spec/related_weighted_accuracy.rb+ to see the lift
@@ -90,6 +91,12 @@ OptionParser.new do |opt|
   opt.on("--seed N", Integer) { |v| options[:seed] = v }
   opt.on("--dry-run") { options[:dry_run] = true }
   opt.on("--verbose") { options[:verbose] = true }
+  # Override the auto-selected probability cutoff. Default (+nil+) keeps the
+  # historical behavior of sweeping +best_threshold+ over the in-sample fit and
+  # picking the composite-maximum. Useful when you want to lock the FE/eval
+  # boundary to a known-good prior (e.g. the +0.43+ cutoff that produced 91.7%
+  # before the latest data churn) without resurrecting the entire model file.
+  opt.on("--threshold F", Float) { |v| options[:threshold] = v }
 
   opt.on("--fn-weight F", Float) { |v| options[:fn_weight] = v }
   opt.on("--fn-penalty F", Float) { |v| options[:fn_penalty] = v }
@@ -651,13 +658,33 @@ predict, model_data = fit_model(options[:model], features_list, labels, weights,
 scored = (0...features_list.size).map do |i|
   { y: labels[i], ish: ish_flags[i], p: predict.call(features_list[i]) }
 end
-best = best_threshold(scored, fn_penalty: options[:fn_penalty])
-s = best[:stats]
-puts format(
-  "  in-sample  t=%.2f  composite=%.1f  weighted=%.1f%%  sfn=%d ifn=%d sfp=%d ifp=%d",
-  best[:threshold], s[:composite], s[:weighted_pct],
-  s[:strong_fn], s[:ish_fn], s[:strong_fp], s[:ish_fp]
-)
+swept = best_threshold(scored, fn_penalty: options[:fn_penalty])
+# +--threshold+ lets the operator pin the cutoff (e.g. to a previously deployed
+# value) instead of taking whatever the in-sample sweep happens to land on.
+# We still print the swept optimum alongside so it's obvious how much the pin
+# is costing in-sample.
+chosen_threshold = options[:threshold] || swept[:threshold]
+chosen_stats = composite_at(scored, chosen_threshold, fn_penalty: options[:fn_penalty])
+s = chosen_stats
+if options[:threshold]
+  ss = swept[:stats]
+  puts format(
+    "  in-sample (swept optimum)  t=%.2f  composite=%.1f  weighted=%.1f%%  sfn=%d ifn=%d sfp=%d ifp=%d",
+    swept[:threshold], ss[:composite], ss[:weighted_pct],
+    ss[:strong_fn], ss[:ish_fn], ss[:strong_fp], ss[:ish_fp]
+  )
+  puts format(
+    "  in-sample (pinned --threshold)  t=%.2f  composite=%.1f  weighted=%.1f%%  sfn=%d ifn=%d sfp=%d ifp=%d",
+    chosen_threshold, s[:composite], s[:weighted_pct],
+    s[:strong_fn], s[:ish_fn], s[:strong_fp], s[:ish_fp]
+  )
+else
+  puts format(
+    "  in-sample  t=%.2f  composite=%.1f  weighted=%.1f%%  sfn=%d ifn=%d sfp=%d ifp=%d",
+    chosen_threshold, s[:composite], s[:weighted_pct],
+    s[:strong_fn], s[:ish_fn], s[:strong_fp], s[:ish_fp]
+  )
+end
 
 puts
 case options[:model]
@@ -687,7 +714,7 @@ puts
 common = {
   "feature_names" => LEARNED_FEATURE_NAMES,
   "model_type" => model_data[:model_type],
-  "threshold" => best[:threshold],
+  "threshold" => chosen_threshold,
   "training" => {
     "model" => options[:model],
     "rows" => features_list.size,
@@ -696,6 +723,8 @@ common = {
     "fn_weight" => options[:fn_weight],
     "fn_penalty" => options[:fn_penalty],
     "seed" => options[:seed],
+    "threshold_pinned" => !options[:threshold].nil?,
+    "swept_threshold" => swept[:threshold],
     "cv_folds" => options[:folds],
     "cv_pooled_composite" => pooled_composite,
     "cv_mean_threshold" => avg_thr,
