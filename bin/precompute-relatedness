@@ -32,6 +32,13 @@
 #   --incremental          Keep existing rows in the target DB and only process cues
 #                          not already present. Use after widening the cue filter so
 #                          you don't redo cues the stored rows already cover.
+#   --only=W[,W...]        Restrict the run to the given headwords / lemmas (comma-
+#                          separated, may repeat). Headwords are resolved to their
+#                          lemma via +word_dict+ so passing +running+ targets the
+#                          +run+ row. Entries not in the cue set (rare words,
+#                          stop words, non-cues) are warned and skipped. Combines
+#                          with +--start-after+ / +--max-cues+ / +--incremental+
+#                          (intersection).
 #
 # Ordering: cues are processed frequency-descending, alphabetical within band.
 # This front-loads the high-value common cues so a Ctrl-C partway through still
@@ -82,6 +89,7 @@ dry_run = false
 max_cues = nil
 start_after = nil
 incremental = false
+only_words = []
 # Detect installed physical RAM in bytes (macOS / Linux). Falls back to +nil+
 # on other platforms or when the probe fails, in which case we skip the
 # memory-based cap and rely on the CPU cap alone. Called once during startup;
@@ -142,6 +150,10 @@ OptionParser.new do |o|
                        "Use when widening the cue filter to avoid redoing the cues already done.") do
     incremental = true
   end
+  o.on("--only=W[,W...]", Array, "Restrict run to these headwords/lemmas (resolved via word_dict). " \
+                                 "Repeatable; values are unioned.") do |list|
+    only_words.concat(list)
+  end
 end.parse!
 
 word_path = generated_dict_path(WORD_DICT_FILENAME)
@@ -200,6 +212,39 @@ lemmas.sort_by! { |l| [-wd[l][0].to_i, l] }
 # words that sort ahead of the real work).
 stopword_lemmas, lemmas = lemmas.partition { |l| stop_word?(l) }
 puts "Skipping #{stopword_lemmas.size} stop-word lemmas (runtime short-circuits to words_we_care_about): #{stopword_lemmas.inspect}" if stopword_lemmas.any?
+
+# +--only+: explicit cue allowlist. Resolve each passed word to its dictionary
+# lemma (so +running+ targets the +run+ row, matching how the runtime keys
+# +thematically_related?+ lookups), then intersect with the filtered cue set
+# while preserving the freq-desc / alpha order. Anything that doesn't survive
+# the intersection (rare, stop word, non-cue, unknown headword) gets warned
+# once so a typo doesn't silently produce an empty run.
+unless only_words.empty?
+  requested = only_words
+    .flat_map { |w| w.to_s.split(",") }
+    .map { |w| w.strip }
+    .reject(&:empty?)
+    .map(&:desanitize)
+  resolved = requested.map do |w|
+    if rep.key?(w)
+      w
+    elsif (entry = wd[w]) && entry[2] && !entry[2].to_s.strip.empty?
+      entry[2].to_s.strip
+    else
+      w
+    end
+  end
+  resolved_set = resolved.to_set
+  before_only = lemmas.size
+  lemmas = lemmas.select { |l| resolved_set.include?(l) }
+  missing = resolved_set - lemmas
+  if missing.any?
+    sample = missing.to_a.sort.first(20)
+    suffix = missing.size > 20 ? "… (+#{missing.size - 20} more)" : ""
+    warn "--only: #{missing.size} requested entr#{missing.size == 1 ? 'y' : 'ies'} not in cue set (skipped — rare, stop word, non-cue, or unknown): #{sample.inspect}#{suffix}"
+  end
+  puts "--only: limiting to #{lemmas.size} of #{before_only} cues (#{requested.size} requested, #{resolved_set.size} unique after lemma resolution)."
+end
 
 if start_after
   # Resume-after-crash: drop everything up through +start_after+ in the current
