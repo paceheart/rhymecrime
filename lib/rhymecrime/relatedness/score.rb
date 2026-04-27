@@ -77,6 +77,7 @@ LEARNED_FEATURE_NAMES = (
     model_sv_max_x_usf
     def_in_vocab
     def_cos
+    def_cos_when_base_low
     cn_hops
     cn_shared_neighbors
     usf_direct_max
@@ -108,6 +109,17 @@ def learned_feature_vector(signals)
   # condition the learner. See +PairSignals#def_cos_pct+.
   d_in = signals.def_both_in_vocab?
   d_cos = d_in ? signals.def_cos_pct : 0
+
+  # Gloss-similarity vote that fires only when base similarity is weak. Lets the
+  # learner credit high +def_cos+ as standalone positive evidence in the regime
+  # where Numberbatch cosine has nothing to say — i.e. associative / thematic
+  # pairs like +pirate/ruse+, +gay/diva+, +food/presentation+ where humans see
+  # an obvious relation but the vector space doesn't. Without this explicit
+  # cross, the GBT has to discover the (high +def_cos+ × low +base+) interaction
+  # implicitly via tree splits, which it does poorly when training-set density
+  # in that quadrant is low. Threshold 10 was chosen because the post-audit
+  # strong-FN cluster with +def_cos >= 20+ all have +base_similarity+ in [-3, 8].
+  d_cos_low_base = base < 10 ? d_cos.to_f : 0.0
 
   [
     1.0,
@@ -142,6 +154,7 @@ def learned_feature_vector(signals)
     m_sv_max * usf / 10.0,
     d_in ? 1.0 : 0.0,
     d_cos.to_f,
+    d_cos_low_base,
     signals.cn_hops.to_f,
     signals.cn_shared_neighbors.to_f,
     signals.usf_direct_max.to_f,
