@@ -52,7 +52,7 @@ module Rhymecrime
       if vf
         io.puts "spelling.csv: #{vf.inspect}"
       else
-        io.puts "spec/spelling.csv: no row for this key (variants()[#{w.inspect}] is nil)"
+        io.puts "curated/spelling.csv: no row for this key (variants()[#{w.inspect}] is nil)"
       end
       io.puts
 

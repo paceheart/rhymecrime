@@ -1,7 +1,7 @@
 #!/usr/bin/env ruby
 # encoding: utf-8
 #
-# Weighted accuracy over spec/rarity.csv rarity categories vs live +rarity_category+ (built word_dict).
+# Weighted accuracy over curated/rarity.csv rarity categories vs live +rarity_category+ (built word_dict).
 # Run from repo root:
 #   ruby spec/rarity_weighted_accuracy.rb
 #
@@ -83,7 +83,7 @@ def row_weight(kind)
   kind.strip.end_with?("_ish") ? 1 : 3
 end
 
-csv_path = File.expand_path("rarity.csv", __dir__)
+csv_path = File.expand_path("../curated/rarity.csv", __dir__)
 rows = CSV.read(csv_path, headers: true, encoding: "UTF-8")
 
 total_weight = 0.0

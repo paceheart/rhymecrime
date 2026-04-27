@@ -60,7 +60,7 @@ $USF_MIN_BASE = 0
 # the 3-phase design unlocks — gates on individual rules are already tuned, but pairs
 # with (e.g.) below-threshold +base+ *and* two-sided sense-vector agreement *and* a
 # validated USF bridge are clearly related despite no single gate passing. Weights
-# tuned on +spec/related.csv+ via grid search over a broad plateau (see
+# tuned on +curated/related.csv+ via grid search over a broad plateau (see
 # +spec/related_weighted_accuracy.rb+). Contribution is +base * w + sv_min * w +
 # max(0, sv_max - floor) * w + (usf ? w : 0)+, each term capped so one runaway
 # signal can't dominate.

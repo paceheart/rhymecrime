@@ -280,7 +280,7 @@ def drop_abbreviation_expansion_alternates!(cmudict_flat_prons)
   dropped
 end
 
-AUTHORITATIVE_PRONUNCIATIONS_PATH = File.join(__dir__, "authoritative_pronunciations.txt")
+AUTHORITATIVE_PRONUNCIATIONS_PATH = File.join(CURATED_DIR, "authoritative_pronunciations.txt")
 
 # Hand-curated pronunciation overrides. Loaded before CMUdict (and merged ahead
 # of Wiktionary/Kaikki/Inflect) so that when we have a better pronunciation for

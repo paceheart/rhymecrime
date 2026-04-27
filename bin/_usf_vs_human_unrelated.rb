@@ -15,7 +15,7 @@ require "rhymecrime/relatedness/signals"
 
 word_dict
 
-raw = CSV.read("spec/related.csv", headers: true, encoding: "UTF-8")
+raw = CSV.read("curated/related.csv", headers: true, encoding: "UTF-8")
 
 direct_hits = []
 twohop_only = []

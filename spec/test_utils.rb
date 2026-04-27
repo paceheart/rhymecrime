@@ -1,7 +1,7 @@
 require 'csv'
 require "rhymecrime/pace_utils"
 
-# Valid values for the +oughta be related?+ column in spec/related.csv. Rows marked +whatever+ are
+# Valid values for the +oughta be related?+ column in curated/related.csv. Rows marked +whatever+ are
 # ignored by the spec / weighted accuracy script because either answer is acceptable. Rows marked
 # +*_ish+ represent weak-signal cases (originally encoded as a +ish+ marker in the +notes+ column).
 RELATEDNESS_KINDS = %w[related related_ish unrelated unrelated_ish whatever].freeze
@@ -27,7 +27,7 @@ end
 
 # cue, related, oughta be related?, notes
 def load_relatedness_test_cases
-  cases = CSV.parse(File.read("spec/related.csv", encoding: 'UTF-8'), headers: true) or raise "Could not read/parse related.csv"
+  cases = CSV.parse(File.read("curated/related.csv", encoding: 'UTF-8'), headers: true) or raise "Could not read/parse related.csv"
   for c in cases
     repair_relatedness_test_case(c)
   end
@@ -89,7 +89,7 @@ def failing_test_count
   relatedness_test_cases.count - succeeding_test_count
 end
 
-# --- rarity.csv (spec/rarity_spec.rb) ---
+# --- rarity.csv (curated/rarity.csv, exercised by spec/rarity_spec.rb) ---
 
 RARITY_CSV_KINDS = %w[
   common common_ish rare rare_ish uncommon forbidden forbidden_ish
@@ -97,7 +97,7 @@ RARITY_CSV_KINDS = %w[
 ].freeze
 
 def rarity_csv_path
-  File.expand_path("rarity.csv", __dir__)
+  File.expand_path("../curated/rarity.csv", __dir__)
 end
 
 def load_rarity_csv_rows
@@ -156,7 +156,7 @@ def apply_rarity_csv_row(row)
   end
 end
 
-# Loads spec/rarity.csv and defines nested RSpec contexts + examples. Requires +oughta_be_*+ helpers from
+# Loads curated/rarity.csv and defines nested RSpec contexts + examples. Requires +oughta_be_*+ helpers from
 # +rarity_spec.rb+ (same pattern as +related_spec.rb+ / +related.csv+).
 def load_and_define_rarity_test_cases_from_csv
   rows = load_rarity_csv_rows

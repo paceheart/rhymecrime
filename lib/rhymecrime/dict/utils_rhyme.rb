@@ -59,7 +59,7 @@ NUMBERBATCH_VECTORS_FILENAME = "numberbatch_vectors.msgpack"
 USF_ASSOCIATIONS_FILENAME = "usf_associations.json"
 # Auto-detected lexical spelling variant pairs (e.g. -oes/-os), emitted by dict-build from corpus
 # frequency data. Whitespace-separated +preferred alt+ pairs (legacy format kept for the auto
-# file; the hand-edited list lives at +spec/spelling.csv+ in CSV form). Both are loaded at
+# file; the hand-edited list lives at +curated/spelling.csv+ in CSV form). Both are loaded at
 # runtime via +load_variants_raw+ so no corpus I/O leaks into the runtime path.
 SPELLING_VARIANTS_AUTO_FILENAME = "spelling_variants_auto.txt"
 # Learned phase-2 relatedness combiner (logistic regression over +PairSignals+ features);
@@ -92,6 +92,11 @@ end
 REPO_ROOT = File.expand_path("../../..", __dir__)
 GENERATED_DIR = File.join(REPO_ROOT, "generated")
 
+# Hand-curated inputs (lemma/spelling/related/rarity CSVs, common/rare/forbid/stop word
+# lists, authoritative pronunciation overrides, neol supplement). All ten files live
+# under <repo>/curated/ — see curated/README.md.
+CURATED_DIR = File.join(REPO_ROOT, "curated")
+
 def generated_dict_path(basename)
   File.join(GENERATED_DIR, basename)
 end
@@ -110,13 +115,13 @@ end
 
 $stop_words = nil
 
-# Lazily load +lib/rhymecrime/dict/stop_words.txt+ into a +Set+ for O(1) lookups.
+# Lazily load +curated/stop_words.txt+ into a +Set+ for O(1) lookups.
 # +#+ comment lines and blank lines are skipped; trailing whitespace on each entry is
 # stripped (so e.g. +"hey "+ in the file matches the word +"hey"+).
 def stop_words
   $stop_words ||= begin
     set = Set.new
-    path = File.join(__dir__, "stop_words.txt")
+    path = File.join(CURATED_DIR, "stop_words.txt")
     File.foreach(path, chomp: true, encoding: "UTF-8") do |line|
       w = line.strip
       next if w.empty? || w.start_with?("#")
@@ -147,7 +152,7 @@ def explicitly_forbidden?(word)
 end
 
 def load_forbid_list_as_array
-  path = File.join(__dir__, "forbid_list.txt")
+  path = File.join(CURATED_DIR, "forbid_list.txt")
   lines = []
   File.foreach(path, chomp: true, encoding: "UTF-8") { |line| lines << line }
   lines
@@ -1185,7 +1190,7 @@ def all_forms(word)
   [word]
 end
 
-SPELLING_CSV_PATH = File.join(REPO_ROOT, "spec", "spelling.csv")
+SPELLING_CSV_PATH = File.join(CURATED_DIR, "spelling.csv")
 
 # A spelling.csv column counts as a word-form (rather than a free-text notes value)
 # when it consists entirely of letters, hyphens, and apostrophes (e.g. +color+,
@@ -1221,7 +1226,7 @@ end
 
 # Returns an array of form-arrays: each inner array is +[preferred, alt1[, alt2, ...]]+.
 # Sources, in order:
-#   * +spec/spelling.csv+        — hand-edited list, CSV (comma-separated) with +#+ comment
+#   * +curated/spelling.csv+     — hand-edited list, CSV (comma-separated) with +#+ comment
 #                                   header lines and an optional trailing free-text notes
 #                                   column (silently dropped at load time; see
 #                                   +split_spelling_row+).

@@ -1,7 +1,7 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 #
-# Sweep classifier decision threshold over the +spec/related.csv+ eval set and
+# Sweep classifier decision threshold over the +curated/related.csv+ eval set and
 # report the composite / weighted-accuracy / TPR / TNR at each candidate cutoff.
 # Bypasses the precomputed SQLite store (so we evaluate the *current* classifier,
 # matching +RELATED_BYPASS_STORE=1 spec/related_weighted_accuracy.rb+'s semantics).
@@ -40,7 +40,7 @@ clf_t = clf["threshold"].to_f
 puts "current classifier threshold = #{format('%.3f', clf_t)}"
 
 # Mirror the RSpec eval filter pipeline.
-path = File.join(repo, "spec", "related.csv")
+path = File.join(repo, "curated", "related.csv")
 raw_rows = CSV.parse(File.read(path, encoding: "UTF-8"), headers: true)
 
 skipped_stopword = 0
@@ -83,7 +83,7 @@ rows.each do |r|
 end
 
 puts format(
-  "spec/related.csv  n=%d  positive=%d  negative=%d  (+%d whatever skipped, %d stop-word pairs filtered)",
+  "curated/related.csv  n=%d  positive=%d  negative=%d  (+%d whatever skipped, %d stop-word pairs filtered)",
   scored.size, n_pos, n_neg, skipped_whatever, skipped_stopword
 )
 puts

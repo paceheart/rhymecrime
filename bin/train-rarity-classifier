@@ -11,7 +11,7 @@
 #       {"word": "foo", "features": [...58 floats + 1 bias...], "freq": 10}
 #     Feature ordering must match +LEARNED_RARITY_FEATURE_NAMES+ in
 #     lib/rhymecrime/dict/rarity_classifier.rb.
-#   spec/rarity.csv                        labeled rows (word, kind, ...).
+#   curated/rarity.csv                     labeled rows (word, kind, ...).
 #
 # Output:
 #   generated/rarity_classifier.json       best model on 5-fold CV weighted
@@ -144,7 +144,7 @@ File.foreach(dump_path, encoding: "UTF-8") do |line|
 end
 puts "loaded signals dump: #{dump_words.size} words"
 
-rarity_csv = File.join(repo, "spec", "rarity.csv")
+rarity_csv = File.join(repo, "curated", "rarity.csv")
 raw_rows = CSV.read(rarity_csv, headers: true, encoding: "UTF-8")
 
 labeled_rows = []

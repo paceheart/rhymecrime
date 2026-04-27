@@ -11,7 +11,7 @@
 #       attrs = verdict, ip, user_agent, session
 #     The (pk, sk) layout means we can +Query+ for "every vote on this pair"
 #     in one call (sort-key range over time), and +Scan+ the table to export
-#     all feedback into +spec/related.csv+ when re-importing training data.
+#     all feedback into +curated/related.csv+ when re-importing training data.
 #
 #   * +CsvFeedbackStore+ — local dev. Appends a row to
 #     +generated/feedback.csv+ on every click. Same column set as the
@@ -50,7 +50,7 @@ module Rhymecrime
     # backend doesn't surface as a user-facing error during data collection.
     #
     # +cue+ / +related+ are the lowercased surface forms that were rendered
-    # next to the thumbs (matching the conventions in +spec/related.csv+'s
+    # next to the thumbs (matching the conventions in +curated/related.csv+'s
     # +cue+ / +related+ columns). +verdict+ is +"up"+ or +"down"+. +ip+,
     # +user_agent+, +session+ are request-scoped metadata pulled from the
     # caller (Sinatra +request.*+ in dev, Lambda +event["requestContext"]+

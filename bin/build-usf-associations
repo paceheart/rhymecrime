@@ -1,0 +1,68 @@
+#!/usr/bin/env ruby
+# encoding: utf-8
+# frozen_string_literal: true
+#
+# Build generated/usf_associations.json from corpora/usf/Cue_Target_Pairs.* shards.
+#
+# USF Free Association Norms (Nelson, McEvoy & Schreiber 1998): for each
+# stimulus CUE, the words a participant produced as a free association,
+# with forward strength FSG = #participants giving the target / #G. Used at
+# runtime by lib/rhymecrime/relatedness/signals.rb for direct (1-hop) and
+# Numberbatch-validated 2-hop association evidence.
+#
+# Output schema (consumed by signals.rb's +usf_associations+ loader):
+#   { "<cue>": { "<target>": <fsg float>, ... }, ... }
+# Lemmas are lowercase single-token (matching dict.rb's headword shape);
+# multi-word targets like "PINK PANTHER" are dropped since they can't be
+# looked up against the dict vocabulary.
+#
+#   ./bin/build-usf-associations
+#   ./bin/build-usf-associations /path/to/out.json
+
+require "fileutils"
+require "json"
+
+repo = File.expand_path("..", __dir__)
+shards = Dir.glob(File.join(repo, "corpora", "usf", "Cue_Target_Pairs.*")).sort
+if shards.empty?
+  abort "no Cue_Target_Pairs.* shards under #{File.join(repo, 'corpora', 'usf')}"
+end
+
+out_path = ARGV[0]
+out_path = File.join(repo, "generated", "usf_associations.json") if out_path.nil? || out_path.empty?
+FileUtils.mkdir_p(File.dirname(out_path))
+
+# Match dict.rb's headword shape (cf. utils_rhyme.rb#usf_corpus_word_set).
+LEMMA_RE = /\A[a-z][a-z0-9'-]*\z/.freeze
+
+graph = Hash.new { |h, k| h[k] = {} }
+pair_count = 0
+
+shards.each do |path|
+  File.foreach(path, encoding: "UTF-8") do |line|
+    line = line.scrub
+    # Skip the HTML/PRE wrapper and the column-header row at the top of each shard.
+    next if line.include?("CUE,")
+    next unless line.match?(/\A[A-Z]/)
+
+    # Columns: CUE, TARGET, NORMED?, #G, #P, FSG, BSG, MSG, ...
+    parts = line.split(",")
+    next if parts.length < 6
+
+    cue = parts[0].strip.downcase
+    target = parts[1].strip.downcase
+    fsg = parts[5].to_s.strip
+
+    next unless cue.match?(LEMMA_RE) && target.match?(LEMMA_RE)
+    next if fsg.empty?
+
+    f = fsg.to_f
+    next unless f.positive?
+
+    graph[cue][target] = f
+    pair_count += 1
+  end
+end
+
+File.write(out_path, JSON.generate(graph))
+puts "wrote #{graph.size} cues / #{pair_count} pairs to #{out_path}"

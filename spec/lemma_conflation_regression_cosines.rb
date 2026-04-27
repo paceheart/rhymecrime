@@ -57,7 +57,7 @@ Dir.chdir(repo) do
   require "rhymecrime/relatedness/signals"
   require "rhymecrime/relatedness/score"
 
-  path = File.join(repo, "spec", "related.csv")
+  path = File.join(repo, "curated", "related.csv")
   rows = CSV.parse(File.read(path, encoding: "UTF-8"), headers: true)
 
   regressions = []

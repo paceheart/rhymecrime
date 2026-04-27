@@ -5,7 +5,7 @@ require "csv"
 require_relative "test_utils"
 
 def lemma_csv_path
-  File.join(__dir__, "lemma.csv")
+  File.expand_path("../curated/lemma.csv", __dir__)
 end
 
 def load_lemma_csv_rows

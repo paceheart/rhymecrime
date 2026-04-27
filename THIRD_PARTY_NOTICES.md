@@ -1,0 +1,145 @@
+# Third-Party Notices
+
+RhymeCrime depends on several externally-licensed lexical resources. This
+document records attribution and license terms for every such resource the
+project bundles directly **or** fetches at build time. Where data is vendored
+in `corpora/`, the upstream license file is also checked in alongside the
+data when one exists separately.
+
+The list is grouped by where the data lives at build time:
+
+  - **Vendored** — checked into git under `corpora/<name>/` (force-added
+    past the `corpora/*` rule in `.gitignore`).
+  - **Fetched at build** — downloaded by `bin/setup-corpora` and never
+    redistributed by this repository.
+
+Generated artifacts derived from any CC-BY-SA input (e.g.
+`generated/numberbatch_vectors.msgpack`, `generated/conceptnet_edges.json`)
+inherit CC-BY-SA terms; if you redistribute a build of RhymeCrime that ships
+those artifacts, attribution is required.
+
+---
+
+## Vendored
+
+### CMU Pronouncing Dictionary (`corpora/cmudict/`)
+
+Carnegie Mellon University Pronouncing Dictionary (CMUdict), version 0.7c,
+by the CMU Speech Group.
+
+  - Upstream: <http://www.speech.cs.cmu.edu/cgi-bin/cmudict>
+  - License: see `corpora/cmudict/LICENSE.txt` (BSD-style; free for any use
+    with attribution).
+
+### WordNet 3.1 (`corpora/wordnet/3.1/`)
+
+Princeton University WordNet 3.1.
+
+  - Upstream: <https://wordnet.princeton.edu/>
+  - License: see `corpora/wordnet/3.1/LICENSE` (BSD-style; "free of charge
+    for any purpose" with attribution).
+  - Citation: George A. Miller (1995). *WordNet: A Lexical Database for
+    English.* Communications of the ACM, 38(11), 39–41.
+
+### USF Free Association Norms (`corpora/usf/`)
+
+University of South Florida Word Association, Rhyme, and Word Fragment Norms
+(`Cue_Target_Pairs.*` shards).
+
+  - Upstream: <http://w3.usf.edu/FreeAssociation/> (HTML pages;
+    `Cue_Target_Pairs.*` are the alphabetic shards).
+  - License: research / educational use; cite the canonical paper.
+  - Citation: Nelson, D. L., McEvoy, C. L., & Schreiber, T. A. (1998).
+    *The University of South Florida word association, rhyme, and word
+    fragment norms.*
+
+### 12dicts neol2016 list (`corpora/neol/neol2016.txt`)
+
+The `neol2016.txt` neologism list from Alan Beale's 12dicts package, 2016
+snapshot.
+
+  - Upstream: <https://wordlist.aspell.net/12dicts/> /
+    <https://sourceforge.net/projects/wordlist/files/12dicts/>
+  - License: public domain (per the upstream 12dicts distribution).
+
+### `neol_supplement.txt` (`curated/neol_supplement.txt`)
+
+Locally-curated additions to the neol list. No upstream — maintained in this
+repository alongside the other hand-edited inputs under `curated/`.
+
+  - License: same project license as the rest of this repository.
+
+### VarCon (`corpora/varcon/`)
+
+Variant Conversion Info — US/UK/CA/AU spelling-variant clusters by Kevin
+Atkinson and Benjamin Titze, with roots in Geoff Kuenning's Ispell word
+lists.
+
+  - Upstream: <http://wordlist.aspell.net/> (vendored from the
+    `en-wl/wordlist` repository at the `v1` tag).
+  - Vendored files: `corpora/varcon/varcon.txt` and `corpora/varcon/README.txt`
+    (the upstream README, which carries the full license inline).
+  - License: MIT-style for the Atkinson/Titze contributions; modified
+    BSD-3-clause for the Ispell-derived material (Kuenning, 1993). See
+    `corpora/varcon/README.txt` § "Copyright" for the full text.
+
+### SUBTLEX-US (`corpora/subtlex/`)
+
+Brysbaert & New (2009) movie-subtitle frequency norms for American English.
+
+  - Vendored from Open Lexicon's redistribution at
+    <http://www.lexique.org/databases/SUBTLEX-US/SUBTLEXus74286wordstextversion.tsv>.
+  - License: **CC-BY-SA 4.0**. See <https://creativecommons.org/licenses/by-sa/4.0/>.
+  - Citation: Brysbaert, M. & New, B. (2009). *Moving beyond Kucera and
+    Francis: A critical evaluation of current word frequency norms and the
+    introduction of a new and improved word frequency measure for American
+    English.* Behavior Research Methods, 41(4), 977–990.
+
+---
+
+## Fetched at build (not redistributed by this repository)
+
+The following datasets are downloaded by `bin/setup-corpora` into
+`corpora/<name>/` (gitignored) and consumed by `bin/dict-build`. The
+generated artifacts that ship in `generated/` are derived works and inherit
+the upstream license terms.
+
+### Wiktionary / Kaikki / Wiktextract (`corpora/wiktionary/`)
+
+Tatu Ylonen's Wiktextract project — structured English Wiktionary export.
+
+  - Upstream: <https://kaikki.org/dictionary/English/>.
+  - License: **CC-BY-SA 3.0** (inherited from Wiktionary).
+  - Citation: Ylonen, T. (2022). *Wiktextract: Wiktionary as Machine-Readable
+    Structured Data.* Proceedings of LREC 2022.
+
+### ConceptNet 5.7 (`corpora/conceptnet/`)
+
+ConceptNet semantic-network assertions.
+
+  - Upstream: <https://github.com/commonsense/conceptnet5/wiki/Downloads>.
+  - License: **CC-BY-SA 4.0** for the assertions; component data sources have
+    their own terms — see <https://github.com/commonsense/conceptnet5/wiki/Copying-and-sharing-ConceptNet>.
+  - Citation: Speer, R., Chin, J., & Havasi, C. (2017). *ConceptNet 5.5: An
+    Open Multilingual Graph of General Knowledge.* AAAI 2017.
+
+### ConceptNet Numberbatch 19.08 (`corpora/numberbatch/`)
+
+Pre-computed multilingual word embeddings derived from ConceptNet,
+word2vec, GloVe, and OpenSubtitles.
+
+  - Upstream: <https://github.com/commonsense/conceptnet-numberbatch>.
+  - License: **CC-BY-SA 4.0**.
+  - Citation: Speer, R. & Lowry-Duda, J. (2017). *ConceptNet at SemEval-2017
+    Task 2: Extending Word Embeddings with Multilingual Relational
+    Knowledge.* SemEval 2017.
+
+### `wordfreq` (`generated/wordfreq.tsv`)
+
+Generated by the Python `wordfreq` package (Robyn Speer / LuminosoInsight)
+and written to `generated/wordfreq.tsv` by
+`lib/rhymecrime/dict/wordfreq/export_wordfreq_tsv.py`.
+
+  - Upstream: <https://github.com/rspeer/wordfreq>.
+  - License: MIT for the package; underlying corpora are CC-BY-SA in places.
+  - Citation: Speer, R. (2022). *rspeer/wordfreq: v3.0* (Zenodo).

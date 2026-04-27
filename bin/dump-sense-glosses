@@ -22,11 +22,11 @@
 #
 # Scope:
 #   +--limit-csv CSV+  only dump words referenced in the CSV's +cue+/+related+ columns.
-#                      Useful for iterating on spec/related.csv fast.
+#                      Useful for iterating on curated/related.csv fast.
 #   default            all dictionary base lemmas with Numberbatch vectors (~65k; Python
 #                      encoding this many at MPNet pace is ~30 min on Apple Silicon MPS).
 #
-#   ruby bin/dump-sense-glosses --limit-csv spec/related.csv
+#   ruby bin/dump-sense-glosses --limit-csv curated/related.csv
 #   ruby bin/dump-sense-glosses                    # everything
 #   ruby bin/dump-sense-glosses --max-senses 6 --output /tmp/glosses.jsonl
 

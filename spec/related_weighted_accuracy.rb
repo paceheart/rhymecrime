@@ -1,7 +1,7 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 #
-# Evaluate thematic relatedness on spec/related.csv (same predicate as RSpec).
+# Evaluate thematic relatedness on curated/related.csv (same predicate as RSpec).
 #
 #   cd <repo> && ruby -I lib experiments/related_weighted_accuracy.rb
 #   cd <repo> && ruby -I lib experiments/related_weighted_accuracy.rb --profile
@@ -181,7 +181,7 @@ Dir.chdir(repo) do
   require "rhymecrime/relatedness/score"
   require_relative "inclusive_profiler" if want_profile
 
-  path = File.join(repo, "spec", "related.csv")
+  path = File.join(repo, "curated", "related.csv")
   raw_rows = CSV.parse(File.read(path, encoding: "UTF-8"), headers: true)
   rows, clone_count = expanded_rows_with_clones(raw_rows)
 
@@ -346,7 +346,7 @@ Dir.chdir(repo) do
   prec = (tp + fp).zero? ? 0.0 : (tp.to_f / (tp + fp))
 
   whatever_note = whatever_as_unrelated ? "#{relabeled_whatever} whatever→unrelated_ish" : "+#{skipped_whatever} whatever skipped"
-  puts "spec/related.csv  n=#{n}  positive=#{pos}  negative=#{neg}  (#{whatever_note}, #{skipped_stopword} stop-word pairs filtered at load)"
+  puts "curated/related.csv  n=#{n}  positive=#{pos}  negative=#{neg}  (#{whatever_note}, #{skipped_stopword} stop-word pairs filtered at load)"
   puts "  raw rows=#{raw_rows.size}  +#{clone_count} OUGHTA_BE_IDENTICAL clones across #{OUGHTA_BE_IDENTICAL.size} cue families"
   puts
   correct = tp + tn

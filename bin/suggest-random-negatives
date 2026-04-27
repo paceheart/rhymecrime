@@ -3,7 +3,7 @@
 # encoding: UTF-8
 #
 # Negative oversampling helper: append +TARGET+ random (a, b) pairs to
-# spec/related.csv, pre-labelled +unrelated+, drawn from the universe of
+# curated/related.csv, pre-labelled +unrelated+, drawn from the universe of
 # +relatedness_target_word?+ lemma pairs and stratified across three
 # classifier-score buckets so the classifier sees the empirical "random
 # pair = unrelated" prior at a range of decision-confidence levels:
@@ -16,7 +16,7 @@
 #                                                          accidental homonym /
 #                                                          polysemy positives.
 #
-# Why this exists: the FP error analysis on +spec/related.csv+ found that
+# Why this exists: the FP error analysis on +curated/related.csv+ found that
 # ~71% of FPs were "Composite_weak" — pairs where four-five modest signals
 # each pushed slightly upward and the GBT learned to trust their sum.
 # Hand-curated negatives are dominated by *near-positives* (the human picks
@@ -69,7 +69,7 @@ BOR_HI        = (ENV["BOR_HI"]  || "49").to_i
 MAX_ATTEMPTS  = (ENV["MAX_ATTEMPTS"] || "1500000").to_i
 SEED          = (ENV["SEED"]      || "31").to_i
 
-CSV_PATH = File.expand_path("../spec/related.csv", __dir__)
+CSV_PATH = File.expand_path("../curated/related.csv", __dir__)
 
 def pair_key(a, b)
   la = (lemma(a) || a).to_s

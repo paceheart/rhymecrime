@@ -107,7 +107,7 @@ end
 
 # Feedback cue per goal. Determines what +cue+ the rendered word is being
 # claimed related to, so the thumbs widget can POST a (cue, related, verdict)
-# triple matching the +spec/related.csv+ schema:
+# triple matching the +curated/related.csv+ schema:
 #
 #   * +rhymes+         → nil (plain rhymes; no relatedness claim being made)
 #   * +related+        → word1 (debug column: "words related to word1")

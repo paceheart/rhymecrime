@@ -2,7 +2,14 @@
 
 source "https://rubygems.org"
 
+# Match AWS Lambda's +ruby3.4+ managed runtime (see +template.yaml+).
+# Pessimistic on minor so a contributor on 3.5/4.0 surfaces the mismatch
+# before deploy instead of after; AWS picks the patch within the 3.4.x line.
+ruby "~> 3.4.0"
+
 gem "aws-sdk-dynamodb"
+gem "csv"     # bundled (not default) since Ruby 3.4 — required at runtime
+              # by +lib/rhymecrime/feedback_store.rb+'s CsvFeedbackStore.
 gem "memery"
 gem "msgpack"
 gem "puma"
@@ -11,7 +18,6 @@ gem "sinatra"
 gem "sqlite3"
 
 group :development, :test do
-  gem "csv"
   gem "numo-narray" # BLAS-backed dot products for the MPNet sense-vector
                     # cosines in +lib/rhymecrime/relatedness/signals.rb+.
                     # Offline / local-dev only — signals.rb isn't loaded at

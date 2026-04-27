@@ -1,7 +1,7 @@
 # Surface-spelling preference expectations: the dictionary should normalize each documented
 # pair to a single preferred form via +preferred_form+. Covers both:
 #
-#   - manually declared variants (+spec/spelling.csv+), and
+#   - manually declared variants (+curated/spelling.csv+), and
 #   - automatically detected morphology pairs (+us_uk_morphology_pair+ and friends).
 #
 # Per-pair semantics: if the non-preferred form is not a headword in +word_dict+ there is nothing
@@ -9,9 +9,9 @@
 # it normalizes to the preferred form, AND that the preferred form is itself a fixed point (so a
 # future regression that flips the preference shows up as a spec failure either way).
 
-SPELLING_CSV_SPEC_PATH = File.join(__dir__, "spelling.csv")
+SPELLING_CSV_SPEC_PATH = File.expand_path("../curated/spelling.csv", __dir__)
 
-# Parse +spec/spelling.csv+: each non-comment line is
+# Parse +curated/spelling.csv+: each non-comment line is
 # +preferred,alt1[,alt2,...][,free-text notes]+. We yield every +(preferred, alt)+ pair.
 # The +#+-prefixed comment header at the top is skipped, and an optional trailing notes
 # column (any column containing whitespace / punctuation / digits — i.e. not matching
@@ -122,7 +122,7 @@ describe "SPELLING VARIANTS" do
     prefer_spelling "icing", "iceing"
   end
 
-  context "manual list (spec/spelling.csv)" do
+  context "manual list (curated/spelling.csv)" do
     each_spelling_csv_pair do |preferred, alt|
       prefer_spelling preferred, alt
     end

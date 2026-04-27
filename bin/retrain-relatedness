@@ -24,7 +24,7 @@
 # Stage 3 alone is enough when:
 #   - you edit LEARNED_FEATURE_NAMES / PairSignals / learned_feature_vector
 #   - you tweak hyperparameters
-#   - you modify spec/related.csv (the training labels)
+#   - you modify curated/related.csv (the training labels)
 
 set -euo pipefail
 

@@ -3,7 +3,7 @@
 # encoding: UTF-8
 #
 # Active-learning helper: append +TARGET+ untagged (CUE, w) rows to
-# spec/related.csv, sampled evenly across three classifier-score strata so the
+# curated/related.csv, sampled evenly across three classifier-score strata so the
 # human annotator can refute or confirm the model's beliefs across the entire
 # decision-confidence range — not just the borderline band that
 # +bin/suggest-untagged-relatedness+ targets.
@@ -66,7 +66,7 @@ BORDER_HI  = (ENV["BORDER_HI"] || "60").to_i
 UNREL_HI   = (ENV["UNREL_HI"]  || "25").to_i
 SEED       = (ENV["SEED"]      || "17").to_i
 
-CSV_PATH = File.expand_path("../spec/related.csv", __dir__)
+CSV_PATH = File.expand_path("../curated/related.csv", __dir__)
 
 def pair_key(a, b)
   la = (lemma(a) || a).to_s

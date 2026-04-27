@@ -201,7 +201,7 @@ end
 #
 # +replace+ is the default because the hand rules composed via max-over-contributions
 # overgenerate: +cooccurrence+ + +sense_vectors+ + +similarity+ between them produced
-# ~330 of the ~380 strong FPs on the live pipeline (2026-04 eval on +spec/related.csv+),
+# ~330 of the ~380 strong FPs on the live pipeline (2026-04 eval on +curated/related.csv+),
 # compared to 80 strong FPs with the classifier alone. The learned combiner sees all
 # 67 phase-1 features (gloss_match, usf_twohop, sv_max/min, edge_present, cn_hops,
 # contextualized-model signals, per-word priors) and composes them coherently under

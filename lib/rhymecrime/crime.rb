@@ -1471,7 +1471,7 @@ def print_word(word, focal_word=false, cue: nil)
   # +cue+ is nil (no relatedness column, e.g. plain rhymes), or when the
   # rendered word is the cue itself (relatedness to self is uninteresting).
   # The data attributes carry the *underscore* surface so what we POST to
-  # +/feedback+ matches the shape of +spec/related.csv+'s +cue+/+related+
+  # +/feedback+ matches the shape of +curated/related.csv+'s +cue+/+related+
   # columns; +feedback.js+ wires the click → fetch and uses +sessionStorage+
   # to persist the user's vote across navigations within the tab.
   emit_relatedness_feedback_widget(word, cue) if cue && !cue.to_s.empty? && cue != word

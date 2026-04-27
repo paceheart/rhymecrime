@@ -2,7 +2,7 @@
 # frozen_string_literal: true
 #
 # Per-row failure analysis for the +strong false negative+ bucket of the relatedness
-# eval (+spec/related.csv+ rows with +oughta be related? = related+ that the current
+# eval (+curated/related.csv+ rows with +oughta be related? = related+ that the current
 # classifier predicts unrelated). Dominant cost component on the new harder eval set
 # (~1100/4900 weighted-composite penalty), so worth structurally attacking.
 #
@@ -50,7 +50,7 @@ puts "classifier threshold = #{format('%.3f', threshold)}"
 NEAR_MISS_LO = (threshold - 0.10).round(3)
 MID_MISS_LO = 0.20
 
-path = File.join(repo, "spec", "related.csv")
+path = File.join(repo, "curated", "related.csv")
 raw_rows = CSV.parse(File.read(path, encoding: "UTF-8"), headers: true)
 
 skipped_stopword = 0

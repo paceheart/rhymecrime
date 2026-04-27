@@ -3,12 +3,16 @@ Find thematically related rhymes
 
 ## Installation
 
-* dnf install git
-* git clone http://github.com/paceheart/rhymecrime/
-* dnf install ruby
-* gem install rwordnet
-* gem install rspec
-* Run rspec from the rhymecrime directory to verify installation. All tests should pass.
+Prereqs: Ruby (see `template.yaml` for the AWS Lambda runtime version), Bundler, Python 3 (for the wordfreq export), `curl`, and `gunzip`.
+
+```bash
+git clone https://github.com/paceheart/rhymecrime/
+cd rhymecrime
+./setup.sh             # bundle install + download corpora + bin/dict-build
+bundle exec rspec      # all tests should pass
+```
+
+`setup.sh` is idempotent: corpus downloads are skipped if the destination file already exists, so re-running during iteration only redoes the dict build. See `setup.sh` for the full list of corpora and their licenses.
 
 ## Repository layout
 
@@ -22,30 +26,47 @@ Data and build artifacts are split so **sources** stay under `corpora/` and **re
 | **`corpora/`** | Upstream or hand-maintained **inputs** (versioned when license/size allow). |
 | **`corpora/cmudict/`** | CMU Pronouncing Dictionary (tweaked 0.7c text + license/readme). |
 | **`corpora/wordnet/3.1/`** | WordNet 3.1 lexicon (same internal layout as the standard distribution: inner `dict/`, `LICENSE`, …). |
-| **`corpora/usf/`** | USF free-association norms (raw `Cue_Target_Pairs.*` shards). Runtime graph: `generated/usf_associations.json` (you build from the raw shards; not produced by `dict-build` today). |
-| **`corpora/wiktionary/`** | Kaikki / Wiktextract English JSONL (often large; **gitignored** — fetch with `setup.sh` or equivalent). |
-| **`corpora/subtlex/`** | SUBTLEX-US frequency TSV (often **gitignored**). |
+| **`corpora/usf/`** | USF free-association norms (raw `Cue_Target_Pairs.*` shards). Runtime graph `generated/usf_associations.json` is compiled by `bin/build-usf-associations` (run from `setup.sh`); not produced by `dict-build`. |
+| **`corpora/neol/`** | The 12dicts `neol2016.txt` neologism list (2016 snapshot, public domain). Force-added past `corpora/*` in `.gitignore`. The locally-curated companion list lives at `curated/neol_supplement.txt`. See `corpora/neol/README.md`. |
+| **`corpora/wiktionary/`** | Kaikki / Wiktextract English JSONL (often large; **gitignored** — fetched by `bin/setup-corpora`). |
+| **`corpora/subtlex/`** | SUBTLEX-US frequency TSV (`SUBTLEXus.tsv` from Open Lexicon, CC-BY-SA). Vendored — force-added past `corpora/*` in `.gitignore`. See `corpora/subtlex/README.md` and the top-level `THIRD_PARTY_NOTICES.md`. |
+| **`corpora/varcon/`** | VarCon `varcon.txt` (US/UK/CA/AU spelling-variant clusters by Atkinson & Titze, MIT-style). Vendored along with the upstream `README.txt` carrying the license. |
 | **`corpora/conceptnet/`** | Optional **ConceptNet** assertions gzip (`conceptnet-assertions-5.7.0.csv.gz`) for thematic edge weights in `generated/conceptnet_edges.json` (large; **gitignored**). |
 | **`corpora/numberbatch/`** | Optional **Numberbatch** English vectors (`numberbatch-en-19.08.txt`) for `generated/numberbatch_vectors.msgpack` (large; **gitignored**). |
+| **`curated/`** | All hand-edited inputs in one flat directory: word lists (`common_words.txt`, `rare_words.txt`, `forbid_list.txt`, `stop_words.txt`, `neol_supplement.txt`), the `authoritative_pronunciations.txt` overrides, the manually-declared `spelling.csv` variant clusters, and the labeled `lemma.csv` / `rarity.csv` / `related.csv` test/training sets. See `curated/README.md`. |
 | **`generated/`** | **Outputs** of `./bin/dict-build` (see `lib/rhymecrime/dict/dict.rb`): `word_dict.txt`, `rime_dict.txt`, `part_of_speech.json`, `hyphen_variant_map.json`, `wordfreq.tsv`, and when source corpora are present `conceptnet_edges.json`, `numberbatch_vectors.msgpack`. Semantic relatedness also reads `usf_associations.json` here if present. Entire directory is **gitignored**; clone → run `setup.sh` (wordfreq, Kaikki, …) then `./bin/dict-build`. |
-| **`lib/rhymecrime/dict/`** | Dictionary compiler (`dict.rb`), pronunciation / inflection / Wiktionary loaders, curated lists (`common_words.txt`, `rare_words.txt`, `forbid_list.txt`, …), and `dict/wordfreq/export_wordfreq_tsv.py`. |
-| **`spec/`** | RSpec examples and `related.csv` (thematic relatedness expectations). |
+| **`lib/rhymecrime/dict/`** | Dictionary compiler (`dict.rb`), pronunciation / inflection / Wiktionary loaders, and `dict/wordfreq/export_wordfreq_tsv.py`. (Hand-edited word lists previously kept here now live under `curated/`.) |
+| **`spec/`** | RSpec examples and supporting harnesses. Hand-labeled CSVs (`related.csv`, `rarity.csv`, `lemma.csv`, `spelling.csv`) live under `curated/`. |
 
 ## Command Line Usage
 
+`bin/rhyme.rb` reads CGI-style form input from STDIN and prints HTML, e.g.
+
+```bash
 echo "word1=food" | bin/rhyme.rb
+```
 
-You can change OUTPUT_TYPE from 'cgi' to 'text' if you want to use it at the command line.
+Set `OUTPUT_FORMAT` in `lib/rhymecrime/frontend.rb` to `"text"` for plain-text output.
 
-## Webserver Installation
+## Running the web UI
 
-* put everything into your cgi-bin directory
-* configure your webserver to allow Ruby scripts
-* cd /WHATEVER/cgi-bin/
-* chmod +x bin/*.rb bin/dict-build
-* ./bin/dict-build
+**Locally** (Sinatra under Puma):
 
-That rebuilds caches under `generated/` (loads `lib/rhymecrime/dict/dict.rb` and runs the rebuild). Configure your app server to run `bin/rhyme.rb` (and `bin/similar.rb` if needed) for the web UI. Symlink `assets/*.css` into your static docroot if needed (see `setup.sh`).
+```bash
+bin/run-local              # http://localhost:9292/
+```
+
+`config.ru` boots `app.rb`, a small Sinatra app exposing `/`, `/similar`, `/feedback`, and `/health`.
+
+**On AWS** (Lambda + HTTP API + DynamoDB):
+
+The deploy is described by `template.yaml` (AWS SAM). Generated dictionary data is loaded from DynamoDB at runtime instead of `generated/` — see `bin/upload-to-dynamodb` and `RHYMECRIME_DATA_SOURCE=dynamodb`. Typical flow:
+
+```bash
+./bin/dict-build           # build generated/ locally
+./bin/upload-to-dynamodb   # push generated/ into the rhymecrime table
+sam build && sam deploy --guided
+```
 
 ## Examples:
 

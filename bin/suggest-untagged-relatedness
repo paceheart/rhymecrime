@@ -1,7 +1,7 @@
 #!/usr/bin/env ruby
 # encoding: UTF-8
 # Active-learning helper: append +TARGET_PAIRS+ new untagged (word1, word2) rows
-# to +spec/related.csv+ whose hand-labels would be most informative for the
+# to +curated/related.csv+ whose hand-labels would be most informative for the
 # relatedness classifier. Pairs are sampled by uncertainty.
 #
 # Tracks:
@@ -38,7 +38,7 @@ require "rhymecrime/store"
 
 MODE                 = (ENV["MODE"] || "mixed").downcase
 TARGET_PAIRS         = (ENV["TARGET_PAIRS"] || "1000").to_i
-CSV_PATH             = File.expand_path("../spec/related.csv", __dir__)
+CSV_PATH             = File.expand_path("../curated/related.csv", __dir__)
 TRACK_A_LOW          = (ENV["TRACK_A_LOW"]  || "50").to_i
 TRACK_A_HIGH         = (ENV["TRACK_A_HIGH"] || "65").to_i
 TRACK_B_LOW          = (ENV["TRACK_B_LOW"]  || (MODE == "neg" ? "25" : "30")).to_i

@@ -34,7 +34,7 @@ Resources:
   # Feedback table: one item per thumbs click. Composite key lets us
   # +Query+ all votes for a single (cue, related) pair without scanning,
   # while +Scan+ is still cheap enough at expected feedback volume to drive
-  # the periodic export back into spec/related.csv. Kept separate from
+  # the periodic export back into curated/related.csv. Kept separate from
   # +RhymecrimeTable+ so the function's read policy on the main table
   # stays read-only — write capability is scoped to this table only.
   RhymecrimeFeedbackTable:

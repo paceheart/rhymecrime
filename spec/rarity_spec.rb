@@ -2,7 +2,7 @@
 # 95.7% success overall
 # 98.3% success on the examples we care most about
 #
-# Examples live in spec/rarity.csv (context, word, kind, important, skip, notes) — loaded below.
+# Examples live in curated/rarity.csv (context, word, kind, important, skip, notes) — loaded below.
 # +kind+ includes forbidden_ish (soft-priority forbidden; see +oughta_be_forbidden_ish+).
 # See spec/test_utils.rb (+load_and_define_rarity_test_cases_from_csv+).
 

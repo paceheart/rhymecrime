@@ -3,10 +3,10 @@
 # encoding: UTF-8
 #
 # Importer: fold thumbs-up/down clicks from +generated/feedback.csv+ into
-# +spec/related.csv+ as new hand-tag rows. Mirrors the +DynamoFeedbackStore+
+# +curated/related.csv+ as new hand-tag rows. Mirrors the +DynamoFeedbackStore+
 # +Scan+ → CSV importer story documented in +lib/rhymecrime/feedback_store.rb+,
 # but for the local CSV sink. Idempotent: pairs already present in
-# +spec/related.csv+ (lowercased exact match on +cue+/+related+) are left
+# +curated/related.csv+ (lowercased exact match on +cue+/+related+) are left
 # untouched, so re-running after another play session only appends genuinely
 # new pairs.
 #
@@ -31,7 +31,7 @@
 #
 # Knobs (env vars):
 #   FEEDBACK_CSV   path     (default: generated/feedback.csv)
-#   RELATED_CSV    path     (default: spec/related.csv)
+#   RELATED_CSV    path     (default: curated/related.csv)
 #   DRY_RUN        truthy   if set, print the planned diff and exit without
 #                           touching the file
 #
@@ -47,7 +47,7 @@ require "time"
 
 ROOT = File.expand_path("..", __dir__)
 FEEDBACK_CSV = ENV["FEEDBACK_CSV"] || File.join(ROOT, "generated", "feedback.csv")
-RELATED_CSV  = ENV["RELATED_CSV"]  || File.join(ROOT, "spec", "related.csv")
+RELATED_CSV  = ENV["RELATED_CSV"]  || File.join(ROOT, "curated", "related.csv")
 DRY_RUN = !ENV["DRY_RUN"].to_s.strip.empty? && ENV["DRY_RUN"] != "0"
 
 unless File.file?(FEEDBACK_CSV)
@@ -150,7 +150,7 @@ if DRY_RUN
   exit 0
 end
 
-# +CSV.open+ in "a" mode would handle quoting for us, but +spec/related.csv+
+# +CSV.open+ in "a" mode would handle quoting for us, but +curated/related.csv+
 # was hand-written and most existing rows are unquoted; we match that style
 # only when no special chars need escaping, otherwise let +CSV+ quote.
 CSV.open(RELATED_CSV, "a", encoding: "UTF-8") do |csv|

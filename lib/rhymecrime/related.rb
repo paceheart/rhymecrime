@@ -47,7 +47,7 @@ end
 # when set, +thematically_related?+ / +why_thematically_related?+ skip the
 # precomputed Store lookup and always run the compute pipeline. Lets
 # post-retrain evals measure the *current* classifier + rules against
-# +spec/related.csv+ without waiting for a full +bin/precompute-relatedness+
+# +curated/related.csv+ without waiting for a full +bin/precompute-relatedness+
 # rebuild. Never consulted at Lambda runtime (production never sets the var).
 def related_bypass_store?
   ENV["RELATED_BYPASS_STORE"].to_s == "1"

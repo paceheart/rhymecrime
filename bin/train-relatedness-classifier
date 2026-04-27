@@ -3,7 +3,7 @@
 #
 # Train the phase-2 learned combiner for thematic relatedness.
 #
-# Input:  spec/related.csv  (gold-labeled pairs: related / related_ish / unrelated / unrelated_ish / whatever)
+# Input:  curated/related.csv  (gold-labeled pairs: related / related_ish / unrelated / unrelated_ish / whatever)
 # Output: generated/relatedness_classifier.json
 #           common: { feature_names, model_type, threshold, training }
 #           logreg: { means, stds, weights }
@@ -522,7 +522,7 @@ end
 # Classifier must not see the stop-word short-circuit; phase 3 still handles those.
 ENV["RELATED_LEARNED_MODE"] = "off"
 
-path = File.join(repo, "spec", "related.csv")
+path = File.join(repo, "curated", "related.csv")
 raw_rows = CSV.parse(File.read(path, encoding: "UTF-8"), headers: true)
 
 # Drop stop-word rows up front: phase 3's stop-word short-circuit makes the
@@ -579,7 +579,7 @@ rows.each do |r|
   l2 = ENV["RELATED_SKIP_LEMMA"] == "1" ? w2 : lemma(w2)
 
   # +PairSignals+ is now directional: the +cue+ column is the cue, +related+
-  # is the related candidate (see +spec/related.csv+'s 2026-04 orientation
+  # is the related candidate (see +curated/related.csv+'s 2026-04 orientation
   # pass). Do NOT canonicalize lex-order here — that would feed lex order into
   # the directional +sv_cue_to_related+ / +usf_direct_cue_to_related+ /
   # unigram +cue+ / +related+ columns and turn them into noise that the GBT
