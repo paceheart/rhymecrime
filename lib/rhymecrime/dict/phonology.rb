@@ -179,6 +179,13 @@ def syllabify_with_common_prefix_split(word, normalized_flat_pron, flat_by_word)
       next unless flat[-stem_flat.length..-1] == stem_flat
       prefix_flat = flat[0...-stem_flat.length]
       next if prefix_flat.empty?
+      # A morphological prefix must carry its own vowel — otherwise inserting a
+      # syllable boundary right after it produces a vowelless "syllable" (beau =
+      # +be+ + +au+ flat-prons as +B . OW1+, leaving +B+ as syllable 1; +cooperate+'s
+      # alt pron +K W AA1 P AH0 R EY2 T+ similarly leaves +K W+ standing alone).
+      # When that happens we're not really seeing a prefix derivation at the
+      # phonological level — fall through to plain +syllabify+.
+      next unless prefix_flat.any?(&:vowel?)
       # Re-syllabify both halves: +stem_flat+ comes from +flat_pron_sequences_for_word+
       # which strips +.+ from the stem's stored pron, so without this the stem half
       # collapses into one giant vowel-stuffed syllable (illegitimate → IH2 . L AH0 JH
@@ -205,23 +212,25 @@ end
 # +syllabify+, the historical +illegitimate+ → +IH2 . L AH0 JH IH1 D AH0 M
 # AH0 T+ regression).
 #
-# Set +RHYMECRIME_SYLL_INVARIANT=warn+ to print one warning per violation;
-# +=raise+ to fail dict-build hard. Default is silent so vocabulary-wide
-# audits go through +bin/audit-syllable-vowel-invariant+ and don't bury
-# normal build output.
+# Default mode is +raise+ — the dict has been audited clean (see
+# +bin/audit-syllable-vowel-invariant+), so any new violation is a bug we
+# want to surface loudly during +bin/dict-build+. Set
+# +RHYMECRIME_SYLL_INVARIANT=warn+ to demote to a stderr warning while
+# debugging, +=off+ to silence entirely.
 def check_syllable_vowel_invariant!(pron, word, source)
   return if pron.nil? || pron.empty?
   return if pron.syllable_vowel_invariant_ok?
-  mode = ENV["RHYMECRIME_SYLL_INVARIANT"].to_s.downcase
-  return if mode.empty?
+  mode = ENV.fetch("RHYMECRIME_SYLL_INVARIANT", "raise").to_s.downcase
 
   msg = "syllable-vowel invariant violated for #{word.inspect} via #{source}: " \
         "#{pron.syllable_vowel_invariant_violation} (full: #{pron})"
   case mode
-  when "raise"
-    raise msg
+  when "off", ""
+    # silenced
   when "warn"
     warn msg
+  else
+    raise msg
   end
 end
 
