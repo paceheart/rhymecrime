@@ -265,6 +265,7 @@ describe 'RHYMES' do
     ought_not_rhyme 'subordinate', 'insubordinate' # in-
     ought_not_rhyme 'other', 'another' # arguable; an- is... kind of a prefix?
     ought_not_rhyme 'deserved', 'undeserved' # un-
+    ought_not_rhyme 'legitimate', 'illegitimate' # il-
     context "unless they're not derivationally related" do
       # Pseudo-prefixes (the +re-+, +a-+, +im-+ isn't really derivational here) would need
       # lemma-aware / etymological reasoning to distinguish from real prefix rhymes. For now

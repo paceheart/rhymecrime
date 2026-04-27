@@ -92,7 +92,7 @@ def compute_and_print_html_middle(word1, word2)
     goal = goals[i]
     width = widths[i]
     output, dregs, type, header = rhymecrime(word1, word2, goal, OUTPUT_FORMAT, DEBUG_MODE)
-    print_html_column(goal, output, dregs, word1, type, header, width, i == goals.length - 1)
+    print_html_column(goal, output, dregs, word1, word2, type, header, width, i == goals.length - 1)
   end
 end
 
@@ -105,10 +105,32 @@ def tuple_focal_word_for_goal(goal, word1)
   goal == "set_related" ? word1 : nil
 end
 
-def print_html_column(goal, output, dregs, input_word1, type, header, width, is_last_column)
+# Feedback cue per goal. Determines what +cue+ the rendered word is being
+# claimed related to, so the thumbs widget can POST a (cue, related, verdict)
+# triple matching the +spec/related.csv+ schema:
+#
+#   * +rhymes+         → nil (plain rhymes; no relatedness claim being made)
+#   * +related+        → word1 (debug column: "words related to word1")
+#   * +set_related+    → word1 (every tuple slot related to word1)
+#   * +related_rhymes+ → word2 (rhymes for word1, related to word2)
+#   * +pair_related+   → +[word1, word2]+ (slot 0 related to word1, slot 1 to
+#     word2). +print_tuples+ accepts this Array form natively.
+def feedback_cue_for_goal(goal, word1, word2)
+  case goal
+  when "set_related", "related"
+    word1
+  when "related_rhymes"
+    word2
+  when "pair_related"
+    [word1, word2]
+  end
+end
+
+def print_html_column(goal, output, dregs, input_word1, input_word2, type, header, width, is_last_column)
   cgi_puts "<td style='vertical-align: top; width:#{width}%;' label='#{goal}'>"
   tuple_focal = tuple_focal_word_for_goal(goal, input_word1)
-  print_html_column_data(output, dregs, input_word1, type, header, tuple_focal)
+  feedback_cue = feedback_cue_for_goal(goal, input_word1, input_word2)
+  print_html_column_data(output, dregs, input_word1, type, header, tuple_focal, feedback_cue)
   cgi_puts "</td>"
   unless is_last_column
     cgi_puts "<td style='width:1%;'> </td>"
@@ -116,10 +138,10 @@ def print_html_column(goal, output, dregs, input_word1, type, header, width, is_
   end
 end
 
-def print_html_column_data(output, dregs, input_word1, type, header, tuple_focal_word = nil)
+def print_html_column_data(output, dregs, input_word1, type, header, tuple_focal_word = nil, feedback_cue = nil)
   case type
   when :words, :tuples, :synsets
-    print_interesting_html_column_data(output, dregs, input_word1, header, type, tuple_focal_word)
+    print_interesting_html_column_data(output, dregs, input_word1, header, type, tuple_focal_word, feedback_cue)
   when :bad_input
     emit_line header
   when :error
@@ -129,7 +151,7 @@ def print_html_column_data(output, dregs, input_word1, type, header, tuple_focal
   end
 end
 
-def print_interesting_html_column_data(output, dregs, input_word1, header, output_type, tuple_focal_word = nil)
+def print_interesting_html_column_data(output, dregs, input_word1, header, output_type, tuple_focal_word = nil, feedback_cue = nil)
   cgi_puts header
   if output.empty?
     if dregs.empty?
@@ -138,20 +160,22 @@ def print_interesting_html_column_data(output, dregs, input_word1, header, outpu
       emit_line "No good results."
     end
   else
-    print_output(output, input_word1, output_type, tuple_focal_word)
+    print_output(output, input_word1, output_type, tuple_focal_word, feedback_cue)
   end
   unless dregs.empty?
     cgi_puts "<br/><hr><p>For the desperate:</p>"
-    print_output(dregs, input_word1, output_type, tuple_focal_word)
+    print_output(dregs, input_word1, output_type, tuple_focal_word, feedback_cue)
   end
 end
 
-def print_output(output, input_word1, output_type, tuple_focal_word = nil)
+def print_output(output, input_word1, output_type, tuple_focal_word = nil, feedback_cue = nil)
   case output_type
   when :words
-    print_words(output)
+    # +feedback_cue+ for :words is always a String (per +feedback_cue_for_goal+:
+    # only +pair_related+ — a :tuples goal — returns an Array).
+    print_words(output, false, cue: feedback_cue)
   when :tuples
-    print_tuples(output, tuple_focal_word)
+    print_tuples(output, tuple_focal_word, cues: feedback_cue)
   when :synsets
     print_synsets(output, input_word1)
   end

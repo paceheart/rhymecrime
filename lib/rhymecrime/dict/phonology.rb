@@ -179,10 +179,50 @@ def syllabify_with_common_prefix_split(word, normalized_flat_pron, flat_by_word)
       next unless flat[-stem_flat.length..-1] == stem_flat
       prefix_flat = flat[0...-stem_flat.length]
       next if prefix_flat.empty?
-      return Pronunciation.new(prefix_flat + ["."] + stem_flat)
+      # Re-syllabify both halves: +stem_flat+ comes from +flat_pron_sequences_for_word+
+      # which strips +.+ from the stem's stored pron, so without this the stem half
+      # collapses into one giant vowel-stuffed syllable (illegitimate → IH2 . L AH0 JH
+      # IH1 D AH0 M AH0 T, four vowels in syllable 2). The prefix half is short enough
+      # that +syllabify+ is a no-op for native prefixes, but doing it symmetrically
+      # also handles +tele+/+supe+/+inte+ etc.
+      prefix_syl = Pronunciation.new(prefix_flat).syllabify.phonemes
+      stem_syl   = Pronunciation.new(stem_flat).syllabify.phonemes
+      result = Pronunciation.new(prefix_syl + ["."] + stem_syl)
+      check_syllable_vowel_invariant!(result, word, "syllabify_with_common_prefix_split")
+      return result
     end
   end
-  normalized_flat_pron.syllabify
+  result = normalized_flat_pron.syllabify
+  check_syllable_vowel_invariant!(result, word, "syllabify")
+  result
+end
+
+# Build-time invariant: a well-syllabified ARPAbet pronunciation has exactly
+# one vowel per syllable (CMU encodes syllabic consonants as a vowel symbol,
+# so this is universal — see +Pronunciation#syllable_vowel_invariant_ok?+).
+# Violations indicate a bug in whatever produced the syllabification (e.g.
+# concatenating an un-syllabified stem onto a prefix without re-running
+# +syllabify+, the historical +illegitimate+ → +IH2 . L AH0 JH IH1 D AH0 M
+# AH0 T+ regression).
+#
+# Set +RHYMECRIME_SYLL_INVARIANT=warn+ to print one warning per violation;
+# +=raise+ to fail dict-build hard. Default is silent so vocabulary-wide
+# audits go through +bin/audit-syllable-vowel-invariant+ and don't bury
+# normal build output.
+def check_syllable_vowel_invariant!(pron, word, source)
+  return if pron.nil? || pron.empty?
+  return if pron.syllable_vowel_invariant_ok?
+  mode = ENV["RHYMECRIME_SYLL_INVARIANT"].to_s.downcase
+  return if mode.empty?
+
+  msg = "syllable-vowel invariant violated for #{word.inspect} via #{source}: " \
+        "#{pron.syllable_vowel_invariant_violation} (full: #{pron})"
+  case mode
+  when "raise"
+    raise msg
+  when "warn"
+    warn msg
+  end
 end
 
 def conflate_imperfect_rhyme_phoneme_string(phoneme_space_string)

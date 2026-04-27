@@ -2,8 +2,10 @@
 
 $LOAD_PATH.unshift File.expand_path("lib", __dir__)
 
+require "json"
 require "sinatra"
 require "rhymecrime/frontend"
+require "rhymecrime/feedback_store"
 
 set :public_folder, File.expand_path("assets", __dir__)
 set :bind, "0.0.0.0"
@@ -21,6 +23,22 @@ get "/similar" do
     halt 501, "<!DOCTYPE html><html><body><p>Thematic similarity needs full in-memory lexicon; it is not available in DynamoDB mode.</p></body></html>"
   end
   build_similar_page(params["word1"], params["word2"])
+end
+
+post "/feedback" do
+  content_type :json
+  body = request.body.read
+  payload = body.empty? ? {} : (JSON.parse(body) rescue {})
+  ok = Rhymecrime::FeedbackStore.record!(
+    cue: payload["cue"],
+    related: payload["related"],
+    verdict: payload["verdict"],
+    ip: request.ip,
+    user_agent: request.user_agent,
+    session: payload["session"],
+  )
+  status(ok ? 204 : 400)
+  ok ? "" : { error: "invalid feedback payload" }.to_json
 end
 
 get "/health" do

@@ -1,0 +1,128 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+#
+# Audit +generated/word_dict.txt+ for the "every syllable has exactly one
+# vowel" invariant (see +Pronunciation#syllable_vowel_invariant_ok?+ in
+# +lib/rhymecrime/dict/pronunciation.rb+). CMU encodes syllabic consonants
+# as a vowel symbol, so any well-formed syllabification — whether produced
+# by +Pronunciation#syllabify+ or assembled by +syllabify_with_common_prefix_split+ —
+# satisfies this. Violations indicate a build-time bug: the canonical example
+# is +illegitimate+ being stored as +IH2 . L AH0 JH IH1 D AH0 M AH0 T+, where
+# the body has lost its interior syllable boundaries because
+# +syllabify_with_common_prefix_split+ concatenated a flat (un-syllabified)
+# stem onto the prefix without re-running +syllabify+.
+#
+# Usage:
+#   bin/audit-syllable-vowel-invariant                        # full report
+#   bin/audit-syllable-vowel-invariant --summary              # counts only
+#   bin/audit-syllable-vowel-invariant --group-by prefix      # cluster by leading 1–4 letters
+#   bin/audit-syllable-vowel-invariant --only non-prefix      # only words not starting with a COMMON_PREFIXES entry
+#   bin/audit-syllable-vowel-invariant --limit 50             # cap printed rows
+#
+# Exit code: 0 if no violations, 1 otherwise — usable in CI as a regression
+# guard once the dict has been cleaned up.
+
+$LOAD_PATH.unshift File.expand_path("../lib", __dir__)
+require "rhymecrime/dict/phoneme"
+require "rhymecrime/dict/pronunciation"
+require "rhymecrime/dict/utils_rhyme"
+
+WORD_DICT_PATH = File.expand_path("../generated/word_dict.txt", __dir__)
+PREFIXES_BY_LEN = COMMON_PREFIXES.sort_by { |p| -p.length }
+
+def matching_common_prefix(word)
+  PREFIXES_BY_LEN.find { |p| word.length > p.length && word.start_with?(p) }
+end
+
+opts = { mode: :full, group_by: nil, limit: nil, only: nil }
+ARGV.each_with_index do |arg, i|
+  case arg
+  when "--summary"
+    opts[:mode] = :summary
+  when "--group-by"
+    opts[:group_by] = ARGV[i + 1]
+  when "--limit"
+    opts[:limit] = ARGV[i + 1]&.to_i
+  when "--only"
+    opts[:only] = ARGV[i + 1] # "prefix" | "non-prefix"
+  when "-h", "--help"
+    puts File.read(__FILE__).lines.grep(/^# /).join
+    exit 0
+  end
+end
+
+unless File.exist?(WORD_DICT_PATH)
+  abort "missing #{WORD_DICT_PATH} (run bin/dict-build first)"
+end
+
+violations = []
+total_words = 0
+total_prons = 0
+
+File.foreach(WORD_DICT_PATH, encoding: "UTF-8") do |line|
+  line.chomp!
+  next if line.empty? || line.start_with?("#")
+  cols = line.split(",", 4)
+  word = cols[0]
+  pron_field = cols[2].to_s
+  next if pron_field.empty?
+
+  total_words += 1
+  pron_field.split("|").each do |pron_str|
+    next if pron_str.strip.empty?
+    pron = Pronunciation.new(pron_str.split)
+    total_prons += 1
+    next if pron.syllable_vowel_invariant_ok?
+    violations << {
+      word: word,
+      pron: pron_str,
+      detail: pron.syllable_vowel_invariant_violation,
+      vowel_counts: pron.syllable_vowel_counts,
+      prefix: matching_common_prefix(word),
+    }
+  end
+end
+
+puts "audited #{total_words} words / #{total_prons} pronunciations"
+puts "violations: #{violations.size}"
+puts "  attributable to COMMON_PREFIXES: #{violations.count { |v| v[:prefix] }}"
+puts "  other:                           #{violations.count { |v| v[:prefix].nil? }}"
+puts
+
+case opts[:only]
+when "prefix"
+  violations = violations.select { |v| v[:prefix] }
+when "non-prefix"
+  violations = violations.reject { |v| v[:prefix] }
+end
+
+if violations.empty?
+  exit 0
+end
+
+case opts[:mode]
+when :summary
+  # done above
+when :full
+  if opts[:group_by] == "prefix"
+    by_prefix = Hash.new { |h, k| h[k] = [] }
+    violations.each do |v|
+      pre = v[:word][0, 4]
+      by_prefix[pre] << v
+    end
+    by_prefix.sort_by { |_, vs| -vs.size }.each do |pre, vs|
+      puts "[#{pre}*] #{vs.size}"
+      vs.first(5).each { |v| puts "  #{v[:word]}: #{v[:pron]}  (#{v[:detail]})" }
+      puts "  ... +#{vs.size - 5} more" if vs.size > 5
+    end
+  else
+    rows = opts[:limit] ? violations.first(opts[:limit]) : violations
+    rows.each do |v|
+      puts "#{v[:word]}: #{v[:pron]}"
+      puts "  #{v[:detail]}"
+    end
+    puts "(showing #{rows.size} of #{violations.size})" if opts[:limit] && violations.size > rows.size
+  end
+end
+
+exit 1

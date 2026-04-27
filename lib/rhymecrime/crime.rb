@@ -377,9 +377,18 @@ def find_related_words(word, include_self, include_rhymeless = true, max_candida
 end
 
 def find_related_rhymes(rhyme, rel)
+  # +rhyme+ supplies the phonological anchor (we collect everything that rhymes
+  # with it); +rel+ supplies the directional relatedness cue (each surviving
+  # rhyme must be thematically related *to +rel+*, in the cue→related sense
+  # the classifier learned post-symmetry-break). Pre-directional this filter
+  # was +thematically_related?(rhyme, w)+, which checked relatedness against
+  # the rhyme anchor instead of +rel+ — silently fine when the classifier was
+  # symmetric and +rhyme+ happened to share a relatedness cluster with +rel+,
+  # but wrong by construction now that direction matters and the column header
+  # explicitly promises "rhymes for word1 related to word2".
   result = find_rhyming_words(rhyme, false)
   result = filter_out_dispreferred_words(result, rhyme)
-  result = result.select { |w| thematically_related?(rhyme, w) }
+  result = result.select { |w| thematically_related?(rel, w) }
 end
 
 # Inflect suffix kind from +base+ to +inflected+, or nil if not a recognized surface pattern.
@@ -867,6 +876,24 @@ def prune_suffix_redundant_rhyming_tuples(tuples, focal_word = nil)
     end
   end
 
+  # Phase 0.6: drop tuples whose condensation collapsed them below 2 members.
+  # A "rhyming tuple" with one (or zero) word is no longer a rhyme — the input
+  # was a pure prefix-derivation pair like +[legitimate, illegitimate]+ or a
+  # homophone cluster like +[coral, choral]+, and condense_tuple_* picked the
+  # one keeper. Without this drop the singleton would survive the pruner and
+  # render as a single-word "tuple". Callers (find_rhyming_tuples) already
+  # filter +size < 2+ on the way out, but the unit pruner itself owes the same
+  # contract so spec assertions on +prune_suffix_redundant_rhyming_tuples+
+  # output match what the UI ultimately renders.
+  tuples = tuples.reject do |tup|
+    next false if tup.size >= 2
+    if verbose_prunes
+      puts "pruned rhyming tuple (collapsed below 2 members during condensation): #{tup.join(' / ')}"
+    end
+    $debug_pruned_tuples << tup if debug_pruning
+    !debug_pruning
+  end
+
   sorted = tuples.sort
   kept = []
   sorted.each do |tup|
@@ -1089,56 +1116,71 @@ def short_gloss(synset)
   end
 end
 
-def print_tuple(tuple, focal_word=false)
+# +cues+ in tuple/words printers can be:
+#   * +nil+ — no thumbs feedback rendered (e.g. plain rhymes column).
+#   * a +String+ — uniform cue for every slot (set_related uses word1; the
+#     debug +related+ column uses word1; +related_rhymes+ uses word2).
+#   * an +Array+ — per-slot cue, parallel to the tuple (used by pair_related,
+#     where slot 0's cue is word1 and slot 1's cue is word2).
+# +cue_for+ resolves which to use for a given slot index in a tuple.
+def cue_for(cues, index)
+  return nil if cues.nil?
+  cues.is_a?(Array) ? cues[index] : cues
+end
+
+def print_tuple(tuple, focal_word=false, cues: nil)
   # this basically just pushes the rare words to the end, but we could do something snazzier if we want
   pruned_class = ($debug_pruning && $debug_pruned_tuples&.include?(tuple)) ? " output_tuple_pruned" : ""
   cgi_print "<div class='output_tuple#{pruned_class}'><p class='output_p'>"
-  good_tuple = tuple.reject{ |t| rare?(t) }
-  bad_tuple  = tuple.select{ |t| rare?(t) }
+  # Sub-tuples (good/bad) inherit a sliced view of +cues+ when +cues+ is an
+  # Array, so the per-slot cue stays aligned with the rare-word reordering.
+  good_idx = tuple.each_index.reject { |i| rare?(tuple[i]) }
+  bad_idx  = tuple.each_index.select { |i| rare?(tuple[i]) }
+  good_tuple = good_idx.map { |i| tuple[i] }
+  bad_tuple  = bad_idx.map { |i| tuple[i] }
+  good_cues  = cues.is_a?(Array) ? good_idx.map { |i| cues[i] } : cues
+  bad_cues   = cues.is_a?(Array) ? bad_idx.map  { |i| cues[i] } : cues
+
   if(good_tuple.empty?)
-    print_half_of_tuple(bad_tuple, focal_word)
+    print_half_of_tuple(bad_tuple, focal_word, cues: bad_cues)
   elsif(bad_tuple.empty?)
-    print_half_of_tuple(good_tuple, focal_word)
+    print_half_of_tuple(good_tuple, focal_word, cues: good_cues)
   else
-    print_half_of_tuple(good_tuple, focal_word)
+    print_half_of_tuple(good_tuple, focal_word, cues: good_cues)
     emit_text " / "
-    print_half_of_tuple(bad_tuple, focal_word)
+    print_half_of_tuple(bad_tuple, focal_word, cues: bad_cues)
   end
   cgi_print "</p></div>"
   emit_line
   STDOUT.flush unless Thread.current[:html_output_buffer]
 end
-  
-def print_half_of_tuple(tuple, focal_word=false)
+
+def print_half_of_tuple(tuple, focal_word=false, cues: nil)
   # print TUPLE separated by slashes
-  i = 0
-  tuple.each { |elem|
-    if(i > 0)
-      emit_text " / "
-    end
-    print_word(elem, focal_word)
-    i += 1
-  }
+  tuple.each_with_index do |elem, i|
+    emit_text " / " if i > 0
+    print_word(elem, focal_word, cue: cue_for(cues, i))
+  end
 end
 
-def print_tuples(tuples, focal_word=false)
+def print_tuples(tuples, focal_word=false, cues: nil)
   # return boolean, did I print anything? i.e. was TUPLES nonempty?
   success = !tuples.empty?
   if(success)
     tuples.sort.uniq.each { |tuple|
-      print_tuple(tuple, focal_word)
+      print_tuple(tuple, focal_word, cues: cues)
     }
   end
   return success
 end
 
-def print_words(words, focal_word=false)
+def print_words(words, focal_word=false, cue: nil)
   success = !words.empty?
   if(success)
     words.sort.uniq.each { |word|
       cgi_print "<div class='output_tuple'>"
       cgi_print "<p class='output_p'>"
-      print_word(word, focal_word)
+      print_word(word, focal_word, cue: cue)
       if($display_word_frequencies)
         emit_text " (#{frequency(word)})"
       end
@@ -1215,7 +1257,7 @@ def filter_out_rare_tuples(tuples)
   return good, bad
 end
 
-def print_word(word, focal_word=false)
+def print_word(word, focal_word=false, cue: nil)
   word = word.gsub(/\(.*\)/, '') # remove stuff in parentheses
   got_rhymes = !pronunciations(word).empty?
   if(got_rhymes)
@@ -1230,15 +1272,34 @@ def print_word(word, focal_word=false)
   if similarity_span
     cgi_print "<span style='color: #{word_similarity_color(word, focal_word)}'>"
   end
-  word = word.gsub('_', ' ')
-  emit_text word
+  display_word = word.gsub('_', ' ')
+  emit_text display_word
   cgi_print "</span>" if similarity_span
   if(got_rhymes)
     cgi_print "</a>"
   end
   if($display_word_similarities)
-    print_html_percent_similarity(word, focal_word)
+    print_html_percent_similarity(display_word, focal_word)
   end
+  # Inline thumbs-up / thumbs-down for relatedness feedback. Suppressed when
+  # +cue+ is nil (no relatedness column, e.g. plain rhymes), or when the
+  # rendered word is the cue itself (relatedness to self is uninteresting).
+  # The data attributes carry the *underscore* surface so what we POST to
+  # +/feedback+ matches the shape of +spec/related.csv+'s +cue+/+related+
+  # columns; +feedback.js+ wires the click → fetch and uses +sessionStorage+
+  # to persist the user's vote across navigations within the tab.
+  emit_relatedness_feedback_widget(word, cue) if cue && !cue.to_s.empty? && cue != word
+end
+
+def emit_relatedness_feedback_widget(word, cue)
+  c = CGI.escape_html(cue.to_s)
+  w = CGI.escape_html(word.to_s)
+  cgi_print(
+    " <span class='feedback-thumbs' data-cue='#{c}' data-related='#{w}'>" \
+    "<button type='button' class='thumb thumb-up' aria-label='thumbs up #{w} as related to #{c}'>\u{1F44D}</button>" \
+    "<button type='button' class='thumb thumb-down' aria-label='thumbs down #{w} as related to #{c}'>\u{1F44E}</button>" \
+    "</span>"
+  )
 end
 
 #

@@ -1306,6 +1306,11 @@ COMMON_PREFIXES = [
   'mid',
   'mis',
   'mono',
+  'multi',   # multimillionaire/millionaire, multinational/national, multipurpose/purpose,
+             # multitask/task, multiform/form, multiplex/plex. Splash damage on words that
+             # merely start with +multi+ but aren't morphological derivations (none observed
+             # so far — opaque uses like +multiply+/+ply+ collapse correctly here too since
+             # they ARE etymologically prefixed and we don't want them paired as rhymes).
   'non',
   'north',
   'off',

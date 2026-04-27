@@ -10035,3 +10035,14 @@ wildcat,cat,related,symmetry-breaking sweep 2026-04-26
 witch,cat,related,symmetry-breaking sweep 2026-04-26
 halloween,celebration,related,prereq: halloween/celebration+decoration
 pirate,french,related,prereq: pirate/french+wench
+pirate,billionaire,unrelated,pirate review
+pirate,blue,unrelated_ish,pirate review
+pirate,climatologist,unrelated,pirate review
+pirate,scientologist,unrelated,pirate review
+pirate,knot,related,pirate review
+pirate,knots,related,pirate review
+pirate,knotting,related,pirate review
+pirate,notting,whatever,pirate studios in nottingham
+pirate,cyan,unrelated,pirate review
+pirate,hoe,unrelated_ish,pirate review
+pirate,,unrelated,pirate review

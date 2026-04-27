@@ -402,6 +402,7 @@ def morph_derived_syllabified_pronunciation(base_pron, base_word, inflected_word
   unless WHITELIST.include?(inflected_word)
     return nil unless final_consonant_cluster_ok?(syllabified.final_consonant_cluster_array)
   end
+  check_syllable_vowel_invariant!(syllabified, inflected_word, "morph_derived")
   syllabified
 end
 
@@ -431,6 +432,7 @@ def morph_gdropped_in_apostrophe_syllabified_pronunciation(ing_syll, in_prime_wo
   unless WHITELIST.include?(in_prime_word)
     return nil unless final_consonant_cluster_ok?(syllabified.final_consonant_cluster_array)
   end
+  check_syllable_vowel_invariant!(syllabified, in_prime_word, "morph_gdropped_in_apostrophe")
   syllabified
 end
 

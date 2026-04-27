@@ -234,6 +234,58 @@ class Pronunciation
     rhyme_syllables_array.join(" ")
   end
 
+  # Split +@phonemes+ on +.+ tokens into per-syllable arrays. Cheap; used by
+  # the vowel-count invariant and any caller that needs a structural view of
+  # an already-syllabified pronunciation.
+  def syllables
+    out = []
+    cur = []
+    @phonemes.each do |ph|
+      if ph.syllable_boundary?
+        out << cur unless cur.empty?
+        cur = []
+      else
+        cur << ph
+      end
+    end
+    out << cur unless cur.empty?
+    out
+  end
+
+  # Per-syllable vowel count. CMUDict encodes every syllable nucleus as a
+  # vowel symbol (AA/AE/AH/AO/AW/AY/EH/ER/EY/IH/IY/OW/OY/UH/UW with a stress
+  # digit), including syllabic consonants (rhythm = R IH1 DH AH0 M, with the
+  # syllabic /m/ rendered as schwa AH0). Under that convention every well-
+  # formed syllable has exactly one vowel — the +syllable_vowel_invariant+
+  # check exploits this.
+  def syllable_vowel_counts
+    syllables.map { |syl| syl.count(&:vowel?) }
+  end
+
+  # Invariant: every syllable has exactly one vowel. Returns +true+ if so,
+  # +false+ for an empty pronunciation or any syllable with 0 / >=2 vowels.
+  # Empty pron is treated as a violation so callers don't have to special-
+  # case it; all real call sites operate on non-empty prons.
+  def syllable_vowel_invariant_ok?
+    counts = syllable_vowel_counts
+    !counts.empty? && counts.all? { |n| n == 1 }
+  end
+
+  # Human-readable description of the first vowel-count violation in this
+  # pronunciation (e.g. "syllable 2 has 0 vowels: L AH0 JH IH1 D AH0 M AH0 T").
+  # Returns +nil+ when the invariant holds. Used by build-time warnings and
+  # by the standalone audit tool to point at the offending syllable.
+  def syllable_vowel_invariant_violation
+    counts = syllable_vowel_counts
+    return "no syllables (empty pronunciation)" if counts.empty?
+    syls = syllables
+    counts.each_with_index do |n, i|
+      next if n == 1
+      return "syllable #{i + 1} has #{n} vowels: #{syls[i].join(' ')}"
+    end
+    nil
+  end
+
   def syllabify
     syls = Array.new
     this_syllable = Array.new
@@ -272,9 +324,26 @@ class Pronunciation
         end
       end
     }
-    # tack on whatever was left over when we ran out of phonemes
+    # tack on whatever was left over when we ran out of phonemes. If the leftover
+    # has no vowel — non-English initial clusters that aren't in
+    # +WORD_INITIAL_CONSONANT_CLUSTERS+ (sbarro/SB, schneider/SHN, svelte/SV,
+    # tsunami/TS, voila/VW, vroom/VR) — merge it onto the front of the first
+    # vowel-bearing syllable instead of letting it stand as a vowelless syllable
+    # of its own (which would violate +syllable_vowel_invariant_ok?+).
     unless this_syllable.empty?
-      syls.unshift(this_syllable)
+      if this_syllable.any?(&:vowel?) || syls.empty?
+        syls.unshift(this_syllable)
+      else
+        # find the first non-"." entry (the next real syllable) and merge into it
+        first_real_idx = syls.index { |e| e != "." }
+        if first_real_idx
+          syls[first_real_idx] = this_syllable + syls[first_real_idx]
+          # drop the now-redundant leading "." if we merged into the first syllable
+          syls.shift if first_real_idx == 1 && syls.first == "."
+        else
+          syls.unshift(this_syllable)
+        end
+      end
     end
     sylpron = Pronunciation.new(syls.flatten)
     return sylpron

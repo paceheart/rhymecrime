@@ -14,6 +14,9 @@ Parameters:
   TableName:
     Type: String
     Default: rhymecrime
+  FeedbackTableName:
+    Type: String
+    Default: rhymecrime-feedback
 
 Resources:
   RhymecrimeTable:
@@ -28,6 +31,28 @@ Resources:
         - AttributeName: pk
           KeyType: HASH
 
+  # Feedback table: one item per thumbs click. Composite key lets us
+  # +Query+ all votes for a single (cue, related) pair without scanning,
+  # while +Scan+ is still cheap enough at expected feedback volume to drive
+  # the periodic export back into spec/related.csv. Kept separate from
+  # +RhymecrimeTable+ so the function's read policy on the main table
+  # stays read-only — write capability is scoped to this table only.
+  RhymecrimeFeedbackTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Ref FeedbackTableName
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: pk
+          AttributeType: S
+        - AttributeName: sk
+          AttributeType: S
+      KeySchema:
+        - AttributeName: pk
+          KeyType: HASH
+        - AttributeName: sk
+          KeyType: RANGE
+
   RhymecrimeFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -37,10 +62,13 @@ Resources:
         Variables:
           RHYMECRIME_DATA_SOURCE: dynamodb
           RHYMECRIME_TABLE_NAME: !Ref TableName
+          RHYMECRIME_FEEDBACK_TABLE_NAME: !Ref FeedbackTableName
           TABLE_NAME: !Ref TableName
       Policies:
         - DynamoDBReadPolicy:
             TableName: !Ref RhymecrimeTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref RhymecrimeFeedbackTable
       Events:
         ApiRoot:
           Type: HttpApi
@@ -52,6 +80,11 @@ Resources:
           Properties:
             Path: /health
             Method: GET
+        ApiFeedback:
+          Type: HttpApi
+          Properties:
+            Path: /feedback
+            Method: POST
 
 Outputs:
   HttpApiUrl:
@@ -59,3 +92,5 @@ Outputs:
     Value: !GetAtt ServerlessHttpApi.ApiEndpoint
   TableNameOut:
     Value: !Ref RhymecrimeTable
+  FeedbackTableNameOut:
+    Value: !Ref RhymecrimeFeedbackTable

@@ -143,6 +143,10 @@ describe 'prune_suffix_redundant_rhyming_tuples' do
     prune_entire_rhyming_tuple 'desperados / desperadoes'
   end
 
+  context 'prune identical rhymes' do
+    prune_entire_rhyming_tuple 'legitimate / illegitimate'
+  end
+
   context 'misc' do
     prune_rhyming_tuple 'proving / removing', 'provings / removings'
     prune_rhyming_tuple 'boot / flute / fruit', 'booted / fluted / fruited'

@@ -94,3 +94,52 @@ a:focus {
 a:visited {
     color: #1ac0d0;
 }
+
+/* Inline thumbs-up / thumbs-down widget rendered after every "related word"
+   surface (see +emit_relatedness_feedback_widget+ in lib/rhymecrime/crime.rb).
+   Buttons are intentionally tiny and low-saturation so they don't compete
+   visually with the words themselves; once a vote lands they latch into a
+   colored "voted" state via the data-feedback attribute set by feedback.js. */
+.feedback-thumbs {
+    margin-left: 4px;
+    white-space: nowrap;
+    font-size: 0.8em;
+    opacity: 0.45;
+    transition: opacity 0.15s ease-in-out;
+}
+
+.output_p:hover .feedback-thumbs,
+.feedback-thumbs.has-vote {
+    opacity: 1;
+}
+
+.feedback-thumbs .thumb {
+    background: transparent;
+    border: 0;
+    padding: 0 2px;
+    margin: 0;
+    cursor: pointer;
+    color: inherit;
+    font: inherit;
+    line-height: 1;
+    filter: grayscale(1);
+    transition: filter 0.15s ease-in-out, transform 0.05s ease-in-out;
+}
+
+.feedback-thumbs .thumb:hover {
+    filter: none;
+}
+
+.feedback-thumbs .thumb:active {
+    transform: scale(0.9);
+}
+
+.feedback-thumbs[data-feedback="up"] .thumb-up,
+.feedback-thumbs[data-feedback="down"] .thumb-down {
+    filter: none;
+}
+
+.feedback-thumbs[data-feedback="up"] .thumb-down,
+.feedback-thumbs[data-feedback="down"] .thumb-up {
+    opacity: 0.25;
+}
