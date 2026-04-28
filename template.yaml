@@ -35,6 +35,41 @@ Parameters:
   FeedbackTableName:
     Type: String
     Default: rhymecrime-feedback
+  # Apex domain to point at the HTTP API (e.g. +rhymecrime.com+). Leave empty
+  # to skip all custom-domain resources — the deploy still produces a working
+  # +execute-api.us-east-1.amazonaws.com+ URL via +HttpApiUrl+. Set via
+  # +samconfig.toml+ +parameter_overrides+ once the apex's NS records have
+  # been delegated to the +HostedZoneId+ Route 53 zone.
+  #
+  # Apex only by design (per +HasCustomDomain+ + the +ApexAliasRecord+
+  # below). To also serve +www.<domain>+, add a second
+  # +AWS::ApiGatewayV2::ApiMapping+ + +AWS::Route53::RecordSet+ pair off the
+  # same +Certificate+ (extend +DomainValidationOptions+ + +SubjectAlternativeNames+
+  # too). Skipped today because the CC-BY-SA-data version of this app
+  # historically lived on a single hostname.
+  DomainName:
+    Type: String
+    Default: ""
+    Description: Apex domain (e.g. rhymecrime.com); leave empty to skip custom-domain wiring.
+  # Route 53 public hosted zone ID for +DomainName+. Required if +DomainName+
+  # is set: +AWS::CertificateManager::Certificate+ uses it to auto-create
+  # the DNS-validation CNAME (and tear it down at delete time), and the
+  # +ApexAliasRecord+ below writes the apex A-ALIAS into it. Find via
+  # +aws route53 list-hosted-zones --profile paceheart+.
+  HostedZoneId:
+    Type: String
+    Default: ""
+    Description: Route 53 hosted zone ID (e.g. Z0123ABC...). Required if DomainName is set.
+
+Conditions:
+  # Single gate for every custom-domain resource. Lets the stack deploy with
+  # +DomainName+ unset (CI / first-time deploy / domain not yet delegated to
+  # Route 53) without conditionally referencing a non-existent +Certificate+
+  # ARN. Add new domain-related resources with +Condition: HasCustomDomain+
+  # so they all flip together — half-on stacks (cert without alias record,
+  # alias record without cert) leave the apex pointing nowhere or stuck on
+  # the previous deploy's ALIAS.
+  HasCustomDomain: !Not [!Equals [!Ref DomainName, ""]]
 
 Resources:
   RhymecrimeTable:
@@ -152,10 +187,96 @@ Resources:
             Path: /{proxy+}
             Method: GET
 
+  # ---------------- Custom domain (apex via Route 53 ALIAS) ----------------
+  # All four resources are gated on +HasCustomDomain+ so the stack still
+  # deploys cleanly with +DomainName=""+. Resource creation order is implicit
+  # via +!Ref+ / +!GetAtt+ dependencies: Certificate → ApiCustomDomain
+  # (needs +CertificateArn+) → ApiMapping (needs +DomainName+) and
+  # ApexAliasRecord (needs +RegionalDomainName+ from ApiCustomDomain).
+
+  # ACM certificate, DNS-validated through the same Route 53 zone we control.
+  # +DomainValidationOptions.HostedZoneId+ tells ACM "create the validation
+  # CNAME for me in this zone" (instead of asking us to add it manually),
+  # so the +sam deploy+ block on first issue is just the DNS propagation
+  # delay (~5 min in practice). Subsequent stack updates that don't change
+  # +DomainName+ are no-ops on the cert — the same ARN is reused.
+  #
+  # Region: this resource lives in us-east-1 along with the rest of the
+  # stack, which is correct for HTTP API +REGIONAL+ endpoints (the cert
+  # must be in the same region as the API). Don't mistake this for the
+  # CloudFront / edge-optimized API Gateway pattern that requires the cert
+  # in us-east-1 specifically — that's a *different* invariant.
+  Certificate:
+    Type: AWS::CertificateManager::Certificate
+    Condition: HasCustomDomain
+    Properties:
+      DomainName: !Ref DomainName
+      ValidationMethod: DNS
+      DomainValidationOptions:
+        - DomainName: !Ref DomainName
+          HostedZoneId: !Ref HostedZoneId
+
+  # API Gateway v2 (HTTP API) custom-domain endpoint. +REGIONAL+ is the only
+  # +EndpointType+ HTTP API supports — +EDGE+ is REST-API-only. +TLS_1_2+
+  # is the modern minimum (drops TLS 1.0 / 1.1 clients, which are <0.1% of
+  # web traffic in 2026 and not worth the protocol-downgrade attack surface).
+  ApiCustomDomain:
+    Type: AWS::ApiGatewayV2::DomainName
+    Condition: HasCustomDomain
+    Properties:
+      DomainName: !Ref DomainName
+      DomainNameConfigurations:
+        - CertificateArn: !Ref Certificate
+          EndpointType: REGIONAL
+          SecurityPolicy: TLS_1_2
+
+  # Maps the custom domain to the HTTP API's +$default+ stage. SAM auto-
+  # generates an HTTP API named +ServerlessHttpApi+ when the function has any
+  # +HttpApi+-typed event (which ours does, for +/+ + +/health+ + +/feedback+
+  # + +/{proxy+}+) — that implicit logical ID is what we +!Ref+ here.
+  # If we ever switch to an explicit +AWS::Serverless::HttpApi+ resource,
+  # update the +!Ref+ to its logical ID; it will NOT be +ServerlessHttpApi+
+  # anymore.
+  ApiMapping:
+    Type: AWS::ApiGatewayV2::ApiMapping
+    Condition: HasCustomDomain
+    Properties:
+      ApiId: !Ref ServerlessHttpApi
+      DomainName: !Ref ApiCustomDomain
+      Stage: $default
+
+  # Route 53 A-ALIAS at the apex. Apex domains can't be CNAMEs (DNS spec —
+  # the apex must always have an SOA / NS record set, and CNAME forbids
+  # coexisting records at the same name), so we use Route 53's
+  # AWS-proprietary "Alias" record, which is stored as A but resolves to
+  # the API Gateway's regional endpoint. The +HostedZoneId+ inside
+  # +AliasTarget+ is API-Gateway-side (different from our zone's
+  # +HostedZoneId+) — +!GetAtt ApiCustomDomain.RegionalHostedZoneId+
+  # returns the right one automatically.
+  #
+  # +EvaluateTargetHealth: false+ because the API Gateway endpoint already
+  # has its own health/SLA managed by AWS; Route 53 health-checks would
+  # only add cost without adding signal.
+  ApexAliasRecord:
+    Type: AWS::Route53::RecordSet
+    Condition: HasCustomDomain
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: !Ref DomainName
+      Type: A
+      AliasTarget:
+        DNSName: !GetAtt ApiCustomDomain.RegionalDomainName
+        HostedZoneId: !GetAtt ApiCustomDomain.RegionalHostedZoneId
+        EvaluateTargetHealth: false
+
 Outputs:
   HttpApiUrl:
-    Description: HTTP API base URL (see also AWS Console → API Gateway)
+    Description: HTTP API base URL (always present; serves traffic regardless of custom-domain wiring)
     Value: !GetAtt ServerlessHttpApi.ApiEndpoint
+  CustomDomainUrl:
+    Condition: HasCustomDomain
+    Description: Public custom-domain URL (apex; HTTPS only)
+    Value: !Sub "https://${DomainName}"
   TableNameOut:
     Value: !Ref RhymecrimeTable
   FeedbackTableNameOut:

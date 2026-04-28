@@ -18,5 +18,17 @@ region = "us-east-1"
 profile = "paceheart"
 confirm_changeset = true
 capabilities = "CAPABILITY_IAM"
-parameter_overrides = "TableName=\"rhymecrime\" FeedbackTableName=\"rhymecrime-feedback\""
+# +DomainName+ + +HostedZoneId+ flip on the +HasCustomDomain+ condition in
+# +template.yaml+ — leaves the +Certificate+, +ApiCustomDomain+, +ApiMapping+,
+# and +ApexAliasRecord+ resources off entirely when both are empty (deploy
+# stays a pure HTTP-API-only stack), or creates them in dependency order
+# when both are set.
+#
+# Set +DomainName+ to the apex (no +https://+, no path), and +HostedZoneId+
+# to the Route 53 zone ID (find via
+# +aws route53 list-hosted-zones --profile paceheart+; it looks like
+# +Z01234ABCDEFGH+). The first deploy after these are populated blocks for
+# ~5 minutes while ACM validates the certificate via the Route-53-managed
+# CNAME — subsequent deploys are no-ops on the cert.
+parameter_overrides = "TableName=\"rhymecrime\" FeedbackTableName=\"rhymecrime-feedback\" DomainName=\"rhymecrime.com\" HostedZoneId=\"Z02956823GWDA5OHTZ6YT\""
 image_repositories = []
