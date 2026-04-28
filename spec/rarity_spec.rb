@@ -1,4 +1,4 @@
-# Rarity expectations from generated/word_dict (see bin/dict-build).
+# Test word rarity expectations.
 #
 # Two layers of coverage live in this file:
 #

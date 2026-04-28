@@ -126,7 +126,7 @@ describe 'RHYMES' do
   end
   context "...but 'bay' oughta rhyme with both of 'em" do
     oughta_rhyme 'bay', 'lay'
-    oughta_rhyme 'bay', 'lei', not_working_message: "lei is missing from word_dict"
+    oughta_rhyme 'bay', 'lei'
   end
   
   context "you can't just add a prefix and call it a rhyme" do
@@ -335,8 +335,8 @@ describe 'RHYMES' do
 
   context "identical rimes" do
     oughta_rhyme 'leave', 'believe'
-    oughta_rhyme 'troll', 'patrol' #, not_working_message: true
-    oughta_rhyme 'troll', 'control' #, not_working_message: true
+    oughta_rhyme 'troll', 'patrol'
+    oughta_rhyme 'troll', 'control'
     oughta_rhyme 'end', 'pend'
     oughta_rhyme 'end', 'append'
     oughta_rhyme 'pend', 'append' # identical
@@ -446,6 +446,8 @@ describe 'RHYMES' do
     oughta_rhyme 'batter', 'madder'
     oughta_rhyme 'bottle', 'model'
     ought_not_rhyme 'ditty', 'diddy' # these become homophones after flapping, and homophones ought not rhyme
+    oughta_rhyme 'ditty', 'titty'
+    oughta_rhyme 'diddy', 'titty'
 
     # --- Classic T/D minimal pairs (intervocalic; GA flap neutralization) ---
     context 'identical rimes' do
@@ -581,7 +583,7 @@ describe 'RHYMES' do
     oughta_rhyme "hits", "its"
     oughta_rhyme "hits", "it's"
     ought_not_rhyme "its", "it's"
-    oughta_rhyme "f'd", "bereft", not_working_message: "f'd is missing from word_dict"
+    oughta_rhyme "f'd", "bereft"
     oughta_rhyme "you're", 'secure'
   end
 
@@ -599,12 +601,12 @@ describe 'RHYMES' do
     oughta_rhyme_one_way 'okeydokey', 'hokey', not_working_message: "okeydokey is missing from word_dict"
     ought_not_rhyme_one_way 'hokey', 'okeydokey'
     ought_not_rhyme 'flim-flam', 'slam' # stress mismatch
-    oughta_rhyme 'papier-mache', 'way', not_working_message: "papier-mache is missing from word_dict"
+    oughta_rhyme 'papier-mache', 'way'
     oughta_rhyme 'tutti-frutti', 'booty', not_working_message: "tutti-frutti is missing from word_dict"
     oughta_rhyme 'willy-nilly', 'silly'
     oughta_rhyme 'roly-poly', 'holy'
     ought_not_rhyme 'roly-poly', 'poly'
-    oughta_rhyme 'hara-kiri', 'weary', not_working_message: "hara-kiri is missing from word_dict"
+    oughta_rhyme 'hara-kiri', 'weary'
     oughta_rhyme 'queer', 'peer-to-peer'
     oughta_rhyme 'so-so', 'mafioso', not_working_message: "so-so should have first syllable stressed instead of both"
     oughta_rhyme 'fib', 'ad-lib'
@@ -966,7 +968,7 @@ describe 'RHYMES' do
     ought_not_rhyme 'apocalypse', 'chips' # imperfect: stress mismatch
     oughta_rhyme 'invader', 'seder'
     oughta_rhyme 'bread', 'undead'
-    oughta_rhyme 'heinz', 'maligns', not_working_message: "heinz is missing from word_dict"
+    oughta_rhyme 'heinz', 'maligns'
     oughta_rhyme 'savory', 'slavery'
     oughta_rhyme 'crumb', 'scum'
     oughta_rhyme 'organic', 'satanic'

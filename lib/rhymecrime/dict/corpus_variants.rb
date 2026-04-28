@@ -201,15 +201,15 @@ def varcon_variant_pairs(word_dict, varcon_variant_map, wordfreq_hash = nil)
 
   direct_pairs = []
   by_pair.each do |(a, b), rows|
-    # Rime gate: VarCon clusters a few verb-morphology alternations whose surfaces do not
-    # share a rime (+dreamed+ +D R IY_M_D+ vs +dreamt+ +D R EH_M_P_T+; +burned+/+burnt+;
-    # +learned+/+learnt+). These are regionally-accepted _morphological_ doublets, not
-    # rhyme-preserving spelling variants — treating them as spelling variants would strip
-    # +dreamt+ from the +EH_M_P_T+ rime bucket even though +tempt+/+undreamt+/+kempt+
-    # depend on it. +colour+/+color+, +centre+/+center+, +acknowledgement+/+acknowledgment+
-    # and the rest of VarCon's genuine spelling-axis clusters pronounce identically and
-    # pass the gate unchanged.
-    next unless headwords_share_rime?(a, b, word_dict)
+    # Pronunciation gate: VarCon clusters a few verb-morphology alternations whose surfaces
+    # do not pronounce the same (+dreamed+ +D R IY M D+ vs +dreamt+ +D R EH M P T+;
+    # +burned+/+burnt+; +learned+/+learnt+). These are regionally-accepted _morphological_
+    # doublets, not rhyme-preserving spelling variants — treating them as spelling variants
+    # would strip +dreamt+ from the +EH_M_P_T+ rime bucket even though +tempt+/+undreamt+/
+    # +kempt+ depend on it. +colour+/+color+, +centre+/+center+, +acknowledgement+/
+    # +acknowledgment+ and the rest of VarCon's genuine spelling-axis clusters pronounce
+    # identically and pass the gate unchanged.
+    next unless headwords_share_full_pron?(a, b, word_dict)
 
     # Aggregate preference scores across all evidence rows. Minimum-over-rows rewards any row
     # that declares one side primary in _some_ region, rather than letting a row where both
@@ -273,7 +273,7 @@ def wiktionary_variant_pairs(word_dict, wordfreq_hash, kaikki_variant_map)
   by_pair.each do |(a, b), rows|
     next if WIKTIONARY_VARIANT_BLOCKLIST.include?([a, b].sort)
     next unless wiktionary_pair_is_useful?(a, b, rows, wordfreq_hash)
-    next unless headwords_share_rime?(a, b, word_dict)
+    next unless headwords_share_full_pron?(a, b, word_dict)
     next if distinct_inflected_forms?(a, b)
     preferred, alt = resolve_wiktionary_variant_winner(a, b, rows, wordfreq_hash)
     direct_pairs << [preferred, alt]
@@ -334,11 +334,12 @@ def propagate_variant_inflections(preferred, alt, word_dict, headwords_with_dire
     # chain-propagated +hed → heed+ just because +(he, hee)+ happens to be a Wiktionary
     # pair that extends regularly by +-d+.
     next if headwords_with_direct_pair.include?(pa) || headwords_with_direct_pair.include?(aa)
-    # Propagated forms must actually rhyme: +sin/sinne+ is a valid archaic pair, but the
-    # +-er+-propagated pair +siner/sinner+ collides with a genuine English noun with a
-    # different pronunciation (+sinner+ = +S IH N ER+, not +S AY N ER+); they don't share
-    # a rime, so reject. Same gate applied in +wiktionary_variant_pairs+ for direct pairs.
-    next unless headwords_share_rime?(pa, aa, word_dict)
+    # Propagated forms must actually pronounce the same: +sin/sinne+ is a valid archaic
+    # pair, but the +-er+-propagated pair +siner/sinner+ collides with a genuine English
+    # noun with a different pronunciation (+sinner+ = +S IH N ER+, not +S AY N ER+); their
+    # full prons differ, so reject. Same gate applied in +wiktionary_variant_pairs+ for
+    # direct pairs.
+    next unless headwords_share_full_pron?(pa, aa, word_dict)
     out_pairs << [pa, aa]
   end
   if preferred.end_with?("y") && alt.end_with?("y")
@@ -352,41 +353,44 @@ def propagate_variant_inflections(preferred, alt, word_dict, headwords_with_dire
       # propagate to +blowsier/blousier+ even though +blousier+ isn't in cmudict or wordfreq.
       next unless word_dict.key?(pa) && word_dict.key?(aa)
       next if headwords_with_direct_pair.include?(pa) || headwords_with_direct_pair.include?(aa)
-      next unless headwords_share_rime?(pa, aa, word_dict)
+      next unless headwords_share_full_pron?(pa, aa, word_dict)
       out_pairs << [pa, aa]
     end
   end
 end
 
-# True when +a+ and +b+ have at least one pronunciation each whose +rime+ matches. Used to
-# veto Wiktionary/Kaikki-sourced "spelling variants" that don't actually rhyme: Kaikki's
-# +alt_of+/+synonym_of+/+misspelling+ annotations are noisy enough to produce pairs like
-# +cache/cachet+ (+AE_SH+ vs +AE_T+), +bone/bane+ (+OW_N+ vs +EY_N+), +fuss/fuzz+ (+AH_S+
-# vs +AH_Z+), and +hundreds/tons+ (semantic synonymy, unrelated rimes). Real spelling variants
-# -- +colour/color+, +tomatoes/tomatos+, +acknowledgment/acknowledgement+, +teem/team+ --
-# share rimes. Homophone collisions that survive the gate (+teem/team+) are addressed by
-# the +pick_corpus_winner_by_zipf+ fallback; this check is only about eliminating clearly
-# non-rhyming noise.
+# True when +a+ and +b+ have at least one pronunciation each whose full phoneme sequence
+# matches. Used to veto Wiktionary/Kaikki-sourced and VarCon "spelling variants" that don't
+# actually pronounce the same: Kaikki's +alt_of+/+synonym_of+/+misspelling+ annotations are
+# noisy enough to produce pairs like +cache/cachet+ (+AE_SH+ vs +AE_T+), +bone/bane+
+# (+OW_N+ vs +EY_N+), +fuss/fuzz+ (+AH_S+ vs +AH_Z+), and +hundreds/tons+ (semantic synonymy,
+# unrelated rimes), as well as onset-divergent pairs that share a rime but differ at the
+# stressed-syllable onset (+tiddy/diddy+: +T IH . D IY+ vs +D IH . D IY+ — both share rime
+# +IH_D_IY+ but +tiddy+ never flaps its initial T). Real spelling variants — +colour/color+
+# (+K AH . L AH R+), +teem/team+ (+T IY M+), +acknowledgment/acknowledgement+ — share a
+# full pron, not just a rime, so the stricter gate accepts them while rejecting the
+# rime-only-collision noise.
 #
-# Both sides must have +Pronunciation+ entries in +word_dict+ (we don't invent rimes). A
-# side without any recorded rime can't meaningfully share a rime with the other, so we reject
+# Both sides must have +Pronunciation+ entries in +word_dict+ (we don't invent prons). A
+# side without any recorded pron can't meaningfully share one with the other, so we reject
 # the pair: e.g. +seeder+ survives the build with no CMU pronunciation but +seder+ has
-# +S EY_D_AH_R+; treating them as spelling variants would only dispreference the side that
+# +S EY . D AH R+; treating them as spelling variants would only dispreference the side that
 # actually has a pron. The +o_plural_corpus_pairs+ caller bypasses this gate entirely (its
 # shape-based lemma match is a stronger morphological signal); VarCon and Wiktionary pairs
-# are gated so verb-morphology doublets like +dreamed/dreamt+ don't strip rime-bucket members.
-def headwords_share_rime?(a, b, word_dict)
+# are gated so verb-morphology doublets like +dreamed/dreamt+ (different rimes, also
+# different full prons) don't strip rime-bucket members.
+def headwords_share_full_pron?(a, b, word_dict)
   prons_a = word_dict[a]&.dig(1)
   prons_b = word_dict[b]&.dig(1)
   return false if prons_a.nil? || prons_a.empty? || prons_b.nil? || prons_b.empty?
-  rimes_a = prons_a.each_with_object(Set.new) do |p, s|
-    r = p.rime
-    s << r unless r.nil? || r.empty?
+  phoneme_sigs_a = prons_a.each_with_object(Set.new) do |p, s|
+    ph = p.phonemes
+    s << ph unless ph.nil? || ph.empty?
   end
-  return false if rimes_a.empty?
+  return false if phoneme_sigs_a.empty?
   prons_b.any? do |p|
-    r = p.rime
-    !r.nil? && !r.empty? && rimes_a.include?(r)
+    ph = p.phonemes
+    !ph.nil? && !ph.empty? && phoneme_sigs_a.include?(ph)
   end
 end
 

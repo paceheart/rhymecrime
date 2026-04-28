@@ -9814,3 +9814,62 @@ cat,way,unrelated,feedback: 0 up / 1 down
 cat,whiting,unrelated,feedback: 0 up / 1 down
 cat,worm,related,feedback: 1 up / 0 down
 cat,yowls,related,feedback: 1 up / 0 down
+pirate,blaster,unrelated,feedback: 0 up / 1 down
+pirate,marine,related,feedback: 1 up / 0 down
+pirate,sail,related,feedback: 1 up / 0 down
+pirate,steal,related,feedback: 1 up / 0 down
+pirate,attitude,related,recoup pirate awesomeness
+pirate,buggery,related,recoup pirate awesomeness
+pirate,commandeer,related,recoup pirate awesomeness
+pirate,commandeering,related,recoup pirate awesomeness
+pirate,crude,related_ish,recoup pirate awesomeness
+pirate,crypto,related,recoup pirate awesomeness
+pirate,dagger,related_ish,recoup pirate awesomeness
+pirate,drunken,related,recoup pirate awesomeness
+pirate,fiend,whatever,recoup pirate awesomeness
+pirate,fiends,whatever,recoup pirate awesomeness
+pirate,flaunt,whatever,recoup pirate awesomeness
+pirate,flaunted,whatever,recoup pirate awesomeness
+pirate,gallows,related_ish,recoup pirate awesomeness
+pirate,harbor,related,recoup pirate awesomeness
+pirate,harbored,related,recoup pirate awesomeness
+pirate,haunt,related_ish,recoup pirate awesomeness
+pirate,haunted,related_ish,recoup pirate awesomeness
+pirate,hull,related,recoup pirate awesomeness
+pirate,illegal,related,recoup pirate awesomeness
+pirate,latitude,related_ish,recoup pirate awesomeness
+pirate,leisure,whatever,recoup pirate awesomeness
+pirate,lobster,related_ish,recoup pirate awesomeness
+pirate,manatee,related_ish,recoup pirate awesomeness
+pirate,mobster,related_ish,recoup pirate awesomeness
+pirate,plot,related_ish,recoup pirate awesomeness
+pirate,plotting,related_ish,recoup pirate awesomeness
+pirate,profanity,related_ish,recoup pirate awesomeness
+pirate,profiteer,related,recoup pirate awesomeness
+pirate,profiteering,related,recoup pirate awesomeness
+pirate,pursue,related,recoup pirate awesomeness
+pirate,pursued,related,recoup pirate awesomeness
+pirate,rowboat,related_ish,recoup pirate awesomeness
+pirate,seagull,related_ish,recoup pirate awesomeness
+pirate,seizure,related,recoup pirate awesomeness
+pirate,shallow,whatever,recoup pirate awesomeness
+pirate,shallows,whatever,recoup pirate awesomeness
+pirate,shanty,related,recoup pirate awesomeness
+pirate,showboat,related_ish,recoup pirate awesomeness
+pirate,skull,related,recoup pirate awesomeness
+pirate,sleeve,related,recoup pirate awesomeness
+pirate,sleeves,related,recoup pirate awesomeness
+pirate,starboard,related,recoup pirate awesomeness
+pirate,submarine,related_ish,recoup pirate awesomeness
+pirate,submarines,related_ish,recoup pirate awesomeness
+pirate,sunken,related,recoup pirate awesomeness
+pirate,swagger,related,recoup pirate awesomeness
+pirate,tattoo,related,recoup pirate awesomeness
+pirate,tattoos,related,recoup pirate awesomeness
+pirate,thieve,related,recoup pirate awesomeness
+pirate,thieves,related,recoup pirate awesomeness
+pirate,thuggery,related_ish,recoup pirate awesomeness
+pirate,tiptoe,related_ish,recoup pirate awesomeness
+pirate,treasure,related,recoup pirate awesomeness
+pirate,undaunted,related_ish,recoup pirate awesomeness
+pirate,vigilante,related_ish,recoup pirate awesomeness

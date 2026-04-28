@@ -1008,6 +1008,18 @@ def prune_trivial_rhyming_pairs(pairs)
   end
 end
 
+# When +$disable_cross_tuple_redundancy_pruning+ is true, the cross-tuple
+# +rhyming_tuple_redundant_with?+ pass below is skipped: distinct rhyme-bucket
+# tuples that differ only by parallel +Inflect+ suffixes (+[deck, wreck]+ vs
+# +[decked, wrecked]+, +[crew, tattoo]+ vs +[crews, tattoos]+) all survive.
+# Phase 0.5 within-tuple condensation (+condense_tuple_derived_forms+, which
+# collapses +[legal, illegal]+-style identical-rhyme prefix derivations) still
+# runs — only the *across-tuple* derivational dedup is bypassed. Used by
+# +spec/similar_rhymes_spec.rb+ so per-pair assertions like
+# +set_related_oughta_contain 'pirate', 'deck', 'wreck'+ aren't masked by an
+# already-kept past-tense sibling tuple. Production runtime keeps it +false+.
+$disable_cross_tuple_redundancy_pruning = false
+
 def prune_suffix_redundant_rhyming_tuples(tuples, focal_word = nil)
   verbose_prunes = ENV["VERBOSE"] == "1"
   debug_pruning = $debug_pruning
@@ -1079,6 +1091,8 @@ def prune_suffix_redundant_rhyming_tuples(tuples, focal_word = nil)
     $debug_pruned_tuples << tup if debug_pruning
     !debug_pruning
   end
+
+  return tuples.sort if $disable_cross_tuple_redundancy_pruning
 
   sorted = tuples.sort
   kept = []
@@ -1166,6 +1180,7 @@ def find_rhyming_tuples(input_rel1, common_only = false)
   # is fine. We also avoid populating the cache from debug-mode results, since those
   # include tuples that non-debug callers expect to have been dropped.
   return really_find_rhyming_tuples(input_rel1, common_only) if $debug_pruning
+  return really_find_rhyming_tuples(input_rel1, common_only) if $disable_cross_tuple_redundancy_pruning
 
   lru_cache_fetch($rhyming_tuple_cache, [input_rel1, common_only], RHYMING_LRU_CACHE_SIZE) do
     really_find_rhyming_tuples(input_rel1, common_only)
@@ -1221,6 +1236,7 @@ def find_rhyming_pairs(input_rel1, input_rel2, common_only = false)
   # Mirrors +find_rhyming_tuples+'s caching policy: bypass the cache whenever
   # +$debug_pruning+ is true so pruning side-effects still populate.
   return really_find_rhyming_pairs(input_rel1, input_rel2, common_only) if $debug_pruning
+  return really_find_rhyming_pairs(input_rel1, input_rel2, common_only) if $disable_cross_tuple_redundancy_pruning
 
   lru_cache_fetch($rhyming_pair_cache, [input_rel1, input_rel2, common_only], RHYMING_LRU_CACHE_SIZE) do
     really_find_rhyming_pairs(input_rel1, input_rel2, common_only)

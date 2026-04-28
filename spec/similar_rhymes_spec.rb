@@ -4,6 +4,14 @@
 # related_rhymes
 #
 
+# Disable the cross-tuple suffix-redundancy pruner for this spec so per-pair
+# assertions like +set_related_oughta_contain 'pirate', 'deck', 'wreck'+ aren't
+# masked when an inflected sibling tuple (+[decked, wrecked]+) is already kept
+# and would normally cause +[deck, wreck]+ to be dropped. Within-tuple
+# condensation (legal/illegal-style prefix derivations) still runs — see
+# +prune_suffix_redundant_rhyming_tuples+ in +lib/rhymecrime/crime.rb+.
+$disable_cross_tuple_redundancy_pruning = true
+
 def set_related_contains?(input, output1, output2)
   # Generate set_related rhymes for INPUT. Does one of them contain both OUTPUT1 and OUTPUT2?
   # e.g. 'pirate', 'handsome', 'ransom'
