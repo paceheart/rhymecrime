@@ -5,7 +5,18 @@ Description: RhymeCrime Lambda + HTTP API + DynamoDB (Plan D)
 Globals:
   Function:
     Timeout: 29
-    MemorySize: 512
+    # 1769 MB is Lambda's "1 full vCPU" tier: CPU time is allocated linearly
+    # with memory and 1 vCPU is the breakpoint where Ruby stops paying a
+    # multi-tenant context-switch tax on JSON parsing + GC. The set_related
+    # path on a common cue (~3K related lemmas → ~150 +BatchGetItem+ calls
+    # over ~100 KB of JSON-encoded responses) was tripping the 29-second
+    # API Gateway timeout at the previous +512 MB+ (~⅓ vCPU) setting; bumping
+    # here, combined with the +parallel_batch_get_items+ fan-out in
+    # +dynamo_store.rb+ and the inflight +RHYMECRIME_LOG_TIMING+ phase logs,
+    # gets us back under budget. Cost impact: ~3.5x per-ms billed, but the
+    # function also runs ~3-5x faster, so total billed-ms per request goes
+    # *down*. Pricing: us-east-1 arm64 = $0.0000133334 / GB-second.
+    MemorySize: 1769
     # Match Gemfile +ruby "~> 3.4.0"+ — AWS picks the patch level inside the
     # +ruby3.4+ managed runtime; pessimistic Gemfile pin surfaces 3.5/4.0
     # contributor drift before deploy rather than after.
@@ -95,6 +106,15 @@ Resources:
           # by the runtime (less of a concern in practice, but cheap) inherits
           # the right locale too.
           LANG: en_US.UTF-8
+          # Turn on +Rhymecrime::Timing.measure+ so each phase of
+          # +really_find_rhyming_tuples+ (find+filter, prefetch.{relateds_words,
+          # relateds_rimes, rhyme_cohort_words}, rhyme-bucket loop, prune) plus
+          # each underlying +batch_get_words+ / +batch_get_rimes+ logs its
+          # wall-clock to CloudWatch. Cheap (a +warn+ per phase), and the only
+          # way to attribute a slow request to a specific stage. Flip to
+          # +"0"+ (or remove this line) once the set_related perf work has
+          # stabilized; in steady state we don't need this log volume.
+          RHYMECRIME_LOG_TIMING: "1"
       Policies:
         - DynamoDBReadPolicy:
             TableName: !Ref RhymecrimeTable
