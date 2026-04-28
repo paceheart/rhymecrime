@@ -198,7 +198,8 @@ module Inflect
   # (forward direction only). Used to propagate frequency from high-frequency bases without
   # O(n²) “every rare word × every base” scans.
   # Yields base spellings +b+ such that +inflection_of_base?(b, inflected)+ (inverse of
-  # +each_derivable_form+). Bounded small set per word; used to avoid Phase 9 O(|hash|×|common|).
+  # +each_derivable_form+). Bounded small set per word; used to avoid the list-pivot Inflect
+  # inheritance pass becoming O(|hash|×|common|).
   def self.each_candidate_base_for_inflected(inflected)
     return enum_for(__method__, inflected) unless block_given?
 

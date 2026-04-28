@@ -7,31 +7,32 @@
 #
 #   ./bin/build
 #
-# Stages:
-#   1. dict-build (full)
+# Build Stages:
+#   1/4. dict-build (full)
 #        - CN+NB exports rebuilt        (RHYMECRIME_DICT_BUILD_CONCEPTNET_NUMBERBATCH=1)
 #        - rarity signals dumped to     generated/rarity_signals_dump.jsonl
 #          (RHYMECRIME_RARITY_DUMP_SIGNALS=...; bootstrap-disables the rarity
 #          rescore for this pass — there's no classifier yet)
-#   2. train-rarity-classifier         → generated/rarity_classifier.json
-#   3. retrain-relatedness --rebuild-vectors
+#   2/4. train-rarity-classifier         → generated/rarity_classifier.json
+#   3/4. retrain-relatedness --rebuild-vectors
 #        a. dump-sense-glosses          → generated/sense_glosses.jsonl
 #        b. build-sense-vectors.py      → generated/model_sense_vectors.msgpack
 #        c. train-relatedness-classifier → generated/relatedness_classifier.json
-#   4. dict-build (slim, with classifier on)
-#        - re-runs Phase 12 to rescore word_dict.txt against the freshly-
-#          trained rarity classifier. CN+NB exports are already on disk from
-#          stage 1, so this pass uses the default slim flags.
+#   4/4. dict-build (slim, with classifier on)
+#        - re-runs the rarity-classifier rescore pass against word_dict.txt
+#          using the freshly-trained classifier. CN+NB exports are already
+#          on disk from Build Stage 1/4, so this pass uses the default slim
+#          flags.
 #
 # Prereqs (one-time): ./setup.sh, which provisions everything — gems,
-# corpora, and the .venv used by stage 3b for MPNet encoding. setup.sh
-# installs uv (https://astral.sh/uv) + a managed CPython 3.12 if no
-# GIL-enabled Python is on PATH, so this script never has to think about
-# Python at all.
+# corpora, and the .venv used by Build Stage 3/4's MPNet encoding sub-step
+# (3/4-b). setup.sh installs uv (https://astral.sh/uv) + a managed CPython
+# 3.12 if no GIL-enabled Python is on PATH, so this script never has to
+# think about Python at all.
 #
-# Stage 1 is ~25 min (mostly Numberbatch I/O). Stage 2 is ~1 min. Stage 3 is
-# ~20 min on CPU (MPNet encoding) + ~1 min for the classifier fit. Stage 4
-# is ~10–15 min (skips CN+NB export I/O).
+# Build Stage 1/4 is ~25 min (mostly Numberbatch I/O). Build Stage 2/4 is
+# ~1 min. Build Stage 3/4 is ~20 min on CPU (MPNet encoding) + ~1 min for
+# the classifier fit. Build Stage 4/4 is ~10–15 min (skips CN+NB export I/O).
 
 set -euo pipefail
 
@@ -45,19 +46,19 @@ cd "$REPO"
 DEFAULT_DUMP_PATH="$REPO/generated/rarity_signals_dump.jsonl"
 DUMP_PATH="${RHYMECRIME_RARITY_DUMP_SIGNALS:-$DEFAULT_DUMP_PATH}"
 
-echo "==> [1/4] dict-build (full: CN+NB exports + rarity signals dump)"
-echo "         dump path: $DUMP_PATH"
+echo "==> Build Stage 1/4: dict-build (full: CN+NB exports + rarity signals dump)"
+echo "                    dump path: $DUMP_PATH"
 RHYMECRIME_DICT_BUILD_CONCEPTNET_NUMBERBATCH=1 \
 RHYMECRIME_RARITY_DUMP_SIGNALS="$DUMP_PATH" \
   ./bin/dict-build
 
-echo "==> [2/4] training rarity classifier -> generated/rarity_classifier.json"
+echo "==> Build Stage 2/4: training rarity classifier -> generated/rarity_classifier.json"
 ruby ./bin/train-rarity-classifier
 
-echo "==> [3/4] retrain-relatedness (sense glosses + MPNet vectors + classifier)"
+echo "==> Build Stage 3/4: retrain-relatedness (sense glosses + MPNet vectors + classifier)"
 ./bin/retrain-relatedness --rebuild-vectors
 
-echo "==> [4/4] dict-build rescore (Phase 12 applies new rarity classifier to word_dict.txt)"
+echo "==> Build Stage 4/4: dict-build rescore (rarity-classifier rescore pass applies new classifier to word_dict.txt)"
 ./bin/dict-build
 
 echo

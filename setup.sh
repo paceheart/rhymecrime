@@ -20,10 +20,10 @@
 # uses uv (https://astral.sh/uv) to provision a managed CPython 3.12 when no
 # GIL-enabled Python is found on PATH.
 #
-# End-to-end runtime is ~60 min on a fresh clone, dominated by stage 1 of
-# +bin/build+ (Numberbatch I/O, ~25 min) and stage 3 (MPNet encoding on CPU,
-# ~20 min). Re-runs are much cheaper since each step short-circuits when its
-# outputs are already on disk and current.
+# End-to-end runtime is ~60 min on a fresh clone, dominated by Build Stage
+# 1/4 of +bin/build+ (Numberbatch I/O, ~25 min) and Build Stage 3/4 (MPNet
+# encoding on CPU, ~20 min). Re-runs are much cheaper since each step
+# short-circuits when its outputs are already on disk and current.
 
 set -euo pipefail
 

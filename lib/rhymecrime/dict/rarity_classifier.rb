@@ -1,6 +1,6 @@
 # encoding: utf-8
 #
-# Phase 2 of the rarity pipeline: machine-learned scorer over +RaritySignals+.
+# Rarity scoring (rarity-pipeline stage 2): machine-learned scorer over +RaritySignals+.
 #
 # Reads +generated/rarity_classifier.json+ (produced by +bin/train-rarity-classifier+)
 # and maps a signals struct to one of +:common / :rare / :forbidden+ plus an integer
@@ -23,9 +23,10 @@
 # Either one fires +rarity_classifier_disabled?+, which short-circuits the load
 # before the file-existence check; any other invocation against a missing classifier
 # is a hard error with a remediation hint. The standard end-to-end build script
-# (+bin/build+) sets +RHYMECRIME_RARITY_DUMP_SIGNALS+ for stage 1 and then runs
-# +bin/train-rarity-classifier+, so a fresh checkout reaches steady state without
-# the operator having to think about either env var.
+# (+bin/build+) sets +RHYMECRIME_RARITY_DUMP_SIGNALS+ for Build Stage 1/4 and
+# then runs +bin/train-rarity-classifier+ as Build Stage 2/4, so a fresh
+# checkout reaches steady state without the operator having to think about
+# either env var.
 #
 # Two supported training targets (selected at train time and stored in the JSON
 # as +target+):
@@ -172,7 +173,7 @@ def rarity_classifier
   path = RARITY_CLASSIFIER_PATH
   unless File.exist?(path)
     raise "rarity classifier not found at #{path}. Train it via:\n" \
-          "  ./bin/build                                     # full pipeline (CN+NB + dump + train + relatedness stage 2)\n" \
+          "  ./bin/build                                     # full four-Build-Stage pipeline (CN+NB + dump + train + relatedness)\n" \
           "or just the rarity steps manually:\n" \
           "  RHYMECRIME_RARITY_DUMP_SIGNALS=generated/rarity_signals_dump.jsonl ./bin/dict-build\n" \
           "  ./bin/train-rarity-classifier\n" \
@@ -345,7 +346,7 @@ end
 # Returns +[category_symbol, integer_freq]+ for +sig+. Integer freq in {0, 2, 10}
 # so downstream preference code that compares integer freqs keeps working.
 #
-# +:forbidden => 0+ (the Phase 3 +rare?+ cutoff in +crime.rb+ treats freq <=
+# +:forbidden => 0+ (the rarity gate +rare?+ in +crime.rb+ treats freq <=
 # +RARE_FREQ_MAX+ as rare, so 0 is "rare but deletable"; the caller deletes the
 # headword). +:rare => 2+ (below +RARE_FREQ_MAX+=4). +:common => 10+ (above the
 # cutoff). Extend this mapping if the build needs more resolution in the common
@@ -474,7 +475,7 @@ def rarity_rescore_and_dump!(hash, **ctx_kwargs)
         sig.received_donor_from_common_base_flag = !!meta[:donor_anchored]
       end
 
-      dict_trace_puts(word, "Phase12 rarity_rescore: enter freq=#{entry[0]} src=#{sig.freq_source_phase} donor_anchored=#{sig.received_donor_from_common_base_flag}") if dict_trace_word?(word)
+      dict_trace_puts(word, "rarity_classifier_rescore: enter freq=#{entry[0]} src=#{sig.freq_source_phase} donor_anchored=#{sig.received_donor_from_common_base_flag}") if dict_trace_word?(word)
 
       if dump_file
         features = learned_rarity_feature_vector(sig)
@@ -489,27 +490,27 @@ def rarity_rescore_and_dump!(hash, **ctx_kwargs)
 
       if entry[0] > RARITY_CLASSIFIER_RESCORE_MAX_FREQ
         skipped_sentinel += 1
-        dict_trace_puts(word, "Phase12 rarity_rescore: skip (sentinel freq=#{entry[0]} > #{RARITY_CLASSIFIER_RESCORE_MAX_FREQ})") if dict_trace_word?(word)
+        dict_trace_puts(word, "rarity_classifier_rescore: skip (sentinel freq=#{entry[0]} > #{RARITY_CLASSIFIER_RESCORE_MAX_FREQ})") if dict_trace_word?(word)
         next
       end
 
       result = rarity_classify(sig)
       if result.nil?
-        dict_trace_puts(word, "Phase12 rarity_rescore: classify returned nil") if dict_trace_word?(word)
+        dict_trace_puts(word, "rarity_classifier_rescore: classify returned nil") if dict_trace_word?(word)
         next
       end
 
       new_cat, new_freq = result
       if new_cat == :forbidden
-        dict_trace_puts(word, "Phase12 rarity_rescore: DELETE (classified :forbidden, was freq=#{entry[0]})") if dict_trace_word?(word)
+        dict_trace_puts(word, "rarity_classifier_rescore: DELETE (classified :forbidden, was freq=#{entry[0]})") if dict_trace_word?(word)
         hash.delete(word)
         deleted += 1
       elsif entry[0] != new_freq
-        dict_trace_puts(word, "Phase12 rarity_rescore: rescored #{entry[0]} -> #{new_freq} (cat=#{new_cat})") if dict_trace_word?(word)
+        dict_trace_puts(word, "rarity_classifier_rescore: rescored #{entry[0]} -> #{new_freq} (cat=#{new_cat})") if dict_trace_word?(word)
         entry[0] = new_freq
         rescored += 1
       else
-        dict_trace_puts(word, "Phase12 rarity_rescore: kept freq=#{entry[0]} (cat=#{new_cat})") if dict_trace_word?(word)
+        dict_trace_puts(word, "rarity_classifier_rescore: kept freq=#{entry[0]} (cat=#{new_cat})") if dict_trace_word?(word)
       end
     end
   ensure

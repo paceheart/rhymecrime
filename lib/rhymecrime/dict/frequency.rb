@@ -128,7 +128,7 @@ end
 # Does not use Inflect forward derivation (idea 2a) — too many FPs.
 # Skip -ing / -ed forms whose base is a non-verb in WordNet (*kitchen* noun ⇒ *kitchening* rescue
 # denied): Kaikki often lists deverbal participle-shape forms for nouns that English doesn't
-# verbify. Phase 8/10/11 already refuse to promote these, but the disconnect rescue kept them at
+# verbify. The morph inheritance / expansion passes already refuse to promote these, but the disconnect rescue kept them at
 # freq 0 which reads as :rare (*jealousing*, *opinioning*, *attorneying*, *conversationing*).
 def kaikki_form_oov_rescue_headwords(forms_map, wordfreq_hash, zipf_floor, wiktionary_words = nil)
   out = Set.new
@@ -357,7 +357,7 @@ def compute_frequency(word, subtlex_hash, wordfreq_hash, subtlex_total_hash: nil
   # up with FREQcount of 1-2 in SUBTLEX (caption noise) or Zipf < 2.0 in wordfreq (single-digit
   # document hits). Example junk: *gollies* (SUBTLEX count=2, Zipf 0), *polys* (SUBTLEX count=1,
   # Zipf 1.71), *bravados* (SUBTLEX 0, NB-only). These should stay freq=0 and be pruned by the
-  # disconnect filter unless Phase 8/11 rescue them via strong surface attestation of the form
+  # disconnect filter unless Kaikki/SUBTLEX morph passes rescue them via strong surface attestation of the form
   # itself. Guard is narrow: only fires when (a) the surface is a Kaikki non-lemma form of a
   # different base, (b) no WordNet anchor on the surface, (c) Zipf below RARE threshold, and
   # (d) SUBTLEX is trickle-level (< SUBTLEX_OVERRIDE_PROPER_MIN). Legit common plurals and
@@ -582,8 +582,9 @@ def compute_frequency(word, subtlex_hash, wordfreq_hash, subtlex_total_hash: nil
   return freq
 end
 
-# Phase 9: try to lift +word+ to donor freq via +listed+ (common_words.txt), forward or reverse Inflect match.
-def phase9_inherit_once!(word, listed, forward, hash, rare_words, common_words, pos_map, forms_map, kaikki_verb_morph, subtlex_hash, wordfreq_hash, cmudict_orig, ref_cn, ref_nb, ref_usf, neol_words)
+# List-pivot Inflect inheritance: try to lift +word+ to donor freq via +listed+
+# (common_words.txt), forward or reverse Inflect match.
+def morph_inherit_listed_once!(word, listed, forward, hash, rare_words, common_words, pos_map, forms_map, kaikki_verb_morph, subtlex_hash, wordfreq_hash, cmudict_orig, ref_cn, ref_nb, ref_usf, neol_words)
   entry = hash[word]
   return false unless entry
   return false if entry[0] > RARE_FREQ_MAX
@@ -603,47 +604,47 @@ def phase9_inherit_once!(word, listed, forward, hash, rare_words, common_words, 
   end
 
   if morph_kaikki_lists_surface_as_inflected_nonlemma?(inflect_stem)
-    tr = dict_trace_phase9?(word, listed, base, infl)
-    dict_trace_puts(word, "Phase9 listed=#{listed}: skip (Kaikki lists #{inflect_stem} as form of #{$inflection_base_words[inflect_stem]})") if tr
+    tr = dict_trace_morph_inherit_listed?(word, listed, base, infl)
+    dict_trace_puts(word, "morph_inherit_listed listed=#{listed}: skip (Kaikki lists #{inflect_stem} as form of #{$inflection_base_words[inflect_stem]})") if tr
     return false
   end
 
-  tr = dict_trace_phase9?(word, listed, base, infl)
+  tr = dict_trace_morph_inherit_listed?(word, listed, base, infl)
   inflection_suffix_kind = Inflect.send(:match_suffix_kind, base, infl)
   if inflection_suffix_kind.nil?
-    dict_trace_puts(word, "Phase9 listed=#{listed} base=#{base} infl=#{infl}: skip (no suffix kind)") if tr
+    dict_trace_puts(word, "morph_inherit_listed listed=#{listed} base=#{base} infl=#{infl}: skip (no suffix kind)") if tr
     return false
   end
   wf_infl = wordfreq_hash[infl] || 0
   if inflection_suffix_kind == :s && !morph_base_allows_plural_s?(base, pos_map, forms_map, infl, wordfreq_hash: wordfreq_hash, subtlex_hash: subtlex_hash)
-    dict_trace_puts(infl, "Phase9 ← #{base} (listed=#{listed}): skip (plural :s not allowed)") if tr
+    dict_trace_puts(infl, "morph_inherit_listed ← #{base} (listed=#{listed}): skip (plural :s not allowed)") if tr
     return false
   end
   if (inflection_suffix_kind == :ed || inflection_suffix_kind == :ing) && base.end_with?("ing")
-    dict_trace_puts(infl, "Phase9 ← #{base} (listed=#{listed}): skip (#{inflection_suffix_kind} on -ing base)") if tr
+    dict_trace_puts(infl, "morph_inherit_listed ← #{base} (listed=#{listed}): skip (#{inflection_suffix_kind} on -ing base)") if tr
     return false
   end
   list_auth = common_words.include?(base)
   if (inflection_suffix_kind == :ed || inflection_suffix_kind == :ing) && !morph_base_allows_verb_forms?(base, infl, pos_map, forms_map, wf_infl, wordfreq_hash, list_authoritative_base: list_auth, kaikki_verb_morph: kaikki_verb_morph)
-    dict_trace_puts(infl, "Phase9 ← #{base} (listed=#{listed}): skip (verb forms blocked; suffix=#{inflection_suffix_kind} list_auth=#{list_auth} zipf=#{wf_infl})") if tr
+    dict_trace_puts(infl, "morph_inherit_listed ← #{base} (listed=#{listed}): skip (verb forms blocked; suffix=#{inflection_suffix_kind} list_auth=#{list_auth} zipf=#{wf_infl})") if tr
     return false
   end
   if inflection_suffix_kind == :er || inflection_suffix_kind == :est
     base_p0 = hash[base]&.dig(1)&.first
     unless morph_base_allows_comparative_er_est?(base, infl, pos_map, base_p0, forms_map, wf_infl)
-      dict_trace_puts(infl, "Phase9 ← #{base}: skip (:er/:est not allowed)") if tr
+      dict_trace_puts(infl, "morph_inherit_listed ← #{base}: skip (:er/:est not allowed)") if tr
       return false
     end
   end
   listed_freq = hash.key?(listed) ? hash[listed][0] : 0
   donor = listed_freq > RARE_FREQ_MAX ? listed_freq : 99
   if donor > RARE_FREQ_MAX && !common_words.include?(listed) && !neol_words.include?(base) && !neol_words.include?(listed) && !inflection_surface_reference_attested?(word, subtlex_hash, wordfreq_hash, cmudict_orig, ref_cn, ref_nb, ref_usf, neol_words: neol_words)
-    dict_trace_puts(word, "Phase9 ← base=#{base} (listed=#{listed}): skip (surface not in wordfreq/SUBTLEX/WN/CMU/USF/CN/NB/neol)") if tr
+    dict_trace_puts(word, "morph_inherit_listed ← base=#{base} (listed=#{listed}): skip (surface not in wordfreq/SUBTLEX/WN/CMU/USF/CN/NB/neol)") if tr
     return false
   end
   entry[0] = donor
-  record_freq_propagation!(word, phase: :phase9, donor: base, donor_anchored: true)
-  dict_trace_puts(word, "Phase9: set freq=#{donor} via listed=#{listed} base=#{base} infl=#{infl} suffix=#{inflection_suffix_kind}") if tr
+  record_freq_propagation!(word, phase: :morph_inherit_listed, donor: base, donor_anchored: true)
+  dict_trace_puts(word, "morph_inherit_listed: set freq=#{donor} via listed=#{listed} base=#{base} infl=#{infl} suffix=#{inflection_suffix_kind}") if tr
   true
 end
 
@@ -672,11 +673,11 @@ def add_frequency_info(cmudict, subtlex_hash, subtlex_total_hash, wordfreq_hash,
       count += 1
     end
     hash[word] = [freq, prons]
-    dict_trace_puts(word, "Phase1 (cmudict pass): freq=#{freq}") if dict_trace_word?(word)
+    dict_trace_puts(word, "cmudict_seed: freq=#{freq}") if dict_trace_word?(word)
   end
   puts "#{count} of those entries have frequency data (from cmudict/wiktionary words)"
 
-  # Phase 4: add words from SUBTLEX that aren't in cmudict.
+  # SUBTLEX expansion: add words from SUBTLEX that aren't in cmudict.
   extra = 0
   subtlex_hash.each_key do |word|
     next if hash.key?(word)
@@ -697,11 +698,12 @@ def add_frequency_info(cmudict, subtlex_hash, subtlex_total_hash, wordfreq_hash,
   end
   puts "#{extra} extra words added from SUBTLEX"
 
-  # Phase 5: add (or sentinel-floor) words from common_words.txt. Freq 99 is a structural
-  # sentinel: it lands above +RARITY_CLASSIFIER_RESCORE_MAX_FREQ+ so the Phase 12 rarity
-  # classifier won't delete these curated headwords as forbidden. Pre-existing entries at
-  # or below +RARE_FREQ_MAX+ get bumped (otherwise a word like +mitten+ — legit but sparse
-  # in SUBTLEX — can be floored at freq 4 and then nuked by the classifier).
+  # Common-list floor: add (or sentinel-floor) words from common_words.txt. Freq 99 is a
+  # structural sentinel: it lands above +RARITY_CLASSIFIER_RESCORE_MAX_FREQ+ so the
+  # rarity-classifier rescore pass won't delete these curated headwords as forbidden.
+  # Pre-existing entries at or below +RARE_FREQ_MAX+ get bumped (otherwise a word like
+  # +mitten+ — legit but sparse in SUBTLEX — can be floored at freq 4 and then nuked by
+  # the classifier).
   common_extra = 0
   common_bumped = 0
   common_words.each do |word|
@@ -718,9 +720,9 @@ def add_frequency_info(cmudict, subtlex_hash, subtlex_total_hash, wordfreq_hash,
   puts "#{common_extra} extra words added from common_words.txt" if common_extra > 0
   puts "#{common_bumped} existing rare-band headwords floored by common_words.txt" if common_bumped > 0
 
-  # Phase 5b: modern neologisms from neol2016 (12dicts) + supplement.
+  # Neol promotion: modern neologisms from neol2016 (12dicts) + supplement.
   # Neither list is a complete inventory of inflections, so the union serves as attestation
-  # for morphological expansion in Phases 8-11 (e.g. +yeeted+ from +yeet+).
+  # for the downstream morph inheritance / expansion passes (e.g. +yeeted+ from +yeet+).
   neol_words = load_word_list_set(NEOL2016_FILENAME)
   neol_words.merge(load_word_list_set(NEOL_SUPPLEMENT_FILENAME))
   neol_promoted = 0
@@ -735,7 +737,7 @@ def add_frequency_info(cmudict, subtlex_hash, subtlex_total_hash, wordfreq_hash,
   end
   puts "#{neol_promoted} words promoted/added from neol2016 + supplement" if neol_promoted > 0
 
-  # Phase 6: Wiktionary floor for modern words absent from all traditional corpora, e.g. throuple, yeet.
+  # Wiktionary existence floor for modern words absent from all traditional corpora, e.g. throuple, yeet.
   # Require Zipf >= RARE to avoid junk words
   floor_applied = 0
   hash.each do |word, entry|
@@ -773,10 +775,11 @@ def add_frequency_info(cmudict, subtlex_hash, subtlex_total_hash, wordfreq_hash,
   end
   puts "#{floor_applied} words received Wiktionary existence floor" if floor_applied > 0
 
-  # Phase 7 (hyphenated word existence floor) disabled: it promoted many proper names / junk;
-  # hyphenated headwords now rely on compute_frequency, Phase 6, and later phases only.
+  # Hyphenated existence floor (DISABLED): it promoted many proper names / junk; hyphenated
+  # headwords now rely on compute_frequency, the Wiktionary existence floor, and the later
+  # morph inheritance / expansion passes only.
 
-  # Phase 8: frequency inheritance for inflected forms.
+  # Kaikki morph inheritance: frequency inheritance for inflected forms.
   # Inherit from any common base word. Skip only when wordfreq shows the inflection itself
   # as independently common (Zipf >= COMMON); a mere corpus key with low Zipf still inherits
   # (yeeted, twerks) so slang bases propagate.
@@ -790,47 +793,47 @@ def add_frequency_info(cmudict, subtlex_hash, subtlex_total_hash, wordfreq_hash,
   $inflection_base_words.each do |inflected, base|
     tr = dict_trace_morph?(base, inflected)
     unless hash.key?(inflected)
-      dict_trace_puts(inflected, "Phase8 ← #{base}: skip (not in hash)") if tr
+      dict_trace_puts(inflected, "morph_inherit_kaikki ← #{base}: skip (not in hash)") if tr
       next
     end
     if rare_words.include?(inflected)
-      dict_trace_puts(inflected, "Phase8 ← #{base}: skip (in rare_words.txt)") if tr
+      dict_trace_puts(inflected, "morph_inherit_kaikki ← #{base}: skip (in rare_words.txt)") if tr
       next
     end
     infl_freq = hash[inflected][0]
     if infl_freq > RARE_FREQ_MAX
-      dict_trace_puts(inflected, "Phase8 ← #{base}: skip (freq #{infl_freq} already > #{RARE_FREQ_MAX})") if tr
+      dict_trace_puts(inflected, "morph_inherit_kaikki ← #{base}: skip (freq #{infl_freq} already > #{RARE_FREQ_MAX})") if tr
       next
     end
     # Respect the specialized-lex demotion applied by +compute_frequency+ (+gens+ syn=1
-    # noun.group, +anthers+ syn=1 noun.plant). Without this guard, Phase 8 re-promotes
-    # +gens+ off its base +gen+ (freq≥common), undoing the Option 2 clamp.
+    # noun.group, +anthers+ syn=1 noun.plant). Without this guard, Kaikki morph inheritance
+    # re-promotes +gens+ off its base +gen+ (freq≥common), undoing the Option 2 clamp.
     if wn_encyclopedic_single_synset_demoted?(inflected, subtlex_hash, wordfreq_hash)
-      dict_trace_puts(inflected, "Phase8 ← #{base}: skip (WN single-synset specialized-lex demotion)") if tr
+      dict_trace_puts(inflected, "morph_inherit_kaikki ← #{base}: skip (WN single-synset specialized-lex demotion)") if tr
       next
     end
     # Do not copy frequency from hyphenated base to hyphenated inflection (hoity-toity → hoity-toities).
     if inflected.include?("-") && base.include?("-")
-      dict_trace_puts(inflected, "Phase8 ← #{base}: skip (hyphenated base↔inflection)") if tr
+      dict_trace_puts(inflected, "morph_inherit_kaikki ← #{base}: skip (hyphenated base↔inflection)") if tr
       next
     end
     base_freq = hash.key?(base) ? hash[base][0] : 0
     if base_freq >= 999999
-      dict_trace_puts(inflected, "Phase8 ← #{base}: skip (stop word donor)") if tr
+      dict_trace_puts(inflected, "morph_inherit_kaikki ← #{base}: skip (stop word donor)") if tr
       next
     end
     if base_freq <= RARE_FREQ_MAX
-      dict_trace_puts(inflected, "Phase8 ← #{base}: skip (base_freq=#{base_freq} ≤ #{RARE_FREQ_MAX})") if tr
+      dict_trace_puts(inflected, "morph_inherit_kaikki ← #{base}: skip (base_freq=#{base_freq} ≤ #{RARE_FREQ_MAX})") if tr
       next
     end
     if infl_freq >= base_freq
-      dict_trace_puts(inflected, "Phase8 ← #{base}: skip (infl_freq=#{infl_freq} ≥ base_freq=#{base_freq})") if tr
+      dict_trace_puts(inflected, "morph_inherit_kaikki ← #{base}: skip (infl_freq=#{infl_freq} ≥ base_freq=#{base_freq})") if tr
       next
     end
     wf_inf = wordfreq_hash[inflected]
     # High Zipf can still be freq≤RARE after OOV SUBTLEX clamps (*blogging*); only skip when already common.
     if wf_inf && wf_inf >= WORDFREQ_COMMON_ZIPF && infl_freq > RARE_FREQ_MAX
-      dict_trace_puts(inflected, "Phase8 ← #{base}: skip (Zipf #{wf_inf} ≥ #{WORDFREQ_COMMON_ZIPF} and infl already common)") if tr
+      dict_trace_puts(inflected, "morph_inherit_kaikki ← #{base}: skip (Zipf #{wf_inf} ≥ #{WORDFREQ_COMMON_ZIPF} and infl already common)") if tr
       next
     end
     inflection_suffix_kind = Inflect.send(:match_suffix_kind, base, inflected)
@@ -846,12 +849,12 @@ def add_frequency_info(cmudict, subtlex_hash, subtlex_total_hash, wordfreq_hash,
       wf_raw_inf = (wordfreq_hash[inflected] || 0).to_f
       wn_inf = wn_has_entry?(inflected)
       unless wn_inf || wf_raw_inf >= WORDFREQ_COMMON_ZIPF || sub_raw_inf >= SUBTLEX_OVERRIDE_PROPER_MIN
-        dict_trace_puts(inflected, "Phase8 ← #{base}: skip (Kaikki irregular form, wf=#{wf_raw_inf} sub=#{sub_raw_inf} no WN)") if tr
+        dict_trace_puts(inflected, "morph_inherit_kaikki ← #{base}: skip (Kaikki irregular form, wf=#{wf_raw_inf} sub=#{sub_raw_inf} no WN)") if tr
         next
       end
     end
     if inflection_suffix_kind == :s && !morph_base_allows_plural_s?(base, pos_map, forms_map, inflected, wordfreq_hash: wordfreq_hash, subtlex_hash: subtlex_hash)
-      dict_trace_puts(inflected, "Phase8 ← #{base}: skip (plural :s not allowed)") if tr
+      dict_trace_puts(inflected, "morph_inherit_kaikki ← #{base}: skip (plural :s not allowed)") if tr
       next
     end
     # Non-standard consonant+y plurals: English pluralizes +lady+→+ladies+, +teddy+→+teddies+,
@@ -865,19 +868,19 @@ def add_frequency_info(cmudict, subtlex_hash, subtlex_total_hash, wordfreq_hash,
         inflected == "#{base}s"
       wf_raw_inf = (wordfreq_hash[inflected] || 0).to_f
       unless wn_has_entry?(inflected) || wf_raw_inf >= WORDFREQ_RARE_ZIPF
-        dict_trace_puts(inflected, "Phase8 ← #{base}: skip (nonstandard cons+ys plural; standard is -ies)") if tr
+        dict_trace_puts(inflected, "morph_inherit_kaikki ← #{base}: skip (nonstandard cons+ys plural; standard is -ies)") if tr
         next
       end
     end
     zf_w = wordfreq_hash[inflected] || 0
     if (inflection_suffix_kind == :ed || inflection_suffix_kind == :ing) && !morph_base_allows_verb_forms?(base, inflected, pos_map, forms_map, zf_w, wordfreq_hash, kaikki_verb_morph: kaikki_verb_morph)
-      dict_trace_puts(inflected, "Phase8 ← #{base}: skip (verb forms blocked; suffix=#{inflection_suffix_kind} zipf_inf=#{zf_w})") if tr
+      dict_trace_puts(inflected, "morph_inherit_kaikki ← #{base}: skip (verb forms blocked; suffix=#{inflection_suffix_kind} zipf_inf=#{zf_w})") if tr
       next
     end
     if inflection_suffix_kind == :er || inflection_suffix_kind == :est
       base_p0 = hash[base]&.dig(1)&.first
       unless morph_base_allows_comparative_er_est?(base, inflected, pos_map, base_p0, forms_map, zf_w)
-        dict_trace_puts(inflected, "Phase8 ← #{base}: skip (:er/:est not allowed)") if tr
+        dict_trace_puts(inflected, "morph_inherit_kaikki ← #{base}: skip (:er/:est not allowed)") if tr
         next
       end
     end
@@ -904,22 +907,24 @@ def add_frequency_info(cmudict, subtlex_hash, subtlex_total_hash, wordfreq_hash,
       neol_words.include?(base) ||
       base_zipf >= WORDFREQ_COMMON_ZIPF
     if base_freq > RARE_FREQ_MAX && !base_has_real_anchor && !surf_ok
-      dict_trace_puts(inflected, "Phase8 ← #{base}: skip (base not in common_words/WN/neol, Zipf #{base_zipf} < COMMON, surface not in wordfreq/WN/CMU/neol)") if tr
+      dict_trace_puts(inflected, "morph_inherit_kaikki ← #{base}: skip (base not in common_words/WN/neol, Zipf #{base_zipf} < COMMON, surface not in wordfreq/WN/CMU/neol)") if tr
       next
     end
     hash[inflected][0] = base_freq
-    record_freq_propagation!(inflected, phase: :phase8, donor: base, donor_anchored: base_has_real_anchor)
-    dict_trace_puts(inflected, "Phase8 ← #{base}: inherited freq=#{base_freq} suffix=#{inflection_suffix_kind} anchored=#{base_has_real_anchor}") if tr
+    record_freq_propagation!(inflected, phase: :morph_inherit_kaikki, donor: base, donor_anchored: base_has_real_anchor)
+    dict_trace_puts(inflected, "morph_inherit_kaikki ← #{base}: inherited freq=#{base_freq} suffix=#{inflection_suffix_kind} anchored=#{base_has_real_anchor}") if tr
     inherited += 1
   end
   puts "#{inherited} inflected forms inherited frequency from base words" if inherited > 0
 
-  # Phase 9: suffix inheritance from common_words.txt (Inflect spelling patterns).
-  # Phase 8 lifts Kaikki-linked inflections through the rare bins; Phase 9 still handles list-driven cases.
-  # Match forward (listed + suffix = word) or reverse (word + suffix = listed,
-  # e.g. regionalize… ← regionalized). Structural junk guards only; list headwords skip Kaikki verb
-  # attestation (see +list_authoritative_base+ on +morph_base_allows_verb_forms?+). When +listed+ is in
-  # common_words.txt, also skip +inflection_surface_reference_attested?+ so curated lemmas can lift OOV inflections.
+  # List-pivot Inflect inheritance: suffix inheritance from common_words.txt (Inflect
+  # spelling patterns). Kaikki morph inheritance lifts Kaikki-linked inflections through
+  # the rare bins; this pass still handles list-driven cases. Match forward (listed +
+  # suffix = word) or reverse (word + suffix = listed, e.g. regionalize… ← regionalized).
+  # Structural junk guards only; list headwords skip Kaikki verb attestation (see
+  # +list_authoritative_base+ on +morph_base_allows_verb_forms?+). When +listed+ is in
+  # common_words.txt, also skip +inflection_surface_reference_attested?+ so curated lemmas
+  # can lift OOV inflections.
   cw_sorted = common_words.sort_by { |b| -b.length }
   cw_inherited = 0
   # Multiple rounds: e.g. regionalized → regionalize → regionalizing in one build.
@@ -934,14 +939,14 @@ def add_frequency_info(cmudict, subtlex_hash, subtlex_total_hash, wordfreq_hash,
         next if claimed[w]
         entry = hash[w]
         if entry[0] > RARE_FREQ_MAX
-          dict_trace_puts(w, "Phase9: skip row (freq #{entry[0]} already > #{RARE_FREQ_MAX})") if dict_trace_word?(w)
+          dict_trace_puts(w, "morph_inherit_listed: skip row (freq #{entry[0]} already > #{RARE_FREQ_MAX})") if dict_trace_word?(w)
           next
         end
         if rare_words.include?(w)
-          dict_trace_puts(w, "Phase9: skip row (in rare_words.txt)") if dict_trace_word?(w)
+          dict_trace_puts(w, "morph_inherit_listed: skip row (in rare_words.txt)") if dict_trace_word?(w)
           next
         end
-        next unless phase9_inherit_once!(w, listed, true, hash, rare_words, common_words, pos_map, forms_map, kaikki_verb_morph, subtlex_hash, wordfreq_hash, cmudict_orig, ref_cn, ref_nb, ref_usf, neol_words)
+        next unless morph_inherit_listed_once!(w, listed, true, hash, rare_words, common_words, pos_map, forms_map, kaikki_verb_morph, subtlex_hash, wordfreq_hash, cmudict_orig, ref_cn, ref_nb, ref_usf, neol_words)
         claimed[w] = true
         round += 1
         cw_inherited += 1
@@ -952,14 +957,14 @@ def add_frequency_info(cmudict, subtlex_hash, subtlex_total_hash, wordfreq_hash,
         next if claimed[w]
         entry = hash[w]
         if entry[0] > RARE_FREQ_MAX
-          dict_trace_puts(w, "Phase9: skip row (freq #{entry[0]} already > #{RARE_FREQ_MAX})") if dict_trace_word?(w)
+          dict_trace_puts(w, "morph_inherit_listed: skip row (freq #{entry[0]} already > #{RARE_FREQ_MAX})") if dict_trace_word?(w)
           next
         end
         if rare_words.include?(w)
-          dict_trace_puts(w, "Phase9: skip row (in rare_words.txt)") if dict_trace_word?(w)
+          dict_trace_puts(w, "morph_inherit_listed: skip row (in rare_words.txt)") if dict_trace_word?(w)
           next
         end
-        next unless phase9_inherit_once!(w, listed, false, hash, rare_words, common_words, pos_map, forms_map, kaikki_verb_morph, subtlex_hash, wordfreq_hash, cmudict_orig, ref_cn, ref_nb, ref_usf, neol_words)
+        next unless morph_inherit_listed_once!(w, listed, false, hash, rare_words, common_words, pos_map, forms_map, kaikki_verb_morph, subtlex_hash, wordfreq_hash, cmudict_orig, ref_cn, ref_nb, ref_usf, neol_words)
         claimed[w] = true
         round += 1
         cw_inherited += 1
@@ -969,11 +974,12 @@ def add_frequency_info(cmudict, subtlex_hash, subtlex_total_hash, wordfreq_hash,
   end
   puts "#{cw_inherited} forms inherited frequency from common_words.txt bases" if cw_inherited > 0
 
-  # Phase 10: morphological extensions from common_words.txt headwords only (Inflect matcher).
-  # Unlike an “any freq>RARE_FREQ_MAX lemma” scan, this avoids promoting foxed/gooses/bruisers from ordinary
-  # common nouns and avoids hyphenated blast (topsy-turvy → topsy-turvys).
-  # OOV rows: list headwords are authoritative (no SUBTLEX/Wikt gate). Existing keys may be raised.
-  # -ing from a base requires a WordNet verb lemma (same FP-4 guard as Phase 8).
+  # Common-list Inflect expansion: morphological extensions from common_words.txt headwords
+  # only (Inflect matcher). Unlike an “any freq>RARE_FREQ_MAX lemma” scan, this avoids
+  # promoting foxed/gooses/bruisers from ordinary common nouns and avoids hyphenated blast
+  # (topsy-turvy → topsy-turvys). OOV rows: list headwords are authoritative (no SUBTLEX/Wikt
+  # gate). Existing keys may be raised. -ing from a base requires a WordNet verb lemma (same
+  # FP-4 guard as Kaikki morph inheritance).
   morph_inherited = 0
   loop do
     round = 0
@@ -982,27 +988,27 @@ def add_frequency_info(cmudict, subtlex_hash, subtlex_total_hash, wordfreq_hash,
       bent = hash[base]
       tb = dict_trace_word?(base)
       unless bent && bent[0] > RARE_FREQ_MAX
-        dict_trace_puts(base, "Phase10: skip (no row or freq #{bent ? bent[0] : 'nil'} ≤ #{RARE_FREQ_MAX})") if tb
+        dict_trace_puts(base, "morph_expand_listed: skip (no row or freq #{bent ? bent[0] : 'nil'} ≤ #{RARE_FREQ_MAX})") if tb
         next
       end
       unless common_words.include?(base)
-        dict_trace_puts(base, "Phase10: skip (not in common_words.txt)") if tb
+        dict_trace_puts(base, "morph_expand_listed: skip (not in common_words.txt)") if tb
         next
       end
       if stop_word?(base)
-        dict_trace_puts(base, "Phase10: skip (stop word)") if tb
+        dict_trace_puts(base, "morph_expand_listed: skip (stop word)") if tb
         next
       end
       if rare_words.include?(base)
-        dict_trace_puts(base, "Phase10: skip (in rare_words.txt)") if tb
+        dict_trace_puts(base, "morph_expand_listed: skip (in rare_words.txt)") if tb
         next
       end
       if base.include?("-")
-        dict_trace_puts(base, "Phase10: skip (hyphenated)") if tb
+        dict_trace_puts(base, "morph_expand_listed: skip (hyphenated)") if tb
         next
       end
       if morph_kaikki_lists_surface_as_inflected_nonlemma?(base)
-        dict_trace_puts(base, "Phase10: skip (Kaikki form of #{$inflection_base_words[base]}, not an Inflect stem)") if tb
+        dict_trace_puts(base, "morph_expand_listed: skip (Kaikki form of #{$inflection_base_words[base]}, not an Inflect stem)") if tb
         next
       end
       donor = bent[0] > RARE_FREQ_MAX ? bent[0] : 99
@@ -1013,45 +1019,45 @@ def add_frequency_info(cmudict, subtlex_hash, subtlex_total_hash, wordfreq_hash,
           next
         end
         if w.include?("-")
-          dict_trace_puts(w, "Phase10 ← #{base}: skip (hyphenated form)") if tr
+          dict_trace_puts(w, "morph_expand_listed ← #{base}: skip (hyphenated form)") if tr
           next
         end
         if rare_words.include?(w)
-          dict_trace_puts(w, "Phase10 ← #{base}: skip (in rare_words.txt)") if tr
+          dict_trace_puts(w, "morph_expand_listed ← #{base}: skip (in rare_words.txt)") if tr
           next
         end
         unless Inflect.inflection_of_base?(base, w)
-          dict_trace_puts(w, "Phase10 ← #{base}: skip (not inflection_of_base?)") if tr
+          dict_trace_puts(w, "morph_expand_listed ← #{base}: skip (not inflection_of_base?)") if tr
           next
         end
         inflection_suffix_kind = Inflect.send(:match_suffix_kind, base, w)
         wf = wordfreq_hash[w] || 0
         if inflection_suffix_kind == :s && !morph_base_allows_plural_s?(base, pos_map, forms_map, w, wordfreq_hash: wordfreq_hash, subtlex_hash: subtlex_hash)
-          dict_trace_puts(w, "Phase10 ← #{base}: skip (plural :s not allowed)") if tr
+          dict_trace_puts(w, "morph_expand_listed ← #{base}: skip (plural :s not allowed)") if tr
           next
         end
         if (inflection_suffix_kind == :ed || inflection_suffix_kind == :ing) && base.end_with?("ing")
-          dict_trace_puts(w, "Phase10 ← #{base}: skip (#{inflection_suffix_kind} on -ing base)") if tr
+          dict_trace_puts(w, "morph_expand_listed ← #{base}: skip (#{inflection_suffix_kind} on -ing base)") if tr
           next
         end
         if (inflection_suffix_kind == :ed || inflection_suffix_kind == :ing) && !morph_base_allows_verb_forms?(base, w, pos_map, forms_map, wf, wordfreq_hash, kaikki_verb_morph: kaikki_verb_morph)
-          dict_trace_puts(w, "Phase10 ← #{base}: skip (verb forms blocked; suffix=#{inflection_suffix_kind} zipf=#{wf})") if tr
+          dict_trace_puts(w, "morph_expand_listed ← #{base}: skip (verb forms blocked; suffix=#{inflection_suffix_kind} zipf=#{wf})") if tr
           next
         end
         if inflection_suffix_kind == :er || inflection_suffix_kind == :est
           unless morph_base_allows_comparative_er_est?(base, w, pos_map, base_prons&.first, forms_map, wf)
-            dict_trace_puts(w, "Phase10 ← #{base}: skip (:er/:est not allowed)") if tr
+            dict_trace_puts(w, "morph_expand_listed ← #{base}: skip (:er/:est not allowed)") if tr
             next
           end
         end
         if wf >= WORDFREQ_COMMON_ZIPF
-          dict_trace_puts(w, "Phase10 ← #{base}: skip (Zipf #{wf} ≥ #{WORDFREQ_COMMON_ZIPF})") if tr
+          dict_trace_puts(w, "morph_expand_listed ← #{base}: skip (Zipf #{wf} ≥ #{WORDFREQ_COMMON_ZIPF})") if tr
           next
         end
-        # Phase 10 scans only common_words.txt bases; list headwords are authoritative (no reference-corpus gate).
+        # Common-list Inflect expansion scans only common_words.txt bases; list headwords are authoritative (no reference-corpus gate).
         if hash.key?(w)
           if hash[w][0] > RARE_FREQ_MAX
-            dict_trace_puts(w, "Phase10 ← #{base}: skip (existing freq #{hash[w][0]} > #{RARE_FREQ_MAX})") if tr
+            dict_trace_puts(w, "morph_expand_listed ← #{base}: skip (existing freq #{hash[w][0]} > #{RARE_FREQ_MAX})") if tr
             next
           end
           hash[w][0] = donor
@@ -1059,12 +1065,12 @@ def add_frequency_info(cmudict, subtlex_hash, subtlex_total_hash, wordfreq_hash,
             promo = morph_derived_prons_for_promotion(base_prons, base, w)
             hash[w][1] = promo unless promo.empty?
           end
-          dict_trace_puts(w, "Phase10 ← #{base}: set freq=#{donor} suffix=#{inflection_suffix_kind} (existing row)") if tr
+          dict_trace_puts(w, "morph_expand_listed ← #{base}: set freq=#{donor} suffix=#{inflection_suffix_kind} (existing row)") if tr
         else
           hash[w] = [donor, morph_derived_prons_for_promotion(base_prons, base, w)]
-          dict_trace_puts(w, "Phase10 ← #{base}: new row freq=#{donor} suffix=#{inflection_suffix_kind}") if tr
+          dict_trace_puts(w, "morph_expand_listed ← #{base}: new row freq=#{donor} suffix=#{inflection_suffix_kind}") if tr
         end
-        record_freq_propagation!(w, phase: :phase10, donor: base, donor_anchored: true)
+        record_freq_propagation!(w, phase: :morph_expand_listed, donor: base, donor_anchored: true)
         round += 1
         morph_inherited += 1
       end
@@ -1073,7 +1079,7 @@ def add_frequency_info(cmudict, subtlex_hash, subtlex_total_hash, wordfreq_hash,
   end
   puts "#{morph_inherited} morphological extensions inherited from freq>#{RARE_FREQ_MAX} bases" if morph_inherited > 0
 
-  # Phase 11: non-list bases with strong SUBTLEX dialogue use may promote attested inflections.
+  # SUBTLEX-anchored Inflect expansion: non-list bases with strong SUBTLEX dialogue use may promote attested inflections.
   # Tighter than old “any freq>RARE_FREQ_MAX”: no hyphen, min length; plural :s can also use a lower SUBTLEX
   # floor when WordNet has the base as noun-only (gramophone → gramophones); blocks gooses-style
   # verbal plurals via wn_base_has_verb?. Non-plural suffixes still require MORPH_CORPUS_SUBTLEX_MIN.
@@ -1083,35 +1089,35 @@ def add_frequency_info(cmudict, subtlex_hash, subtlex_total_hash, wordfreq_hash,
     hash.keys.each do |base|
       tb = dict_trace_word?(base)
       if common_words.include?(base)
-        dict_trace_puts(base, "Phase11: skip (in common_words.txt)") if tb
+        dict_trace_puts(base, "morph_expand_subtlex: skip (in common_words.txt)") if tb
         next
       end
       if base.include?("-")
-        dict_trace_puts(base, "Phase11: skip (hyphenated)") if tb
+        dict_trace_puts(base, "morph_expand_subtlex: skip (hyphenated)") if tb
         next
       end
       bent = hash[base]
       unless bent && bent[0] > RARE_FREQ_MAX
-        dict_trace_puts(base, "Phase11: skip (no row or freq #{bent ? bent[0] : 'nil'} ≤ #{RARE_FREQ_MAX})") if tb
+        dict_trace_puts(base, "morph_expand_subtlex: skip (no row or freq #{bent ? bent[0] : 'nil'} ≤ #{RARE_FREQ_MAX})") if tb
         next
       end
       if stop_word?(base) || rare_words.include?(base)
-        dict_trace_puts(base, "Phase11: skip (stop/rare_words)") if tb
+        dict_trace_puts(base, "morph_expand_subtlex: skip (stop/rare_words)") if tb
         next
       end
       if morph_kaikki_lists_surface_as_inflected_nonlemma?(base)
-        dict_trace_puts(base, "Phase11: skip (Kaikki form of #{$inflection_base_words[base]}, not an Inflect stem)") if tb
+        dict_trace_puts(base, "morph_expand_subtlex: skip (Kaikki form of #{$inflection_base_words[base]}, not an Inflect stem)") if tb
         next
       end
       base_zipf_pre = (wordfreq_hash[base] || 0).to_f
       if base.bytesize < 5 && base_zipf_pre < WORDFREQ_COMMON_ZIPF
-        dict_trace_puts(base, "Phase11: skip (too short; Zipf #{base_zipf_pre} < #{WORDFREQ_COMMON_ZIPF})") if tb
+        dict_trace_puts(base, "morph_expand_subtlex: skip (too short; Zipf #{base_zipf_pre} < #{WORDFREQ_COMMON_ZIPF})") if tb
         next
       end
       # Proper-noun bases (SUBTLEX majority capitalized, Kaikki capitalized-only) without any WN
       # common-noun anchor must not drive Inflect derivation. Without this gate, surname CMU
       # headwords (*ferris* with +ferris wheel+-driven Zipf 4.10 but SUBTLEX capitalized 185/209
-      # vs lowercase 24) reach Phase 11 and spin up junk plural surfaces (*ferriss* — Inflect's
+      # vs lowercase 24) reach SUBTLEX-anchored Inflect expansion and spin up junk plural surfaces (*ferriss* — Inflect's
       # consonant-doubling fallback for unstressed *-is* endings). Real common nouns (+blog+,
       # +twerk+, +gramophone+) have WN noun entries or an almost-entirely-lowercase SUBTLEX
       # profile and skip this gate. The +likely_proper_noun_by_case?+ helper is gated by a very
@@ -1124,7 +1130,7 @@ def add_frequency_info(cmudict, subtlex_hash, subtlex_total_hash, wordfreq_hash,
         proper_noun_by_ratio = sub_total_b > 0 && ratio_b && ratio_b >= SUBTLEX_PROPER_NOUN_RATIO_MIN
         kaikki_cap_only = kaikki_capitalized_only && kaikki_capitalized_only.include?(base)
         if proper_noun_by_ratio || kaikki_cap_only
-          dict_trace_puts(base, "Phase11: skip (proper-noun base: cap_ratio=#{ratio_b} kaikki_cap_only=#{kaikki_cap_only})") if tb
+          dict_trace_puts(base, "morph_expand_subtlex: skip (proper-noun base: cap_ratio=#{ratio_b} kaikki_cap_only=#{kaikki_cap_only})") if tb
           next
         end
       end
@@ -1136,7 +1142,7 @@ def add_frequency_info(cmudict, subtlex_hash, subtlex_total_hash, wordfreq_hash,
       lexical_plural_ok = wn_has_entry?(base) && !wn_base_has_verb?(base) &&
         sub_raw >= MORPH_LEXICAL_NOUN_PLURAL_SUBTLEX_MIN
       unless corpus_ok || lexical_plural_ok
-        dict_trace_puts(base, "Phase11: skip (sub_raw=#{sub_raw}; zipf=#{base_zipf_pre}; corpus_ok=#{corpus_ok} lexical_plural_ok=#{lexical_plural_ok})") if tb
+        dict_trace_puts(base, "morph_expand_subtlex: skip (sub_raw=#{sub_raw}; zipf=#{base_zipf_pre}; corpus_ok=#{corpus_ok} lexical_plural_ok=#{lexical_plural_ok})") if tb
         next
       end
       donor = bent[0] > RARE_FREQ_MAX ? bent[0] : 99
@@ -1144,43 +1150,43 @@ def add_frequency_info(cmudict, subtlex_hash, subtlex_total_hash, wordfreq_hash,
       Inflect.each_derivable_form(base) do |w|
         tr = dict_trace_morph?(base, w)
         if w == base || w.include?("-") || rare_words.include?(w)
-          dict_trace_puts(w, "Phase11 ← #{base}: skip (same/hyphen/rare_words)") if tr && w != base
+          dict_trace_puts(w, "morph_expand_subtlex ← #{base}: skip (same/hyphen/rare_words)") if tr && w != base
           next
         end
         unless Inflect.inflection_of_base?(base, w)
-          dict_trace_puts(w, "Phase11 ← #{base}: skip (not inflection_of_base?)") if tr
+          dict_trace_puts(w, "morph_expand_subtlex ← #{base}: skip (not inflection_of_base?)") if tr
           next
         end
         inflection_suffix_kind = Inflect.send(:match_suffix_kind, base, w)
         unless inflection_suffix_kind
-          dict_trace_puts(w, "Phase11 ← #{base}: skip (no suffix kind)") if tr
+          dict_trace_puts(w, "morph_expand_subtlex ← #{base}: skip (no suffix kind)") if tr
           next
         end
         wf = wordfreq_hash[w] || 0
         if inflection_suffix_kind == :s && !morph_base_allows_plural_s?(base, pos_map, forms_map, w, wordfreq_hash: wordfreq_hash, subtlex_hash: subtlex_hash)
-          dict_trace_puts(w, "Phase11 ← #{base}: skip (plural :s not allowed)") if tr
+          dict_trace_puts(w, "morph_expand_subtlex ← #{base}: skip (plural :s not allowed)") if tr
           next
         end
         if (inflection_suffix_kind == :ed || inflection_suffix_kind == :ing) && base.end_with?("ing")
-          dict_trace_puts(w, "Phase11 ← #{base}: skip (#{inflection_suffix_kind} on -ing base)") if tr
+          dict_trace_puts(w, "morph_expand_subtlex ← #{base}: skip (#{inflection_suffix_kind} on -ing base)") if tr
           next
         end
         if (inflection_suffix_kind == :ed || inflection_suffix_kind == :ing) && !morph_base_allows_verb_forms?(base, w, pos_map, forms_map, wf, wordfreq_hash, kaikki_verb_morph: kaikki_verb_morph)
-          dict_trace_puts(w, "Phase11 ← #{base}: skip (verb forms blocked; suffix=#{inflection_suffix_kind} zipf=#{wf})") if tr
+          dict_trace_puts(w, "morph_expand_subtlex ← #{base}: skip (verb forms blocked; suffix=#{inflection_suffix_kind} zipf=#{wf})") if tr
           next
         end
         if inflection_suffix_kind == :er || inflection_suffix_kind == :est
           unless morph_base_allows_comparative_er_est?(base, w, pos_map, base_prons&.first, forms_map, wf)
-            dict_trace_puts(w, "Phase11 ← #{base}: skip (:er/:est not allowed)") if tr
+            dict_trace_puts(w, "morph_expand_subtlex ← #{base}: skip (:er/:est not allowed)") if tr
             next
           end
         end
         if wf >= WORDFREQ_COMMON_ZIPF
-          dict_trace_puts(w, "Phase11 ← #{base}: skip (Zipf #{wf} ≥ #{WORDFREQ_COMMON_ZIPF})") if tr
+          dict_trace_puts(w, "morph_expand_subtlex ← #{base}: skip (Zipf #{wf} ≥ #{WORDFREQ_COMMON_ZIPF})") if tr
           next
         end
         # Surface attestation: require wordfreq / WN / CMU / neol for the inflection itself (not just
-        # the trickle signals — SUBTLEX count of 1, lone Numberbatch vector — that Phase 8 also rejects).
+        # the trickle signals — SUBTLEX count of 1, lone Numberbatch vector — that Kaikki morph inheritance also rejects).
         # Base membership in neol does not license Inflect-generated inflections (*taserred*,
         # *taserring*, *finnaed*, *rizzed*): the real neol paradigms (*tasered*, *tasering*, *yeeted*)
         # show up in wordfreq at low Zipf. Without this gate, even high-Zipf bases (*poly* Zipf 3.64)
@@ -1207,43 +1213,43 @@ def add_frequency_info(cmudict, subtlex_hash, subtlex_total_hash, wordfreq_hash,
           neol_words.include?(base) ||
           base_zipf >= WORDFREQ_COMMON_ZIPF
         if donor > RARE_FREQ_MAX && !base_has_real_anchor && !surf_attested
-          dict_trace_puts(w, "Phase11 ← #{base}: skip (base not in common_words/WN/neol, Zipf #{base_zipf} < COMMON, surface not in wordfreq/WN/CMU/neol)") if tr
+          dict_trace_puts(w, "morph_expand_subtlex ← #{base}: skip (base not in common_words/WN/neol, Zipf #{base_zipf} < COMMON, surface not in wordfreq/WN/CMU/neol)") if tr
           next
         end
         if inflection_suffix_kind == :s
           unless hash.key?(w) || neol_words.include?(base)
-            dict_trace_puts(w, "Phase11 ← #{base}: skip (:s branch, not in hash)") if tr
+            dict_trace_puts(w, "morph_expand_subtlex ← #{base}: skip (:s branch, not in hash)") if tr
             next
           end
           # Verb-only bases: *-s* is 3sg (*twerks*), not a noun plural — +morph_base_allows_plural_s?+ already
           # allows that path elsewhere. Noun+verb lemmas (*blog*) still get plural promotion when morph allows.
           if wn_base_has_verb?(base) && !wn_base_has_noun?(base)
-            dict_trace_puts(w, "Phase11 ← #{base}: skip (:s branch, verb-only base)") if tr
+            dict_trace_puts(w, "morph_expand_subtlex ← #{base}: skip (:s branch, verb-only base)") if tr
             next
           end
           if hash.key?(w) && hash[w][0] > RARE_FREQ_MAX
-            dict_trace_puts(w, "Phase11 ← #{base}: skip (:s branch, freq already high)") if tr
+            dict_trace_puts(w, "morph_expand_subtlex ← #{base}: skip (:s branch, freq already high)") if tr
             next
           end
           # Respect the specialized-lex demotion applied by +compute_frequency+ (+gens+ syn=1
-          # noun.group). Phase 11's plural-s path would otherwise re-promote +gens+ off its
+          # noun.group). SUBTLEX-anchored Inflect expansion's plural-s path would otherwise re-promote +gens+ off its
           # +gen+ base (Zipf 4.33, passes corpus_ok), undoing the Option 2 clamp.
           if wn_encyclopedic_single_synset_demoted?(w, subtlex_hash, wordfreq_hash)
-            dict_trace_puts(w, "Phase11 ← #{base}: skip (:s branch, WN single-synset specialized-lex demotion)") if tr
+            dict_trace_puts(w, "morph_expand_subtlex ← #{base}: skip (:s branch, WN single-synset specialized-lex demotion)") if tr
             next
           end
-          # Mirror the Phase 8 nonstandard consonant+y plural gate: English canonical plural of
+          # Mirror the Kaikki morph inheritance nonstandard consonant+y plural gate: English canonical plural of
           # +teddy+/+lady+/+eddy+ is +teddies+/+ladies+/+eddies+. Kaikki sometimes records the
           # +-ys+ alternative; without its own Zipf ≥ RARE or WN entry, that surface is Wiktionary
           # paradigm echo and should not receive donor frequency here either.
           if base.length >= 2 && base.end_with?("y") && !%w[a e i o u y].include?(base[-2]) &&
               w == "#{base}s" &&
               !wn_has_entry?(w) && (wordfreq_hash[w] || 0) < WORDFREQ_RARE_ZIPF
-            dict_trace_puts(w, "Phase11 ← #{base}: skip (:s branch, nonstandard cons+ys plural)") if tr
+            dict_trace_puts(w, "morph_expand_subtlex ← #{base}: skip (:s branch, nonstandard cons+ys plural)") if tr
             next
           end
           unless corpus_ok || lexical_plural_ok
-            dict_trace_puts(w, "Phase11 ← #{base}: skip (:s branch, corpus gates)") if tr
+            dict_trace_puts(w, "morph_expand_subtlex ← #{base}: skip (:s branch, corpus gates)") if tr
             next
           end
           if hash.key?(w)
@@ -1255,11 +1261,11 @@ def add_frequency_info(cmudict, subtlex_hash, subtlex_total_hash, wordfreq_hash,
           else
             hash[w] = [donor, morph_derived_prons_for_promotion(base_prons, base, w)]
           end
-          dict_trace_puts(w, "Phase11 ← #{base}: set freq=#{donor} (:s plural path)") if tr
+          dict_trace_puts(w, "morph_expand_subtlex ← #{base}: set freq=#{donor} (:s plural path)") if tr
         elsif corpus_ok
           if hash.key?(w)
             if hash[w][0] > RARE_FREQ_MAX
-              dict_trace_puts(w, "Phase11 ← #{base}: skip (corpus path, existing freq high)") if tr
+              dict_trace_puts(w, "morph_expand_subtlex ← #{base}: skip (corpus path, existing freq high)") if tr
               next
             end
             hash[w][0] = donor
@@ -1267,20 +1273,20 @@ def add_frequency_info(cmudict, subtlex_hash, subtlex_total_hash, wordfreq_hash,
               promo = morph_derived_prons_for_promotion(base_prons, base, w)
               hash[w][1] = promo unless promo.empty?
             end
-            dict_trace_puts(w, "Phase11 ← #{base}: set freq=#{donor} suffix=#{inflection_suffix_kind} (existing row)") if tr
+            dict_trace_puts(w, "morph_expand_subtlex ← #{base}: set freq=#{donor} suffix=#{inflection_suffix_kind} (existing row)") if tr
           else
             unless surf_attested
-              dict_trace_puts(w, "Phase11 ← #{base}: skip (new row, not attested in any reference corpus)") if tr
+              dict_trace_puts(w, "morph_expand_subtlex ← #{base}: skip (new row, not attested in any reference corpus)") if tr
               next
             end
             hash[w] = [donor, morph_derived_prons_for_promotion(base_prons, base, w)]
-            dict_trace_puts(w, "Phase11 ← #{base}: new row freq=#{donor} suffix=#{inflection_suffix_kind}") if tr
+            dict_trace_puts(w, "morph_expand_subtlex ← #{base}: new row freq=#{donor} suffix=#{inflection_suffix_kind}") if tr
           end
         else
-          dict_trace_puts(w, "Phase11 ← #{base}: skip (not :s and !corpus_ok)") if tr
+          dict_trace_puts(w, "morph_expand_subtlex ← #{base}: skip (not :s and !corpus_ok)") if tr
           next
         end
-        record_freq_propagation!(w, phase: :phase11, donor: base, donor_anchored: base_has_real_anchor)
+        record_freq_propagation!(w, phase: :morph_expand_subtlex, donor: base, donor_anchored: base_has_real_anchor)
         round += 1
         morph_corpus += 1
       end
@@ -1291,7 +1297,8 @@ def add_frequency_info(cmudict, subtlex_hash, subtlex_total_hash, wordfreq_hash,
 
   # G-drop frequency inheritance: +failin'+/+wailin'+/+somethin'+ inherit from +failing+/+wailing+/
   # +something+ when the base is common. The apostrophe surface is merged in
-  # +merge_gdropped_in_apostrophe_forms!+ before the frequency phases, but none of Phase 8..11
+  # +merge_gdropped_in_apostrophe_forms!+ before the frequency phases, but none of the
+  # downstream morph inheritance / expansion passes
   # see it as an Inflect stem, so it sits at freq 0 and reads as :forbidden. Cap the inherited
   # frequency at +RARE_FREQ_MAX+ so g-drop never surfaces as :common (it's informal dialect, not
   # the base lemma).
@@ -1380,7 +1387,7 @@ def add_frequency_info(cmudict, subtlex_hash, subtlex_total_hash, wordfreq_hash,
   hyp_edge = delete_headwords_with_edge_hyphen!(hash)
   puts "#{hyp_edge} headwords with a leading or trailing '-' removed after frequency phases" if hyp_edge > 0
 
-  # Phase 12: post-propagation rarity classifier rescore / signal dump (no-op when the
+  # Rarity classifier rescore: post-propagation rescore / signal dump (no-op when the
   # classifier JSON is absent AND dump is not enabled). See
   # +lib/rhymecrime/dict/rarity_classifier.rb+ for the rescore semantics; the dump
   # path is driven by +RHYMECRIME_RARITY_DUMP_SIGNALS+.

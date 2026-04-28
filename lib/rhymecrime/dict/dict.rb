@@ -49,16 +49,17 @@ require_relative "corpus_variants"
 
 $inflection_base_words = {}
 
-# Per-headword frequency-propagation provenance, populated by the Phase 8..11 / g-drop
-# inheritance branches in +frequency.rb+ and consumed by +rarity_rescore_and_dump!+ in
-# +rarity_classifier.rb+ to fill the corresponding +RaritySignals+ fields. Cleared at the
-# top of each +load_word_dict+ rebuild (no cross-build leakage).
+# Per-headword frequency-propagation provenance, populated by the morph
+# inheritance / expansion / g-drop branches in +frequency.rb+ and consumed by
+# +rarity_rescore_and_dump!+ in +rarity_classifier.rb+ to fill the corresponding
+# +RaritySignals+ fields. Cleared at the top of each +load_word_dict+ rebuild (no
+# cross-build leakage).
 #
 # Shape: +{ surface => { phase: Symbol, donor: String, donor_anchored: Boolean } }+.
 # +phase+ ∈ +RARITY_FREQ_SOURCE_PHASES+. +donor_anchored+ records whether the donor base
 # carried independent corpus / lexical evidence at inheritance time (+common_words+,
 # WordNet entry, neol membership, or Zipf ≥ +WORDFREQ_COMMON_ZIPF+) — same notion used
-# by Phase 8's +base_has_real_anchor+ gate. The classifier reads it as
+# by Kaikki morph inheritance's +base_has_real_anchor+ gate. The classifier reads it as
 # +received_donor_from_common_base_flag+.
 $freq_propagation_metadata = {}
 

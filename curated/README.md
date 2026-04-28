@@ -46,7 +46,7 @@ by `stop_words` in `lib/rhymecrime/dict/utils_rhyme.rb`. Lines starting with
 Local additions to the 12dicts `neol2016.txt` neologism list (acai,
 blockchain, doomscroll, yeet, …) — words that either post-date the 2016
 snapshot or were absent from it. Loaded alongside `corpora/neol/neol2016.txt`
-in Phase 5b of `lib/rhymecrime/dict/frequency.rb` to floor the frequency of
+in the neol-promotion pass of `lib/rhymecrime/dict/frequency.rb` to floor the frequency of
 recent additions to English so they survive the rare-word threshold and seed
 morphological expansion. Plain newline-delimited list. Add words that are
 (a) absent from SUBTLEX-US / wordfreq at meaningful frequency, and

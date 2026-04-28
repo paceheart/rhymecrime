@@ -4,7 +4,7 @@
 # relatedness/scan.rb — full-scan fallback for +RelatedWords+.
 #
 # Scans every candidate in +words_we_care_about+ against a cue, scoring each pair
-# through +relatedness_score+ (phase 2) and keeping those at or above
+# through +relatedness_score+ (the score-combination stage) and keeping those at or above
 # +RELATEDNESS_SCORE_THRESHOLD+. Emits +(word, score)+ tuples so callers can sort /
 # cache / serialize the stored-pair score alongside the related-word list in one
 # pass (+bin/precompute-relatedness+).

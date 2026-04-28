@@ -786,7 +786,7 @@ def lemmilarity(l1, l2)
   (cos * 100).round + edge_bonus
 end
 
-# --- Phase 1: Signal gathering ---
+# --- Relatedness signal gathering ---
 #
 # +PairSignals+ bundles every relatedness signal for a given dictionary-lemma pair
 # +(a, b)+. Each feature is returned in its natural type/range (booleans for yes/no
@@ -795,7 +795,8 @@ end
 # happens here. Accessors memoize on the instance so diagnostics, scoring, and any
 # future callers can read the same signal multiple times without recomputation.
 #
-# Phase 2 (+relatedness_score+) is the only place feature weights / scaling live.
+# Relatedness score combination (+relatedness_score+) is the only place feature weights
+# / scaling live.
 # --- Unigram feature registry ---
 # Each entry here yields one column per pair reduction in +PAIR_REDUCTIONS+
 # (+min+ / +max+ / +diff+, which behave as AND / OR / XOR for 0/1-valued booleans

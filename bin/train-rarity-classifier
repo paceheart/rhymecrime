@@ -1,8 +1,8 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 #
-# Train the phase-2 learned scorer for rarity (replaces +compute_frequency+ /
-# Phase 6 Wiktionary floor / +filter_word_dict_disconnected!+ rescue rules).
+# Train the rarity-scoring stage's learned scorer (replaces +compute_frequency+ /
+# Wiktionary existence floor / +filter_word_dict_disconnected!+ rescue rules).
 #
 # Input:
 #   generated/rarity_signals_dump.jsonl    built by running

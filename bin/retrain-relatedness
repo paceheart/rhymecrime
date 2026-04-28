@@ -58,8 +58,9 @@ if [[ $REBUILD_VECTORS -eq 1 ]]; then
   fi
 
   # Sub-stages use letters (a/b/c) so they read as sub-bullets when invoked
-  # from bin/build (which prints its own "[N/4]" parent banners) and don't
-  # masquerade as a competing top-level numbering scheme when run standalone.
+  # from bin/build (which prints its own "Build Stage N/4:" parent banners)
+  # and don't masquerade as a competing top-level numbering scheme when run
+  # standalone.
   echo "==> (a) dumping sense glosses -> generated/sense_glosses.jsonl"
   ruby bin/dump-sense-glosses
   echo "==> (b) encoding sense vectors -> generated/model_sense_vectors.msgpack"

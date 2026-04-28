@@ -1,14 +1,14 @@
 # encoding: utf-8
 #
-# Phase 1 of the rarity pipeline: per-headword signal extraction. Every feature the
-# downstream classifier / rule-based combiner reads is produced here once and never
-# recomputed.
+# Rarity signal extraction (rarity-pipeline stage 1): per-headword signal extraction. Every
+# feature the downstream classifier / rule-based combiner reads is produced here once and
+# never recomputed.
 #
-# Phase 2 (+rarity_classifier.predict+ or the legacy rules in +compute_frequency+ /
-# Phase 6 Wiktionary floor / +filter_word_dict_disconnected!+ rescue) consumes the
-# +RaritySignals+ struct only — it must not reach back into the raw corpora.
+# Rarity scoring (stage 2: +rarity_classifier.predict+ or the legacy rules in
+# +compute_frequency+ / Wiktionary existence floor / +filter_word_dict_disconnected!+ rescue)
+# consumes the +RaritySignals+ struct only — it must not reach back into the raw corpora.
 #
-# Phase 3 (+rare? / allowed?+ in +crime.rb+) compares final freq against
+# Rarity gate (stage 3: +rare? / allowed?+ in +crime.rb+) compares final freq against
 # +RARE_FREQ_MAX+; it's a pure threshold.
 #
 # Feature surface intentionally kept small: raw corpus scalars, WordNet presence /
@@ -118,13 +118,18 @@ RaritySignals = Struct.new(
 
   # --- Post-propagation (recomputed by the classifier pass) ---
   :post_propagation_freq,
-  :freq_source_phase,                     # one of :cmudict_seed, :subtlex, :common_list, :neol, :wiktionary_floor, :phase8, :phase9, :phase10, :phase11, :gdrop, :unknown
+  :freq_source_phase,                     # one of :cmudict_seed, :subtlex, :common_list, :neol, :wiktionary_floor, :morph_inherit_kaikki, :morph_inherit_listed, :morph_expand_listed, :morph_expand_subtlex, :gdrop, :unknown
   :received_donor_from_common_base_flag
 )
 
+# Order is part of the trained-classifier ABI: +rarity_freq_source_to_index+
+# returns the array index, which is what the model sees as a feature value.
+# Append new sources at the end; renaming a symbol is safe (model doesn't see
+# the symbol name), but reordering invalidates +generated/rarity_classifier.json+.
 RARITY_FREQ_SOURCE_PHASES = [
   :unknown, :cmudict_seed, :subtlex, :common_list, :neol,
-  :wiktionary_floor, :phase8, :phase9, :phase10, :phase11, :gdrop
+  :wiktionary_floor, :morph_inherit_kaikki, :morph_inherit_listed,
+  :morph_expand_listed, :morph_expand_subtlex, :gdrop
 ].freeze
 
 def rarity_freq_source_to_index(phase)

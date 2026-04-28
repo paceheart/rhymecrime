@@ -1,11 +1,12 @@
 #!/usr/bin/env ruby
 # encoding: utf-8
 #
-# Rebuild RhymeCrime caches under <repo>/generated/. Fast-path default: skips the
-# slow ConceptNet edge-map and Numberbatch vector exports (~15-20 min) and the
-# rarity-signals dump (~30 s extra plus disk I/O). Use bin/build for the full
-# pipeline (CN+NB rebuild + rarity dump + classifier training + relatedness
-# stage 2) — or set the override env vars below to opt in piecemeal.
+# Rebuild RhymeCrime caches under <repo>/generated/. Fast-path default: skips
+# the slow ConceptNet edge-map and Numberbatch vector exports (~15-20 min)
+# and the rarity-signals dump (~30 s extra plus disk I/O). Use bin/build for
+# the full four-Build-Stage pipeline (dict-build full + rarity classifier +
+# relatedness training + rarity-classifier rescore) — or set the override env
+# vars below to opt in piecemeal.
 #
 # Loads lib/rhymecrime/dict/dict.rb (which requires constants, phonology, lexical,
 # morphology, rime, frequency) with cwd = that directory (relative list files),

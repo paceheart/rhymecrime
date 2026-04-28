@@ -81,7 +81,7 @@ USF_ASSOCIATIONS_FILENAME = "usf_associations.json"
 # file; the hand-edited list lives at +curated/spelling.csv+ in CSV form). Both are loaded at
 # runtime via +load_variants_raw+ so no corpus I/O leaks into the runtime path.
 SPELLING_VARIANTS_AUTO_FILENAME = "spelling_variants_auto.txt"
-# Learned phase-2 relatedness combiner (logistic regression over +PairSignals+ features);
+# Learned relatedness score-combiner (logistic regression over +PairSignals+ features);
 # built by bin/train-relatedness-classifier, consumed in related.rb.
 RELATEDNESS_CLASSIFIER_FILENAME = "relatedness_classifier.json"
 # Contextualized sentence-transformer embeddings of dictionary-lemma headwords and their

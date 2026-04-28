@@ -1026,10 +1026,10 @@ def condense_tuple_homophones(tup, focal_word)
   tup - dropped.to_a
 end
 
-# True when the pair +[a, b]+ would collapse to a single member under Phase 0.5
-# tuple condensation — i.e. it is a morphological +COMMON_PREFIXES+ derivation
-# over matching +rhyme_syllables_string+ (+condense_tuple_derived_forms+), or a
-# true same-phoneme homophone pair (+condense_tuple_homophones+). Examples:
+# True when the pair +[a, b]+ would collapse to a single member under within-tuple
+# derivation/homophone condensation — i.e. it is a morphological +COMMON_PREFIXES+
+# derivation over matching +rhyme_syllables_string+ (+condense_tuple_derived_forms+),
+# or a true same-phoneme homophone pair (+condense_tuple_homophones+). Examples:
 # +[healthy, unhealthy]+ (prefix); +[flour, flower]+, +[coral, choral]+,
 # +[symbol, cymbal]+ (homophones). The homophone condenser needs a +focal_word+
 # to pick a winner, but for the drop-or-keep decision here we only care whether
@@ -1041,9 +1041,10 @@ def rhyming_pair_trivial?(a, b)
     condense_tuple_homophones([a, b], a).size < 2
 end
 
-# Pair-mode analog of Phase 0.5 in +prune_suffix_redundant_rhyming_tuples+.
-# Drops pairs whose two members +rhyming_pair_trivial?+ flags as prefix
-# derivations or same-pronunciation homophones — the "rhyme" carries no
+# Pair-mode analog of within-tuple derivation/homophone condensation in
+# +prune_suffix_redundant_rhyming_tuples+. Drops pairs whose two members
+# +rhyming_pair_trivial?+ flags as prefix derivations or same-pronunciation
+# homophones — the "rhyme" carries no
 # information beyond the trivial collapse. A pair is binary, so unlike the
 # tuple condensers (which pick a winner and keep the tuple alive) we drop the
 # whole pair. Called from +really_find_rhyming_pairs+ after the rhyme-cross.
@@ -1061,7 +1062,7 @@ end
 # +rhyming_tuple_redundant_with?+ pass below is skipped: distinct rhyme-bucket
 # tuples that differ only by parallel +Inflect+ suffixes (+[deck, wreck]+ vs
 # +[decked, wrecked]+, +[crew, tattoo]+ vs +[crews, tattoos]+) all survive.
-# Phase 0.5 within-tuple condensation (+condense_tuple_derived_forms+, which
+# Within-tuple derivation condensation (+condense_tuple_derived_forms+, which
 # collapses +[legal, illegal]+-style identical-rhyme prefix derivations) still
 # runs — only the *across-tuple* derivational dedup is bypassed. Used by
 # +spec/similar_rhymes_spec.rb+ so per-pair assertions like
@@ -1069,16 +1070,18 @@ end
 # already-kept past-tense sibling tuple. Production runtime keeps it +false+.
 $disable_cross_tuple_redundancy_pruning = false
 
-# Pure focal-independent prune of phases -1, 0, and 0.5a from
-# +prune_suffix_redundant_rhyming_tuples+. Returns either:
+# Pure focal-independent prune: applies the stop-word wholesale drop, the
+# spelling-variant wholesale drop, and within-tuple derivation condensation —
+# the cue-independent steps from +prune_suffix_redundant_rhyming_tuples+.
+# Returns either:
 #
-#   * +nil+ — tuple was dropped wholesale at phase -1 (all stop words —
-#     +above / of+) or phase 0 (all members are spelling variants of one
-#     root — +desperados / desperadoes+).
-#   * a (possibly shorter) tuple — survived the wholesale-drop phases;
-#     phase 0.5a may have removed prefix-derivation members whose
-#     +rhyme_syllables_string+ matched a base already present in the
-#     tuple (+[healthy, stealthy, unhealthy] → [healthy, stealthy]+,
+#   * +nil+ — tuple was dropped wholesale by the stop-word drop (all stop
+#     words — +above / of+) or the spelling-variant drop (all members are
+#     spelling variants of one root — +desperados / desperadoes+).
+#   * a (possibly shorter) tuple — survived the wholesale-drop steps;
+#     within-tuple derivation condensation may have removed prefix-derivation
+#     members whose +rhyme_syllables_string+ matched a base already present
+#     in the tuple (+[healthy, stealthy, unhealthy] → [healthy, stealthy]+,
 #     +[recorded, prerecorded, unrecorded] → [recorded]+).
 #
 # Pure function of +tup+: no $debug_pruned_tuples / VERBOSE side effects,
@@ -1090,11 +1093,12 @@ $disable_cross_tuple_redundancy_pruning = false
 # focal-dependent +condense_tuple_homophones+ + the cross-tuple sweep on
 # top per cue.
 #
-# Phase 0.5b (+condense_tuple_homophones+) intentionally lives outside
-# this helper because it's the one prune step that consults +focal_word+
-# (it picks a winner among full-pronunciation homophones by stored
-# relatedness to the cue) and so can't be cached cue-agnostically.
-def prune_phases_minus_1_through_0_5a(tup)
+# Within-tuple homophone condensation (+condense_tuple_homophones+)
+# intentionally lives outside this helper because it's the one prune step
+# that consults +focal_word+ (it picks a winner among full-pronunciation
+# homophones by stored relatedness to the cue) and so can't be cached
+# cue-agnostically.
+def prune_tuple_cue_independent_steps(tup)
   return nil if tup.all? { |w| stop_word?(w) }
   return nil if rhyming_tuple_all_spelling_variants?(tup)
   condense_tuple_derived_forms(tup)
@@ -1103,7 +1107,9 @@ end
 # Cross-tuple redundancy sweep: drops tuples that differ from another
 # already-kept tuple only by parallel +Inflect+ suffixes, hidden-base
 # parallelism, or lemma-multiset inclusion. Operates on a pre-sorted list
-# of tuples that have already been through phases -1, 0, 0.5a, 0.5b, 0.6.
+# of tuples that have already been through the cue-independent steps
+# (stop-word/spelling-variant drops, derivation condensation),
+# within-tuple homophone condensation, and the below-two-member drop.
 #
 # Focal-independent: every redundancy decision routes through
 # +rhyming_tuple_redundant_with?+, whose entire transitive call graph is
@@ -1231,34 +1237,39 @@ end
 #   3. base-vs-inflected-superset (richer inflected has extra members not in the base): keep the
 #      richer inflected
 #
-# Pipeline (numbered to match the inline comments below):
+# Pipeline:
 #
-#   * Phase -1 + 0 + 0.5a — focal-independent per-tuple work, factored
-#     into +prune_phases_minus_1_through_0_5a+ so an en-masse caller can
-#     memoize the result. Wholesale drops (all-stop-word, all-spelling-
-#     variants tuples) and within-tuple +COMMON_PREFIXES+ derivation
-#     condensation (+[healthy, stealthy, unhealthy] → [healthy,
+#   * Cue-independent per-tuple steps — factored into
+#     +prune_tuple_cue_independent_steps+ so an en-masse caller can
+#     memoize the result. Runs (in order): the *stop-word wholesale drop*
+#     (drop tuples that are all stop words — +above / of+), the
+#     *spelling-variant wholesale drop* (drop tuples whose members are
+#     all spelling variants of one root — +desperados / desperadoes+),
+#     and *within-tuple derivation condensation* (drop +COMMON_PREFIXES+
+#     derivation members whose +rhyme_syllables_string+ matches a base
+#     already in the tuple — +[healthy, stealthy, unhealthy] → [healthy,
 #     stealthy]+).
-#   * Phase 0.5b — +condense_tuple_homophones+. The *only* prune step
-#     that consults +focal_word+: breaks residual full-pronunciation
-#     homophone clusters (+coral+/+choral+, +flour+/+flower+,
-#     +write+/+right+) by picking the member most closely related to the
-#     cue (tie-break: unigram frequency, then alphabetical). Requires a
-#     non-nil +focal_word+; otherwise this sub-pass is a no-op.
-#   * Phase 0.6 — drop tuples whose condensation collapsed them below 2
-#     members. A "rhyming tuple" with one (or zero) word is no longer a
-#     rhyme — the input was a pure prefix-derivation pair like
-#     +[legitimate, illegitimate]+ or a homophone cluster like +[coral,
-#     choral]+, and condense_tuple_* picked the one keeper. Without this
-#     drop the singleton would survive the pruner and render as a
-#     single-word "tuple". Callers (find_rhyming_tuples) already filter
-#     +size < 2+ on the way out, but the unit pruner itself owes the same
-#     contract so spec assertions on
+#   * Within-tuple homophone condensation — +condense_tuple_homophones+.
+#     The *only* prune step that consults +focal_word+: breaks residual
+#     full-pronunciation homophone clusters (+coral+/+choral+,
+#     +flour+/+flower+, +write+/+right+) by picking the member most
+#     closely related to the cue (tie-break: unigram frequency, then
+#     alphabetical). Requires a non-nil +focal_word+; otherwise this
+#     sub-pass is a no-op.
+#   * Below-two-member drop — drop tuples whose condensation collapsed
+#     them below 2 members. A "rhyming tuple" with one (or zero) word is
+#     no longer a rhyme — the input was a pure prefix-derivation pair
+#     like +[legitimate, illegitimate]+ or a homophone cluster like
+#     +[coral, choral]+, and condense_tuple_* picked the one keeper.
+#     Without this drop the singleton would survive the pruner and render
+#     as a single-word "tuple". Callers (find_rhyming_tuples) already
+#     filter +size < 2+ on the way out, but the unit pruner itself owes
+#     the same contract so spec assertions on
 #     +prune_suffix_redundant_rhyming_tuples+ output match what the UI
 #     ultimately renders.
-#   * Cross-tuple sweep — focal-independent O(N * avg_bucket_size) pass
-#     factored into +prune_cross_tuple_redundancy_sweep+. Drops tuples
-#     redundant with another already-kept tuple under any of the
+#   * Cross-tuple redundancy sweep — focal-independent O(N * avg_bucket_size)
+#     pass factored into +prune_cross_tuple_redundancy_sweep+. Drops
+#     tuples redundant with another already-kept tuple under any of the
 #     +rhyming_tuple_redundant_with?+ branches.
 #
 # Checks are bidirectional against the kept list because +tuples.sort+ does not reliably
@@ -1275,26 +1286,29 @@ def prune_suffix_redundant_rhyming_tuples(tuples, focal_word = nil)
   verbose_prunes = ENV["VERBOSE"] == "1"
   debug_pruning = $debug_pruning
 
-  # Phases -1, 0, 0.5a — focal-independent per-tuple work via the pure
-  # helper. The orchestrator handles the verbose / debug-pruning side
-  # effects so the helper itself stays a pure function of its tuple.
+  # Cue-independent per-tuple steps via the pure helper (stop-word
+  # wholesale drop, spelling-variant wholesale drop, within-tuple
+  # derivation condensation). The orchestrator handles the verbose /
+  # debug-pruning side effects so the helper itself stays a pure function
+  # of its tuple.
   tuples = tuples.flat_map do |tup|
-    survivor = prune_phases_minus_1_through_0_5a(tup)
+    survivor = prune_tuple_cue_independent_steps(tup)
     if survivor.nil?
-      # Wholesale drop at phase -1 or phase 0.
+      # Wholesale drop (stop-word or spelling-variant).
       reason = tup.all? { |w| stop_word?(w) } ? "all stop words" : "all spelling variants of one root"
       puts "pruned rhyming tuple (#{reason}): #{tup.join(' / ')}" if verbose_prunes
       $debug_pruned_tuples << tup if debug_pruning
       next debug_pruning ? [tup] : []
     end
-    # Phase 0.5a may have shortened the tuple. Under debug we retain the
-    # original tup so the renderer keeps showing it (with the dropped
-    # member recorded as a singleton in +$debug_pruned_tuples+); phase
-    # 0.5b downstream then runs on the retained original, which is
-    # semantically equivalent because prefix-derivation drops (0.5a) and
-    # full-pronunciation homophone clusters (0.5b) are disjoint by
-    # construction (a prefix derivation has an extra phoneme prefix that
-    # makes it phonologically distinct from its base).
+    # Within-tuple derivation condensation may have shortened the tuple.
+    # Under debug we retain the original tup so the renderer keeps
+    # showing it (with the dropped member recorded as a singleton in
+    # +$debug_pruned_tuples+); the downstream homophone condensation then
+    # runs on the retained original, which is semantically equivalent
+    # because prefix-derivation drops and full-pronunciation homophone
+    # clusters are disjoint by construction (a prefix derivation has an
+    # extra phoneme prefix that makes it phonologically distinct from
+    # its base).
     if verbose_prunes && survivor.size < tup.size
       dropped = tup - survivor
       puts "condensed rhyming tuple (dropped #{dropped.inspect}, derived forms): #{tup.join(' / ')} -> #{survivor.join(' / ')}"
@@ -1307,10 +1321,10 @@ def prune_suffix_redundant_rhyming_tuples(tuples, focal_word = nil)
     end
   end
 
-  # Phase 0.5b — focal-dependent. Within each tuple, break full-
-  # pronunciation homophone clusters down to one winner by stored
-  # relatedness to +focal_word+. This is the only prune step that
-  # consults the cue.
+  # Within-tuple homophone condensation — focal-dependent. Within each
+  # tuple, break full-pronunciation homophone clusters down to one
+  # winner by stored relatedness to +focal_word+. This is the only
+  # prune step that consults the cue.
   tuples = tuples.map do |tup|
     condensed = condense_tuple_homophones(tup, focal_word)
     if verbose_prunes && condensed.size < tup.size
@@ -1325,7 +1339,7 @@ def prune_suffix_redundant_rhyming_tuples(tuples, focal_word = nil)
     end
   end
 
-  # Phase 0.6 — drop tuples whose condensation collapsed them below 2 members.
+  # Below-two-member drop: drop tuples whose condensation collapsed them below 2 members.
   tuples = tuples.reject do |tup|
     next false if tup.size >= 2
     if verbose_prunes

@@ -1,18 +1,19 @@
 #!/usr/bin/env ruby
 # coding: utf-8
 #
-# relatedness/score.rb — offline relatedness scoring (phases 2 + 3 of the pipeline).
+# relatedness/score.rb — offline relatedness scoring (the score-combination and
+# threshold-gate stages of the pipeline).
 #
 # Requires +relatedness/signals+ first (for +PairSignals+, +learned_feature_vector+'s
 # unigram helpers, and every knowledge base the rules consult). Provides:
 #
 #   - +learned_feature_vector+ + +LEARNED_FEATURE_NAMES+ — the classifier's input.
 #   - +relatedness_classifier+ + +learned_relatedness_{probability,score}+ — GBT /
-#     logistic regression over phase-1 signals, loaded from
+#     logistic regression over the gathered signals, loaded from
 #     +generated/relatedness_classifier.json+.
 #   - +relatedness_contributions+ + +relatedness_score+ — hand-tuned rule bundle
-#     (plus the learned score in +additive+ / +replace+ modes) that composes phase-1
-#     signals into an integer 0..100.
+#     (plus the learned score in +additive+ / +replace+ modes) that composes the
+#     gathered signals into an integer 0..100.
 #   - +thematically_related_pair_uncached?+ + +..._memoized?+ — the predicate at
 #     +RELATEDNESS_SCORE_THRESHOLD+, directional in +(cue, related)+, memoized by
 #     ordered lemma pair (callers must not pre-canonicalize).
@@ -188,7 +189,7 @@ def learned_feature_vector(signals)
   ].concat(unigram_pair_feature_values(signals.cue, signals.related))
 end
 
-# --- Learned phase-2 combiner ---
+# --- Learned score-combiner ---
 #
 # Logistic regression / gradient-boosted-trees over +learned_feature_vector+,
 # trained by +bin/train-relatedness-classifier+ and written to
@@ -206,7 +207,7 @@ end
 # overgenerate: +cooccurrence+ + +sense_vectors+ + +similarity+ between them produced
 # ~330 of the ~380 strong FPs on the live pipeline (2026-04 eval on +curated/related.csv+),
 # compared to 80 strong FPs with the classifier alone. The learned combiner sees all
-# 67 phase-1 features (gloss_match, usf_twohop, sv_max/min, edge_present, cn_hops,
+# 67 gathered signals (gloss_match, usf_twohop, sv_max/min, edge_present, cn_hops,
 # contextualized-model signals, per-word priors) and composes them coherently under
 # a class-balanced training objective (+--fn-weight 1 --fn-penalty 1+ — equal
 # treatment of related vs. unrelated rows; orthogonal to the +(cue, related)+
@@ -361,7 +362,7 @@ def relatedness_contributions(signals)
     return [[100, "stop_word: #{stop.inspect} is a stop word (related to everything)"]]
   end
 
-  # Learned-classifier replace mode: the logistic regression over all phase-1
+  # Learned-classifier replace mode: the logistic regression over all gathered
   # signals is the *only* contribution (except the stop-word short-circuit above).
   #
   # Score and reason both need the classifier probability, but the GBT is the
@@ -444,7 +445,7 @@ def relatedness_contributions(signals)
     ]
   end
 
-  # Learned-classifier additive mode: logistic regression over all phase-1 signals
+  # Learned-classifier additive mode: logistic regression over all gathered signals
   # contributes one more rule. Max-over-contributions means it can only rescue
   # pairs the hand rules missed, never veto them — safe to enable alongside.
   if $RELATED_LEARNED_MODE == "additive"
@@ -465,7 +466,7 @@ def relatedness_score(signals)
   [c.map(&:first).max, 0].max
 end
 
-# --- Phase 3: Threshold → boolean predicate ---
+# --- Relatedness threshold gate (boolean predicate) ---
 
 # Memo keyed by the ordered +(cue_lemma, related_lemma)+ pair (see
 # +thematically_related?+). Now that the predicate is directional, +(cue, related)+

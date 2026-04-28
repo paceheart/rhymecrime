@@ -95,8 +95,9 @@ end
 # surface so lexicon rows for marginal verbs (e.g. *taboo*) do not promote rare *tabooed* when
 # corpus use is negligible. OOV bases (no WordNet entry) keep the legacy open policy.
 #
-# When +list_authoritative_base+ is true (Phase 9 only), skip Kaikki/corpus verb attestation: entries in
-# common_words.txt are curated list headwords (*finesse*→*finessed* must inherit).
+# When +list_authoritative_base+ is true (list-pivot Inflect inheritance only), skip
+# Kaikki/corpus verb attestation: entries in common_words.txt are curated list headwords
+# (*finesse*→*finessed* must inherit).
 #
 # +kaikki_verb_morph+ (from +load_wiktionary+): blocks Inflect *-ed*/*-ing* when Kaikki already documents
 # the corresponding verb slot in the lexeme (*snuck* is a past surface of *sneak*; do not add *snucked*;
@@ -385,15 +386,17 @@ def morph_base_allows_plural_s?(base, pos_map, forms_map, plural_word, wordfreq_
 end
 
 # +$inflection_base_words+ (filled in +dict.rb+) maps Wiktionary/Kaikki surfaces to their lemma.
-# When +surface+ is recorded as an inflected form of a *different* headword, Phase 9/10 must not treat it
-# as an Inflect *stem* — forward rules would stack suffixes on participles (*cataloging*→*catalogings*).
+# When +surface+ is recorded as an inflected form of a *different* headword, the list-pivot
+# Inflect inheritance and common-list Inflect expansion passes must not treat it as an
+# Inflect *stem* — forward rules would stack suffixes on participles
+# (*cataloging*→*catalogings*).
 def morph_kaikki_lists_surface_as_inflected_nonlemma?(surface)
   lex = $inflection_base_words[surface]
   lex && lex != surface
 end
 
 # Syllabified pronunciation for +inflected_word+ from +base_word+'s first CMU pron, or nil.
-# Same final-cluster whitelist gate as merge_inflected_forms! (Phase 10/11 morph promotion).
+# Same final-cluster whitelist gate as merge_inflected_forms! (common-list / SUBTLEX-anchored Inflect expansion).
 def morph_derived_syllabified_pronunciation(base_pron, base_word, inflected_word)
   derived = Inflect.derive(base_pron, base_word, inflected_word)
   return nil if derived.nil? || derived.empty?

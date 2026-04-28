@@ -1,7 +1,7 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 #
-# Train the phase-2 learned combiner for thematic relatedness.
+# Train the score-combination stage's learned combiner for thematic relatedness.
 #
 # Input:  curated/related.csv  (gold-labeled pairs: related / related_ish / unrelated / unrelated_ish / whatever)
 # Output: generated/relatedness_classifier.json
@@ -526,18 +526,18 @@ end
 
 # --- Load CSV, build training examples -------------------------------------
 
-# Classifier must not see the stop-word short-circuit; phase 3 still handles those.
+# Classifier must not see the stop-word short-circuit; the threshold-gate stage still handles those.
 ENV["RELATED_LEARNED_MODE"] = "off"
 
 path = File.join(repo, "curated", "related.csv")
 raw_rows = CSV.parse(File.read(path, encoding: "UTF-8"), headers: true)
 
-# Drop stop-word rows up front: phase 3's stop-word short-circuit makes the
-# predicate trivially-true for any pair where either side is a stop word, so
-# these rows can't teach the classifier anything useful (they'd just inject
-# easy positives and confuse the negative half if labeled +unrelated+). Filter
-# on both surface form and lemma — users write "running" but the short-circuit
-# checks +stop_word?("running")+ only after phase 3 computes +lemma+.
+# Drop stop-word rows up front: the threshold-gate's stop-word short-circuit makes
+# the predicate trivially-true for any pair where either side is a stop word, so
+# these rows can't teach the classifier anything useful (they'd just inject easy
+# positives and confuse the negative half if labeled +unrelated+). Filter on both
+# surface form and lemma — users write "running" but the short-circuit checks
+# +stop_word?("running")+ only after the threshold gate computes +lemma+.
 skipped_stopword = 0
 rows = raw_rows.reject do |r|
   w1 = r["cue"]

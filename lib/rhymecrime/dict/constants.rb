@@ -18,15 +18,17 @@ def dict_trace_word?(word)
   !TRACE_WORDS.empty? && TRACE_WORDS.include?(word)
 end
 
-# Phase 8 / 10 / 11: +base+ → +infl+ inflection row touches any word in +TRACE_WORDS+.
+# Kaikki morph inheritance / common-list + SUBTLEX-anchored Inflect expansion: +base+ →
+# +infl+ inflection row touches any word in +TRACE_WORDS+.
 def dict_trace_morph?(base, infl)
   return false if TRACE_WORDS.empty?
 
   TRACE_WORDS.include?(base) || TRACE_WORDS.include?(infl)
 end
 
-# Phase 9: hash key +word+, common_words candidate +listed+, morph +base+ → +infl+.
-def dict_trace_phase9?(word, listed, base, infl)
+# List-pivot Inflect inheritance: hash key +word+, common_words candidate +listed+,
+# morph +base+ → +infl+.
+def dict_trace_morph_inherit_listed?(word, listed, base, infl)
   return false if TRACE_WORDS.empty?
 
   TRACE_WORDS.include?(word) || TRACE_WORDS.include?(listed) || TRACE_WORDS.include?(base) || TRACE_WORDS.include?(infl)
@@ -84,7 +86,7 @@ SUBTLEX_OVERRIDE_PROPER_MIN = 12
 # and above iron Fe appearing as dialogue junk (~17).
 SUBTLEX_SINGLE_PROPER_OVERRIDE_MIN = 28
 SUBTLEX_SINGLE_PROPER_OVERRIDE_MAX = 40
-# Phase 11: minimum raw SUBTLEX FREQlow on a base before it may promote non-list inflections.
+# SUBTLEX-anchored Inflect expansion: minimum raw SUBTLEX FREQlow on a base before it may promote non-list inflections.
 MORPH_CORPUS_SUBTLEX_MIN = 40
 # Plural :s only: allow WN noun-only bases below the corpus floor when still attested in subtitles
 # (e.g. gramophone SUBTLEX 15 → gramophones).
@@ -105,9 +107,9 @@ SUBTLEX_PROPER_NOUN_RATIO_MIN = 0.7
 # *Lawton* 0, *Mott* 0). Threshold chosen to protect rhyme-worthy names while catching name trickle.
 SUBTLEX_PROPER_NOUN_MAX_FREQLOW = 2
 
-# Phase 6: skip Wiktionary floor for 4-letter OOV tokens below this Zipf (*mobo* ~2.5); *yeet* ~2.51 stays eligible.
+# Wiktionary existence floor: skip for 4-letter OOV tokens below this Zipf (*mobo* ~2.5); *yeet* ~2.51 stays eligible.
 WIKT_FLOOR_4L_WEAK_ZIPF_BELOW = 2.51
-# Phase 6: OOV lemmas length ≥5 need Zipf ≥ this for the existence floor (below COMMON; admits *twerk* / *polyamory*).
+# Wiktionary existence floor: OOV lemmas length ≥5 need Zipf ≥ this (below COMMON; admits *twerk* / *polyamory*).
 WIKT_FLOOR_LONG_OOV_MIN_ZIPF = 2.2
 
 RIME_DICT_HEADER = "# RhymeCrime's rime dictionary

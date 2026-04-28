@@ -287,9 +287,10 @@ def wn_noun_plural_via_morphy?(word, base)
   stems.any? { |s| (preferred_form(s) || s) == base_canonical }
 end
 
-# True if WordNet lists the base as a verb (any sense). Used to avoid Phase 8 giving
-# noun-only stems a bogus verbal -ing frequency (kitchening, crotching, jealousing).
-# Bases with no WordNet entry still return true so modern verbs (twerk) can inherit.
+# True if WordNet lists the base as a verb (any sense). Used to avoid Kaikki morph
+# inheritance giving noun-only stems a bogus verbal -ing frequency (kitchening, crotching,
+# jealousing). Bases with no WordNet entry still return true so modern verbs (twerk) can
+# inherit.
 def wn_base_has_verb?(base)
   lemmas = wn_lemma_find_all_cached(base)
   return true if lemmas.empty?
@@ -456,8 +457,8 @@ WN_ALL_PROPER_BIOLOGY_LEXNAMES = Set.new(%w[
 ]).freeze
 
 # True when +word+ matches the WN single-synset + specialized-lex + thin-SUBTLEX profile that
-# +compute_frequency+ proactively demotes to rare. Used by Phase 8 to refuse plural/inflection
-# inheritance that would undo the demotion (e.g. +gens+ → +gen+ base inherit).
+# +compute_frequency+ proactively demotes to rare. Used by Kaikki morph inheritance to refuse
+# plural/inflection inheritance that would undo the demotion (e.g. +gens+ → +gen+ base inherit).
 def wn_encyclopedic_single_synset_demoted?(word, subtlex_hash, wordfreq_hash)
   return false unless wn_has_entry?(word)
   return false unless wn_synset_count(word) == 1
