@@ -643,6 +643,71 @@ def rhyming_tuple_word_bases(word)
   $rhyming_tuple_word_bases_cache[word] = result
 end
 
+# Pre-filter fingerprint for the cross-tuple redundancy index in
+# +prune_suffix_redundant_rhyming_tuples+. Returns a Set of identifiers such
+# that two tuples can only be redundant with each other (under any branch of
+# +rhyming_tuple_redundant_with?+) if their fingerprints intersect.
+#
+# Includes:
+#
+#   * +word+ itself — for the "ear is the base of tup" direction. The
+#     predicate calls +inflection_suffix_kind_from_base(ear[i], tup[i])+,
+#     which is true when +ear[i]+ is a base of +tup[i]+; the candidate
+#     lookup needs +ear[i]+ to live in +tup[i]+'s key set, and the easy
+#     side is just adding +ear[i]+ to +ear+'s own keys here.
+#   * +lemma(word)+ — irregular-form bridge (+ran → run+, +mice → mouse+)
+#     not reachable via surface-suffix morphology.
+#   * +Inflect.raw_candidate_bases_for_inflected(word)+ — every surface-
+#     morphology base (-s, -ed, -ing, -er, -est, -ly, -ful, -ily, y/ies,
+#     consonant-doubling undo, silent-e). This is the *unfiltered* Inflect
+#     output, NOT the headword-vetted +rhyming_tuple_word_bases+: the
+#     predicate's +inflection_suffix_kind_from_base+ doesn't require either
+#     side to be a headword (it's pure surface morphology), so the
+#     fingerprint can't either, or any tuple with a non-headword member
+#     (synthetic test data; partially-loaded DDB cache) would silently fall
+#     out of the candidate pool. Found this trying to optimize the prune in
+#     a fixture-only test where the dict was empty — see commit history.
+#   * Surface reversals of the four custom branches in
+#     +inflection_suffix_kind_from_base+ that route around Inflect: +:y_adj+
+#     (+healthy → health+), +:er+ via +-or+ (+sailor → sail+), +:ing_gdrop+
+#     (+fakin' → faking+ / +fakin+), +:ings+ (+foistings → foisting / foist+).
+#
+# All entries are unvalidated by design — the fingerprint only narrows the
+# candidate pool the real +rhyming_tuple_redundant_with?+ predicate is then
+# run against, so false positives cost a few extra (cheap) predicate calls;
+# false negatives would silently change pruning output. Mirroring every
+# reverse-strip branch in +inflection_suffix_kind_from_base+ + every Inflect
+# pattern is the contract that keeps +spec/prune_redundant_tuples_spec.rb+
+# green and matches the un-optimized pruner output bit-for-bit.
+def tuple_redundancy_keys_for_word(word)
+  keys = Set.new
+  return keys if word.nil? || word.empty?
+
+  keys.add(word)
+
+  lem = lemma(word)
+  keys.add(lem) if lem && !lem.empty?
+
+  Inflect.raw_candidate_bases_for_inflected(word).each { |b| keys.add(b) }
+
+  if word.end_with?("y") && word.bytesize >= 2
+    keys.add(word[0...-1])
+  end
+  if word.end_with?("or") && word.bytesize >= 4
+    keys.add(word[0...-2])
+  end
+  if word.end_with?("in'") && word.bytesize >= 4
+    keys.add(word[0...-3] + "ing")
+    keys.add(word[0...-3])
+  end
+  if word.end_with?("ings") && word.bytesize >= 5
+    keys.add(word[0...-1])
+    keys.add(word[0...-4])
+  end
+
+  keys
+end
+
 # Shortest headword in +rhyming_tuple_word_bases+, tie-broken lex. Returns +word+ itself when no
 # bases are known (pure OOV). Used by +rhyming_tuple_inflection_distance+ to count how many words
 # in a tuple have shifted off their root form.
@@ -1120,38 +1185,107 @@ def prune_suffix_redundant_rhyming_tuples(tuples, focal_word = nil)
   return tuples.sort if $disable_cross_tuple_redundancy_pruning
 
   sorted = tuples.sort
-  kept = []
+
+  # Cross-tuple redundancy: index tuples by an "inflection-key" fingerprint so
+  # each new +tup+ only compares against +kept+ entries that share at least
+  # one key. Every branch in +rhyming_tuple_redundant_with?+ ultimately routes
+  # through +inflection_suffix_kind_from_base+,
+  # +Inflect.raw_candidate_bases_for_inflected+, or +rhyming_tuple_word_bases+
+  # — all three require the two tuples' words to share a lemma / inflection
+  # base, so disjoint-fingerprint tuples can be pruned from consideration
+  # without ever invoking the predicate. This collapses the original O(N^2)
+  # scan to roughly O(N * avg_bucket_size) and is the difference between cat
+  # (654 tuples → 11 s) and pirate (~900 tuples) in the 29-second API Gateway
+  # budget — see +[timing] set_related[<word>] prune+ in CloudWatch under
+  # +RHYMECRIME_LOG_TIMING=1+.
+  #
+  # Insertion-order semantics are preserved: +kept+ is a Hash (which iterates
+  # in insertion order on MRI), so +kept.values+ at the bottom returns the
+  # same sequence as the previous +kept+ Array would have. +Set+ is used for
+  # the inverted index so candidate-lookup is O(1) per key.
+  #
+  # The fingerprint must be a *superset* of every reachable redundancy match
+  # or we silently drop comparisons. +rhyming_tuple_word_bases+ alone is too
+  # narrow because +inflection_suffix_kind_from_base+ has four extensions
+  # beyond +Inflect.match_suffix_kind+ that don't show up in the Inflect base
+  # table: +:y_adj+ (+health → healthy+), +:er+ via +-or+ (+sail → sailor+),
+  # +:ing_gdrop+ (+fakin' → faking+), and +:ings+ (+foist → foistings+, mostly
+  # already covered by Inflect's +-s+ stripping but mirrored here for safety).
+  # +tuple_redundancy_keys_for_word+ inlines those four reversals against the
+  # surface, *unvalidated* — false positives in the pre-filter just mean we
+  # run the real predicate on a few extra pairs, which is cheap. False
+  # negatives would silently change pruning output (regression in
+  # +spec/prune_redundant_tuples_spec.rb+).
+  base_index = Hash.new { |h, k| h[k] = Set.new }
+  kept = {}
+  kept_bases = {}
+  next_idx = 0
+
+  bases_for_tuple = lambda do |tup|
+    set = Set.new
+    tup.each { |w| set.merge(tuple_redundancy_keys_for_word(w)) }
+    set
+  end
+
   sorted.each do |tup|
-    keeper = kept.find { |ear| rhyming_tuple_redundant_with?(ear, tup) }
-    if keeper
+    bases = bases_for_tuple.call(tup)
+    candidate_idx = Set.new
+    bases.each { |b| candidate_idx.merge(base_index[b]) }
+
+    keeper_idx = candidate_idx.find { |ki| rhyming_tuple_redundant_with?(kept[ki], tup) }
+    if keeper_idx
       if verbose_prunes
-        puts "pruned rhyming tuple (suffix-redundant): #{tup.join(' / ')}  [kept: #{keeper.join(' / ')}]"
+        puts "pruned rhyming tuple (suffix-redundant): #{tup.join(' / ')}  [kept: #{kept[keeper_idx].join(' / ')}]"
       end
       if debug_pruning
         $debug_pruned_tuples << tup
-        kept << tup
+        # Under debug, the pruned tuple still flows through to the output (the
+        # renderer paints it grey via +output_tuple_pruned+). Index it like any
+        # other survivor so later candidates can find it as a +keeper+ too —
+        # mirrors the original +kept << tup+ behavior.
+        kept[next_idx] = tup
+        kept_bases[next_idx] = bases
+        bases.each { |b| base_index[b] << next_idx }
+        next_idx += 1
       end
       next
     end
 
-    kept.reject! do |ear|
+    # +tup+ stands; check whether it obsoletes any earlier +ear+. Only candidate
+    # indices need checking (other entries in +kept+ have disjoint base sets and
+    # so can't be redundant with +tup+ under any branch of the predicate).
+    to_remove = []
+    candidate_idx.each do |ki|
+      ear = kept[ki]
+      next unless ear
       redundant = rhyming_tuple_redundant_with?(tup, ear)
-      next false unless redundant
+      next unless redundant
 
       if verbose_prunes
         puts "pruned rhyming tuple (suffix-redundant): #{ear.join(' / ')}  [kept: #{tup.join(' / ')}]"
       end
       if debug_pruning
         $debug_pruned_tuples << ear
-        # Retain ear (marked pruned) instead of rejecting it.
-        next false
+        # Retain ear (marked pruned) instead of rejecting it — matches the
+        # original +next false+ branch in +kept.reject!+.
+      else
+        to_remove << ki
       end
-      true
     end
 
-    kept << tup
+    to_remove.each do |ki|
+      kept_bases[ki].each { |b| base_index[b].delete(ki) }
+      kept.delete(ki)
+      kept_bases.delete(ki)
+    end
+
+    kept[next_idx] = tup
+    kept_bases[next_idx] = bases
+    bases.each { |b| base_index[b] << next_idx }
+    next_idx += 1
   end
-  kept
+
+  kept.values
 end
 
 # Related headwords for tuple/pair construction: common (freq > +RARE_FREQ_MAX+) and preferred surface
