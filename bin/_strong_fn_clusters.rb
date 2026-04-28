@@ -6,8 +6,8 @@
 # classifier predicts unrelated). Dominant cost component on the new harder eval set
 # (~1100/4900 weighted-composite penalty), so worth structurally attacking.
 #
-# Mirrors the +RELATED_BYPASS_STORE=1 spec/related_weighted_accuracy.rb+ predicate
-# (live classifier, no store), filters whatever / ish / stop-word rows the same way,
+# Mirrors the +RELATED_BYPASS_STORE=1 spec/related_spec.rb+ predicate (live
+# directional classifier, no store), filters whatever / ish / stop-word rows the same way,
 # and dumps each strong FN with the signals that drive +PairSignals+ → classifier
 # probability +p+. We also bucket each row by failure mode for an at-a-glance
 # distribution.

@@ -43,12 +43,12 @@ def related_trace_memo?
   ENV["RELATED_TRACE_MEMO"].to_s == "1"
 end
 
-# Diagnostic knob for +spec/related_weighted_accuracy.rb+ and ad-hoc eval work:
-# when set, +thematically_related?+ / +why_thematically_related?+ skip the
-# precomputed Store lookup and always run the compute pipeline. Lets
-# post-retrain evals measure the *current* classifier + rules against
-# +curated/related.csv+ without waiting for a full +bin/precompute-relatedness+
-# rebuild. Never consulted at Lambda runtime (production never sets the var).
+# Diagnostic knob for +spec/related_spec.rb+ and ad-hoc eval work: when set,
+# +thematically_related?+ / +why_thematically_related?+ skip the precomputed
+# Store lookup and always run the compute pipeline. Lets post-retrain evals
+# measure the *current* classifier + rules against +curated/related.csv+
+# without waiting for a full +bin/precompute-relatedness+ rebuild. Never
+# consulted at Lambda runtime (production never sets the var).
 def related_bypass_store?
   ENV["RELATED_BYPASS_STORE"].to_s == "1"
 end
@@ -143,13 +143,11 @@ end
 # +(cue, related)+ — see +thematically_related_pair_memoized?+ in
 # +relatedness/score.rb+. Stop words are treated as related to every other
 # word (contentless glue). At runtime the predicate is answered via
-# +RelatedWords.pair_in_store?+; the local-dev fallback lazy-loads the compute
-# pipeline when the Store is absent.
-#
-# Note: the precomputed Store was built under a symmetric predicate, so
-# +pair_in_store?+ effectively returns the OR of both orientations. Until the
-# Store is rebuilt directionally that's a slight permissiveness gap vs. the
-# compute path, hidden behind +RELATED_BYPASS_STORE=1+ for eval work.
+# +RelatedWords.pair_in_store?+ (also directional — only consults +cue+'s
+# precompute row); the local-dev fallback lazy-loads the compute pipeline
+# when the Store is absent. +RELATED_BYPASS_STORE=1+ skips the Store entirely
+# and forces the live compute path, useful for evaluating retrained
+# classifiers against rows whose precompute is stale.
 def thematically_related?(cue, related, include_self = false)
   if ENV["RELATED_TRACE_THEMATIC"] == "1"
     warn "thematically_related? cue=#{cue.inspect} related=#{related.inspect} include_self=#{include_self.inspect}"
@@ -175,9 +173,8 @@ def thematically_related?(cue, related, include_self = false)
   puts "  -> lemma key #{cue_lemma} -> #{related_lemma}" if related_trace_memo?
 
   unless related_bypass_store?
-    # Store is symmetric internally (queries both endpoints' rows). Pass the
-    # cue/related lemmas as-is; the OR-of-orientations semantics is intentional
-    # while the Store predates the directional refactor.
+    # Directional store hit: consults only +cue_lemma+'s precompute row, since
+    # the Store key IS the cue and the row entries are its precomputed relateds.
     return true if RelatedWords.pair_in_store?(cue_lemma, related_lemma)
 
     # DDB is authoritative: "missing means unrelated," no compute fallback in
@@ -229,56 +226,30 @@ class RelatedWords
     # invalidations.
     def reset_caches!
       @related_word_cache = {}
-      @lemma_score_map_cache = {}
       $rhyming_tuple_word_bases_cache = {} if defined?($rhyming_tuple_word_bases_cache)
     end
 
-    # Lemma-indexed score hash for a cue's precompute row. Built lazily and
-    # cached so that repeated +lookup_score_by_lemmas+ calls against the same
-    # focal cue (the common pattern — every colored word in a +set_related+
-    # tuple is compared against the same input word) collapse from O(N) tuple
-    # scans to O(1) hash lookups. Returns +nil+ when the cue has no row.
+    # Membership test for a directional lemma pair: is +lemma_b+ a precomputed
+    # related of +lemma_a+ (when +lemma_a+ is used as a cue)? Linear scan over
+    # the cue's stored row, which is typically small (~SIMILAR_MAX entries).
     #
-    # We only build this for the *second* arg to +lookup_score_by_lemmas+
-    # (the focal side), not the first: the first side is typically a distinct
-    # surface word per call with an empty row, so building a map for it would
-    # just thrash allocations and GC.
-    def lemma_score_map_for(lemma_key)
-      return nil if lemma_key.nil?
-
-      @lemma_score_map_cache ||= {}
-      return @lemma_score_map_cache[lemma_key] if @lemma_score_map_cache.key?(lemma_key)
-
-      tuples = Rhymecrime::Store.fetch_related_tuples(lemma_key)
-      return @lemma_score_map_cache[lemma_key] = nil if tuples.empty?
-
-      map = {}
-      tuples.each do |(w, s)|
-        score = s.to_i
-        map[w] = score unless map.key?(w) && map[w] >= score
-        l = lemma(w)
-        if l && l != w
-          map[l] = score unless map.key?(l) && map[l] >= score
-        end
-      end
-      @lemma_score_map_cache[lemma_key] = map
-    end
-
-    # Membership test for a lemma pair. Tries the +related#lemma_a+ row first
-    # via a linear scan (cheap — usually an empty row), then consults the
-    # focal-side score map for +lemma_b+ (O(1)).
+    # Strictly directional: we DO NOT consult +lemma_b+'s row to decide. The
+    # precompute pipeline writes (cue → relateds, scores) per cue, so +lemma_a+'s
+    # row is the authoritative answer for the +(cue=lemma_a, related=lemma_b)+
+    # question. Asking +lemma_b+'s row would answer a different question
+    # (+(cue=lemma_b, related=lemma_a)+) and conflate the two orientations —
+    # +thematically_related?+ is directional, so this lookup must be too.
     def pair_in_store?(lemma_a, lemma_b)
       return false if lemma_a.nil? || lemma_b.nil?
 
       tuples = Rhymecrime::Store.fetch_related_tuples(lemma_a)
-      return true if tuples.any? { |(w, _s)| w == lemma_b || lemma(w) == lemma_b }
-
-      map = lemma_score_map_for(lemma_b)
-      !map.nil? && map.key?(lemma_a)
+      tuples.any? { |(w, _s)| w == lemma_b || lemma(w) == lemma_b }
     end
 
-    # Stored +relatedness_score+ (0..100) for (word1, word2), or 0 when
-    # neither endpoint has the other in its precompute row. Symmetric.
+    # Stored +relatedness_score+ (0..100) for the directional pair
+    # +(cue=word1, related=word2)+. Returns 0 when +word1+ is not a precompute
+    # cue or when its row does not list +word2+. Directional — see
+    # +pair_in_store?+ for the orientation rationale.
     def lookup_score(word1, word2)
       lookup_score_by_lemmas(lemma(word1), lemma(word2))
     end
@@ -286,15 +257,9 @@ class RelatedWords
     def lookup_score_by_lemmas(lemma_a, lemma_b)
       return 0 if lemma_a.nil? || lemma_b.nil?
 
-      # First side: usually an empty row for the tuple's candidate word;
-      # skip straight to the focal-side map on miss.
       tuples = Rhymecrime::Store.fetch_related_tuples(lemma_a)
       tuples.each { |(w, s)| return s.to_i if w == lemma_b || lemma(w) == lemma_b }
-
-      map = lemma_score_map_for(lemma_b)
-      return 0 if map.nil?
-      s = map[lemma_a]
-      s ? s : 0
+      0
     end
 
     # +max_candidates+ default +SIMILAR_MAX+ caps the list by stored

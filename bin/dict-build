@@ -1,14 +1,20 @@
 #!/usr/bin/env ruby
 # encoding: utf-8
 #
-# Rebuild RhymeCrime caches under <repo>/generated/.
-# Loads lib/rhymecrime/dict/dict.rb (which requires constants, phonology, lexical, morphology, rime, frequency)
-# with cwd = that directory (relative list files), then runs rebuild.
+# Rebuild RhymeCrime caches under <repo>/generated/. Fast-path default: skips the
+# slow ConceptNet edge-map and Numberbatch vector exports (~15-20 min) and the
+# rarity-signals dump (~30 s extra plus disk I/O). Use bin/build for the full
+# pipeline (CN+NB rebuild + rarity dump + classifier training + relatedness
+# stage 2) — or set the override env vars below to opt in piecemeal.
 #
-#   ./bin/dict-build
+# Loads lib/rhymecrime/dict/dict.rb (which requires constants, phonology, lexical,
+# morphology, rime, frequency) with cwd = that directory (relative list files),
+# then runs rebuild.
 #
-# Faster rebuilds while iterating (skips slow ConceptNet + Numberbatch exports; leaves prior generated files):
-#   RHYMECRIME_DICT_SKIP_CONCEPTNET_NUMBERBATCH=1 ./bin/dict-build
+#   ./bin/dict-build                                              # slim default
+#   RHYMECRIME_DICT_BUILD_CONCEPTNET_NUMBERBATCH=1 ./bin/dict-build  # +CN+NB exports
+#   RHYMECRIME_RARITY_DUMP_SIGNALS=PATH         ./bin/dict-build  # +rarity signal dump
+#                                                                 # (+ disables rescore)
 #
 # CPU sampling profile (StackProf): ./bin/dict-build-profile — see script header for STACKPROF_* env vars.
 #

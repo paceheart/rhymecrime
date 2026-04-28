@@ -1,0 +1,114 @@
+#!/usr/bin/env bash
+#
+# Idempotent Python venv bootstrap for the relatedness pipeline's MPNet
+# encoding step (bin/build-sense-vectors.py needs sentence-transformers +
+# msgpack). Lives at <repo>/.venv/. Called from setup.sh; safe to run
+# directly anytime the venv looks broken.
+#
+# Strategy (in order):
+#   1. If <repo>/.venv exists AND can +import sentence_transformers, msgpack+,
+#      we're done.
+#   2. Else look for a GIL-enabled Python >= 3.9 on PATH (python3.12 first,
+#      since it has the best ML wheel coverage) and use it directly:
+#        $PY -m venv .venv && .venv/bin/pip install ...
+#   3. Else fall back to uv (Astral's standalone Python installer):
+#        - install uv via the official curl|sh installer when missing
+#        - +uv python install 3.12+ — pulls a python-build-standalone CPython
+#          tarball into ~/.local/share/uv/python/, leaves system Python alone
+#        - +uv venv --python 3.12 .venv+
+#        - regular pip install for the deps
+#
+# Why reject free-threaded Python (3.13t / no-GIL)? sentence-transformers'
+# +tokenizers+ Rust extension does not yet ship cp31Xt wheels (Apr 2026), so
+# pip falls back to a maturin source build that fails on macOS arm64 link
+# symbols. Re-evaluate once tokenizers ships free-threaded wheels.
+
+set -euo pipefail
+
+REPO="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$REPO"
+
+VENV=".venv"
+PYTHON_VERSION="3.12"  # uv-managed Python target (only used when no host Python qualifies)
+
+# --- 1. Existing-venv health check -----------------------------------------
+
+if [[ -x "$VENV/bin/python" ]]; then
+  if "$VENV/bin/python" -c 'import sentence_transformers, msgpack' >/dev/null 2>&1; then
+    echo "==> $VENV already healthy ($("$VENV/bin/python" --version 2>&1))"
+    exit 0
+  fi
+  echo "==> $VENV is missing required packages — rebuilding from scratch"
+  rm -rf "$VENV"
+fi
+
+# --- 2. Look for a usable host Python --------------------------------------
+
+PY=""
+for cmd in python3.12 python3.13 python3.11 python3.10 python3 python; do
+  command -v "$cmd" >/dev/null 2>&1 || continue
+  candidate="$(command -v "$cmd")"
+  if "$candidate" -c '
+import sys
+ver_ok = sys.version_info[:2] >= (3, 9)
+gil_on = getattr(sys, "_is_gil_enabled", lambda: True)()
+sys.exit(0 if (ver_ok and gil_on) else 1)
+' 2>/dev/null; then
+    PY="$candidate"
+    break
+  fi
+done
+
+# --- 3. uv fallback when no host Python qualifies --------------------------
+
+if [[ -z "$PY" ]]; then
+  echo "==> no GIL-enabled Python >= 3.9 on PATH; will provision one via uv"
+
+  # Pick up uv that's already installed but not yet on PATH (e.g. fresh shell
+  # session that hasn't sourced rc-file edits from a prior install).
+  if ! command -v uv >/dev/null 2>&1; then
+    export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
+  fi
+
+  if ! command -v uv >/dev/null 2>&1; then
+    if ! command -v curl >/dev/null 2>&1; then
+      echo "error: no usable Python on PATH and curl is missing, so we can't" >&2
+      echo "       auto-install uv. Install Python ${PYTHON_VERSION} (or curl) and retry." >&2
+      exit 1
+    fi
+    echo "==> installing uv (astral.sh) to provision a managed Python ${PYTHON_VERSION}"
+    curl -LsSf https://astral.sh/uv/install.sh | sh
+    export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
+    if ! command -v uv >/dev/null 2>&1; then
+      echo "error: uv installer ran but uv is not on PATH at" >&2
+      echo "       \$HOME/.local/bin or \$HOME/.cargo/bin. Inspect output above." >&2
+      exit 1
+    fi
+  fi
+
+  echo "==> uv: installing managed CPython ${PYTHON_VERSION}"
+  uv python install "${PYTHON_VERSION}"
+  echo "==> uv: creating $VENV against managed Python ${PYTHON_VERSION}"
+  # --seed pre-installs pip/setuptools/wheel into the venv so the unified
+  # +$VENV/bin/pip install ...+ step below works on both branches. uv venvs
+  # ship without pip by default (uv expects +uv pip install+ instead).
+  uv venv --seed --python "${PYTHON_VERSION}" "$VENV"
+else
+  echo "==> bootstrapping $VENV using $PY ($("$PY" --version 2>&1))"
+  "$PY" -m venv "$VENV"
+fi
+
+# --- 4. Install deps -------------------------------------------------------
+
+echo "==> installing sentence-transformers + msgpack into $VENV"
+"$VENV/bin/pip" install --upgrade pip
+"$VENV/bin/pip" install sentence-transformers msgpack
+
+# --- 5. Verify -------------------------------------------------------------
+
+if ! "$VENV/bin/python" -c 'import sentence_transformers, msgpack' >/dev/null 2>&1; then
+  echo "error: $VENV created but the deps still fail to import. Inspect output above." >&2
+  exit 1
+fi
+
+echo "==> $VENV ready ($("$VENV/bin/python" --version 2>&1))"

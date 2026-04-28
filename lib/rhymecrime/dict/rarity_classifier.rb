@@ -6,26 +6,41 @@
 # and maps a signals struct to one of +:common / :rare / :forbidden+ plus an integer
 # freq in {0, 2, 10} that downstream preference-ordering code compares.
 #
-# When the classifier JSON is absent (clean clone, uninitialized training run) this
-# module returns +nil+ from +rarity_classifier+ / +rarity_classify+, and the caller
-# falls back to the legacy rule-based combiner in +compute_frequency+ / Phase 6 /
-# +filter_word_dict_disconnected!+. That keeps +./bin/dict-build+ working during the
-# bootstrap window when the classifier has not been trained yet.
+# Strict-load policy: when the classifier JSON is missing or its feature-name list
+# disagrees with +LEARNED_RARITY_FEATURE_NAMES+, +rarity_classifier+ raises rather
+# than silently no-op'ing. A degraded build is worse than a loud failure — the
+# rule-based combiner that used to take over had ~3% lower top-line accuracy on
+# +curated/rarity.csv+ and quietly shipped that delta.
 #
-# Three supported training targets (one is selected at train time via
-# +--target 3class|2class|regressor+ and stored in the JSON as +target+):
+# Two explicit bootstrap escapes for the chicken-and-egg case (the trainer reads a
+# classifier dump that +./bin/dict-build+ produces, so the very first build can't
+# have a classifier yet):
 #
-#   3class     — 3-way softmax over {common, rare, forbidden}; +probs+ is
-#                [p_forbidden, p_rare, p_common]; argmax is the label.
-#   2class     — binary +forbidden+ vs +allowed+; if allowed, split rare/common
-#                via a raw-Zipf threshold +rare_common_zipf+ (typically
-#                +WORDFREQ_COMMON_ZIPF+).
+#   RHYMECRIME_RARITY_CLASSIFIER=off       no rescore (rule-based path runs)
+#   RHYMECRIME_RARITY_DUMP_SIGNALS=PATH    same, plus emit a feature dump for the
+#                                          trainer to consume
+#
+# Either one fires +rarity_classifier_disabled?+, which short-circuits the load
+# before the file-existence check; any other invocation against a missing classifier
+# is a hard error with a remediation hint. The standard end-to-end build script
+# (+bin/build+) sets +RHYMECRIME_RARITY_DUMP_SIGNALS+ for stage 1 and then runs
+# +bin/train-rarity-classifier+, so a fresh checkout reaches steady state without
+# the operator having to think about either env var.
+#
+# Two supported training targets (selected at train time and stored in the JSON
+# as +target+):
+#
+#   3class     — 3-way softmax over {common, rare, forbidden}; one-vs-rest
+#                binary classifiers per class (logreg or GBT), softmax over
+#                logits at inference, argmax is the label.
 #   regressor  — single scalar target (0=forbidden, 2=rare, 10=common); two
-#                thresholds +t_forbidden_rare+ and +t_rare_common+ partition it.
+#                thresholds +t_forbidden_rare+ and +t_rare_common+ partition
+#                the predicted score. GBT-only (logreg has been ablated; it
+#                consistently lost to 3class on cross-validated weighted
+#                accuracy and isn't worth the inference path).
 #
 # +learned_rarity_feature_vector+ / +LEARNED_RARITY_FEATURE_NAMES+ are the same
-# ordered list of feature names the trainer emits to the JSON. A feature-name
-# mismatch at load time produces a warning and falls back to the legacy rule path.
+# ordered list of feature names the trainer emits to the JSON.
 
 require "json"
 require "fileutils"
@@ -143,6 +158,10 @@ $rarity_classifier_loaded = false
 def rarity_classifier_disabled?
   v = ENV["RHYMECRIME_RARITY_CLASSIFIER"]
   return true if v && %w[off 0 false no disabled].include?(v.downcase)
+  # Bootstrap mode: dumping signals to feed the trainer. The classifier doesn't
+  # exist yet by definition, so suppress the strict-load error.
+  dump = ENV["RHYMECRIME_RARITY_DUMP_SIGNALS"]
+  return true if dump && !dump.empty?
   false
 end
 
@@ -151,14 +170,21 @@ def rarity_classifier
   $rarity_classifier_loaded = true
   return nil if rarity_classifier_disabled?
   path = RARITY_CLASSIFIER_PATH
-  return nil unless File.exist?(path)
+  unless File.exist?(path)
+    raise "rarity classifier not found at #{path}. Train it via:\n" \
+          "  ./bin/build                                     # full pipeline (CN+NB + dump + train + relatedness stage 2)\n" \
+          "or just the rarity steps manually:\n" \
+          "  RHYMECRIME_RARITY_DUMP_SIGNALS=generated/rarity_signals_dump.jsonl ./bin/dict-build\n" \
+          "  ./bin/train-rarity-classifier\n" \
+          "Or set RHYMECRIME_RARITY_CLASSIFIER=off to skip rescore."
+  end
 
   clf = JSON.parse(File.read(path, encoding: "UTF-8"))
   got = clf["feature_names"]
   expected = LEARNED_RARITY_FEATURE_NAMES
   unless got == expected
-    warn "rarity: classifier feature-name mismatch (#{path}); ignoring. got=#{got.inspect} expected=#{expected.inspect}"
-    return nil
+    raise "rarity classifier feature-name mismatch in #{path}: got=#{got.inspect} expected=#{expected.inspect}. " \
+          "Retrain via ./bin/train-rarity-classifier."
   end
 
   _rarity_compile_classifier!(clf)
@@ -168,16 +194,6 @@ def rarity_classifier
   target = clf["target"] || "unknown"
   puts "loaded rarity classifier from #{path} (target=#{target} type=#{type})"
   $rarity_classifier
-end
-
-def _rarity_sigmoid(z)
-  if z >= 0
-    ez = Math.exp(-z)
-    1.0 / (1.0 + ez)
-  else
-    ez = Math.exp(z)
-    ez / (1.0 + ez)
-  end
 end
 
 def _rarity_tree_predict(nodes, row)
@@ -251,9 +267,6 @@ def _rarity_compile_classifier!(clf)
     return unless type == "gbt"
     per_class = clf["models"] || {}
     per_class.each_value { |m| _rarity_maybe_compile_gbt_model!(m) }
-  when "2class"
-    return unless type == "gbt"
-    _rarity_maybe_compile_gbt_model!(clf)
   when "regressor"
     _rarity_maybe_compile_gbt_model!(clf)
   end
@@ -276,10 +289,6 @@ def _rarity_logreg_binary_margin(feats, model)
   z
 end
 
-def _rarity_logreg_binary_proba(feats, model)
-  _rarity_sigmoid(_rarity_logreg_binary_margin(feats, model))
-end
-
 def _rarity_gbt_binary_margin(feats, model)
   trees_c = model["trees_c"]
   if trees_c
@@ -293,10 +302,6 @@ def _rarity_gbt_binary_margin(feats, model)
     model["trees"].each { |t| score += lr * _rarity_tree_predict(t, feats) }
     score
   end
-end
-
-def _rarity_gbt_binary_proba(feats, model)
-  _rarity_sigmoid(_rarity_gbt_binary_margin(feats, model))
 end
 
 def _rarity_gbt_regression(feats, model)
@@ -357,19 +362,6 @@ def rarity_classify(sig)
           probs = _rarity_multiclass_probs(feats, clf)
           classes = clf["classes"]
           classes[probs.each_with_index.max_by { |v, _| v }[1]].to_sym
-        when "2class"
-          p_forbidden = case clf["model_type"]
-                        when "logreg" then _rarity_logreg_binary_proba(feats, clf)
-                        when "gbt"    then _rarity_gbt_binary_proba(feats, clf)
-                        else raise "unknown rarity model_type: #{clf["model_type"].inspect}"
-                        end
-          threshold = (clf["threshold"] || 0.5).to_f
-          if p_forbidden >= threshold
-            :forbidden
-          else
-            rc = (clf["rare_common_zipf"] || WORDFREQ_COMMON_ZIPF).to_f
-            sig.wordfreq_zipf.to_f >= rc ? :common : :rare
-          end
         when "regressor"
           score = _rarity_gbt_regression(feats, clf)
           t_fr = (clf["t_forbidden_rare"] || 1.0).to_f
@@ -404,14 +396,12 @@ $rarity_usf_associations = nil
 def rarity_usf_associations_for_build
   return $rarity_usf_associations unless $rarity_usf_associations.nil?
   path = generated_dict_path(USF_ASSOCIATIONS_FILENAME)
-  $rarity_usf_associations = if File.exist?(path)
-                               data = JSON.parse(File.read(path, encoding: "UTF-8"))
-                               puts "loaded #{data.size} USF cues for rarity signals from #{path}"
-                               data
-                             else
-                               {}
-                             end
-  $rarity_usf_associations
+  unless File.exist?(path)
+    raise "USF associations not found at #{path}. Run ./bin/setup-corpora (which calls ./bin/build-usf-associations)."
+  end
+  data = JSON.parse(File.read(path, encoding: "UTF-8"))
+  puts "loaded #{data.size} USF cues for rarity signals from #{path}"
+  $rarity_usf_associations = data
 end
 
 # Build ConceptNet adjacency for the rarity signal pass from the PREVIOUS build's
@@ -445,6 +435,12 @@ end
 def rarity_rescore_and_dump!(hash, **ctx_kwargs)
   dump_path = ENV["RHYMECRIME_RARITY_DUMP_SIGNALS"]
   dump_enabled = !dump_path.nil? && !dump_path.empty?
+  # +bin/dict-build+ +Dir.chdir+'s into +lib/rhymecrime/dict/+ before invoking
+  # us, so a relative +RHYMECRIME_RARITY_DUMP_SIGNALS+ would land under
+  # +lib/rhymecrime/dict/generated/+ instead of the repo's +generated/+. Anchor
+  # to +REPO_ROOT+ so the path the operator passes (and the path the trainer
+  # later reads — see +bin/train-rarity-classifier+) line up.
+  dump_path = File.expand_path(dump_path, REPO_ROOT) if dump_enabled
   clf = rarity_classifier
   return if clf.nil? && !dump_enabled
 

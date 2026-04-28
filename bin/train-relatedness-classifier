@@ -23,14 +23,16 @@
 #
 # Both optimize weighted log-loss. Base sample weights capture the "strong vs ish"
 # confidence asymmetry (+strong = 3+, +ish = 1+). The +--fn-weight+ knob (default
-# +1.0+, i.e. symmetric) further multiplies positive-class rows, turning the
-# historical 3:1 pro-positive pull into an adjustable lever. After fitting, sweeps
-# the decision threshold over [0.05, 0.95] and picks the probability cutoff
-# maximizing composite; +--fn-penalty+ (default +1.0+) independently scales the FN
-# terms in that composite so threshold-selection asymmetry can be tuned apart from
-# fit asymmetry. Historical behavior is reproducible with
-# +--fn-weight 3 --fn-penalty 3+ and was identified as a major driver of
-# thematic-relatedness overgeneration (see notes/todo.md).
+# +1.0+, i.e. class-balanced — equal treatment of related vs. unrelated rows;
+# distinct from the +(cue, related)+ orientation, which the directional unfolds
+# in +learned_feature_vector+ already expose) further multiplies positive-class
+# rows, turning the historical 3:1 pro-positive pull into an adjustable lever.
+# After fitting, sweeps the decision threshold over [0.05, 0.95] and picks the
+# probability cutoff maximizing composite; +--fn-penalty+ (default +1.0+)
+# independently scales the FN terms in that composite so threshold-selection
+# class asymmetry can be tuned apart from fit class asymmetry. Historical
+# behavior is reproducible with +--fn-weight 3 --fn-penalty 3+ and was identified
+# as a major driver of thematic-relatedness overgeneration (see notes/todo.md).
 #
 # Reports N-fold CV composite for an honest generalization estimate, then fits once
 # on the full labeled set for deployment.
@@ -38,14 +40,16 @@
 #   ruby bin/train-relatedness-classifier                    # gbt (default)
 #   ruby bin/train-relatedness-classifier --model logreg
 #   ruby bin/train-relatedness-classifier --model gbt --trees 400 --depth 5
-#   ruby bin/train-relatedness-classifier --fn-weight 3 --fn-penalty 3  # pre-2026 asymmetry
+#   ruby bin/train-relatedness-classifier --fn-weight 3 --fn-penalty 3  # pre-2026 class asymmetry
 #   ruby bin/train-relatedness-classifier --threshold 0.43   # pin cutoff (skip sweep)
 #   ruby bin/train-relatedness-classifier --dry-run
 #
-# After training, run +spec/related_weighted_accuracy.rb+ to see the lift
+# After training, run +bundle exec rspec spec/related_spec.rb+ to see the lift
 # (default +RELATED_LEARNED_MODE=additive+; +=replace+ for pure learned combiner).
-# The evaluator reads +RELATED_FN_WEIGHT+ / +RELATED_FN_PENALTY+ env vars so its
-# composite score matches whatever asymmetry was used for training.
+# The spec evaluates with class-balanced scoring (3:1 strong vs ish, FN==FP); to
+# compare apples-to-apples with a +--fn-weight 3 --fn-penalty 3+ training run,
+# write a one-off evaluator that re-weights the per-row composites — the spec
+# deliberately doesn't bake training-time class asymmetry into its pass criterion.
 
 $LOAD_PATH.unshift File.expand_path("../lib", __dir__)
 
@@ -60,14 +64,17 @@ options = {
   dry_run: false,
   verbose: false,
 
-  # Class-asymmetry knobs. Historical behavior of this script was +fn_weight = fn_penalty = 3+
-  # (sample weights 9/3/3/1, composite −9/−3/−3/−1), which compounded a ~3× positive pull
-  # in the fit with a matching 3× FN:FP skew in the threshold sweep. That stacked bias was
-  # identified as a major driver of thematic-relatedness overgeneration; defaults are now
-  # symmetric (+1.0+ each) and the old behavior is reproducible with +--fn-weight 3
-  # --fn-penalty 3+. The evaluator +spec/related_weighted_accuracy.rb+ reads matching env
-  # vars (+RELATED_FN_WEIGHT+ / +RELATED_FN_PENALTY+) so training CV numbers stay comparable
-  # to post-hoc scoring.
+  # Class-asymmetry knobs (positive vs. negative rows — orthogonal to the
+  # +(cue, related)+ orientation, which is asymmetric and exposed via the
+  # directional unfolds in +learned_feature_vector+). Historical behavior of
+  # this script was +fn_weight = fn_penalty = 3+ (sample weights 9/3/3/1,
+  # composite −9/−3/−3/−1), which compounded a ~3× positive pull in the fit
+  # with a matching 3× FN:FP skew in the threshold sweep. That stacked bias
+  # was identified as a major driver of thematic-relatedness overgeneration;
+  # defaults are now class-balanced (+1.0+ each) and the old behavior is
+  # reproducible with +--fn-weight 3 --fn-penalty 3+. +spec/related_spec.rb+
+  # evaluates with class-balanced scoring; if a future experiment wants to
+  # eval against asymmetric training, fork the spec or write a one-off.
   fn_weight: 1.0,   # sample-weight multiplier on positive-class rows (strong_pos / ish_pos)
   fn_penalty: 1.0,  # composite-score multiplier on FN terms during threshold selection
 

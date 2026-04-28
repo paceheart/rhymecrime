@@ -46,12 +46,17 @@ REPO="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$REPO"
 
 if [[ $REBUILD_VECTORS -eq 1 ]]; then
-  if [[ ! -x .venv/bin/python ]]; then
-    echo "error: .venv/bin/python not found. Set up the venv first:" >&2
-    echo "  /opt/homebrew/bin/python3.13 -m venv .venv" >&2
-    echo "  .venv/bin/pip install sentence-transformers msgpack" >&2
+  # The .venv (sentence-transformers + msgpack for MPNet encoding) is
+  # provisioned by setup.sh / bin/setup-python-venv. Hard-assert it's healthy
+  # here so a missing or broken venv fails fast with a single clear pointer
+  # rather than later inside +.venv/bin/python bin/build-sense-vectors.py+.
+  if [[ ! -x .venv/bin/python ]] || \
+     ! .venv/bin/python -c 'import sentence_transformers, msgpack' >/dev/null 2>&1; then
+    echo "error: .venv is missing or its dependencies aren't importable." >&2
+    echo "  run: ./bin/setup-python-venv         (or ./setup.sh, which calls it)" >&2
     exit 1
   fi
+
   echo "==> [1/3] dumping sense glosses -> generated/sense_glosses.jsonl"
   ruby bin/dump-sense-glosses
   echo "==> [2/3] encoding sense vectors -> generated/model_sense_vectors.msgpack"

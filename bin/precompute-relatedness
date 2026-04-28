@@ -5,9 +5,8 @@
 #
 # Cue set (one row per): every +word_common_preferred_headword?+ lemma,
 # including rhymeless ones like +music+ / +concerto+ / +algebra+ — runtime
-# (and +spec/related_weighted_accuracy.rb+) may legitimately ask
-# +thematically_related?+ about any common headword, so we need a row for any
-# common headword.
+# (and +spec/related_spec.rb+) may legitimately ask +thematically_related?+
+# about any common headword, so we need a row for any common headword.
 #
 # Relateds list (per row): +find_all_thematically_related_words_by_scan(lem,
 # include_rhymeless=false, common_only=true)+ — narrower, only rhymable

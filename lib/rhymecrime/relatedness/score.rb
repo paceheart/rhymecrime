@@ -28,8 +28,8 @@ RELATEDNESS_CLASSIFIER_PATH = generated_dict_path(RELATEDNESS_CLASSIFIER_FILENAM
 
 # On-disk GBT tree format this loader understands. When +bin/train-relatedness-classifier+
 # emits a different +tree_format+, the classifier is rejected at load time (loud
-# warning, rule-based mode takes over) rather than silently misbehaving. Bump in
-# lock-step with the trainer whenever the node layout changes.
+# raise) rather than silently misbehaving. Bump in lock-step with the trainer
+# whenever the node layout changes.
 SUPPORTED_GBT_TREE_FORMAT = "parallel_v1" unless defined?(SUPPORTED_GBT_TREE_FORMAT)
 
 def related_trace_memo?
@@ -38,8 +38,12 @@ end
 
 # Ordered feature vector pulled from +PairSignals+, shared by the learned-classifier
 # trainer (+bin/train-relatedness-classifier+) and runtime scorer
-# (+learned_relatedness_score+). Symmetrized: all directional signals are folded to
-# min/max so the feature order can't leak +(a, b)+ order into the model.
+# (+learned_relatedness_score+). Carries BOTH symmetric reductions of every
+# directional signal (+sv_max+/+sv_min+, +morphy_sv_max+/+min+, +model_sv_max+/+min+,
+# +usf_direct_max+/+min+) AND the underlying +cue→related+ / +related→cue+ unfolds
+# (+sv_cue_to_related+ / +sv_related_to_cue+ etc.), so the classifier sees orientation-
+# aware features in addition to the order-independent ones. The relatedness predicate
+# is directional in +(cue, related)+, and so is this vector — feature order matters.
 #
 # NOTE: keep this list and its order in lock-step with the weights file
 # (+generated/relatedness_classifier.json+). When retraining, the file stores its own
@@ -184,20 +188,19 @@ def learned_feature_vector(signals)
   ].concat(unigram_pair_feature_values(signals.cue, signals.related))
 end
 
-# --- Learned phase-2 combiner (optional) ---
+# --- Learned phase-2 combiner ---
 #
 # Logistic regression / gradient-boosted-trees over +learned_feature_vector+,
 # trained by +bin/train-relatedness-classifier+ and written to
-# +generated/relatedness_classifier.json+. When the weights file exists it
-# contributes an additional rule inside +relatedness_contributions+:
-#   learned probability → calibrated 0..100 score such that
-#   p = best_threshold maps to +RELATEDNESS_SCORE_THRESHOLD+.
-# When the file is absent the existing rule-based combiner runs unchanged.
+# +generated/relatedness_classifier.json+. Strict-load policy: a missing or
+# format-incompatible weights file is a hard error. Set
+# +RELATED_LEARNED_MODE=off+ to explicitly bypass the classifier (rule-based
+# combiner runs alone — strictly worse: see the FP comparison below).
 #
 # Mode controlled by +$RELATED_LEARNED_MODE+ / env +RELATED_LEARNED_MODE+:
 #   +replace+   (default) learned score is the *only* rule (except stop-word short-circuit).
 #   +additive+            learned score joins the max-over-rules — can only add TPs.
-#   +off+                 ignore classifier even if present.
+#   +off+                 explicit bypass; classifier weights are not consulted even if present.
 #
 # +replace+ is the default because the hand rules composed via max-over-contributions
 # overgenerate: +cooccurrence+ + +sense_vectors+ + +similarity+ between them produced
@@ -205,8 +208,10 @@ end
 # compared to 80 strong FPs with the classifier alone. The learned combiner sees all
 # 67 phase-1 features (gloss_match, usf_twohop, sv_max/min, edge_present, cn_hops,
 # contextualized-model signals, per-word priors) and composes them coherently under
-# the symmetric training objective (+--fn-weight 1 --fn-penalty 1+), so it doesn't
-# need the hand rules to catch genuine positives.
+# a class-balanced training objective (+--fn-weight 1 --fn-penalty 1+ — equal
+# treatment of related vs. unrelated rows; orthogonal to the +(cue, related)+
+# directionality, which the feature vector exposes via dedicated unfolds), so it
+# doesn't need the hand rules to catch genuine positives.
 #
 # +additive+ and +off+ remain available for debugging: +additive+ to compare the
 # combined score with the learned component, +off+ to isolate the rule bundle.
@@ -227,21 +232,25 @@ def relatedness_classifier
   return nil if $RELATED_LEARNED_MODE == "off"
 
   path = RELATEDNESS_CLASSIFIER_PATH
-  return nil unless File.exist?(path)
+  unless File.exist?(path)
+    raise "relatedness classifier not found at #{path}. Train it via ./bin/retrain-relatedness " \
+          "(which calls dump-sense-glosses → build-sense-vectors.py → train-relatedness-classifier), " \
+          "or set RELATED_LEARNED_MODE=off to bypass the learned combiner entirely."
+  end
 
   clf = JSON.parse(File.read(path, encoding: "UTF-8"))
   got = clf["feature_names"]
   expected = LEARNED_FEATURE_NAMES
   unless got == expected
-    warn "related: classifier feature-name mismatch (#{path}); ignoring. got=#{got.inspect} expected=#{expected.inspect}"
-    return nil
+    raise "relatedness classifier feature-name mismatch in #{path}: got=#{got.inspect} expected=#{expected.inspect}. " \
+          "Retrain via ./bin/retrain-relatedness."
   end
 
   if (clf["model_type"] || "logreg") == "gbt"
     fmt = clf["tree_format"]
     unless fmt == SUPPORTED_GBT_TREE_FORMAT
-      warn "related: unsupported GBT tree_format=#{fmt.inspect} in #{path} (expected #{SUPPORTED_GBT_TREE_FORMAT.inspect}); retrain via bin/retrain-relatedness."
-      return nil
+      raise "relatedness classifier unsupported GBT tree_format=#{fmt.inspect} in #{path} (expected #{SUPPORTED_GBT_TREE_FORMAT.inspect}). " \
+            "Retrain via ./bin/retrain-relatedness."
     end
   end
 
@@ -284,9 +293,11 @@ def learned_tree_predict(tree, row)
   end
 end
 
-# Classifier probability in 0..1. Returns +nil+ when no classifier is loaded.
-# Dispatches on +model_type+: "logreg" (linear, with standardization) or "gbt"
-# (gradient-boosted tree ensemble over raw features).
+# Classifier probability in 0..1. Returns +nil+ only when the classifier is
+# explicitly disabled (+RELATED_LEARNED_MODE=off+) — a missing or malformed
+# weights file raises out of +relatedness_classifier+. Dispatches on
+# +model_type+: "logreg" (linear, with standardization) or "gbt"
+# (gradient-boosted tree ensemble over raw features); any other value raises.
 def learned_relatedness_probability(signals)
   clf = relatedness_classifier
   return nil if clf.nil?
@@ -309,8 +320,7 @@ def learned_relatedness_probability(signals)
     clf["trees"].each { |t| score += lr * learned_tree_predict(t, feats) }
     learned_sigmoid(score)
   else
-    warn "related: unknown classifier model_type=#{clf['model_type'].inspect}"
-    nil
+    raise "relatedness: unknown classifier model_type=#{clf['model_type'].inspect} in #{RELATEDNESS_CLASSIFIER_PATH}"
   end
 end
 

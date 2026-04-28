@@ -18,19 +18,23 @@
 #     accuracy. See +rarity_classify+ in lib/rhymecrime/dict/rarity_classifier.rb
 #     for the consumer format.
 #
-# Training targets (six total, each with both GBT and logreg):
-#   3class      multiclass ∈ {common, rare, forbidden}. One-vs-rest binary per
-#                class; softmax over logits at inference; argmax → label.
-#   2class      binary forbidden vs allowed. If allowed, split rare/common by
-#                raw Zipf ≥ WORDFREQ_COMMON_ZIPF.
-#   regressor   single scalar target (forbidden=0, rare=2, common=10). Squared
-#                error with sample weights; two thresholds map score to label.
+# Training combos (3 total; the 2class target and the regressor-logreg variant
+# were ablated — both consistently lost to 3class on cross-validated weighted
+# accuracy and the inference paths weren't worth keeping alive):
+#   3class-gbt     multiclass ∈ {common, rare, forbidden}. One-vs-rest binary
+#                  GBT per class; softmax over logits at inference; argmax →
+#                  label.
+#   3class-logreg  same target, logistic-regression base learner.
+#   regressor-gbt  single scalar target (forbidden=0, rare=2, common=10).
+#                  Squared error with sample weights; two thresholds
+#                  (+t_forbidden_rare+, +t_rare_common+) map score → label.
 #
-# Evaluation / selection: weighted accuracy using the partial-credit matrix
-# from spec/rarity_weighted_accuracy.rb (rare↔forbidden=0.9, common↔rare=0.1,
-# common↔forbidden=0.0). Row weights 3 for strong labels, 1 for _ish.
+# Evaluation / selection: weighted accuracy using the same symmetric
+# partial-credit matrix as spec/rarity_spec.rb (rare↔forbidden=0.9,
+# common↔rare=0.1, common↔forbidden=0.0). Row weights 3 for strong labels,
+# 1 for _ish.
 #
-#   ./bin/train-rarity-classifier                   # all six, pick winner
+#   ./bin/train-rarity-classifier                   # all 3 combos, pick winner
 #   ./bin/train-rarity-classifier --only 3class-gbt # train one combo
 #   ./bin/train-rarity-classifier --dry-run         # don't write json
 #   ./bin/train-rarity-classifier --folds 5 --seed 42
@@ -296,37 +300,6 @@ def fit_logreg_binary(x_rows, y, sample_weights, lr:, l2:, epochs:)
   w
 end
 
-def fit_linreg(x_rows, y, sample_weights, lr:, l2:, epochs:)
-  n = x_rows.size
-  d = x_rows.first.size
-  w = Array.new(d, 0.0)
-  w_sum_total = sample_weights.sum.to_f
-
-  prev_loss = Float::INFINITY
-  epochs.times do |epoch|
-    grad = Array.new(d, 0.0)
-    loss = 0.0
-    n.times do |i|
-      x = x_rows[i]
-      z = 0.0
-      d.times { |j| z += w[j] * x[j] }
-      sw = sample_weights[i]
-      err = z - y[i]
-      loss += 0.5 * sw * err * err
-      d.times { |j| grad[j] += sw * err * x[j] }
-    end
-    (1...d).each { |j| grad[j] += l2 * w[j] }
-
-    step = lr / w_sum_total
-    d.times { |j| w[j] -= step * grad[j] }
-
-    delta = (prev_loss - loss).abs / [prev_loss.abs, 1.0].max
-    break if delta < 1e-7 && epoch > 10
-    prev_loss = loss
-  end
-  w
-end
-
 def predict_linreg(raw_row, w, means, stds)
   z = 0.0
   raw_row.each_with_index do |v, j|
@@ -553,70 +526,23 @@ def train_3class(labeled_rows, train_ids, model_type, options)
   [predict, model_data]
 end
 
-def train_2class(labeled_rows, train_ids, model_type, options, rare_common_zipf_feat_idx:)
-  y = train_ids.map { |i| labeled_rows[i][:label] == "forbidden" ? 1.0 : 0.0 }
-  sw = train_ids.map { |i| labeled_rows[i][:weight] }
-  case model_type
-  when "logreg"
-    x = train_ids.map { |i| labeled_rows[i][:features].dup }
-    means, stds = standardize!(x)
-    w = fit_logreg_binary(x, y, sw, lr: options[:lr], l2: options[:l2], epochs: options[:epochs])
-    payload = { "means" => means, "stds" => stds, "weights" => w }
-  when "gbt"
-    x = train_ids.map { |i| labeled_rows[i][:features] }
-    bias, trees = fit_gbt_binary(x, y, sw, trees: options[:trees], depth: options[:depth], lr: options[:gbt_lr], lambda_leaf: options[:lambda_leaf], min_child_hessian: options[:min_child_hessian], colsample: options[:colsample], seed: options[:seed])
-    payload = { "bias" => bias, "lr" => options[:gbt_lr], "trees" => trees }
-  end
-
-  threshold = 0.5
-  rare_common_zipf = WORDFREQ_COMMON_ZIPF
-  zipf_idx = rare_common_zipf_feat_idx
-
-  predict = lambda do |feats|
-    p_forbidden = case model_type
-                  when "logreg" then sigmoid(predict_linreg(feats, payload["weights"], payload["means"], payload["stds"]))
-                  when "gbt"    then sigmoid(predict_gbt_margin(feats, payload["bias"], payload["trees"], payload["lr"]))
-                  end
-    if p_forbidden >= threshold
-      "forbidden"
-    else
-      feats[zipf_idx] >= rare_common_zipf ? "common" : "rare"
-    end
-  end
-
-  model_data = {
-    "target" => "2class",
-    "model_type" => model_type,
-    "threshold" => threshold,
-    "rare_common_zipf" => rare_common_zipf,
-  }.merge(payload)
-  [predict, model_data]
-end
-
-def train_regressor(labeled_rows, train_ids, model_type, options)
+# Regressor is GBT-only — the logreg variant lost to 3class on every fold and
+# the runtime never had a dispatch for it (the +regressor+ inference path in
+# +rarity_classify+ unconditionally calls the GBT scorer). Keeping just the
+# GBT path here keeps the trainer in lock-step with what the runtime can load.
+def train_regressor(labeled_rows, train_ids, options)
   y = train_ids.map { |i| FREQ_PER_CLASS[labeled_rows[i][:label]] }
   sw = train_ids.map { |i| labeled_rows[i][:weight] }
+  x = train_ids.map { |i| labeled_rows[i][:features] }
 
-  case model_type
-  when "logreg"
-    x = train_ids.map { |i| labeled_rows[i][:features].dup }
-    means, stds = standardize!(x)
-    w = fit_linreg(x, y, sw, lr: options[:lr], l2: options[:l2], epochs: options[:epochs])
-    payload = { "means" => means, "stds" => stds, "weights" => w }
-  when "gbt"
-    x = train_ids.map { |i| labeled_rows[i][:features] }
-    bias, trees = fit_gbt_regression(x, y, sw, trees: options[:trees], depth: options[:depth], lr: options[:gbt_lr], lambda_leaf: options[:lambda_leaf], min_child_hessian: options[:min_child_hessian], colsample: options[:colsample], seed: options[:seed])
-    payload = { "bias" => bias, "lr" => options[:gbt_lr], "trees" => trees }
-  end
+  bias, trees = fit_gbt_regression(x, y, sw, trees: options[:trees], depth: options[:depth], lr: options[:gbt_lr], lambda_leaf: options[:lambda_leaf], min_child_hessian: options[:min_child_hessian], colsample: options[:colsample], seed: options[:seed])
+  payload = { "bias" => bias, "lr" => options[:gbt_lr], "trees" => trees }
 
   t_fr = 1.0
   t_rc = 6.0
 
   predict = lambda do |feats|
-    s = case model_type
-        when "logreg" then predict_linreg(feats, payload["weights"], payload["means"], payload["stds"])
-        when "gbt"    then predict_gbt_margin(feats, payload["bias"], payload["trees"], payload["lr"])
-        end
+    s = predict_gbt_margin(feats, payload["bias"], payload["trees"], payload["lr"])
     if s < t_fr then "forbidden"
     elsif s < t_rc then "rare"
     else "common"
@@ -625,7 +551,7 @@ def train_regressor(labeled_rows, train_ids, model_type, options)
 
   model_data = {
     "target" => "regressor",
-    "model_type" => model_type,
+    "model_type" => "gbt",
     "t_forbidden_rare" => t_fr,
     "t_rare_common" => t_rc,
   }.merge(payload)
@@ -649,16 +575,12 @@ def evaluate(labeled_rows, eval_ids, predict_label)
   { weighted_pct: 100.0 * score / total_w, weighted_score: score, weighted_total: total_w, confusion: confusion }
 end
 
-# --- Run CV across all 6 combos --------------------------------------------
+# --- Run CV across all 3 combos --------------------------------------------
 
-zipf_idx = LEARNED_RARITY_FEATURE_NAMES.index("wordfreq_zipf") or raise "no wordfreq_zipf in feature names"
-
-combos = []
-%w[3class 2class regressor].each do |target|
-  %w[gbt logreg].each do |model_type|
-    combos << "#{target}-#{model_type}"
-  end
-end
+# Explicit combo list — was a target × model_type cross-product before the
+# 2class and regressor-logreg variants were ablated; left as a literal so
+# adding/dropping a combo is a one-line change without revisiting dispatch.
+combos = %w[3class-gbt 3class-logreg regressor-gbt]
 combos = combos.select { |c| c == options[:only] } if options[:only]
 
 folds = make_folds(labeled_rows.size, options[:folds], options[:seed])
@@ -674,8 +596,7 @@ combos.each do |combo|
 
     predict, _ = case target
                  when "3class"    then train_3class(labeled_rows, train_ids, model_type, options)
-                 when "2class"    then train_2class(labeled_rows, train_ids, model_type, options, rare_common_zipf_feat_idx: zipf_idx)
-                 when "regressor" then train_regressor(labeled_rows, train_ids, model_type, options)
+                 when "regressor" then train_regressor(labeled_rows, train_ids, options)
                  end
 
     r = evaluate(labeled_rows, test_ids, predict)
@@ -704,8 +625,7 @@ all_ids = (0...labeled_rows.size).to_a
 
 predict, model_data = case target
                       when "3class"    then train_3class(labeled_rows, all_ids, model_type, options)
-                      when "2class"    then train_2class(labeled_rows, all_ids, model_type, options, rare_common_zipf_feat_idx: zipf_idx)
-                      when "regressor" then train_regressor(labeled_rows, all_ids, model_type, options)
+                      when "regressor" then train_regressor(labeled_rows, all_ids, options)
                       end
 
 in_sample = evaluate(labeled_rows, all_ids, predict)

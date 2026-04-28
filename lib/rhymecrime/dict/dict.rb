@@ -23,8 +23,11 @@
 # ConceptNet lemma cache under generated/ is created by setup.sh after downloading assertions, or
 # automatically at the start of this rebuild if it is missing or older than assertions.gz.
 #
-# Fast iteration: set RHYMECRIME_DICT_SKIP_CONCEPTNET_NUMBERBATCH=1 to skip the slow ConceptNet and
-# Numberbatch exports at the end (hyphen map and word_dict still run). Default is to rebuild everything.
+# Fast-iteration default: bin/dict-build skips the slow ConceptNet edge-map and
+# Numberbatch vector exports at the end (hyphen map and word_dict still run).
+# Use bin/build (the full pipeline orchestrator) — or set
+# RHYMECRIME_DICT_BUILD_CONCEPTNET_NUMBERBATCH=1 explicitly — when those exports
+# need to be refreshed alongside the rhyming dict.
 
 require "rwordnet"
 require "json"
@@ -71,8 +74,8 @@ end
 # Lazy path -> frozen Hash of 8-digit synset offset string -> full data-file line (+wn_synset_line_for_offset+).
 $wn_synset_line_index_by_path = nil
 
-def skip_conceptnet_numberbatch_dict_exports?
-  v = ENV["RHYMECRIME_DICT_SKIP_CONCEPTNET_NUMBERBATCH"]
+def include_conceptnet_numberbatch_dict_exports?
+  v = ENV["RHYMECRIME_DICT_BUILD_CONCEPTNET_NUMBERBATCH"]
   v && !v.empty? && %w[1 true yes on].include?(v.downcase)
 end
 
@@ -733,12 +736,13 @@ def rebuild_rhymecrime_dictionaries()
   save_word_dict(word_dict, lemma_map)
   save_word_lemma_map!(word_dict, lemma_map)
   save_hyphen_variant_map!(hyphen_fold_build_keys, exported_keys: word_dict.keys)
-  if skip_conceptnet_numberbatch_dict_exports?
-    puts "Skipping ConceptNet edge map and Numberbatch vectors (RHYMECRIME_DICT_SKIP_CONCEPTNET_NUMBERBATCH is set)"
-  else
+  if include_conceptnet_numberbatch_dict_exports?
     rel_bases = relatedness_export_base_headwords(word_dict.keys, lemma_map)
     save_conceptnet_edge_map!(word_dict.keys, lemma_map)
     save_numberbatch_vectors!(rel_bases)
+  else
+    puts "Skipping ConceptNet edge map and Numberbatch vectors " \
+         "(set RHYMECRIME_DICT_BUILD_CONCEPTNET_NUMBERBATCH=1 to rebuild, or run ./bin/build)"
   end
 
   # Build the semantic base map AFTER Numberbatch is on disk so the cosine

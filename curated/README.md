@@ -79,18 +79,22 @@ in `corpus_variants.rb` (US/UK -ize/-ise, -oes/-os plurals, …).
 Labeled rarity outcomes: `(context, word, kind, important, skip, notes)`
 where `kind ∈ {common, common_ish, rare, rare_ish, uncommon, forbidden,
 forbidden_ish, common_no_rhymes, rare_no_rhymes, have_rhymes}`. The eval
-harness in `spec/rarity_spec.rb` and the weighted-accuracy script
-`spec/rarity_weighted_accuracy.rb` both consume this file directly; it also
-drives the rarity classifier training in `bin/train-rarity-classifier`.
+harness in `spec/rarity_spec.rb` consumes this file directly (sweeps every
+row against live `rarity_category`, prints a `FAIL …` line per mismatch, and
+gates on a single weighted-pass-rate aggregate spec). It also drives the
+rarity classifier training in `bin/train-rarity-classifier`.
 
 ### `related.csv`
 
 Labeled cue/target relatedness pairs: `(cue, related, oughta be related?,
 notes)` where `oughta be related? ∈ {related, related_ish, unrelated,
-unrelated_ish, whatever}`. Consumed by `spec/related_spec.rb`,
-`spec/related_weighted_accuracy.rb`, and the `bin/train-relatedness-classifier`
-training pipeline. The `whatever` label opts a row out of accuracy scoring
-when either answer is acceptable.
+unrelated_ish, whatever}`. The relationship is **directional** — "is `related`
+a thematic associate of `cue`?" — and `thematically_related?` evaluates that
+direction. Consumed by `spec/related_spec.rb` (sweeps every row against the
+live directional predicate, prints a `FAIL …` line per mismatch, gates on a
+single weighted-pass-rate aggregate spec) and the
+`bin/train-relatedness-classifier` training pipeline. The `whatever` label
+opts a row out of accuracy scoring when either answer is acceptable.
 
 ### `lemma.csv`
 

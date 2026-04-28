@@ -61,7 +61,7 @@ $USF_MIN_BASE = 0
 # with (e.g.) below-threshold +base+ *and* two-sided sense-vector agreement *and* a
 # validated USF bridge are clearly related despite no single gate passing. Weights
 # tuned on +curated/related.csv+ via grid search over a broad plateau (see
-# +spec/related_weighted_accuracy.rb+). Contribution is +base * w + sv_min * w +
+# +spec/related_spec.rb+). Contribution is +base * w + sv_min * w +
 # max(0, sv_max - floor) * w + (usf ? w : 0)+, each term capped so one runaway
 # signal can't dominate.
 $COOCCUR_BASE_WEIGHT = 3.0
@@ -388,9 +388,14 @@ end
 #     "senses"   => {lemma => [[Float * dim], ...]} }
 # Vectors are pre-L2-normalized so cosine similarity is a plain dot product. Keys use
 # hyphen-form lemmas (matching +lemma()+ output), not the underscore form Numberbatch
-# keys use. Returns +nil+ if the file is absent — callers degrade gracefully (all
-# model-* signals become 0 and +model_both_in_vocab?+ is false, which the learned
-# combiner can condition on).
+# keys use. Strict-load policy: a missing msgpack raises — the relatedness pipeline
+# was trained against +model_*+ features and the classifier doesn't know how to
+# behave when those features are silently zero. Bootstrap by running
+# +bin/dump-sense-glosses+ → +bin/build-sense-vectors.py+ before retraining /
+# precomputing. Per-word OOV is still handled gracefully: +headword[word]+ /
+# +senses[word]+ may legitimately be +nil+ for words not in the encoder vocabulary,
+# and the in-vocab flag features (+model_both_in_vocab?+, +def_both_in_vocab?+)
+# let the classifier condition on that.
 #
 # At load time the per-word vectors get converted to +Numo::SFloat+ (32-bit float):
 #   headword:  {lemma => Numo::SFloat(dim)}               or nil if OOV
@@ -409,7 +414,12 @@ def model_sense_vectors_table
   return $model_sense_vectors if $model_sense_vectors_loaded
   $model_sense_vectors_loaded = true
   path = generated_dict_path(MODEL_SENSE_VECTORS_FILENAME)
-  return nil unless File.exist?(path)
+  unless File.exist?(path)
+    raise "model sense vectors not found at #{path}. Build them via:\n" \
+          "  ./bin/dump-sense-glosses\n" \
+          "  ./bin/build-sense-vectors.py\n" \
+          "(or ./bin/retrain-relatedness, which chains both)."
+  end
   # Stream-decode instead of +File.binread(path)+: macOS' +read(2)+ syscall caps a
   # single read at +INT_MAX+ (2 GiB), so once the full-vocab msgpack passes that
   # threshold (~136k headwords × 768 fp32 ≈ 2.3 GB), +File.binread+ raises

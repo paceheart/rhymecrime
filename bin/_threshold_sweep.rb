@@ -4,7 +4,7 @@
 # Sweep classifier decision threshold over the +curated/related.csv+ eval set and
 # report the composite / weighted-accuracy / TPR / TNR at each candidate cutoff.
 # Bypasses the precomputed SQLite store (so we evaluate the *current* classifier,
-# matching +RELATED_BYPASS_STORE=1 spec/related_weighted_accuracy.rb+'s semantics).
+# matching +RELATED_BYPASS_STORE=1 spec/related_spec.rb+'s semantics).
 #
 # Mechanics: we compute the classifier probability +p+ once per eval row (the GBT
 # is the bottleneck), then scan thresholds in pure arithmetic — predicate result
@@ -89,7 +89,8 @@ puts format(
 puts
 
 # Tally composite / weighted-accuracy / confusion at a given threshold. Mirrors the
-# RSpec evaluator's symmetric -3 / -1 schedule (RELATED_FN_WEIGHT / FN_PENALTY default 1.0).
+# RSpec evaluator's class-balanced -3 / -1 schedule (3× weight on strong rows,
+# 1× on +*_ish+; FN penalty == FP penalty within each weight tier).
 def tally(scored, t)
   tp = tn = fp = fn_ = 0
   sfn = ifn = sfp = ifp = 0
