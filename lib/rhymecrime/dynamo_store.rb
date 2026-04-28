@@ -23,6 +23,25 @@ module Rhymecrime
                      :find_all_related_precomputed, :find_all_related_precomputed_with_scores
     end
 
+    # FIFO upper bound for the in-process +word#+ / +rime#+ caches. The full
+    # dictionary fits well under both ceilings (~150K words, <10K rimes) so in
+    # the common case these caps never trigger — they're insurance against a
+    # long-lived Lambda container that has cumulatively touched every cue and
+    # would otherwise hold the entire dataset in RAM.
+    #
+    # Eviction policy is FIFO (drop oldest insertion) rather than LRU because
+    # +batch_get_words+ writes once per row and never re-reads on the hot
+    # path — adding LRU bookkeeping would slow every cache write to defend
+    # against a workload (cyclic re-eviction of recently-fetched keys) that
+    # doesn't happen here.
+    DDB_WORD_CACHE_CAP = (ENV["RHYMECRIME_DDB_WORD_CACHE_CAP"] || "250000").to_i
+    DDB_RIME_CACHE_CAP = (ENV["RHYMECRIME_DDB_RIME_CACHE_CAP"] || "25000").to_i
+
+    # Wipe the in-process caches. Called by +bin/precompute-relatedness+
+    # between shards to bound worker RSS; intentionally NOT called per
+    # request from the web entry points (+frontend.rb+) — +word#+ / +rime#+
+    # rows are immutable per data deploy, so warm Lambda containers benefit
+    # from keeping them across invocations.
     def clear_session_cache!
       @word_cache = {}
       @rime_cache = {}
@@ -74,7 +93,7 @@ module Rhymecrime
       return @word_cache[word] if @word_cache.key?(word)
 
       item = get_item("word##{word}")
-      @word_cache[word] = parse_word_item(word, item)
+      put_word(word, parse_word_item(word, item))
     end
 
     def batch_get_words(words)
@@ -87,9 +106,9 @@ module Rhymecrime
         slices.zip(responses).each do |slice, resp|
           (resp.responses[table_name] || []).each do |item|
             w = item["pk"].to_s.sub(/\Aword#/, "")
-            @word_cache[w] = parse_word_item(w, item)
+            put_word(w, parse_word_item(w, item))
           end
-          slice.each { |w| @word_cache[w] = nil unless @word_cache.key?(w) }
+          slice.each { |w| put_word(w, nil) unless @word_cache.key?(w) }
         end
       end
     end
@@ -98,7 +117,7 @@ module Rhymecrime
       return @rime_cache[rime] if @rime_cache.key?(rime)
 
       item = get_item("rime##{rime}")
-      @rime_cache[rime] = parse_rime_item(item)
+      put_rime(rime, parse_rime_item(item))
     end
 
     def batch_get_rimes(rimes)
@@ -111,9 +130,9 @@ module Rhymecrime
         slices.zip(responses).each do |slice, resp|
           (resp.responses[table_name] || []).each do |item|
             r = item["pk"].to_s.sub(/\Arime#/, "")
-            @rime_cache[r] = parse_rime_item(item)
+            put_rime(r, parse_rime_item(item))
           end
-          slice.each { |r| @rime_cache[r] = [] unless @rime_cache.key?(r) }
+          slice.each { |r| put_rime(r, []) unless @rime_cache.key?(r) }
         end
       end
     end
@@ -199,6 +218,23 @@ module Rhymecrime
     end
 
     private
+
+    # FIFO-bounded write to +@word_cache+. Returns the value so the put can be
+    # the tail expression of a +fetch_word+-style "miss → fetch → cache → return"
+    # chain. Re-assignment to an already-present key preserves its insertion
+    # position (Ruby Hash semantics), so we only evict when we're growing past
+    # the cap. See +DDB_WORD_CACHE_CAP+ doc comment for the bounding rationale.
+    def put_word(word, value)
+      @word_cache[word] = value
+      @word_cache.shift while @word_cache.size > DDB_WORD_CACHE_CAP
+      value
+    end
+
+    def put_rime(rime, value)
+      @rime_cache[rime] = value
+      @rime_cache.shift while @rime_cache.size > DDB_RIME_CACHE_CAP
+      value
+    end
 
     # Bounded-parallelism cap on concurrent +BatchGetItem+ calls. Override via
     # +RHYMECRIME_DDB_PARALLELISM+ if a future workload (different cue, different

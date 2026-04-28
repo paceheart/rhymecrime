@@ -211,9 +211,23 @@ end
 # slots are colored by stored relatedness_score vs +word1+ instead of rendering
 # in the default text color. See the +$debug_pruning+ doc comment for the full
 # list of behaviors gated on this flag.
+#
+# Cache lifetime: we deliberately do NOT call +Rhymecrime::DynamoRuntime
+# .clear_session_cache!+ or +RelatedWords.reset_caches!+ on entry. The
+# +word#+ / +rime#+ rows backing the DDB cache and the per-cue +@related_
+# word_cache+ / +$rhyming_tuple_word_bases_cache+ are pure functions of the
+# upstream data deploy (frozen until the next +bin/upload-to-dynamodb+),
+# so warm Lambda containers benefit from keeping them across requests —
+# the prefetch+find_related DDB phases collapse from ~5s to single-digit
+# milliseconds whenever the cohort overlaps a previously-served cue. The
+# DDB caches are FIFO-bounded by +DDB_WORD_CACHE_CAP+ / +DDB_RIME_CACHE_CAP+
+# so even a long-lived container that has cumulatively touched every cue
+# can't grow them past the dictionary size.
+#
+# +bin/precompute-relatedness+ still calls +reset_caches!+ between shards
+# to bound worker RSS — that's a different access pattern (sequential
+# distinct-cue scan) where retention has no upside.
 def build_rhymecrime_page(word1, word2, debug: false)
-  Rhymecrime::DynamoRuntime.clear_session_cache! if defined?(Rhymecrime::DynamoRuntime) && Rhymecrime::DataSource.dynamodb?
-  RelatedWords.reset_caches! if defined?(RelatedWords)
   $debug_pruning = debug
   $debug_pruned_tuples = debug ? Set.new : nil
   buf = +""
@@ -230,8 +244,8 @@ ensure
 end
 
 # CGI: reads params from environment, prints to stdout.
+# See +build_rhymecrime_page+ for why we don't reset caches here.
 def compute_and_print_html
-  Rhymecrime::DynamoRuntime.clear_session_cache! if defined?(Rhymecrime::DynamoRuntime) && Rhymecrime::DataSource.dynamodb?
   word1, word2 = parse_cgi_input
   puts build_rhymecrime_page(word1, word2)
 end
@@ -293,8 +307,6 @@ def compute_and_print_html_similar_middle(word1, word2)
 end
 
 def build_similar_page(word1, word2)
-  Rhymecrime::DynamoRuntime.clear_session_cache! if defined?(Rhymecrime::DynamoRuntime) && Rhymecrime::DataSource.dynamodb?
-  RelatedWords.reset_caches! if defined?(RelatedWords)
   buf = +""
   Thread.current[:html_output_buffer] = buf
   w1, w2 = parse_query_words(word1, word2)
