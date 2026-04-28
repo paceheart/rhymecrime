@@ -100,9 +100,60 @@ def compute_and_print_html_middle(word1, word2)
   goals.length.times do |i|
     goal = goals[i]
     width = widths[i]
-    output, dregs, type, header = rhymecrime(word1, word2, goal, OUTPUT_FORMAT, DEBUG_MODE)
+    output, dregs, type, header = compute_column_for_goal(goal, word1, word2)
     print_html_column(goal, output, dregs, word1, word2, type, header, width, i == goals.length - 1)
   end
+end
+
+# Per-column dispatch: short-circuits with a "semantically promiscuous"
+# message when the goal's relatedness cue is a stop word, otherwise calls
+# the normal +rhymecrime+ pipeline.
+#
+# Why per-column rather than at the top of +compute_and_print_html_middle+:
+# the +rhymes+ goal has no relatedness cue (+feedback_cue_for_goal → nil+),
+# so a stop word in +word1+ doesn't impair it — "the" really does rhyme
+# with "we" / "she" / "be", and we want that column to keep working. Only
+# the relatedness-bearing goals (+related+, +set_related+, +related_rhymes+,
+# +pair_related+) need to bail out, and the cue-mapping table that says
+# *which* word matters per goal is exactly +feedback_cue_for_goal+ — the
+# same one that drives the thumbs-feedback widget. Reusing it keeps the
+# "what's the cue here" definition single-sourced.
+#
+# Returning a synthetic +(:bad_input, header)+ tuple piggybacks on
+# +print_html_column_data+'s existing +emit_line header+ branch — no new
+# render path needed.
+#
+# Linking parity: stop words are also stripped of their +<a href=...>+ in
+# +print_word+ (see +link_word+), so a user who somehow lands on a stop word
+# through search or a typed URL doesn't get tempted by clickable rhymes that
+# would only land them back on this same dead-end message.
+def compute_column_for_goal(goal, word1, word2)
+  cue = feedback_cue_for_goal(goal, word1, word2)
+  promiscuous = stop_words_in_cue(cue)
+  if promiscuous.any?
+    return [[], [], :bad_input, promiscuous_message(promiscuous)]
+  end
+  rhymecrime(word1, word2, goal, OUTPUT_FORMAT, DEBUG_MODE)
+end
+
+# Returns the unique stop words in the goal's relatedness cue. +cue+ is
+# whatever +feedback_cue_for_goal+ returned: nil (no cue), a String, or an
+# Array of Strings (+pair_related+). +Array(cue)+ flattens all three to a
+# uniform iterable; +uniq+ keeps the message stable when the same stop word
+# fills both slots of a +pair_related+ query (+the / the+). Empty / blank
+# cue components are pre-filtered so a vacuous query (+word1=""+) doesn't
+# accidentally trigger the message.
+def stop_words_in_cue(cue)
+  Array(cue).reject { |c| c.nil? || c.to_s.empty? }.uniq.select { |c| stop_word?(c) }
+end
+
+# Format the abort message. Always singular: when both slots of a
+# +pair_related+ query are stop words (+the / and+), pluralizing inline
+# produces awkward English ("the and and are..."), so we just name the
+# first offender. Loses a bit of info in that rare case, but the user
+# can see the full query in the form/URL anyway.
+def promiscuous_message(stop_words)
+  "#{stop_words.first} is semantically promiscuous; can't compute related words"
 end
 
 # Per-column focal word for tuple coloring. Every slot in a +set_related+ tuple
