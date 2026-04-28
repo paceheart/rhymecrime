@@ -23,6 +23,13 @@ group :development, :test do
                     # so a wrong +AWS_PROFILE+ surfaces immediately. Lambda
                     # runtime never touches STS; keeping this out of the main
                     # group keeps it out of the deployment bundle.
+  gem "rexml"       # Ruby 3.4 demoted +rexml+ from default-gem to bundled-gem,
+                    # which means +bundle exec+ won't auto-load it. +aws-sdk-sts+
+                    # uses Query (XML) protocol and falls over on first call
+                    # without one of {rexml, ox, oga, libxml, nokogiri}. Pure-Ruby
+                    # +rexml+ is the lightest option and has no native build step.
+                    # Dev/test only — +aws-sdk-dynamodb+ (Lambda runtime) speaks
+                    # JSON, so the prod bundle still doesn't pull this in.
   gem "numo-narray" # BLAS-backed dot products for the MPNet sense-vector
                     # cosines in +lib/rhymecrime/relatedness/signals.rb+.
                     # Offline / local-dev only — signals.rb isn't loaded at

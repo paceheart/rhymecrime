@@ -26,8 +26,8 @@ $LOAD_PATH.unshift File.expand_path("../lib", __dir__)
 require "json"
 require "optparse"
 require "aws-sdk-dynamodb"
-require "aws-sdk-sts"
 require "sqlite3"
+require_relative "_aws_preflight"
 require_relative "../lib/rhymecrime/data_source"
 require_relative "../lib/rhymecrime/dict/utils_rhyme"
 
@@ -44,33 +44,14 @@ OptionParser.new do |o|
   o.on("--related=PATH", "Path to local SQLite store built by bin/precompute-relatedness") { |p| related_path = File.expand_path(p) }
 end.parse!
 
-profile = ENV["AWS_PROFILE"].to_s
-if profile.empty?
-  abort <<~MSG
-    Error: AWS_PROFILE is required.
-
-    This script writes to a +rhymecrime+ DynamoDB table. Without an explicit
-    profile, the AWS SDK picks whichever credentials its default chain finds
-    first, which is how previous deploys for this app accidentally hit a
-    work-account stack.
-
-    Re-run with the profile pointing at your personal AWS account:
-
-      AWS_PROFILE=paceheart ./bin/upload-to-dynamodb#{original_argv.empty? ? "" : " " + original_argv.join(" ")}
-
-    Available profiles on this machine: +aws configure list-profiles+.
-  MSG
-end
-
 table = Rhymecrime::DataSource.table_name
 region = ENV.fetch("AWS_REGION", "us-east-1")
 
-# Pass +profile+ explicitly to both clients rather than relying on the SDK's
-# env-var pickup. Belt-and-suspenders against a stray +unset AWS_PROFILE+
-# between the guard above and the first DDB call.
-sts_client = Aws::STS::Client.new(region: region, profile: profile)
-identity = sts_client.get_caller_identity
-puts "==> AWS_PROFILE=#{profile} → account=#{identity.account} arn=#{identity.arn}"
+profile, _identity = AwsPreflight.preflight!(
+  script_name: "upload-to-dynamodb",
+  original_argv: original_argv,
+  region: region,
+)
 puts "    region=#{region} table=#{table}"
 
 client = Aws::DynamoDB::Client.new(region: region, profile: profile)

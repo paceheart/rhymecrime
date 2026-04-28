@@ -9873,3 +9873,10 @@ pirate,tiptoe,related_ish,recoup pirate awesomeness
 pirate,treasure,related,recoup pirate awesomeness
 pirate,undaunted,related_ish,recoup pirate awesomeness
 pirate,vigilante,related_ish,recoup pirate awesomeness
+pirate,explores,related,feedback: 1 up / 0 down
+pirate,extort,related,feedback: 1 up / 0 down
+pirate,fort,related,feedback: 1 up / 0 down
+pirate,idiosyncratic,unrelated,feedback: 0 up / 1 down
+pirate,port,related,feedback: 1 up / 0 down
+pirate,spores,unrelated,feedback: 0 up / 1 down
+pirate,transparent,unrelated,feedback: 0 up / 1 down
