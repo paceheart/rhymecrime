@@ -109,7 +109,7 @@ def load_wiktionary
       # in +compute_lemma_map+ Source A. Suppress the paradigm contribution here and let
       # +prune_obsolete_alt_of_only_headwords!+ in dict.rb drop the ghost from word_dict.
       # +collect_variant_senses+ still runs below so the evidence is available to
-      # +corpus_variants.rb+ (harmless; its +headwords_share_rime?+ gate already filters).
+      # +corpus_variants.rb+ (harmless; its +headwords_share_full_pron?+ gate already filters).
       obsolete_target = kaikki_record_obsolete_alt_of_only_target(obj, word)
       if obsolete_target && !obsolete_only_blocked.include?(word)
         existing = obsolete_only_candidate[word]
