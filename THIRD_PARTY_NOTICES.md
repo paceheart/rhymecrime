@@ -1,26 +1,15 @@
 # Third-Party Notices
 
-RhymeCrime depends on several externally-licensed lexical resources. This
-document records attribution and license terms for every such resource the
-project bundles directly **or** fetches at build time. Where data is vendored
-in `corpora/`, the upstream license file is also checked in alongside the
-data when one exists separately.
+RhymeCrime stands on the shoulders of a bunch of lexical resources, some of
+which are bundled with this repo and others of which are fetched during setup.
 
-The list is grouped by where the data lives at build time:
-
-  - **Vendored** — checked into git under `corpora/<name>/` (force-added
-    past the `corpora/*` rule in `.gitignore`).
-  - **Fetched at build** — downloaded by `bin/setup-corpora` and never
-    redistributed by this repository.
-
-Generated artifacts derived from any CC-BY-SA input (e.g.
-`generated/numberbatch_vectors.msgpack`, `generated/conceptnet_edges.json`)
-inherit CC-BY-SA terms; if you redistribute a build of RhymeCrime that ships
-those artifacts, attribution is required.
+Generated artifacts derived from any CC-BY-SA input inherit CC-BY-SA terms;
+if you redistribute a build of RhymeCrime that ships those artifacts,
+attribution is required.
 
 ---
 
-## Vendored
+## Bundled
 
 ### CMU Pronouncing Dictionary (`corpora/cmudict/`)
 
@@ -61,13 +50,6 @@ snapshot.
   - Upstream: <https://wordlist.aspell.net/12dicts/> /
     <https://sourceforge.net/projects/wordlist/files/12dicts/>
   - License: public domain (per the upstream 12dicts distribution).
-
-### `neol_supplement.txt` (`curated/neol_supplement.txt`)
-
-Locally-curated additions to the neol list. No upstream — maintained in this
-repository alongside the other hand-edited inputs under `curated/`.
-
-  - License: same project license as the rest of this repository.
 
 ### VarCon (`corpora/varcon/`)
 
