@@ -281,7 +281,18 @@ n = lemmas.size
 threads = [threads, n].min if n.positive?
 threads = 1 if threads < 1
 
-puts "Precompute cues: #{n} preferred common lemmas with rhymes (#{before_n} distinct common lemmas in word_dict before filter)"
+# Cue universe is +cue_word?+: in +word_dict+, freq > +RARE_FREQ_MAX+,
+# preferred surface == self. The filter does *not* check rhyme partners or
+# even pronunciations — rhymeless lemmas (+music+ / +concerto+ / +algebra+ /
+# +quarterback+) are kept on purpose because the runtime can legitimately
+# ask +thematically_related?+ about any common headword. +pirate+ for
+# example has +prons=[]+ and +headword_has_nonidentical_rhyme_partner?=false+
+# yet still surfaces as a cue here (its +set_related+ row is rich because
+# pirate's *related* words rhyme with each other — +[handsome, ransom]+,
+# +[acquire, crier, entire, squire]+ — even though pirate itself has no
+# rhyme partners). See +cue_word?+ vs +relatedness_target_word?+ in
+# +lib/rhymecrime/dict/rime.rb+.
+puts "Precompute cues: #{n} preferred common lemmas (#{before_n} distinct common lemmas in word_dict before filter; rhymeless cues kept — see comment above)"
 unless threads_user_supplied
   # Show how the default fell out so it's obvious whether CPU or RAM is the
   # binding constraint; users with more RAM can then override with +--threads+.

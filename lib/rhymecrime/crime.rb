@@ -1069,112 +1069,86 @@ end
 # already-kept past-tense sibling tuple. Production runtime keeps it +false+.
 $disable_cross_tuple_redundancy_pruning = false
 
-def prune_suffix_redundant_rhyming_tuples(tuples, focal_word = nil)
+# Pure focal-independent prune of phases -1, 0, and 0.5a from
+# +prune_suffix_redundant_rhyming_tuples+. Returns either:
+#
+#   * +nil+ — tuple was dropped wholesale at phase -1 (all stop words —
+#     +above / of+) or phase 0 (all members are spelling variants of one
+#     root — +desperados / desperadoes+).
+#   * a (possibly shorter) tuple — survived the wholesale-drop phases;
+#     phase 0.5a may have removed prefix-derivation members whose
+#     +rhyme_syllables_string+ matched a base already present in the
+#     tuple (+[healthy, stealthy, unhealthy] → [healthy, stealthy]+,
+#     +[recorded, prerecorded, unrecorded] → [recorded]+).
+#
+# Pure function of +tup+: no $debug_pruned_tuples / VERBOSE side effects,
+# no consultation of +focal_word+. Same +tup+ always yields the same
+# result. This is the seam exposed for an en-masse precompute caller that
+# wants to memoize the focal-independent prune work across many cues
+# (~50× hit rate when iterating all ~28K +set_related#+ rows; the same
+# tuple recurs across many cues' tuple sets) before layering the
+# focal-dependent +condense_tuple_homophones+ + the cross-tuple sweep on
+# top per cue.
+#
+# Phase 0.5b (+condense_tuple_homophones+) intentionally lives outside
+# this helper because it's the one prune step that consults +focal_word+
+# (it picks a winner among full-pronunciation homophones by stored
+# relatedness to the cue) and so can't be cached cue-agnostically.
+def prune_phases_minus_1_through_0_5a(tup)
+  return nil if tup.all? { |w| stop_word?(w) }
+  return nil if rhyming_tuple_all_spelling_variants?(tup)
+  condense_tuple_derived_forms(tup)
+end
+
+# Cross-tuple redundancy sweep: drops tuples that differ from another
+# already-kept tuple only by parallel +Inflect+ suffixes, hidden-base
+# parallelism, or lemma-multiset inclusion. Operates on a pre-sorted list
+# of tuples that have already been through phases -1, 0, 0.5a, 0.5b, 0.6.
+#
+# Focal-independent: every redundancy decision routes through
+# +rhyming_tuple_redundant_with?+, whose entire transitive call graph is
+# pure over +(ear, tup)+ (no +focal_word+ dependency anywhere). Safe to
+# share a +rhyming_tuple_redundant_with?+ memoization layer across cues;
+# the only cue-specific input is the per-cue tuple list itself.
+#
+# Indexing: tuples are bucketed by an "inflection-key" fingerprint
+# (+tuple_redundancy_keys_for_word+) so each new +tup+ only compares
+# against +kept+ entries that share at least one key. Every branch in
+# +rhyming_tuple_redundant_with?+ ultimately routes through
+# +inflection_suffix_kind_from_base+,
+# +Inflect.raw_candidate_bases_for_inflected+, or
+# +rhyming_tuple_word_bases+ — all three require the two tuples' words to
+# share a lemma / inflection base, so disjoint-fingerprint tuples can be
+# pruned from consideration without ever invoking the predicate. This
+# collapses the original O(N^2) scan to roughly O(N * avg_bucket_size)
+# and is the difference between cat (654 tuples → 11 s) and pirate (~900
+# tuples) in the 29-second API Gateway budget — see +[timing]
+# set_related[<word>] prune+ in CloudWatch under
+# +RHYMECRIME_LOG_TIMING=1+.
+#
+# Insertion-order semantics are preserved: +kept+ is a Hash (which
+# iterates in insertion order on MRI), so +kept.values+ at the bottom
+# returns the same sequence as the previous +kept+ Array would have.
+# +Set+ is used for the inverted index so candidate-lookup is O(1) per
+# key.
+#
+# The fingerprint must be a *superset* of every reachable redundancy
+# match or we silently drop comparisons. +rhyming_tuple_word_bases+ alone
+# is too narrow because +inflection_suffix_kind_from_base+ has four
+# extensions beyond +Inflect.match_suffix_kind+ that don't show up in the
+# Inflect base table: +:y_adj+ (+health → healthy+), +:er+ via +-or+
+# (+sail → sailor+), +:ing_gdrop+ (+fakin' → faking+), and +:ings+
+# (+foist → foistings+, mostly already covered by Inflect's +-s+
+# stripping but mirrored here for safety).
+# +tuple_redundancy_keys_for_word+ inlines those four reversals against
+# the surface, *unvalidated* — false positives in the pre-filter just
+# mean we run the real predicate on a few extra pairs, which is cheap.
+# False negatives would silently change pruning output (regression in
+# +spec/prune_redundant_tuples_spec.rb+).
+def prune_cross_tuple_redundancy_sweep(sorted_tuples)
   verbose_prunes = ENV["VERBOSE"] == "1"
   debug_pruning = $debug_pruning
-  # Snapshot the input so the caller's array is never mutated; the original
-  # is not otherwise needed because the pruned set is populated in-place.
-  _original = tuples.dup if debug_pruning
 
-  # Phase -1: drop tuples composed entirely of stop words (e.g. +above / of+). A single
-  # non-stop-word member is enough to keep the tuple alive (+above / dove / of+ survives).
-  tuples = tuples.reject do |tup|
-    next false unless tup.all? { |w| stop_word?(w) }
-    if verbose_prunes
-      puts "pruned rhyming tuple (all stop words): #{tup.join(' / ')}"
-    end
-    $debug_pruned_tuples << tup if debug_pruning
-    !debug_pruning
-  end
-
-  # Phase 0: drop tuples whose members are all spelling variants of a single root (the tuple
-  # carries no information beyond the canonical surface the renderer already emits).
-  tuples = tuples.reject do |tup|
-    next false unless rhyming_tuple_all_spelling_variants?(tup)
-    if verbose_prunes
-      puts "pruned rhyming tuple (all spelling variants of one root): #{tup.join(' / ')}"
-    end
-    $debug_pruned_tuples << tup if debug_pruning
-    !debug_pruning
-  end
-
-  # Phase 0.5: within each tuple, condense redundant members.
-  # (a) +condense_tuple_derived_forms+ drops derived forms whose base form is already
-  #     present — same +rhyme_syllables_string+ plus a +COMMON_PREFIXES+ strip:
-  #     +[healthy, stealthy, unhealthy] \to [healthy, stealthy]+;
-  #     +[recorded, prerecorded, unrecorded, ...] \to [recorded, ...]+.
-  # (b) +condense_tuple_homophones+ then breaks residual same-full-pronunciation
-  #     clusters (+coral+/+choral+, +flour+/+flower+, +write+/+right+) that aren't
-  #     prefix derivations of each other, keeping the member most closely related to
-  #     +focal_word+ (tie-break: unigram frequency, then alphabetical). Requires a
-  #     non-nil +focal_word+; otherwise this sub-pass is a no-op.
-  tuples = tuples.map do |tup|
-    condensed = condense_tuple_derived_forms(tup)
-    condensed = condense_tuple_homophones(condensed, focal_word)
-    if verbose_prunes && condensed.size < tup.size
-      dropped = tup - condensed
-      puts "condensed rhyming tuple (dropped #{dropped.inspect}): #{tup.join(' / ')} -> #{condensed.join(' / ')}"
-    end
-    if debug_pruning
-      (tup - condensed).each { |w| $debug_pruned_tuples << [w] } # record each dropped member as a singleton
-      tup # keep original under debug
-    else
-      condensed
-    end
-  end
-
-  # Phase 0.6: drop tuples whose condensation collapsed them below 2 members.
-  # A "rhyming tuple" with one (or zero) word is no longer a rhyme — the input
-  # was a pure prefix-derivation pair like +[legitimate, illegitimate]+ or a
-  # homophone cluster like +[coral, choral]+, and condense_tuple_* picked the
-  # one keeper. Without this drop the singleton would survive the pruner and
-  # render as a single-word "tuple". Callers (find_rhyming_tuples) already
-  # filter +size < 2+ on the way out, but the unit pruner itself owes the same
-  # contract so spec assertions on +prune_suffix_redundant_rhyming_tuples+
-  # output match what the UI ultimately renders.
-  tuples = tuples.reject do |tup|
-    next false if tup.size >= 2
-    if verbose_prunes
-      puts "pruned rhyming tuple (collapsed below 2 members during condensation): #{tup.join(' / ')}"
-    end
-    $debug_pruned_tuples << tup if debug_pruning
-    !debug_pruning
-  end
-
-  return tuples.sort if $disable_cross_tuple_redundancy_pruning
-
-  sorted = tuples.sort
-
-  # Cross-tuple redundancy: index tuples by an "inflection-key" fingerprint so
-  # each new +tup+ only compares against +kept+ entries that share at least
-  # one key. Every branch in +rhyming_tuple_redundant_with?+ ultimately routes
-  # through +inflection_suffix_kind_from_base+,
-  # +Inflect.raw_candidate_bases_for_inflected+, or +rhyming_tuple_word_bases+
-  # — all three require the two tuples' words to share a lemma / inflection
-  # base, so disjoint-fingerprint tuples can be pruned from consideration
-  # without ever invoking the predicate. This collapses the original O(N^2)
-  # scan to roughly O(N * avg_bucket_size) and is the difference between cat
-  # (654 tuples → 11 s) and pirate (~900 tuples) in the 29-second API Gateway
-  # budget — see +[timing] set_related[<word>] prune+ in CloudWatch under
-  # +RHYMECRIME_LOG_TIMING=1+.
-  #
-  # Insertion-order semantics are preserved: +kept+ is a Hash (which iterates
-  # in insertion order on MRI), so +kept.values+ at the bottom returns the
-  # same sequence as the previous +kept+ Array would have. +Set+ is used for
-  # the inverted index so candidate-lookup is O(1) per key.
-  #
-  # The fingerprint must be a *superset* of every reachable redundancy match
-  # or we silently drop comparisons. +rhyming_tuple_word_bases+ alone is too
-  # narrow because +inflection_suffix_kind_from_base+ has four extensions
-  # beyond +Inflect.match_suffix_kind+ that don't show up in the Inflect base
-  # table: +:y_adj+ (+health → healthy+), +:er+ via +-or+ (+sail → sailor+),
-  # +:ing_gdrop+ (+fakin' → faking+), and +:ings+ (+foist → foistings+, mostly
-  # already covered by Inflect's +-s+ stripping but mirrored here for safety).
-  # +tuple_redundancy_keys_for_word+ inlines those four reversals against the
-  # surface, *unvalidated* — false positives in the pre-filter just mean we
-  # run the real predicate on a few extra pairs, which is cheap. False
-  # negatives would silently change pruning output (regression in
-  # +spec/prune_redundant_tuples_spec.rb+).
   base_index = Hash.new { |h, k| h[k] = Set.new }
   kept = {}
   kept_bases = {}
@@ -1186,7 +1160,7 @@ def prune_suffix_redundant_rhyming_tuples(tuples, focal_word = nil)
     set
   end
 
-  sorted.each do |tup|
+  sorted_tuples.each do |tup|
     bases = bases_for_tuple.call(tup)
     candidate_idx = Set.new
     bases.each { |b| candidate_idx.merge(base_index[b]) }
@@ -1245,6 +1219,125 @@ def prune_suffix_redundant_rhyming_tuples(tuples, focal_word = nil)
   end
 
   kept.values
+end
+
+# Drop rhyming tuples that differ from another tuple only by parallel +Inflect+ suffixes
+# (e.g. plural or past tense of the same set). Handles four regimes:
+#
+#   0. whole-tuple spelling-variant drop: all members are alternate spellings of one root
+#      (+desperados / desperadoes+ → drop)
+#   1. same-length base/inflected pair: keep the base, prune the inflected
+#   2. richer-vs-smaller inflectional subset: keep the richer tuple
+#   3. base-vs-inflected-superset (richer inflected has extra members not in the base): keep the
+#      richer inflected
+#
+# Pipeline (numbered to match the inline comments below):
+#
+#   * Phase -1 + 0 + 0.5a — focal-independent per-tuple work, factored
+#     into +prune_phases_minus_1_through_0_5a+ so an en-masse caller can
+#     memoize the result. Wholesale drops (all-stop-word, all-spelling-
+#     variants tuples) and within-tuple +COMMON_PREFIXES+ derivation
+#     condensation (+[healthy, stealthy, unhealthy] → [healthy,
+#     stealthy]+).
+#   * Phase 0.5b — +condense_tuple_homophones+. The *only* prune step
+#     that consults +focal_word+: breaks residual full-pronunciation
+#     homophone clusters (+coral+/+choral+, +flour+/+flower+,
+#     +write+/+right+) by picking the member most closely related to the
+#     cue (tie-break: unigram frequency, then alphabetical). Requires a
+#     non-nil +focal_word+; otherwise this sub-pass is a no-op.
+#   * Phase 0.6 — drop tuples whose condensation collapsed them below 2
+#     members. A "rhyming tuple" with one (or zero) word is no longer a
+#     rhyme — the input was a pure prefix-derivation pair like
+#     +[legitimate, illegitimate]+ or a homophone cluster like +[coral,
+#     choral]+, and condense_tuple_* picked the one keeper. Without this
+#     drop the singleton would survive the pruner and render as a
+#     single-word "tuple". Callers (find_rhyming_tuples) already filter
+#     +size < 2+ on the way out, but the unit pruner itself owes the same
+#     contract so spec assertions on
+#     +prune_suffix_redundant_rhyming_tuples+ output match what the UI
+#     ultimately renders.
+#   * Cross-tuple sweep — focal-independent O(N * avg_bucket_size) pass
+#     factored into +prune_cross_tuple_redundancy_sweep+. Drops tuples
+#     redundant with another already-kept tuple under any of the
+#     +rhyming_tuple_redundant_with?+ branches.
+#
+# Checks are bidirectional against the kept list because +tuples.sort+ does not reliably
+# front-load base forms (e.g. +"artilleries" < "artillery"+ because +"i" < "y"+).
+#
+# Set +VERBOSE=1+ in the environment to print each pruned tuple (and the kept tuple it matched);
+# this is separate from +$debug_mode+ / +debug+, which remain very chatty elsewhere.
+#
+# When +$debug_pruning+ is true (set per-request from the +debug=1+ URL param), tuples that
+# would normally be dropped are instead retained in the returned array AND recorded in
+# +$debug_pruned_tuples+, so the renderer can display them inline, greyed out, alongside
+# the kept tuples.
+def prune_suffix_redundant_rhyming_tuples(tuples, focal_word = nil)
+  verbose_prunes = ENV["VERBOSE"] == "1"
+  debug_pruning = $debug_pruning
+
+  # Phases -1, 0, 0.5a — focal-independent per-tuple work via the pure
+  # helper. The orchestrator handles the verbose / debug-pruning side
+  # effects so the helper itself stays a pure function of its tuple.
+  tuples = tuples.flat_map do |tup|
+    survivor = prune_phases_minus_1_through_0_5a(tup)
+    if survivor.nil?
+      # Wholesale drop at phase -1 or phase 0.
+      reason = tup.all? { |w| stop_word?(w) } ? "all stop words" : "all spelling variants of one root"
+      puts "pruned rhyming tuple (#{reason}): #{tup.join(' / ')}" if verbose_prunes
+      $debug_pruned_tuples << tup if debug_pruning
+      next debug_pruning ? [tup] : []
+    end
+    # Phase 0.5a may have shortened the tuple. Under debug we retain the
+    # original tup so the renderer keeps showing it (with the dropped
+    # member recorded as a singleton in +$debug_pruned_tuples+); phase
+    # 0.5b downstream then runs on the retained original, which is
+    # semantically equivalent because prefix-derivation drops (0.5a) and
+    # full-pronunciation homophone clusters (0.5b) are disjoint by
+    # construction (a prefix derivation has an extra phoneme prefix that
+    # makes it phonologically distinct from its base).
+    if verbose_prunes && survivor.size < tup.size
+      dropped = tup - survivor
+      puts "condensed rhyming tuple (dropped #{dropped.inspect}, derived forms): #{tup.join(' / ')} -> #{survivor.join(' / ')}"
+    end
+    if debug_pruning
+      (tup - survivor).each { |w| $debug_pruned_tuples << [w] }
+      [tup]
+    else
+      [survivor]
+    end
+  end
+
+  # Phase 0.5b — focal-dependent. Within each tuple, break full-
+  # pronunciation homophone clusters down to one winner by stored
+  # relatedness to +focal_word+. This is the only prune step that
+  # consults the cue.
+  tuples = tuples.map do |tup|
+    condensed = condense_tuple_homophones(tup, focal_word)
+    if verbose_prunes && condensed.size < tup.size
+      dropped = tup - condensed
+      puts "condensed rhyming tuple (dropped #{dropped.inspect}, homophones): #{tup.join(' / ')} -> #{condensed.join(' / ')}"
+    end
+    if debug_pruning
+      (tup - condensed).each { |w| $debug_pruned_tuples << [w] }
+      tup
+    else
+      condensed
+    end
+  end
+
+  # Phase 0.6 — drop tuples whose condensation collapsed them below 2 members.
+  tuples = tuples.reject do |tup|
+    next false if tup.size >= 2
+    if verbose_prunes
+      puts "pruned rhyming tuple (collapsed below 2 members during condensation): #{tup.join(' / ')}"
+    end
+    $debug_pruned_tuples << tup if debug_pruning
+    !debug_pruning
+  end
+
+  return tuples.sort if $disable_cross_tuple_redundancy_pruning
+
+  prune_cross_tuple_redundancy_sweep(tuples.sort)
 end
 
 # Related headwords for tuple/pair construction: common (freq > +RARE_FREQ_MAX+) and preferred surface
@@ -1593,6 +1686,17 @@ end
 def print_word(word, focal_word=false, cue: nil)
   word = word.gsub(/\(.*\)/, '') # remove stuff in parentheses
   got_rhymes = !pronunciations(word).empty?
+  # Stop words ("the", "of", "and", ...) get rendered (mostly via the rhymes
+  # column — "the" rhymes with "we" / "she" / "be") but we strip the click
+  # link off them: clicking a stop word would land the user on a page where
+  # the related/set_related columns short-circuit with the "semantically
+  # promiscuous" message in +frontend.rb+, which is a dead-end UX. Letting
+  # them rhyme is fine, but linking them is not. The +.stop-word+ CSS class
+  # below paints them in the "non-actionable text" color (+#eeeefa+); without
+  # it they'd inherit the +.output_p+ container's cyan and look identical to
+  # clickable links.
+  is_stop_word = stop_word?(word)
+  link_word = got_rhymes && !is_stop_word
   # Decided here (not at +emit_relatedness_feedback_widget+'s call site) so the
   # +<nobr>+ wrapper below uses exactly the same predicate as the widget itself
   # — we never want a +<nobr>+ that wraps just the word with no thumbs to glue
@@ -1610,7 +1714,7 @@ def print_word(word, focal_word=false, cue: nil)
   # and it's understood by every shipping browser; if it ever needs swapping
   # for the standards-track equivalent, the change is span+class right here.
   cgi_print "<nobr>" if emit_thumbs
-  if(got_rhymes)
+  if(link_word)
     # @todo urlencode
     cgi_print "<a href='/?word1=#{word}'>"
   end
@@ -1618,14 +1722,21 @@ def print_word(word, focal_word=false, cue: nil)
   # is supplied (e.g. +set_related+ tuples, where every slot should be related
   # to +word1+). Skipped when +focal_word+ is falsy (word lists that have no
   # single focal, or +pair_related+ tuples whose two slots use different focals).
+  # Stop words can never set both branches simultaneously: the +set_related+
+  # rendering path that drives +similarity_span+ short-circuits before
+  # +print_word+ when +word1+ is a stop word (see +compute_column_for_goal+),
+  # and the rhymes columns that would render a stop word as a result don't
+  # set +focal_word+.
   similarity_span = focal_word && focal_word != "" && word != focal_word
   if similarity_span
     cgi_print "<span style='color: #{word_similarity_color(word, focal_word)}'>"
+  elsif is_stop_word
+    cgi_print "<span class='stop-word'>"
   end
   display_word = word.gsub('_', ' ')
   emit_text display_word
-  cgi_print "</span>" if similarity_span
-  if(got_rhymes)
+  cgi_print "</span>" if similarity_span || is_stop_word
+  if(link_word)
     cgi_print "</a>"
   end
   if($display_word_similarities)
