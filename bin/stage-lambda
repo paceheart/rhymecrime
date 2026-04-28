@@ -33,9 +33,16 @@
 #   curated/                        hand-curated data files (rarity.csv, etc.)
 #   generated/spelling_variants_auto.txt    \ small files crime.rb /
 #   generated/hyphen_variant_map.json       | utils_rhyme.rb open with
-#   generated/word_lemma_map.msgpack        | File.read in DDB mode.
+#   generated/word_lemma_map.msgpack        | File.read at runtime.
 #   generated/word_semantic_base_map.msgpack/ See the require-graph audit
 #                                            below if you're tempted to add.
+#   generated/word_dict.msgpack             \ runtime-canonical lexicon /
+#   generated/rime_dict.msgpack             | rime cohort. Replaced the
+#                                            | DDB +word#+ / +rime#+ partitions
+#                                            | once the msgpacks proved small
+#                                            | enough to bundle (~6 MB total);
+#                                            | see WORD_DICT_MSGPACK_FILENAME
+#                                            | in dict/utils_rhyme.rb.
 #
 # What does NOT ship (intentional):
 #   corpora/                        build-time only; runtime reads DynamoDB
@@ -81,6 +88,8 @@ cp generated/spelling_variants_auto.txt     "$STAGING/generated/"
 cp generated/hyphen_variant_map.json        "$STAGING/generated/"
 cp generated/word_lemma_map.msgpack         "$STAGING/generated/"
 cp generated/word_semantic_base_map.msgpack "$STAGING/generated/"
+cp generated/word_dict.msgpack              "$STAGING/generated/"
+cp generated/rime_dict.msgpack              "$STAGING/generated/"
 
 echo
 echo "staged. $(du -sh "$STAGING" | cut -f1) in $STAGING/"

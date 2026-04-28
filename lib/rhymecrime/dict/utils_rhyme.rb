@@ -12,6 +12,25 @@ require_relative "../pace_utils"
 
 RIME_DICT_FILENAME = "rime_dict.txt"
 WORD_DICT_FILENAME = "word_dict.txt"
+# MessagePack mirrors of the +.txt+ artifacts above. Same shape semantics —
+# +word_dict.msgpack+ is +{word => [freq, prons, lemma_or_nil]}+ where +prons+
+# is an Array of space-joined ARPABET strings (split on load to feed
+# +Pronunciation.new+); +rime_dict.msgpack+ is +{rime => [w1, w2, ...]}+. Self-
+# lemmas are stored as +nil+ (matching +save_word_lemma_map!+'s policy) and
+# materialized back to the headword on load.
+#
+# These are the runtime-canonical artifacts: +word_dict()+ / +rdict()+ in
+# +crime.rb+ load these in BOTH local-dev and Lambda mode (the DDB +word#+ /
+# +rime#+ partitions were retired — see +bin/upload-to-dynamodb+ and
+# +bin/stage-lambda+). The +.txt+ files are kept on disk for human inspection
+# and for tools like +bin/audit-word+ that grep them, but the runtime never
+# reads them when the +.msgpack+ is present.
+#
+# Built by +rebuild_rhymecrime_dictionaries+ alongside the +.txt+ saves so a
+# single +./bin/dict-build+ refreshes both surfaces; see +bin/build+ and
+# +bin/dict-build+ for the full pipeline.
+WORD_DICT_MSGPACK_FILENAME = "word_dict.msgpack"
+RIME_DICT_MSGPACK_FILENAME = "rime_dict.msgpack"
 # Flat +{word => canonical_lemma}+ table, emitted by dict-build right after
 # +save_word_dict+ and read into +$word_to_lemma+ at runtime. Exists so the
 # hot +lemma(w)+ path (hit thousands of times per page render while coloring
@@ -204,10 +223,6 @@ US_UK_IZE_SUFFIXES = [
 US_UK_IZE_ZONLY_EXCEPTIONS = %w[size seize capsize prize maize].freeze
 
 def word_dict_includes_headword?(w)
-  if defined?(Rhymecrime::DataSource) && Rhymecrime::DataSource.dynamodb?
-    return Rhymecrime::DynamoRuntime.headword?(w)
-  end
-
   defined?($word_dict) && $word_dict.is_a?(Hash) && !$word_dict.empty? && $word_dict.key?(w)
 end
 
@@ -217,9 +232,6 @@ end
 # preferred form of a well-pronounced counterpart: a prefix-less entry with empty prons
 # can't rhyme, so making it the canonical surface strands the real word in no cohort.
 def word_dict_includes_pronounced_headword?(w)
-  if defined?(Rhymecrime::DataSource) && Rhymecrime::DataSource.dynamodb?
-    return Rhymecrime::DynamoRuntime.headword?(w) # Dynamo export already drops pronless entries.
-  end
   return false unless defined?($word_dict) && $word_dict.is_a?(Hash) && !$word_dict.empty?
   entry = $word_dict[w]
   return false unless entry
@@ -1851,6 +1863,108 @@ def save_word_dict(word_dict, lemma_map = nil)
     f.puts
   end
   f.close
+end
+
+# Emit the runtime-canonical +word_dict.msgpack+ — same +[freq, prons, lemma]+
+# triple shape as the in-memory hash returned by +load_word_dict+, with two
+# storage tweaks:
+#
+#   * +prons+ on disk is an Array of space-joined ARPABET strings (e.g.
+#     +["K AE1 T", "K AE2 T"]+) rather than an Array of +Pronunciation+
+#     objects — keeps the file ~30% smaller than the equivalent nested array
+#     of phoneme strings (one msgpack string header per pronunciation rather
+#     than per phoneme) and matches the +pron1|pron2+ wire format we already
+#     use in +word_dict.txt+, so +load_word_dict_msgpack+ can pass each
+#     element straight to +pronstr.split+ → +Pronunciation.new+.
+#   * +lemma+ is stored as +nil+ when it equals the headword (matches
+#     +save_word_lemma_map!+'s "drop self-lemmas" policy). +load_word_dict_
+#     msgpack+ resolves +nil+ back to the headword so the runtime contract
+#     ("entry[2] is always a non-nil string equal to lemma or word") holds.
+#
+# Called right after +save_word_dict+ in +rebuild_rhymecrime_dictionaries+ so
+# a single dict-build refreshes both the human-readable +.txt+ and the
+# runtime-loaded +.msgpack+. The +Pronunciation#to_s+ join is cheap (~200K
+# entries × 1-2 prons of 4-8 phonemes), well under the rest of the build.
+def save_word_dict_msgpack!(word_dict, lemma_map = nil)
+  ensure_generated_dict_dir!
+  path = generated_dict_path_under_dict_dir(WORD_DICT_MSGPACK_FILENAME)
+  obj = {}
+  word_dict.each do |word, info|
+    freq, prons = info
+    lem = lemma_map ? lemma_map[word] : (info[2] || word)
+    pron_strs = (prons || []).map(&:to_s)
+    stored_lemma = (lem && lem != word) ? lem : nil
+    obj[word] = [freq.to_i, pron_strs, stored_lemma]
+  end
+  MessagePackUtils.pack_and_save(path, obj)
+  size_mb = (File.size(path).to_f / 1024 / 1024).round(2)
+  puts "Wrote #{obj.size} word_dict entries to #{WORD_DICT_MSGPACK_FILENAME} (#{size_mb} MB)"
+end
+
+# Runtime mirror of +load_word_dict+ that reads +word_dict.msgpack+ instead
+# of streaming the +.txt+ file. Reconstitutes +Pronunciation+ instances and
+# resolves +nil+ lemmas back to the headword so the returned hash is
+# byte-for-byte equivalent to what +load_word_dict+ would have produced from
+# the +.txt+ surface — every downstream consumer (+lexicon_word_entry+,
+# +pronunciations+, +lemma+ fallback, etc.) is shape-agnostic between the
+# two loaders.
+#
+# Returns +nil+ when the msgpack doesn't exist (caller falls back to the
+# +.txt+ loader for fresh checkouts pre-dict-build); raises through the
+# usual MessagePack errors otherwise.
+def load_word_dict_msgpack
+  path = generated_dict_path(WORD_DICT_MSGPACK_FILENAME)
+  return nil unless File.exist?(path)
+  raw = MessagePackUtils.load_and_unpack(path)
+  word_dict = {}
+  raw.each do |word, entry|
+    freq, pron_strs, stored_lemma = entry
+    prons = []
+    (pron_strs || []).each do |pronstr|
+      phonemes = pronstr.split(" ")
+      next if phonemes.empty?
+      push_pronunciation_unless_duplicate!(prons, Pronunciation.new(phonemes))
+    end
+    word_dict[word] = [freq.to_i, prons, stored_lemma || word]
+  end
+  clear_spelling_variant_hyphen_caches!
+  $lemma_to_words = nil
+  $word_to_lemma = nil
+  $word_to_semantic_base = nil
+  $thematically_related_memo = nil
+  word_dict
+end
+
+# Emit the runtime-canonical +rime_dict.msgpack+ — same +{rime => [word, ...]}+
+# shape as +load_string_hash(rime_dict.txt)+, but native MessagePack for fast
+# Lambda cold-start load and an order-of-magnitude smaller bundle hit than
+# the txt + .sanitize round-trip. Keys / values are stored verbatim (the txt
+# surface uses +.sanitize+ to fold +" "+ → +"_"+ for the whitespace-delimited
+# format; msgpack doesn't need the fold so we keep raw spaces). Called from
+# +rebuild_rhymecrime_dictionaries+ alongside +save_string_hash(... rdict
+# ...)+.
+def save_rime_dict_msgpack!(rdict)
+  ensure_generated_dict_dir!
+  path = generated_dict_path_under_dict_dir(RIME_DICT_MSGPACK_FILENAME)
+  obj = {}
+  rdict.each do |rime, words|
+    obj[rime.to_s] = (words || []).map(&:to_s)
+  end
+  MessagePackUtils.pack_and_save(path, obj)
+  size_mb = (File.size(path).to_f / 1024 / 1024).round(2)
+  puts "Wrote #{obj.size} rime_dict buckets to #{RIME_DICT_MSGPACK_FILENAME} (#{size_mb} MB)"
+end
+
+# Runtime mirror of +load_rime_dict_as_hash+. Returns +{rime => [word, ...]}+
+# or +nil+ when the msgpack isn't on disk (caller falls back to the +.txt+
+# loader for fresh checkouts pre-dict-build).
+def load_rime_dict_msgpack
+  path = generated_dict_path(RIME_DICT_MSGPACK_FILENAME)
+  return nil unless File.exist?(path)
+  raw = MessagePackUtils.load_and_unpack(path)
+  out = {}
+  raw.each { |rime, words| out[rime.to_s] = (words || []).map(&:to_s) }
+  out
 end
 
 # Emit the runtime +word → canonical_lemma+ msgpack consumed by +word_to_lemma+.

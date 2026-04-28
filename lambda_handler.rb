@@ -58,7 +58,12 @@ def asset_response(path)
 end
 
 def handler(event:, context:)
-  Rhymecrime::DynamoRuntime.clear_session_cache!
+  # Lexicon and rime cohort are loaded once from +word_dict.msgpack+ /
+  # +rime_dict.msgpack+ at process boot and stay resident across warm-
+  # container invocations (immutable per data deploy — see +bin/stage-
+  # lambda+). +DynamoRuntime+ no longer holds any per-session state, so the
+  # only cache that needs invalidating per request is +RelatedWords+'s
+  # in-process result memo (cue-keyed, would otherwise leak across users).
   RelatedWords.reset_caches! if defined?(RelatedWords)
 
   path = event["rawPath"] || event.dig("requestContext", "http", "path") || "/"

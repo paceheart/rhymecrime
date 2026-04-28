@@ -735,6 +735,14 @@ def rebuild_rhymecrime_dictionaries()
   save_string_hash(rdict, generated_dict_path_under_dict_dir(RIME_DICT_FILENAME), RIME_DICT_HEADER)
   save_word_dict(word_dict, lemma_map)
   save_word_lemma_map!(word_dict, lemma_map)
+  # Runtime-canonical msgpack mirrors of the two +.txt+ artifacts above.
+  # +word_dict()+ / +rdict()+ in +crime.rb+ load these in BOTH local-dev and
+  # Lambda mode; the +.txt+ files are kept on disk for human inspection only.
+  # See the +WORD_DICT_MSGPACK_FILENAME+ doc comment in +utils_rhyme.rb+ for
+  # the storage format and the rationale behind retiring the DDB +word#+ /
+  # +rime#+ partitions.
+  save_word_dict_msgpack!(word_dict, lemma_map)
+  save_rime_dict_msgpack!(rdict)
   save_hyphen_variant_map!(hyphen_fold_build_keys, exported_keys: word_dict.keys)
   if include_conceptnet_numberbatch_dict_exports?
     rel_bases = relatedness_export_base_headwords(word_dict.keys, lemma_map)

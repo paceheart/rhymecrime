@@ -2,53 +2,35 @@
 
 require "singleton"
 require "forwardable"
-require "thread"
 require "aws-sdk-dynamodb"
 require "json"
 require_relative "data_source"
-require_relative "dict/utils_rhyme"
-require_relative "dict/phoneme.rb"
-require_relative "dict/pronunciation.rb"
 require_relative "timing"
 
 module Rhymecrime
+  # Read-side adapter over the precomputed +related#<lemma>+ / +score#<lemma>+
+  # partitions in DynamoDB. The lexicon (+word#+) and rime cohort (+rime#+)
+  # partitions were retired once the corresponding +.msgpack+ files got small
+  # enough (~5.5 MB and ~700 KB respectively) to ship in the Lambda deploy
+  # bundle — see +lib/rhymecrime/dict/utils_rhyme.rb+ (+WORD_DICT_MSGPACK_
+  # FILENAME+, +RIME_DICT_MSGPACK_FILENAME+) and +bin/upload-to-dynamodb+
+  # (which now only writes +related#+ / +score#+).
+  #
+  # +DynamoRuntime+ is therefore a thin wrapper around two GetItems
+  # (+related#<lemma>+ for the cheap path; +score#<lemma>+ for the lazy
+  # score-aware companion). Mirrors +Rhymecrime::LocalStore+'s API so
+  # +Rhymecrime::Store+ can switch on +DataSource.dynamodb?+ without the
+  # caller knowing which backend is live.
   class DynamoRuntime
     include Singleton
 
     class << self
       extend Forwardable
-      def_delegators :instance, :clear_session_cache!, :headword?, :fetch_word, :fetch_rime,
-                     :fetch_related_words, :fetch_related_tuples,
-                     :batch_get_words, :batch_get_rimes,
+      def_delegators :instance, :fetch_related_words, :fetch_related_tuples,
                      :find_all_related_precomputed, :find_all_related_precomputed_with_scores
     end
 
-    # FIFO upper bound for the in-process +word#+ / +rime#+ caches. The full
-    # dictionary fits well under both ceilings (~150K words, <10K rimes) so in
-    # the common case these caps never trigger — they're insurance against a
-    # long-lived Lambda container that has cumulatively touched every cue and
-    # would otherwise hold the entire dataset in RAM.
-    #
-    # Eviction policy is FIFO (drop oldest insertion) rather than LRU because
-    # +batch_get_words+ writes once per row and never re-reads on the hot
-    # path — adding LRU bookkeeping would slow every cache write to defend
-    # against a workload (cyclic re-eviction of recently-fetched keys) that
-    # doesn't happen here.
-    DDB_WORD_CACHE_CAP = (ENV["RHYMECRIME_DDB_WORD_CACHE_CAP"] || "250000").to_i
-    DDB_RIME_CACHE_CAP = (ENV["RHYMECRIME_DDB_RIME_CACHE_CAP"] || "25000").to_i
-
-    # Wipe the in-process caches. Called by +bin/precompute-relatedness+
-    # between shards to bound worker RSS; intentionally NOT called per
-    # request from the web entry points (+frontend.rb+) — +word#+ / +rime#+
-    # rows are immutable per data deploy, so warm Lambda containers benefit
-    # from keeping them across invocations.
-    def clear_session_cache!
-      @word_cache = {}
-      @rime_cache = {}
-    end
-
     def initialize
-      clear_session_cache!
       @client = nil
     end
 
@@ -82,59 +64,6 @@ module Rhymecrime
 
     def table_name
       DataSource.table_name
-    end
-
-    def headword?(word)
-      fetch_word(word)
-      !@word_cache[word].nil?
-    end
-
-    def fetch_word(word)
-      return @word_cache[word] if @word_cache.key?(word)
-
-      item = get_item("word##{word}")
-      put_word(word, parse_word_item(word, item))
-    end
-
-    def batch_get_words(words)
-      keys = words.uniq.reject { |w| @word_cache.key?(w) }
-      return if keys.empty?
-
-      slices = keys.each_slice(100).to_a
-      Rhymecrime::Timing.measure("batch_get_words keys=#{keys.size} slices=#{slices.size} parallelism=#{effective_parallelism(slices.size)}") do
-        responses = parallel_batch_get_items(slices, "word#")
-        slices.zip(responses).each do |slice, resp|
-          (resp.responses[table_name] || []).each do |item|
-            w = item["pk"].to_s.sub(/\Aword#/, "")
-            put_word(w, parse_word_item(w, item))
-          end
-          slice.each { |w| put_word(w, nil) unless @word_cache.key?(w) }
-        end
-      end
-    end
-
-    def fetch_rime(rime)
-      return @rime_cache[rime] if @rime_cache.key?(rime)
-
-      item = get_item("rime##{rime}")
-      put_rime(rime, parse_rime_item(item))
-    end
-
-    def batch_get_rimes(rimes)
-      keys = rimes.uniq.reject { |r| @rime_cache.key?(r) }
-      return if keys.empty?
-
-      slices = keys.each_slice(100).to_a
-      Rhymecrime::Timing.measure("batch_get_rimes keys=#{keys.size} slices=#{slices.size} parallelism=#{effective_parallelism(slices.size)}") do
-        responses = parallel_batch_get_items(slices, "rime#")
-        slices.zip(responses).each do |slice, resp|
-          (resp.responses[table_name] || []).each do |item|
-            r = item["pk"].to_s.sub(/\Arime#/, "")
-            put_rime(r, parse_rime_item(item))
-          end
-          slice.each { |r| put_rime(r, []) unless @rime_cache.key?(r) }
-        end
-      end
     end
 
     # Cheap path: words only, no score GetItem. Used by everything that
@@ -209,167 +138,34 @@ module Rhymecrime
       raw.select { |(w, _s)| survivors.include?(w) }
     end
 
-    # Shared filter step for the two find_all_* entry points. Prefetches
-    # +word#+ rows (and rimes when +include_rhymeless+ is false) in batches,
-    # then drops candidates that fail the visibility flags. Returns the
-    # surviving words in the same order as +words+ so callers that zip
-    # against +scores+ can preserve alignment via a Set membership test.
+    # Shared filter step. The lexicon (+lexicon_word_entry+) and rime cohort
+    # (+rdict_lookup+) are now in-process from the bundled msgpacks, so the
+    # filter is a pure CPU loop — no DDB round-trip. Mirrors
+    # +LocalStore#filter_related_words+; the +defined?+ guard keeps this
+    # module importable by tools that don't load +crime.rb+ (e.g.
+    # +bin/upload-to-dynamodb+).
     def filter_related_words(words, include_rhymeless, common_only)
-      batch_get_words(words)
-      unless include_rhymeless
-        rimes = words.flat_map do |w|
-          entry = @word_cache[w]
-          entry ? entry[1].map(&:rime) : []
-        end.uniq
-        batch_get_rimes(rimes)
-      end
+      return words.dup unless defined?(lexicon_word_entry) && defined?(rdict_lookup)
 
       words.select do |w|
-        entry = @word_cache[w]
+        entry = lexicon_word_entry(w)
         next false unless entry
-        next false if common_only && entry[0] <= RARE_FREQ_MAX
+        next false if common_only && entry[0].to_i <= RARE_FREQ_MAX
 
         if include_rhymeless
           true
         else
-          entry[1].any? { |pron| !(@rime_cache[pron.rime] || []).empty? }
+          entry[1].any? { |pron| !pron.rime.to_s.empty? && !rdict_lookup(pron.rime).empty? }
         end
       end
     end
 
     private
 
-    # FIFO-bounded write to +@word_cache+. Returns the value so the put can be
-    # the tail expression of a +fetch_word+-style "miss → fetch → cache → return"
-    # chain. Re-assignment to an already-present key preserves its insertion
-    # position (Ruby Hash semantics), so we only evict when we're growing past
-    # the cap. See +DDB_WORD_CACHE_CAP+ doc comment for the bounding rationale.
-    def put_word(word, value)
-      @word_cache[word] = value
-      @word_cache.shift while @word_cache.size > DDB_WORD_CACHE_CAP
-      value
-    end
-
-    def put_rime(rime, value)
-      @rime_cache[rime] = value
-      @rime_cache.shift while @rime_cache.size > DDB_RIME_CACHE_CAP
-      value
-    end
-
-    # Bounded-parallelism cap on concurrent +BatchGetItem+ calls. Override via
-    # +RHYMECRIME_DDB_PARALLELISM+ if a future workload (different cue, different
-    # data shape) tips into either DDB-side throttling (lower it) or
-    # HTTP-client-side connection-pool starvation (raise it; the AWS SDK's
-    # default Net::HTTP pool is +max_connections: 50+ — we're well under that).
-    #
-    # 8 was picked empirically as the smallest pool that lets the worst-case
-    # set_related cue (+cat+: ~150 sequential +BatchGetItem+ calls for word +
-    # rime + rhyme-cohort prefetches) come in under the 29-second API Gateway
-    # ceiling. Each batch is a single-region, single-partition call so DDB's
-    # on-demand instant-burst budget covers a fan-out this small without
-    # ProvisionedThroughputExceeded.
-    DDB_BATCH_PARALLELISM = (ENV["RHYMECRIME_DDB_PARALLELISM"] || "8").to_i
-
-    def effective_parallelism(slice_count)
-      return 1 if slice_count <= 1
-      [DDB_BATCH_PARALLELISM, slice_count].min
-    end
-
-    # Fan +slices+ across a bounded pool of worker threads, each issuing one
-    # +client.batch_get_item+ per slice. Returns the responses in the same
-    # order as +slices+ so the caller can zip them back to the input keys.
-    #
-    # +pk_prefix+ ("word#" or "rime#") is concatenated with each key inside
-    # the worker so the per-slice payload is built lazily — keeps the queue
-    # entries small and avoids materializing all request payloads up front.
-    #
-    # Thread safety: +Aws::DynamoDB::Client+ is documented thread-safe (the
-    # SDK guide explicitly calls this out for +Client+ classes); we only mutate
-    # the shared +responses+ array via distinct indices (no overlapping writes)
-    # and never touch +@word_cache+ / +@rime_cache+ from a worker — those are
-    # written from the main thread after +Thread#join+ returns.
-    #
-    # Falls back to a synchronous loop on a single slice — spawning a thread
-    # to do one BatchGetItem is pure overhead.
-    def parallel_batch_get_items(slices, pk_prefix)
-      return [] if slices.empty?
-
-      if slices.size == 1
-        return [batch_get_items_call(slices.first, pk_prefix)]
-      end
-
-      responses = Array.new(slices.size)
-      queue = Queue.new
-      slices.each_with_index { |slice, i| queue << [i, slice] }
-
-      pool_size = effective_parallelism(slices.size)
-      workers = Array.new(pool_size) do
-        Thread.new do
-          loop do
-            begin
-              idx, slice = queue.pop(true)
-            rescue ThreadError
-              break
-            end
-            responses[idx] = batch_get_items_call(slice, pk_prefix)
-          end
-        end
-      end
-      workers.each(&:join)
-      responses
-    end
-
-    def batch_get_items_call(slice, pk_prefix)
-      client.batch_get_item(
-        request_items: {
-          table_name => {
-            keys: slice.map { |k| { "pk" => "#{pk_prefix}#{k}" } }
-          }
-        }
-      )
-    end
-
-    def get_item(pk)
-      resp = client.get_item(table_name: table_name, key: { "pk" => pk })
-      resp.item
-    rescue Aws::DynamoDB::Errors::ServiceError => e
-      warn "DynamoDB get_item #{pk}: #{e.message}"
-      nil
-    end
-
-    def parse_word_item(word, item)
-      return nil unless item
-
-      freq = (item["freq"] || item["frequency"] || 0).to_i
-      prons_str = item["prons"].to_s
-      prons = []
-      prons_str.split("|").each do |pronstr|
-        phonemes = pronstr.split
-        next if phonemes.empty?
-
-        pron = Pronunciation.new(phonemes)
-        push_pronunciation_unless_duplicate!(prons, pron)
-      end
-      lem = item["lemma"].to_s
-      lem = word if lem.empty?
-      [freq, prons, lem]
-    end
-
-    def parse_rime_item(item)
-      return [] unless item
-
-      w = item["words"]
-      return [] unless w
-
-      w.is_a?(Array) ? w.map(&:to_s) : JSON.parse(w.to_s)
-    rescue JSON::ParserError
-      []
-    end
-
-    # Shared decode for the +words+ attribute on +related#<lemma>+ and
-    # +rime#<key>+ items: tolerate both List-typed (modern uploads) and
-    # legacy String-typed (JSON-encoded) shapes, and treat any decode
-    # failure as +[]+ so a single corrupt row doesn't 500 the request.
+    # Shared decode for the +words+ attribute on +related#<lemma>+ items:
+    # tolerate both List-typed (modern uploads) and legacy String-typed
+    # (JSON-encoded) shapes, and treat any decode failure as +[]+ so a single
+    # corrupt row doesn't 500 the request.
     def parse_words_attr(item)
       return [] unless item
 
@@ -381,6 +177,14 @@ module Rhymecrime
       parsed.is_a?(Array) ? parsed.map(&:to_s) : []
     rescue JSON::ParserError
       []
+    end
+
+    def get_item(pk)
+      resp = client.get_item(table_name: table_name, key: { "pk" => pk })
+      resp.item
+    rescue Aws::DynamoDB::Errors::ServiceError => e
+      warn "DynamoDB get_item #{pk}: #{e.message}"
+      nil
     end
 
     # +RELATEDNESS_SCORE_THRESHOLD+ lives in +lib/rhymecrime/related.rb+ and

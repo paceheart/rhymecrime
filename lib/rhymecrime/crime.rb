@@ -70,15 +70,15 @@ require_relative "related"
 require_relative "dynamo_store" if Rhymecrime::DataSource.dynamodb?
 
 #
-# Lexicon: file-backed (+word_dict+) or DynamoDB (+Rhymecrime::DynamoRuntime+).
+# Lexicon: in-process +$word_dict+, loaded from +word_dict.msgpack+ at boot.
+# Same data shape in dev and Lambda; the DDB +word#+ partition was retired
+# (see +bin/upload-to-dynamodb+ and +bin/stage-lambda+) once the msgpack got
+# small enough (~5.5 MB) to ship in the deploy bundle. +DynamoRuntime+ now
+# only fronts the +related#+ / +score#+ partitions.
 #
 
 def lexicon_word_entry(word)
-  if Rhymecrime::DataSource.dynamodb?
-    Rhymecrime::DynamoRuntime.fetch_word(word)
-  else
-    word_dict[word]
-  end
+  word_dict[word]
 end
 
 def debug_info(word)
@@ -124,17 +124,15 @@ end
 
 $word_dict = nil
 def word_dict()
-  # word => [frequency, pronunciations]
+  # word => [frequency, pronunciations, lemma]
   # pronunciations = [pronunciation1, pronunciation2 ...]
   # pronunciation = [syllable1, syllable1, ...]
-  if Rhymecrime::DataSource.dynamodb?
-    $word_dict ||= {}
-    return $word_dict
-  end
-  if $word_dict.nil?
-    $word_dict = load_word_dict
-  end
-  $word_dict
+  return $word_dict unless $word_dict.nil?
+  # Prefer the msgpack: it's the runtime-canonical artifact (smaller, faster
+  # to parse, and the only one shipped to Lambda). Fall back to the +.txt+
+  # loader for fresh checkouts where +bin/dict-build+ hasn't run yet — keeps
+  # +bundle exec rspec+ working before the first build.
+  $word_dict = load_word_dict_msgpack || load_word_dict
 end
 
 WORDS_NEEDED_FOR_TESTING = ['arpeggio', 'asterisk', 'blackmail', 'bobcat', 'burglar', 'burglary', 'cat', 'celebrity', 'costume', 'crime', 'doubloons', 'drumsticks', 'fanciers', 'feline', 'fortissimo', 'galaxy', 'glissando', 'halloween', 'hemiola', 'homicide', 'item', 'jaguar', 'mandolin', 'music', 'overtone', 'pianissimo', 'pirate', 'pussy', 'repertoire', 'ritardando', 'scurvy', 'star', 'thing', 'tree', 'treetop', 'trespassing', 'whiskers', 'wildcat', 'xylophone'] # include these even if they don't have any rhymes
@@ -142,14 +140,10 @@ WORDS_NEEDED_FOR_TESTING = ['arpeggio', 'asterisk', 'blackmail', 'bobcat', 'burg
 $rdict = nil # rime (underscore ARPABET key) -> words hash
 def rdict
   # rime => [rhyming_word1 rhyming_word2 ...]
-  if Rhymecrime::DataSource.dynamodb?
-    $rdict ||= {}
-    return $rdict
-  end
-  if $rdict.nil?
-    $rdict = load_rime_dict_as_hash
-  end
-  $rdict
+  return $rdict unless $rdict.nil?
+  # Mirror of the +word_dict+ loader: prefer +rime_dict.msgpack+, fall back to
+  # the +.txt+ surface for pre-dict-build checkouts.
+  $rdict = load_rime_dict_msgpack || load_rime_dict_as_hash
 end
 
 def load_rime_dict_as_hash()
@@ -204,11 +198,7 @@ end
 
 # Cohort for +rime+ from +rime_dict+ (dict-build keeps preferred headwords only; see +strip_dispreferred_headwords_from_rdict!+).
 def rdict_lookup(rime)
-  if Rhymecrime::DataSource.dynamodb?
-    Rhymecrime::DynamoRuntime.fetch_rime(rime)
-  else
-    rdict[rime] || []
-  end
+  rdict[rime] || []
 end
 
 def find_preferred_rhyming_words(word)
@@ -1036,37 +1026,6 @@ def condense_tuple_homophones(tup, focal_word)
   tup - dropped.to_a
 end
 
-# DynamoDB warm-up: batch-fetch every headword appearing in +relateds_lists+, then
-# every rime their pronunciations reach, then every word in those rime cohorts.
-# No-op when not running against Dynamo (local-dev / CMUDict path hits in-process
-# hashes). Consolidates the prefetch preamble previously duplicated across the
-# +_dynamo+ variants of +find_rhyming_tuples+ / +find_rhyming_pairs+.
-def prefetch_dynamo_for_relateds!(*relateds_lists)
-  return unless Rhymecrime::DataSource.dynamodb?
-  # Three-phase prefetch. After +find_related_words+'s own internal prefetch
-  # (which already pulled +word#+ + +rime#+ rows for the cue's related list),
-  # phases (1) and (2) are typically no-ops — every key is already in
-  # +DynamoRuntime+'s session cache. Phase (3) is the new work: for each rime
-  # the cue's relateds touch, look up the *rhyme cohort* (all words sharing
-  # that rime), then bulk-load their +word#+ entries so the main rhyme-bucket
-  # loop in +really_find_rhyming_tuples+ can ask +relateds1.include?(rhyme1)+
-  # without paying a per-rhyme +get_item+. This is the dominant fan-out for
-  # common cues — see the +[timing] prefetch.rhyme_cohort_words+ line in
-  # CloudWatch when +RHYMECRIME_LOG_TIMING=1+ is on.
-  all_relateds = relateds_lists.flat_map(&:to_a).uniq
-  Rhymecrime::Timing.measure("prefetch.relateds_words n=#{all_relateds.size}") do
-    Rhymecrime::DynamoRuntime.batch_get_words(all_relateds)
-  end
-  rimes = all_relateds.flat_map { |rel| pronunciations(rel).map(&:rime) }.uniq
-  Rhymecrime::Timing.measure("prefetch.relateds_rimes n=#{rimes.size}") do
-    Rhymecrime::DynamoRuntime.batch_get_rimes(rimes)
-  end
-  rhyme_words = rimes.flat_map { |r| rdict_lookup(r) }.uniq
-  Rhymecrime::Timing.measure("prefetch.rhyme_cohort_words n=#{rhyme_words.size}") do
-    Rhymecrime::DynamoRuntime.batch_get_words(rhyme_words)
-  end
-end
-
 # True when the pair +[a, b]+ would collapse to a single member under Phase 0.5
 # tuple condensation — i.e. it is a morphological +COMMON_PREFIXES+ derivation
 # over matching +rhyme_syllables_string+ (+condense_tuple_derived_forms+), or a
@@ -1373,9 +1332,6 @@ def really_find_rhyming_tuples(input_rel1, common_only = false)
     )
   end
   relateds1 = related_list.to_set
-  Rhymecrime::Timing.measure("set_related[#{input_rel1}] prefetch dynamo n=#{related_list.size}") do
-    prefetch_dynamo_for_relateds!(related_list)
-  end
 
   related_rhymes = Hash.new { |h, k| h[k] = [] }
   Rhymecrime::Timing.measure("set_related[#{input_rel1}] rhyme-bucket loop n=#{related_list.size}") do
@@ -1439,7 +1395,6 @@ def really_find_rhyming_pairs(input_rel1, input_rel2, common_only = false)
   relateds2 = filter_related_words_to_common_preferred(
     find_related_words(input_rel2, true, false, nil, common_only: true)
   ).reject { |w| stop_word?(w) }.to_set
-  prefetch_dynamo_for_relateds!(relateds1, relateds2)
 
   related_rhymes = Hash.new { |h, k| h[k] = [] }
   relateds1.each do |rel1|
@@ -1638,6 +1593,23 @@ end
 def print_word(word, focal_word=false, cue: nil)
   word = word.gsub(/\(.*\)/, '') # remove stuff in parentheses
   got_rhymes = !pronunciations(word).empty?
+  # Decided here (not at +emit_relatedness_feedback_widget+'s call site) so the
+  # +<nobr>+ wrapper below uses exactly the same predicate as the widget itself
+  # — we never want a +<nobr>+ that wraps just the word with no thumbs to glue
+  # it to. Predicate matches the original guard verbatim.
+  emit_thumbs = cue && !cue.to_s.empty? && cue != word
+  # +<nobr>+ keeps the word + (optional similarity span) + (optional similarity
+  # %) + thumbs widget on the same display line. Without it, the inline span
+  # for the word and the inline span for +.feedback-thumbs+ are independent
+  # break opportunities — the browser will happily land "transparent" at the
+  # end of one row and float its 👍👎 onto the next, which reads like an
+  # orphan vote control. +.feedback-thumbs { white-space: nowrap }+ already
+  # keeps the two thumbs glued to *each other*, so this only adds the
+  # outer-tier glue between the word and the widget. +<nobr>+ over a CSS
+  # +white-space: nowrap+ wrapper because the user asked for it explicitly
+  # and it's understood by every shipping browser; if it ever needs swapping
+  # for the standards-track equivalent, the change is span+class right here.
+  cgi_print "<nobr>" if emit_thumbs
   if(got_rhymes)
     # @todo urlencode
     cgi_print "<a href='/?word1=#{word}'>"
@@ -1666,7 +1638,8 @@ def print_word(word, focal_word=false, cue: nil)
   # +/feedback+ matches the shape of +curated/related.csv+'s +cue+/+related+
   # columns; +feedback.js+ wires the click → fetch and uses +sessionStorage+
   # to persist the user's vote across navigations within the tab.
-  emit_relatedness_feedback_widget(word, cue) if cue && !cue.to_s.empty? && cue != word
+  emit_relatedness_feedback_widget(word, cue) if emit_thumbs
+  cgi_print "</nobr>" if emit_thumbs
 end
 
 # Inline SVG so the icons inherit color via +fill="currentColor"+ and CSS
