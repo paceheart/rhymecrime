@@ -242,8 +242,11 @@ class RelatedWords
     def pair_in_store?(lemma_a, lemma_b)
       return false if lemma_a.nil? || lemma_b.nil?
 
-      tuples = Rhymecrime::Store.fetch_related_tuples(lemma_a)
-      tuples.any? { |(w, _s)| w == lemma_b || lemma(w) == lemma_b }
+      # Cheap-path lookup: membership doesn't care about the +relatedness_
+      # score+, so we go through +fetch_related_words+ and skip the
+      # +score#<lemma>+ GetItem / +related_scores+ SELECT.
+      words = Rhymecrime::Store.fetch_related_words(lemma_a)
+      words.any? { |w| w == lemma_b || lemma(w) == lemma_b }
     end
 
     # Stored +relatedness_score+ (0..100) for the directional pair
@@ -262,24 +265,60 @@ class RelatedWords
       0
     end
 
-    # +max_candidates+ default +SIMILAR_MAX+ caps the list by stored
-    # +relatedness_score+ for UI / display. Pass +nil+ for no cap (e.g.
-    # set_related / pair rhyming): truncation can drop words with lower
-    # stored scores that are still legitimately related. Sort uses the
-    # stored scores from the cue's precompute row — no per-candidate
-    # backend lookup.
+    # +max_candidates+ default +SIMILAR_MAX+ used to cap the list by stored
+    # +relatedness_score+ for UI / display, but precompute rows top out
+    # several orders of magnitude below 50K so the truncation never fires in
+    # practice. We keep the +max_candidates+ knob for callers that pass an
+    # explicit cap (the only cap path that's ever exercised), and when it
+    # does need to fire we sort score-aware by reaching for the score-bearing
+    # tuples — but the common case stays on the cheap, score-free path.
     def find_thematically_related_words(word, include_self, include_rhymeless = true, common_only = false, max_candidates = SIMILAR_MAX)
-      tuples = find_all_thematically_related_words_with_scores(word, include_rhymeless, common_only)
-      if max_candidates && tuples.length > max_candidates
-        tuples = tuples.sort_by { |(_w, s)| -s }.first(max_candidates)
+      words = find_all_thematically_related_words(word, include_rhymeless, common_only)
+      if max_candidates && words.length > max_candidates
+        # Rare path: pull scores once and sort. Cheap relative to the
+        # truncation it enables, and only triggered for cues whose related
+        # set has somehow exceeded SIMILAR_MAX entries.
+        tuples = find_all_thematically_related_words_with_scores(word, include_rhymeless, common_only)
+        words = tuples.sort_by { |(_w, s)| -s }.first(max_candidates).map(&:first)
       end
-      words = tuples.map(&:first)
       words.push(word) if include_self
       words
     end
 
+    # Cheap path: words only. Used by everything that doesn't need scores —
+    # set_related, related, pair_related, related_rhymes goal handlers all
+    # land here. Stays on +Rhymecrime::Store.find_all_related_precomputed+
+    # (one item / table read) rather than dropping scores from the score-
+    # bearing variant.
     def find_all_thematically_related_words(word, include_rhymeless = true, common_only = false)
-      find_all_thematically_related_words_with_scores(word, include_rhymeless, common_only).map(&:first)
+      @related_word_cache ||= {}
+      key = [:words, word, include_rhymeless, common_only]
+      return @related_word_cache[key] if @related_word_cache.key?(key)
+
+      if stop_word?(word) || stop_word?(lemma(word))
+        words = words_we_care_about(include_rhymeless, common_only).reject { |w| w == word }
+        debug "Finding words related to #{word} (stop word, all candidates)... #{words.length}\n"
+        return @related_word_cache[key] = words
+      end
+
+      lemma_key = lemma(word)
+
+      if store_authoritative?
+        words = Rhymecrime::Store.find_all_related_precomputed(lemma_key, include_rhymeless, common_only)
+        debug "Finding words related to #{word} (store[authoritative], lemma=#{lemma_key})... #{words.length}\n"
+        return @related_word_cache[key] = words
+      end
+
+      if Rhymecrime::Store.available? && Rhymecrime::Store.has_related?(lemma_key)
+        words = Rhymecrime::Store.find_all_related_precomputed(lemma_key, include_rhymeless, common_only)
+        debug "Finding words related to #{word} (store[cache], lemma=#{lemma_key})... #{words.length}\n"
+        return @related_word_cache[key] = words
+      end
+
+      relatedness_lazy_load_compute!
+      tuples = find_all_thematically_related_words_by_scan(word, include_rhymeless, common_only)
+      debug "Finding words related to #{word} (full scan)... #{tuples.length}\n"
+      @related_word_cache[key] = tuples.map(&:first)
     end
 
     # Companion to +find_all_thematically_related_words+ that preserves the

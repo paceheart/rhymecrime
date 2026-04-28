@@ -3,10 +3,14 @@
 # local_store.rb — SQLite-backed local mirror of the Lambda DynamoDB schema.
 #
 # Only the +related#<lemma>+ partition is mirrored today; words / rimes still
-# load from the in-process Ruby dict in dev. The schema matches the DDB item
-# shape (+words+ and +scores+ as parallel JSON arrays) so +bin/precompute-
-# relatedness+ can populate this file and +bin/upload-to-dynamodb+ can stream
-# straight from it up to prod.
+# load from the in-process Ruby dict in dev. The schema mirrors the DDB
+# split: +related+ holds just +words+ (one row per cue) and +related_scores+
+# holds the parallel +scores+ array. Splitting the two tables keeps the hot
+# read path (+fetch_related_words+) free of a JSON parse for the score array
+# whenever the caller doesn't need it (+/similar+ and +?debug=1+ are the only
+# consumers). +bin/precompute-relatedness+ writes both tables; +bin/upload-
+# to-dynamodb+ streams them out as +related#<lemma>+ and +score#<lemma>+
+# items respectively.
 #
 # Not loaded in Lambda runtime: +Rhymecrime::Store+ picks +DynamoRuntime+
 # when +RHYMECRIME_DATA_SOURCE=dynamodb+ and only requires this file otherwise.
@@ -46,7 +50,9 @@ module Rhymecrime
         FileUtils.mkdir_p(File.dirname(path))
         db = SQLite3::Database.new(path)
         configure_for_bulk_write!(db)
-        db.execute(Writer::SCHEMA_SQL)
+        # +execute_batch+ rather than +execute+ because +Writer::SCHEMA_SQL+
+        # ships two CREATE TABLE statements and +execute+ runs only the first.
+        db.execute_batch(Writer::SCHEMA_SQL)
         writer = Writer.new(db)
         if transaction
           db.transaction
@@ -83,45 +89,62 @@ module Rhymecrime
 
     # Row-level writer helper yielded by +open_for_write+.
     class Writer
-      SCHEMA_SQL = <<~SQL
+      SCHEMA_SQL = <<~SQL.freeze
         CREATE TABLE IF NOT EXISTS related (
           pk TEXT PRIMARY KEY,
-          words TEXT NOT NULL,
-          scores TEXT
-        ) WITHOUT ROWID
+          words TEXT NOT NULL
+        ) WITHOUT ROWID;
+        CREATE TABLE IF NOT EXISTS related_scores (
+          pk TEXT PRIMARY KEY,
+          scores TEXT NOT NULL
+        ) WITHOUT ROWID;
       SQL
 
       def initialize(db)
         @db = db
-        @upsert = db.prepare(
-          "INSERT INTO related (pk, words, scores) VALUES (?, ?, ?) " \
-          "ON CONFLICT(pk) DO UPDATE SET words = excluded.words, scores = excluded.scores"
+        @upsert_words = db.prepare(
+          "INSERT INTO related (pk, words) VALUES (?, ?) " \
+          "ON CONFLICT(pk) DO UPDATE SET words = excluded.words"
         )
+        @upsert_scores = db.prepare(
+          "INSERT INTO related_scores (pk, scores) VALUES (?, ?) " \
+          "ON CONFLICT(pk) DO UPDATE SET scores = excluded.scores"
+        )
+        @delete_scores = db.prepare("DELETE FROM related_scores WHERE pk = ?")
       end
 
       # +words+ and +scores+ are parallel arrays. Pass +nil+ or +[]+ for
       # +scores+ on old data; readers fall back to +RELATEDNESS_SCORE_THRESHOLD+
-      # for every surviving word.
+      # for every surviving word. When +scores+ is empty we proactively delete
+      # any prior row in +related_scores+ so an upsert that drops scores
+      # doesn't leave a stale parallel-array around.
       def upsert_related(lemma_key, words, scores = nil)
-        @upsert.execute(
-          "related##{lemma_key}",
-          JSON.generate(words),
-          scores && !scores.empty? ? JSON.generate(scores) : nil
-        )
+        pk = "related##{lemma_key}"
+        @upsert_words.execute(pk, JSON.generate(words))
+        if scores && !scores.empty?
+          @upsert_scores.execute(pk, JSON.generate(scores))
+        else
+          @delete_scores.execute(pk)
+        end
       end
 
-      # Attach +shard_path+ as a secondary database and bulk-copy its +related+
-      # rows into the main table. Used by the parent process in
-      # +bin/precompute-relatedness+ to merge per-worker shards. Must run in
-      # autocommit mode (see +open_for_write(transaction: false)+): a wrapping
-      # transaction keeps a read lock on the attached db, which prevents DETACH
-      # and collides on the next merge's ATTACH.
+      # Attach +shard_path+ as a secondary database and bulk-copy its
+      # +related+ / +related_scores+ rows into the main tables. Used by the
+      # parent process in +bin/precompute-relatedness+ to merge per-worker
+      # shards. Must run in autocommit mode (see
+      # +open_for_write(transaction: false)+): a wrapping transaction keeps a
+      # read lock on the attached db, which prevents DETACH and collides on
+      # the next merge's ATTACH.
       def merge_shard(shard_path)
         @db.execute("ATTACH DATABASE ? AS shard", shard_path)
         begin
           @db.execute(
-            "INSERT OR REPLACE INTO related (pk, words, scores) " \
-            "SELECT pk, words, scores FROM shard.related"
+            "INSERT OR REPLACE INTO related (pk, words) " \
+            "SELECT pk, words FROM shard.related"
+          )
+          @db.execute(
+            "INSERT OR REPLACE INTO related_scores (pk, scores) " \
+            "SELECT pk, scores FROM shard.related_scores"
           )
         ensure
           @db.execute("DETACH DATABASE shard")
@@ -130,7 +153,12 @@ module Rhymecrime
     end
 
     def clear_session_cache!
-      @row_cache = {}
+      # Two caches so the cheap path (+fetch_related_words+) doesn't pay the
+      # parse cost or memory of the score array, and the lazy path
+      # (+fetch_related_tuples+) can pull scores once and keep them resident
+      # for repeat lookups (e.g. the +/similar+ page sorting).
+      @words_cache = {}
+      @scores_cache = {}
     end
 
     def initialize
@@ -176,35 +204,54 @@ module Rhymecrime
            "(built #{stamp}, #{size_mb} MB) — set RELATED_BYPASS_STORE=1 to force live compute"
     end
 
-    # Returns +[[word, score], ...]+ for the +related#<lemma>+ row, or +[]+.
-    # Mirrors +DynamoRuntime.fetch_related_tuples+ so call sites don't care
-    # which backend is active.
-    def fetch_related_tuples(lemma_key)
-      return @row_cache[lemma_key] if @row_cache.key?(lemma_key)
-      return @row_cache[lemma_key] = [] unless available?
+    # Hot-path read: pulls the cheap +related+ row only — no scores parse,
+    # no second table lookup. Mirrors +DynamoRuntime.fetch_related_words+.
+    def fetch_related_words(lemma_key)
+      return @words_cache[lemma_key] if @words_cache.key?(lemma_key)
+      return @words_cache[lemma_key] = [] unless available?
 
-      row = db.get_first_row("SELECT words, scores FROM related WHERE pk = ?", "related##{lemma_key}")
-      return @row_cache[lemma_key] = [] unless row
+      row = db.get_first_row("SELECT words FROM related WHERE pk = ?", "related##{lemma_key}")
+      return @words_cache[lemma_key] = [] unless row
 
-      words_json, scores_json = row
-      words = JSON.parse(words_json)
-      return @row_cache[lemma_key] = [] if !words.is_a?(Array) || words.empty?
-
-      scores = scores_json.nil? ? [] : JSON.parse(scores_json)
-      scores = [] unless scores.is_a?(Array)
-
-      tuples = Array.new(words.size) do |i|
-        s = scores[i]
-        [words[i].to_s, s.is_a?(Numeric) ? s.to_i : RELATEDNESS_SCORE_THRESHOLD]
-      end
-      @row_cache[lemma_key] = tuples
+      words = JSON.parse(row[0])
+      @words_cache[lemma_key] = words.is_a?(Array) ? words.map(&:to_s) : []
     rescue JSON::ParserError, SQLite3::Exception => e
-      warn "local_store: fetch_related_tuples(#{lemma_key.inspect}) failed: #{e.message}"
-      @row_cache[lemma_key] = []
+      warn "local_store: fetch_related_words(#{lemma_key.inspect}) failed: #{e.message}"
+      @words_cache[lemma_key] = []
     end
 
-    def fetch_related_words(lemma_key)
-      fetch_related_tuples(lemma_key).map(&:first)
+    # Returns +[[word, score], ...]+ for the +related#<lemma>+ row, or +[]+.
+    # Mirrors +DynamoRuntime.fetch_related_tuples+ so call sites don't care
+    # which backend is active. Pays for one extra +related_scores+ lookup —
+    # only consumed by +/similar+, +?debug=1+, and +lookup_score_by_lemmas+,
+    # so the rhyme-page hot path never reaches it.
+    def fetch_related_tuples(lemma_key)
+      words = fetch_related_words(lemma_key)
+      return [] if words.empty?
+
+      scores = fetch_scores_array(lemma_key)
+      Array.new(words.size) do |i|
+        s = scores[i]
+        [words[i], s.is_a?(Numeric) ? s.to_i : RELATEDNESS_SCORE_THRESHOLD]
+      end
+    end
+
+    # Lazy companion to +fetch_related_words+. Returns the parallel score
+    # array for +lemma_key+, or +[]+ when the +related_scores+ row is
+    # missing. Cached separately from the words cache so repeat
+    # +similarity+ calls on the same cue don't re-parse the JSON.
+    def fetch_scores_array(lemma_key)
+      return @scores_cache[lemma_key] if @scores_cache.key?(lemma_key)
+      return @scores_cache[lemma_key] = [] unless available?
+
+      row = db.get_first_row("SELECT scores FROM related_scores WHERE pk = ?", "related##{lemma_key}")
+      return @scores_cache[lemma_key] = [] unless row
+
+      parsed = JSON.parse(row[0])
+      @scores_cache[lemma_key] = parsed.is_a?(Array) ? parsed : []
+    rescue JSON::ParserError, SQLite3::Exception => e
+      warn "local_store: fetch_scores_array(#{lemma_key.inspect}) failed: #{e.message}"
+      @scores_cache[lemma_key] = []
     end
 
     # Cheap existence check — used by the dev-only fallback in +related.rb+ to
@@ -219,26 +266,41 @@ module Rhymecrime
     end
 
     # Mirror of +DynamoRuntime.find_all_related_precomputed+: returns the word
-    # list filtered by the caller's visibility flags. Uses the in-process Ruby
-    # dict helpers (+lexicon_word_entry+, +rdict_lookup+) loaded by +crime.rb+.
+    # list filtered by the caller's visibility flags, without fetching scores.
+    # Uses the in-process Ruby dict helpers (+lexicon_word_entry+,
+    # +rdict_lookup+) loaded by +crime.rb+.
     def find_all_related_precomputed(lemma_key, include_rhymeless, common_only)
-      find_all_related_precomputed_with_scores(lemma_key, include_rhymeless, common_only).map(&:first)
+      words = fetch_related_words(lemma_key)
+      return [] if words.empty?
+
+      filter_related_words(words, include_rhymeless, common_only)
     end
 
     # Preserves the stored +relatedness_score+ on each surviving tuple so UI
-    # sorting / coloring stays O(1) per candidate.
+    # sorting / coloring stays O(1) per candidate. Pays for the +related_scores+
+    # lookup; only callers that need scores should reach this.
     def find_all_related_precomputed_with_scores(lemma_key, include_rhymeless, common_only)
       raw = fetch_related_tuples(lemma_key)
       return [] if raw.empty?
 
-      # +defined?+ guard so this module is importable in isolation (e.g. by
-      # +bin/upload-to-dynamodb+ which doesn't load +crime.rb+); callers that
-      # actually need filtering will have those helpers in scope.
       unless defined?(lexicon_word_entry) && defined?(rdict_lookup)
         return raw.dup
       end
 
-      raw.select do |(w, _score)|
+      survivors = filter_related_words(raw.map(&:first), include_rhymeless, common_only).to_set
+      raw.select { |(w, _s)| survivors.include?(w) }
+    end
+
+    # Shared filter step. +defined?+ guard so this module is importable in
+    # isolation (e.g. by +bin/upload-to-dynamodb+ which doesn't load
+    # +crime.rb+); callers that actually need filtering will have those
+    # helpers in scope. Returns surviving words in the input order so a
+    # caller zipping against +scores+ can preserve alignment via Set
+    # membership.
+    def filter_related_words(words, include_rhymeless, common_only)
+      return words.dup unless defined?(lexicon_word_entry) && defined?(rdict_lookup)
+
+      words.select do |w|
         entry = lexicon_word_entry(w)
         next false unless entry
         next false if common_only && entry[0].to_i <= RARE_FREQ_MAX

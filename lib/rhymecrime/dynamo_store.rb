@@ -137,63 +137,84 @@ module Rhymecrime
       end
     end
 
+    # Cheap path: words only, no score GetItem. Used by everything that
+    # doesn't need the +relatedness_score+ band — the non-debug rhyme page,
+    # +pair_in_store?+ membership checks, +find_all_related_precomputed+'s
+    # filter loop. Touches one item (+related#<lemma>+); a missing attribute
+    # or a parse failure both yield +[]+, matching the legacy behavior.
     def fetch_related_words(lemma_key)
-      fetch_related_tuples(lemma_key).map(&:first)
+      item = get_item("related##{lemma_key}")
+      parse_words_attr(item)
     end
 
-    # Returns parallel [[word, score], ...] tuples for the +related#<lemma>+
-    # row. +score+ is the stored +relatedness_score+ (0..100 integer) from
-    # precompute; defaults to +RELATEDNESS_SCORE_THRESHOLD+ when the row
-    # predates the scores-schema (old precompute upload without a +scores+
-    # attr) so UI sorting / coloring still yields sensible values instead of
-    # painting every related word with a 0 score.
-    def fetch_related_tuples(lemma_key)
-      item = get_item("related##{lemma_key}")
+    # Lazy companion to +fetch_related_words+: GetItems +score#<lemma>+ and
+    # returns the parallel score array, or +[]+ when the row is missing
+    # (legacy data, or this lemma simply had no precomputed scores). Only
+    # called by +fetch_related_tuples+ — i.e. by +/similar+, +?debug=1+, and
+    # +lookup_score_by_lemmas+ — so the production rhyme page never pays for
+    # it.
+    def fetch_scores_array(lemma_key)
+      item = get_item("score##{lemma_key}")
       return [] unless item
 
-      w = item["words"]
-      return [] unless w
-
-      words = w.is_a?(Array) ? w.map(&:to_s) : JSON.parse(w.to_s)
-      return [] if words.empty?
-
       s = item["scores"]
-      scores = if s.is_a?(Array)
-                 s
-               elsif s.is_a?(String) && !s.empty?
-                 JSON.parse(s)
-               else
-                 []
-               end
+      return s.map { |x| x.is_a?(Numeric) ? x.to_i : nil } if s.is_a?(Array)
+      return [] unless s.is_a?(String) && !s.empty?
 
-      words.each_with_index.map do |word, i|
-        raw = scores[i]
-        score = raw.is_a?(Numeric) ? raw.to_i : Object.const_get(:RELATEDNESS_SCORE_THRESHOLD)
-        [word, score]
-      end
+      parsed = JSON.parse(s)
+      parsed.is_a?(Array) ? parsed : []
     rescue JSON::ParserError
       []
-    rescue NameError
-      # RELATEDNESS_SCORE_THRESHOLD hasn't been loaded yet (dynamo_store is
-      # being required in isolation). Fall back to a hardcoded 50 — matches
-      # the runtime constant in lib/rhymecrime/related.rb.
-      words.each_with_index.map { |word, _i| [word, 50] }
+    end
+
+    # Returns parallel [[word, score], ...] tuples by zipping the cheap
+    # +related#<lemma>+ words list with the lazy +score#<lemma>+ scores list.
+    # +score+ is the stored +relatedness_score+ (0..100 integer); defaults to
+    # +RELATEDNESS_SCORE_THRESHOLD+ when the score row is missing or shorter
+    # than the words list so UI sorting / coloring still yields sensible
+    # values instead of painting every related word with a 0 score.
+    def fetch_related_tuples(lemma_key)
+      words = fetch_related_words(lemma_key)
+      return [] if words.empty?
+
+      scores = fetch_scores_array(lemma_key)
+      threshold = relatedness_score_threshold
+      words.each_with_index.map do |word, i|
+        raw = scores[i]
+        [word, raw.is_a?(Numeric) ? raw.to_i : threshold]
+      end
     end
 
     # +lemma_key+ is +lemma(word)+ for the query headword (see +related.rb+).
+    # Hot-path entry point: filters the cheap +related#<lemma>+ words list
+    # without ever touching +score#<lemma>+. This is what the non-debug rhyme
+    # page goes through.
     def find_all_related_precomputed(lemma_key, include_rhymeless, common_only)
-      find_all_related_precomputed_with_scores(lemma_key, include_rhymeless, common_only).map(&:first)
+      words = fetch_related_words(lemma_key)
+      return [] if words.empty?
+
+      filter_related_words(words, include_rhymeless, common_only)
     end
 
     # Companion to +find_all_related_precomputed+ that preserves the stored
-    # +relatedness_score+ alongside each surviving word. UI paths that need to
-    # sort / color / serialize by score read this directly instead of paying
-    # for N separate +similarity+ lookups.
+    # +relatedness_score+ alongside each surviving word. Pays for the
+    # +score#<lemma>+ GetItem; only callers that actually consume the score
+    # (+/similar+, +?debug=1+, score-aware sorts) should reach this.
     def find_all_related_precomputed_with_scores(lemma_key, include_rhymeless, common_only)
       raw = fetch_related_tuples(lemma_key)
       return [] if raw.empty?
 
       words = raw.map(&:first)
+      survivors = filter_related_words(words, include_rhymeless, common_only).to_set
+      raw.select { |(w, _s)| survivors.include?(w) }
+    end
+
+    # Shared filter step for the two find_all_* entry points. Prefetches
+    # +word#+ rows (and rimes when +include_rhymeless+ is false) in batches,
+    # then drops candidates that fail the visibility flags. Returns the
+    # surviving words in the same order as +words+ so callers that zip
+    # against +scores+ can preserve alignment via a Set membership test.
+    def filter_related_words(words, include_rhymeless, common_only)
       batch_get_words(words)
       unless include_rhymeless
         rimes = words.flat_map do |w|
@@ -203,10 +224,9 @@ module Rhymecrime
         batch_get_rimes(rimes)
       end
 
-      raw.select do |(w, _score)|
+      words.select do |w|
         entry = @word_cache[w]
         next false unless entry
-
         next false if common_only && entry[0] <= RARE_FREQ_MAX
 
         if include_rhymeless
@@ -344,6 +364,35 @@ module Rhymecrime
       w.is_a?(Array) ? w.map(&:to_s) : JSON.parse(w.to_s)
     rescue JSON::ParserError
       []
+    end
+
+    # Shared decode for the +words+ attribute on +related#<lemma>+ and
+    # +rime#<key>+ items: tolerate both List-typed (modern uploads) and
+    # legacy String-typed (JSON-encoded) shapes, and treat any decode
+    # failure as +[]+ so a single corrupt row doesn't 500 the request.
+    def parse_words_attr(item)
+      return [] unless item
+
+      w = item["words"]
+      return [] unless w
+      return w.map(&:to_s) if w.is_a?(Array)
+
+      parsed = JSON.parse(w.to_s)
+      parsed.is_a?(Array) ? parsed.map(&:to_s) : []
+    rescue JSON::ParserError
+      []
+    end
+
+    # +RELATEDNESS_SCORE_THRESHOLD+ lives in +lib/rhymecrime/related.rb+ and
+    # isn't loaded when +dynamo_store+ is required in isolation (e.g. by
+    # +bin/upload-to-dynamodb+ tests). Look it up via +Object.const_get+ and
+    # fall back to the hardcoded +50+ that matches the runtime constant —
+    # keeps this file importable without dragging in the relatedness
+    # constants module.
+    def relatedness_score_threshold
+      Object.const_get(:RELATEDNESS_SCORE_THRESHOLD)
+    rescue NameError
+      50
     end
   end
 end

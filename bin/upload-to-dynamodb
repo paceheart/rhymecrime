@@ -4,7 +4,9 @@
 # Batch-write into DynamoDB (single-table design, pk partition key):
 #   - word_dict.txt  → word#…
 #   - rime_dict.txt  → rime#…
-#   - rhymecrime_local.sqlite3 (from bin/precompute-relatedness) → related#…
+#   - rhymecrime_local.sqlite3 (from bin/precompute-relatedness):
+#       + related table         → related#… (cheap path, words only)
+#       + related_scores table  → score#…   (lazy companion, parallel scores)
 #
 #   AWS_PROFILE=paceheart RHYMECRIME_TABLE_NAME=rhymecrime AWS_REGION=us-east-1 \
 #     ruby bin/upload-to-dynamodb
@@ -184,33 +186,26 @@ else
 
   puts "Uploading related entries from #{related_path}..."
   # Stream rows out of SQLite in batches so we don't hold the full ~1.5 GB
-  # table in memory just to feed +batch_write_item+ (which batches 25 at a
-  # time anyway). +words+ and +scores+ came in as JSON blobs in the DB;
-  # +scores+ is omitted from the DDB item when the row has no +scores+ JSON
-  # so +Rhymecrime::DynamoRuntime.fetch_related_tuples+ falls back to
-  # +RELATEDNESS_SCORE_THRESHOLD+ for every entry — matches the behavior for
-  # DDB rows that predate the scores schema.
+  # local store in memory just to feed +batch_write_item+ (which batches 25
+  # at a time anyway). The schema lives in two tables:
+  #   * +related+         → +related#<lemma>+ items (cheap path, words only)
+  #   * +related_scores+  → +score#<lemma>+ items   (lazy parallel scores)
+  # The runtime tolerates a missing +score#<lemma>+ row and falls back to
+  # +RELATEDNESS_SCORE_THRESHOLD+ for every entry, so we only upload score
+  # items for cues that actually have scores in the local store — keeps the
+  # +score#+ table from materializing rows that round-trip back to the
+  # default in the runtime anyway.
   db = SQLite3::Database.new(related_path, readonly: true)
   begin
-    # Pre-count so the meter shows %/ETA. Cheap relative to the upload itself
-    # (a single +SELECT COUNT(*)+ on a +pk+-keyed table is sub-second even at
-    # millions of rows), and the alternative — streaming-mode meter with
-    # rolling rate but no total — is meaningfully less useful for a job that
-    # routinely runs 30+ minutes.
     related_total = db.get_first_value("SELECT COUNT(*) FROM related").to_i
     related_meter = ProgressMeter.new("related#", total: related_total)
     n_related = 0
     buf = []
-    db.execute("SELECT pk, words, scores FROM related") do |pk, words_json, scores_json|
+    db.execute("SELECT pk, words FROM related") do |pk, words_json|
       words = JSON.parse(words_json)
       raise "row missing words: #{pk}" unless words.is_a?(Array)
 
-      item = { "pk" => pk, "words" => words }
-      if scores_json
-        scores = JSON.parse(scores_json)
-        item["scores"] = scores if scores.is_a?(Array) && !scores.empty?
-      end
-      buf << item
+      buf << { "pk" => pk, "words" => words }
       if buf.size >= 500
         put_batch(client, table, buf) { |n| related_meter.advance(n) }
         n_related += buf.size
@@ -223,6 +218,33 @@ else
     end
     related_meter.finish
     puts "  #{n_related} related# items"
+
+    # Score#<lemma> stream. Independent loop (rather than a JOIN with
+    # +related+) so the +related#+ phase isn't held back by the full second
+    # table scan, and so a row with words but no scores doesn't waste a DDB
+    # write on a missing +scores+ payload.
+    score_total = db.get_first_value("SELECT COUNT(*) FROM related_scores").to_i
+    score_meter = ProgressMeter.new("score#", total: score_total)
+    n_scores = 0
+    buf = []
+    db.execute("SELECT pk, scores FROM related_scores") do |related_pk, scores_json|
+      scores = JSON.parse(scores_json)
+      next unless scores.is_a?(Array) && !scores.empty?
+
+      lemma = related_pk.sub(/\Arelated#/, "")
+      buf << { "pk" => "score##{lemma}", "scores" => scores }
+      if buf.size >= 500
+        put_batch(client, table, buf) { |n| score_meter.advance(n) }
+        n_scores += buf.size
+        buf.clear
+      end
+    end
+    unless buf.empty?
+      put_batch(client, table, buf) { |n| score_meter.advance(n) }
+      n_scores += buf.size
+    end
+    score_meter.finish
+    puts "  #{n_scores} score# items"
   ensure
     db.close
   end
