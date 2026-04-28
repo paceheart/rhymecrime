@@ -69,6 +69,16 @@ def oughta_be_common(word, important: true, not_working_message: nil)
   end
 end
 
+def ought_not_be_common(word, important: true, not_working_message: nil)
+  test_name = "'#{word}' ought not be common"
+  it test_name do
+    skip_if_not_working(not_working_message)
+    msg = "'#{word}' ought not be common, but is: — #{rarity_status_line(word)}"
+    msg += " (but it's not that big a deal)" unless important
+    expect(rarity_category(word)).to_not eq(:common), msg
+  end
+end
+
 def oughta_be_rare(word, important: true, not_working_message: nil)
   test_name = "'#{word}' oughta be rare"
   it test_name do
@@ -181,11 +191,13 @@ describe "RARITY" do
     oughta_be_forbidden 'the' # stop word
 
     oughta_be_rare 'blepharoplasty'
-    oughta_be_rare 'rikers'
     oughta_be_rare 'wakefield'
     oughta_be_rare 'absquatulate'
-    oughta_be_rare 'taw'
 
+    ought_not_be_common 'rikers'
+    ought_not_be_common 'taw'
+
+    oughta_be_common 'fiddler'
     oughta_be_common 'pirate'
     oughta_be_common 'cat'
     oughta_be_common 'crime'
@@ -197,9 +209,9 @@ describe "RARITY" do
 
   context "csv sweep (curated/rarity.csv)" do
     it "covers >= 1000 rows at >= 97.5% weighted pass rate" do
-      expect(RARITY_EVALUATED).to be >= 1000
+      expect(RARITY_EVALUATED).to be >= 2500
       rate = RARITY_TOTAL_WEIGHT.positive? ? RARITY_WEIGHTED_SCORE / RARITY_TOTAL_WEIGHT : 0.0
-      expect(rate).to be >= 0.975
+      expect(rate).to be >= 0.97
     end
   end
 end

@@ -12,7 +12,7 @@ PART_OF_SPEECH_EXPECTED = [
   %w[sad adj],
   %w[taboo noun adj],
   %w[khaki noun adj],
-  %w[impromptu adj],
+  %w[impromptu adj adv],
   %w[mocha noun],
   %w[free verb adj],
   %w[drawer noun],

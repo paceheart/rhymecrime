@@ -79,3 +79,5 @@ wherever we use wordnet glosses, also use wiktionary glosses
 pluralization bug: nosocomephobiaes
 
 make achin' have lemma "aching"
+
+try again to strengthen lemma to semantic_base and see if it helps
