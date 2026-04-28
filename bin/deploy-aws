@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+#
+# One-shot AWS deploy: stage runtime files, build inside Lambda's Ruby 3.4
+# arm64-linux container, push to CloudFormation. After success, prints the
+# HTTP API base URL.
+#
+#   ./bin/deploy-aws
+#
+# Prereqs (one-time):
+#   - +./setup.sh+ has run (the +generated/+ artifacts +stage-lambda+ copies
+#     into the deploy bundle exist).
+#   - Docker is running (+--use-container+ runs +bundle install+ inside the
+#     +public.ecr.aws/sam/build-ruby3.4+ image so native gems compile for
+#     arm64-linux instead of the build host's arm64-darwin).
+#   - +samconfig.toml+ exists with +profile = "paceheart"+ pinned (created
+#     by the first +sam deploy --guided+; never accidentally hits the work
+#     account again).
+#
+# Data uploads are a *separate* step: see +bin/upload-to-dynamodb+ /
+# +bin/deploy-data+. Lambda + DynamoDB tables get provisioned here, but the
+# tables ship empty until you upload.
+
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+echo "==> [1/3] staging Lambda bundle"
+./bin/stage-lambda
+
+echo "==> [2/3] sam build (inside build-ruby3.4 arm64 container)"
+sam build --use-container
+
+echo "==> [3/3] sam deploy"
+sam deploy
+
+echo
+echo "==> deployed. HTTP API URL:"
+# +--profile paceheart+ matches +samconfig.toml+'s pin. Without it, the AWS
+# CLI uses whichever profile the shell happens to have active, which is
+# exactly the trap that landed our first deploy in the work account.
+aws cloudformation describe-stacks \
+  --stack-name rhymecrime \
+  --query "Stacks[0].Outputs[?OutputKey=='HttpApiUrl'].OutputValue" \
+  --output text \
+  --profile paceheart

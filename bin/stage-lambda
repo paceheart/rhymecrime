@@ -1,0 +1,87 @@
+#!/usr/bin/env bash
+#
+# Stage the Lambda deploy bundle into +lambda-build/+, the directory
+# +template.yaml+ points at via +CodeUri+.
+#
+#   ./bin/stage-lambda
+#
+# Why a staging dir instead of +CodeUri: .+ + an ignore list:
+# SAM CLI's +CopySource+ phase walks the entire +CodeUri+ tree before any
+# build hook runs, and it does NOT honor +.samignore+, +.gitignore+, or
+# +.dockerignore+. Pointing +CodeUri+ at the repo root makes +sam build+
+# (a) drag 4+ GB of corpora and MPNet vectors through copy-source on every
+# build, and (b) crash on +.venv/bin/python3+, which is an absolute symlink
+# into +~/.local/share/uv/+ that doesn't resolve inside the build container.
+#
+# Pointing +CodeUri+ at a directory we control sidesteps both. The default
+# +RubyBundlerBuilder+ then handles +bundle install+ inside the
+# +public.ecr.aws/sam/build-ruby3.4+ image (when invoked with
+# +sam build --use-container+), so native gems — +msgpack+'s C extension
+# is the one that bites in practice — compile for arm64-linux instead of
+# the build host's arm64-darwin.
+#
+# Deploy flow:
+#   ./bin/stage-lambda
+#   sam build --use-container
+#   sam deploy --guided    # (or non-guided once samconfig.toml is settled)
+#
+# What ships:
+#   lambda_handler.rb               request entry point
+#   Gemfile, Gemfile.lock           bundler input (RubyBundlerBuilder consumes)
+#   lib/                            all of lib/rhymecrime
+#   assets/                         CSS / JS / images served from /
+#   curated/                        hand-curated data files (rarity.csv, etc.)
+#   generated/spelling_variants_auto.txt    \ small files crime.rb /
+#   generated/hyphen_variant_map.json       | utils_rhyme.rb open with
+#   generated/word_lemma_map.msgpack        | File.read in DDB mode.
+#   generated/word_semantic_base_map.msgpack/ See the require-graph audit
+#                                            below if you're tempted to add.
+#
+# What does NOT ship (intentional):
+#   corpora/                        build-time only; runtime reads DynamoDB
+#   generated/model_sense_vectors.msgpack   1.6 GB; relatedness training only
+#   generated/relatedness_classifier.json   loaded into DDB, not Lambda
+#   generated/rarity_classifier.json        loaded into DDB, not Lambda
+#   generated/sense_glosses.jsonl           training intermediate
+#   generated/rarity_signals_dump.jsonl     training intermediate
+#   generated/part_of_speech.json           DDB-mode short-circuits its only
+#                                           Lambda-reachable caller; +crime.rb+
+#                                           +part_of_speech_tags+ +raise+s if
+#                                           anything ever does try to read it
+#   bin/                            build / training scripts
+#   spec/, notes/, experiments/     tests + scratch
+#   .venv/, .git/, .aws-sam/        local-dev / build state
+#   app.rb, config.ru, setup.sh     local-dev entry points
+#
+# When you add code that lazy-loads a new +generated/<name>+ artifact at
+# Lambda runtime, mirror an entry into the +cp+ block below — otherwise the
+# file silently disappears from the deployed package.
+
+set -euo pipefail
+
+REPO="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$REPO"
+
+STAGING="lambda-build"
+
+echo "==> wiping $STAGING/"
+rm -rf "$STAGING"
+mkdir -p "$STAGING/generated"
+
+echo "==> copying runtime sources"
+cp lambda_handler.rb "$STAGING/"
+cp Gemfile           "$STAGING/"
+cp Gemfile.lock      "$STAGING/"
+cp -R lib            "$STAGING/"
+cp -R assets         "$STAGING/"
+cp -R curated        "$STAGING/"
+
+echo "==> copying generated/ runtime artifacts"
+cp generated/spelling_variants_auto.txt     "$STAGING/generated/"
+cp generated/hyphen_variant_map.json        "$STAGING/generated/"
+cp generated/word_lemma_map.msgpack         "$STAGING/generated/"
+cp generated/word_semantic_base_map.msgpack "$STAGING/generated/"
+
+echo
+echo "staged. $(du -sh "$STAGING" | cut -f1) in $STAGING/"
+echo "next:  sam build --use-container && sam deploy --guided"

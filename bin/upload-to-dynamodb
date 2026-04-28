@@ -6,17 +6,27 @@
 #   - rime_dict.txt  → rime#…
 #   - rhymecrime_local.sqlite3 (from bin/precompute-relatedness) → related#…
 #
-#   RHYMECRIME_TABLE_NAME=rhymecrime AWS_REGION=us-east-1 ruby bin/upload-to-dynamodb
+#   AWS_PROFILE=paceheart RHYMECRIME_TABLE_NAME=rhymecrime AWS_REGION=us-east-1 \
+#     ruby bin/upload-to-dynamodb
 #
 #   --skip-related     Do not upload related rows (omit if the local store is missing)
 #   --related=PATH     Override path to the local SQLite store
 #                      (default: generated/rhymecrime_local.sqlite3)
+#
+# +AWS_PROFILE+ is required, not optional: an unset profile lets the AWS SDK
+# fall through its default credential chain (env vars, instance metadata, the
+# +[default]+ profile, whichever active SSO session it sees first), which is
+# exactly how the first +sam deploy+ for this stack landed in the wrong AWS
+# account. Forcing an explicit profile + an STS pre-flight makes wrong-account
+# uploads loud (caller-identity mismatch surfaces before the first BatchWrite)
+# and gives us a fingerprint to grep for in shell history when debugging.
 
 $LOAD_PATH.unshift File.expand_path("../lib", __dir__)
 
 require "json"
 require "optparse"
 require "aws-sdk-dynamodb"
+require "aws-sdk-sts"
 require "sqlite3"
 require_relative "../lib/rhymecrime/data_source"
 require_relative "../lib/rhymecrime/dict/utils_rhyme"
@@ -24,15 +34,106 @@ require_relative "../lib/rhymecrime/dict/utils_rhyme"
 skip_related = false
 related_path = generated_dict_path(LOCAL_STORE_FILENAME)
 
+# Snapshot before +parse!+ mutates ARGV so the AWS_PROFILE abort below can
+# echo back the flags the user actually typed (otherwise +--skip-related+
+# silently drops out of the suggested re-run command).
+original_argv = ARGV.dup
+
 OptionParser.new do |o|
   o.on("--skip-related", "Skip uploading related# items from the local store") { skip_related = true }
   o.on("--related=PATH", "Path to local SQLite store built by bin/precompute-relatedness") { |p| related_path = File.expand_path(p) }
 end.parse!
 
+profile = ENV["AWS_PROFILE"].to_s
+if profile.empty?
+  abort <<~MSG
+    Error: AWS_PROFILE is required.
+
+    This script writes to a +rhymecrime+ DynamoDB table. Without an explicit
+    profile, the AWS SDK picks whichever credentials its default chain finds
+    first, which is how previous deploys for this app accidentally hit a
+    work-account stack.
+
+    Re-run with the profile pointing at your personal AWS account:
+
+      AWS_PROFILE=paceheart ./bin/upload-to-dynamodb#{original_argv.empty? ? "" : " " + original_argv.join(" ")}
+
+    Available profiles on this machine: +aws configure list-profiles+.
+  MSG
+end
+
 table = Rhymecrime::DataSource.table_name
 region = ENV.fetch("AWS_REGION", "us-east-1")
-client = Aws::DynamoDB::Client.new(region: region)
 
+# Pass +profile+ explicitly to both clients rather than relying on the SDK's
+# env-var pickup. Belt-and-suspenders against a stray +unset AWS_PROFILE+
+# between the guard above and the first DDB call.
+sts_client = Aws::STS::Client.new(region: region, profile: profile)
+identity = sts_client.get_caller_identity
+puts "==> AWS_PROFILE=#{profile} → account=#{identity.account} arn=#{identity.arn}"
+puts "    region=#{region} table=#{table}"
+
+client = Aws::DynamoDB::Client.new(region: region, profile: profile)
+
+# Throttled progress meter shared by all three upload phases. Two output
+# modes:
+#   - Interactive ($stderr.tty?): a single line redrawn in place every
+#     +throttle_seconds+ via CR + ANSI clear-to-end-of-line. Avoids spamming
+#     scrollback while still giving the user real-time feedback through what's
+#     a multi-minute (often multi-tens-of-minutes for related#) run.
+#   - Non-interactive (CI logs, file capture, `tee`): line-per-update so the
+#     output is grep-able and CR doesn't produce overstrike garbage.
+class ProgressMeter
+  def initialize(label, total: nil, throttle_seconds: 0.5, io: $stderr)
+    @label = label
+    @total = total
+    @count = 0
+    @started = Time.now
+    @last_printed_at = Time.now - throttle_seconds # force first frame
+    @throttle = throttle_seconds
+    @io = io
+    @tty = io.tty?
+  end
+
+  def advance(n = 1)
+    @count += n
+    now = Time.now
+    return if now - @last_printed_at < @throttle
+    render(now)
+    @last_printed_at = now
+  end
+
+  def finish
+    render(Time.now, force: true)
+    @io.write("\n") if @tty
+    @io.flush
+  end
+
+  private
+
+  def render(now, force: false)
+    elapsed = now - @started
+    rate = elapsed > 0 ? (@count / elapsed) : 0
+    msg = if @total && @total > 0
+            pct = (100.0 * @count / @total).round(1)
+            eta = rate > 0 ? ((@total - @count) / rate).round : 0
+            "  #{@label}: #{@count}/#{@total} (#{pct}%) — #{rate.round} items/sec, #{elapsed.round}s elapsed, ~#{eta}s left"
+          else
+            "  #{@label}: #{@count} items — #{rate.round} items/sec, #{elapsed.round}s elapsed"
+          end
+    if @tty
+      @io.write("\r#{msg}\e[K")
+    else
+      @io.write("#{msg}\n")
+    end
+    @io.flush
+  end
+end
+
+# Yields the slice size to the optional block after each successful 25-item
+# +BatchWriteItem+, so callers can drive a +ProgressMeter+ without having to
+# care about DynamoDB's 25-item batch limit themselves. No block = silent
+# (matches the previous signature).
 def put_batch(client, table, items)
   items.each_slice(25) do |slice|
     client.batch_write_item(
@@ -40,6 +141,7 @@ def put_batch(client, table, items)
         table => slice.map { |it| { put_request: { item: it } } }
       }
     )
+    yield(slice.size) if block_given?
   end
 end
 
@@ -68,7 +170,9 @@ File.foreach(word_path, encoding: "UTF-8") do |line|
     "lemma" => lemma
   }
 end
-put_batch(client, table, word_items)
+word_meter = ProgressMeter.new("word#", total: word_items.size)
+put_batch(client, table, word_items) { |n| word_meter.advance(n) }
+word_meter.finish
 puts "  #{word_items.size} word# items"
 
 puts "Uploading rime entries from #{rime_path}..."
@@ -84,7 +188,9 @@ File.foreach(rime_path, encoding: "UTF-8") do |line|
     "words" => words
   }
 end
-put_batch(client, table, rime_items)
+rime_meter = ProgressMeter.new("rime#", total: rime_items.size)
+put_batch(client, table, rime_items) { |n| rime_meter.advance(n) }
+rime_meter.finish
 puts "  #{rime_items.size} rime# items"
 
 if skip_related
@@ -105,6 +211,13 @@ else
   # DDB rows that predate the scores schema.
   db = SQLite3::Database.new(related_path, readonly: true)
   begin
+    # Pre-count so the meter shows %/ETA. Cheap relative to the upload itself
+    # (a single +SELECT COUNT(*)+ on a +pk+-keyed table is sub-second even at
+    # millions of rows), and the alternative — streaming-mode meter with
+    # rolling rate but no total — is meaningfully less useful for a job that
+    # routinely runs 30+ minutes.
+    related_total = db.get_first_value("SELECT COUNT(*) FROM related").to_i
+    related_meter = ProgressMeter.new("related#", total: related_total)
     n_related = 0
     buf = []
     db.execute("SELECT pk, words, scores FROM related") do |pk, words_json, scores_json|
@@ -118,15 +231,16 @@ else
       end
       buf << item
       if buf.size >= 500
-        put_batch(client, table, buf)
+        put_batch(client, table, buf) { |n| related_meter.advance(n) }
         n_related += buf.size
         buf.clear
       end
     end
     unless buf.empty?
-      put_batch(client, table, buf)
+      put_batch(client, table, buf) { |n| related_meter.advance(n) }
       n_related += buf.size
     end
+    related_meter.finish
     puts "  #{n_related} related# items"
   ensure
     db.close

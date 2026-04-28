@@ -1,34 +1,29 @@
 #!/usr/bin/env bash
 #
-# Bootstrap a clean RhymeCrime checkout end-to-end so that +./bin/build+ can
-# then run unattended. Four idempotent steps; each can be re-run in isolation
-# and self-detects already-done state:
+# Bootstrap a clean RhymeCrime checkout end-to-end. Four idempotent steps;
+# each can be re-run in isolation and self-detects already-done state:
 #
 #   bundle install              # Ruby gems pinned in Gemfile / Gemfile.lock
 #   ./bin/setup-corpora         # external corpora + small pre-aggregations
 #   ./bin/setup-python-venv     # .venv/ for MPNet encoding (sentence-transformers + msgpack)
-#   ./bin/dict-build            # slim rhyme-dict compile (no CN+NB, no rarity rescore)
+#   ./bin/build                 # full pipeline: dict-build (CN+NB + rarity dump),
+#                               # rarity classifier, MPNet sense vectors,
+#                               # relatedness classifier, dict-build rescore
 #
 # Run from the repo root after a fresh clone:
 #
-#   ./setup.sh             # everything above, in order
-#   ./bin/build            # full pipeline: CN+NB exports, rarity classifier,
-#                          # MPNet sense vectors, relatedness classifier
-#   bundle exec rspec      # passes only AFTER bin/build; specs assert against
-#                          # the trained classifiers, which the slim setup
-#                          # dict-build does not produce.
+#   ./setup.sh             # everything above, in order — fully turnkey
+#   bundle exec rspec      # validate against the trained classifiers
 #
 # Prereqs on the host: ruby (matching +template.yaml+'s Lambda runtime),
 # bundler, curl, gunzip. Python 3 is *not* a prereq — +bin/setup-python-venv+
 # uses uv (https://astral.sh/uv) to provision a managed CPython 3.12 when no
 # GIL-enabled Python is found on PATH.
 #
-# RHYMECRIME_RARITY_CLASSIFIER=off below: dict-build hard-fails when the
-# rarity classifier is absent (no silent rule-based fallback), but a clean
-# checkout can't have one yet — the trainer reads a feature dump that the
-# very first dict-build pass produces. The =off flag is the documented
-# bootstrap escape; the same chicken-and-egg is what +bin/build+ resolves
-# end-to-end after setup.sh completes.
+# End-to-end runtime is ~60 min on a fresh clone, dominated by stage 1 of
+# +bin/build+ (Numberbatch I/O, ~25 min) and stage 3 (MPNet encoding on CPU,
+# ~20 min). Re-runs are much cheaper since each step short-circuits when its
+# outputs are already on disk and current.
 
 set -euo pipefail
 
@@ -38,9 +33,8 @@ cd "$REPO"
 bundle install
 ./bin/setup-corpora
 ./bin/setup-python-venv
-RHYMECRIME_RARITY_CLASSIFIER=off ./bin/dict-build
+./bin/build
 
 echo
-echo "setup.sh done. Next:"
-echo "  ./bin/build          # train classifiers + build full generated artifacts"
-echo "  bundle exec rspec    # full spec sweep (asserts on trained classifiers)"
+echo "setup.sh done. Validate with:"
+echo "  bundle exec rspec"

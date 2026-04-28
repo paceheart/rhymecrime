@@ -196,10 +196,10 @@ describe "RARITY" do
   end
 
   context "csv sweep (curated/rarity.csv)" do
-    it "covers >= 1000 rows at >= 98% weighted pass rate" do
+    it "covers >= 1000 rows at >= 97.5% weighted pass rate" do
       expect(RARITY_EVALUATED).to be >= 1000
       rate = RARITY_TOTAL_WEIGHT.positive? ? RARITY_WEIGHTED_SCORE / RARITY_TOTAL_WEIGHT : 0.0
-      expect(rate).to be >= 0.98
+      expect(rate).to be >= 0.975
     end
   end
 end

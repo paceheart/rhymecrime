@@ -1,0 +1,22 @@
+version = 0.1
+
+# Pin every +sam+ subcommand from this repo to the +paceheart+ AWS profile.
+# Without this pin, +sam+ falls back to whichever credentials the shell
+# environment last latched onto — which the first deploy attempt did, landing
+# the stack in the work-Later account before +iam:CreateRole+ bounced it. The
+# pin is at +global.parameters+ so it covers +sam build+, +sam deploy+,
+# +sam logs+, +sam delete+, etc. — every entry point that resolves AWS creds.
+[default.global.parameters]
+region = "us-east-1"
+profile = "paceheart"
+
+[default.deploy.parameters]
+stack_name = "rhymecrime"
+resolve_s3 = true
+s3_prefix = "rhymecrime"
+region = "us-east-1"
+profile = "paceheart"
+confirm_changeset = true
+capabilities = "CAPABILITY_IAM"
+parameter_overrides = "TableName=\"rhymecrime\" FeedbackTableName=\"rhymecrime-feedback\""
+image_repositories = []

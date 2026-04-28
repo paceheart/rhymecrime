@@ -2,12 +2,14 @@
 
 require "singleton"
 require "forwardable"
+require "thread"
 require "aws-sdk-dynamodb"
 require "json"
 require_relative "data_source"
 require_relative "dict/utils_rhyme"
 require_relative "dict/phoneme.rb"
 require_relative "dict/pronunciation.rb"
+require_relative "timing"
 
 module Rhymecrime
   class DynamoRuntime
@@ -45,12 +47,18 @@ module Rhymecrime
     # surfaces the data source it's about to trust — DDB doesn't expose a
     # cheap "last write" timestamp without a +describe_table+ round-trip, so
     # we just identify the table and region.
+    #
+    # No +RELATED_BYPASS_STORE=1+ hint here (unlike +LocalStore+'s analog):
+    # in DDB mode +store_authoritative?+ is true, the live-compute pipeline
+    # (+relatedness/signals+, +relatedness/score+) isn't even +require+'d, and
+    # the corpora it depends on (Numberbatch, ConceptNet, etc.) aren't in the
+    # Lambda bundle by design — see +bin/stage-lambda+. A Store miss is the
+    # final answer; there is nothing to fall back to.
     def announce_cache_source!
       return if @announced
       @announced = true
       warn "[related-cache] using DynamoDB precomputed store table=#{table_name} " \
-           "region=#{ENV.fetch('AWS_REGION', 'us-east-1')} — " \
-           "set RELATED_BYPASS_STORE=1 to force live compute"
+           "region=#{ENV.fetch('AWS_REGION', 'us-east-1')} (authoritative; no live-compute fallback)"
     end
 
     def table_name
@@ -73,19 +81,16 @@ module Rhymecrime
       keys = words.uniq.reject { |w| @word_cache.key?(w) }
       return if keys.empty?
 
-      keys.each_slice(100) do |slice|
-        resp = client.batch_get_item(
-          request_items: {
-            table_name => {
-              keys: slice.map { |w| { "pk" => "word##{w}" } }
-            }
-          }
-        )
-        (resp.responses[table_name] || []).each do |item|
-          w = item["pk"].to_s.sub(/\Aword#/, "")
-          @word_cache[w] = parse_word_item(w, item)
+      slices = keys.each_slice(100).to_a
+      Rhymecrime::Timing.measure("batch_get_words keys=#{keys.size} slices=#{slices.size} parallelism=#{effective_parallelism(slices.size)}") do
+        responses = parallel_batch_get_items(slices, "word#")
+        slices.zip(responses).each do |slice, resp|
+          (resp.responses[table_name] || []).each do |item|
+            w = item["pk"].to_s.sub(/\Aword#/, "")
+            @word_cache[w] = parse_word_item(w, item)
+          end
+          slice.each { |w| @word_cache[w] = nil unless @word_cache.key?(w) }
         end
-        slice.each { |w| @word_cache[w] = nil unless @word_cache.key?(w) }
       end
     end
 
@@ -100,19 +105,16 @@ module Rhymecrime
       keys = rimes.uniq.reject { |r| @rime_cache.key?(r) }
       return if keys.empty?
 
-      keys.each_slice(100) do |slice|
-        resp = client.batch_get_item(
-          request_items: {
-            table_name => {
-              keys: slice.map { |r| { "pk" => "rime##{r}" } }
-            }
-          }
-        )
-        (resp.responses[table_name] || []).each do |item|
-          r = item["pk"].to_s.sub(/\Arime#/, "")
-          @rime_cache[r] = parse_rime_item(item)
+      slices = keys.each_slice(100).to_a
+      Rhymecrime::Timing.measure("batch_get_rimes keys=#{keys.size} slices=#{slices.size} parallelism=#{effective_parallelism(slices.size)}") do
+        responses = parallel_batch_get_items(slices, "rime#")
+        slices.zip(responses).each do |slice, resp|
+          (resp.responses[table_name] || []).each do |item|
+            r = item["pk"].to_s.sub(/\Arime#/, "")
+            @rime_cache[r] = parse_rime_item(item)
+          end
+          slice.each { |r| @rime_cache[r] = [] unless @rime_cache.key?(r) }
         end
-        slice.each { |r| @rime_cache[r] = [] unless @rime_cache.key?(r) }
       end
     end
 
@@ -197,6 +199,79 @@ module Rhymecrime
     end
 
     private
+
+    # Bounded-parallelism cap on concurrent +BatchGetItem+ calls. Override via
+    # +RHYMECRIME_DDB_PARALLELISM+ if a future workload (different cue, different
+    # data shape) tips into either DDB-side throttling (lower it) or
+    # HTTP-client-side connection-pool starvation (raise it; the AWS SDK's
+    # default Net::HTTP pool is +max_connections: 50+ — we're well under that).
+    #
+    # 8 was picked empirically as the smallest pool that lets the worst-case
+    # set_related cue (+cat+: ~150 sequential +BatchGetItem+ calls for word +
+    # rime + rhyme-cohort prefetches) come in under the 29-second API Gateway
+    # ceiling. Each batch is a single-region, single-partition call so DDB's
+    # on-demand instant-burst budget covers a fan-out this small without
+    # ProvisionedThroughputExceeded.
+    DDB_BATCH_PARALLELISM = (ENV["RHYMECRIME_DDB_PARALLELISM"] || "8").to_i
+
+    def effective_parallelism(slice_count)
+      return 1 if slice_count <= 1
+      [DDB_BATCH_PARALLELISM, slice_count].min
+    end
+
+    # Fan +slices+ across a bounded pool of worker threads, each issuing one
+    # +client.batch_get_item+ per slice. Returns the responses in the same
+    # order as +slices+ so the caller can zip them back to the input keys.
+    #
+    # +pk_prefix+ ("word#" or "rime#") is concatenated with each key inside
+    # the worker so the per-slice payload is built lazily — keeps the queue
+    # entries small and avoids materializing all request payloads up front.
+    #
+    # Thread safety: +Aws::DynamoDB::Client+ is documented thread-safe (the
+    # SDK guide explicitly calls this out for +Client+ classes); we only mutate
+    # the shared +responses+ array via distinct indices (no overlapping writes)
+    # and never touch +@word_cache+ / +@rime_cache+ from a worker — those are
+    # written from the main thread after +Thread#join+ returns.
+    #
+    # Falls back to a synchronous loop on a single slice — spawning a thread
+    # to do one BatchGetItem is pure overhead.
+    def parallel_batch_get_items(slices, pk_prefix)
+      return [] if slices.empty?
+
+      if slices.size == 1
+        return [batch_get_items_call(slices.first, pk_prefix)]
+      end
+
+      responses = Array.new(slices.size)
+      queue = Queue.new
+      slices.each_with_index { |slice, i| queue << [i, slice] }
+
+      pool_size = effective_parallelism(slices.size)
+      workers = Array.new(pool_size) do
+        Thread.new do
+          loop do
+            begin
+              idx, slice = queue.pop(true)
+            rescue ThreadError
+              break
+            end
+            responses[idx] = batch_get_items_call(slice, pk_prefix)
+          end
+        end
+      end
+      workers.each(&:join)
+      responses
+    end
+
+    def batch_get_items_call(slice, pk_prefix)
+      client.batch_get_item(
+        request_items: {
+          table_name => {
+            keys: slice.map { |k| { "pk" => "#{pk_prefix}#{k}" } }
+          }
+        }
+      )
+    end
 
     def get_item(pk)
       resp = client.get_item(table_name: table_name, key: { "pk" => pk })

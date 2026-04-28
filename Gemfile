@@ -18,6 +18,11 @@ gem "sinatra"
 gem "sqlite3"
 
 group :development, :test do
+  gem "aws-sdk-sts" # +bin/upload-to-dynamodb+ pre-flight: +GetCallerIdentity+
+                    # prints the resolved account+ARN before any +BatchWrite+
+                    # so a wrong +AWS_PROFILE+ surfaces immediately. Lambda
+                    # runtime never touches STS; keeping this out of the main
+                    # group keeps it out of the deployment bundle.
   gem "numo-narray" # BLAS-backed dot products for the MPNet sense-vector
                     # cosines in +lib/rhymecrime/relatedness/signals.rb+.
                     # Offline / local-dev only — signals.rb isn't loaded at

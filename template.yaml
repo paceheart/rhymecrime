@@ -6,9 +6,16 @@ Globals:
   Function:
     Timeout: 29
     MemorySize: 512
-    Runtime: ruby3.3
+    # Match Gemfile +ruby "~> 3.4.0"+ — AWS picks the patch level inside the
+    # +ruby3.4+ managed runtime; pessimistic Gemfile pin surfaces 3.5/4.0
+    # contributor drift before deploy rather than after.
+    Runtime: ruby3.4
+    # arm64 is ~20% cheaper than x86_64 on Lambda compute and matches the
+    # arm64-darwin dev host, so +sam build --use-container+ is a same-arch
+    # build (no Rosetta / qemu emulation, no cross-platform native-gem dance).
+    # All gems we depend on ship arm64-linux artifacts.
     Architectures:
-      - x86_64
+      - arm64
 
 Parameters:
   TableName:
@@ -56,7 +63,22 @@ Resources:
   RhymecrimeFunction:
     Type: AWS::Serverless::Function
     Properties:
-      CodeUri: .
+      # +CodeUri+ points at a staging directory populated by +bin/stage-lambda+,
+      # not the repo root. SAM CLI's +CopySource+ phase walks the entire
+      # +CodeUri+ tree before any build hook fires, and it does NOT honor
+      # +.samignore+ / +.gitignore+ / +.dockerignore+, so a +CodeUri: .+ build
+      # both (a) drags 4+ GB of corpora + MPNet vectors through copy-source
+      # and (b) crashes on +.venv/bin/python3+, which is an absolute symlink
+      # to a uv-managed Python that doesn't exist inside the build container.
+      # +bin/stage-lambda+ enumerates the files the runtime actually opens
+      # — see the doc-comment header there for the require-graph audit.
+      #
+      # Build with +sam build --use-container+ so the default
+      # +RubyBundlerBuilder+ runs +bundle install+ inside
+      # +public.ecr.aws/sam/build-ruby3.4+ and native gems (+msgpack+ has a
+      # C extension on the lemma-map hot path) compile for arm64-linux
+      # instead of the build host's arm64-darwin.
+      CodeUri: lambda-build/
       Handler: lambda_handler.handler
       Environment:
         Variables:
@@ -64,6 +86,15 @@ Resources:
           RHYMECRIME_TABLE_NAME: !Ref TableName
           RHYMECRIME_FEEDBACK_TABLE_NAME: !Ref FeedbackTableName
           TABLE_NAME: !Ref TableName
+          # Lambda's Ruby runtime ships with +LANG+ unset, leaving
+          # +Encoding.default_external+ at US-ASCII. The AWS SDK's JSON parser
+          # then chokes on any multibyte UTF-8 byte in a DynamoDB response
+          # (e.g. +\xC3+ from +café+ / +naïve+ in our dict). +lambda_handler+
+          # also force-sets +Encoding.default_external = UTF_8+ as a backstop;
+          # this env var fixes it at the source so any other process spawned
+          # by the runtime (less of a concern in practice, but cheap) inherits
+          # the right locale too.
+          LANG: en_US.UTF-8
       Policies:
         - DynamoDBReadPolicy:
             TableName: !Ref RhymecrimeTable
@@ -85,6 +116,21 @@ Resources:
           Properties:
             Path: /feedback
             Method: POST
+        # Catch-all for static assets (+/crimestyle.css+, +/feedback.js+, etc.)
+        # served by +ASSET_ROUTES+ in +lambda_handler.rb+. Without it, API
+        # Gateway 404s every asset request before the Lambda sees it, the
+        # browser falls back to default styling, and the page renders with a
+        # white background.
+        #
+        # +Method: GET+ keeps the proxy GET-only so random +POST /anything+
+        # still 404s at the API Gateway layer instead of paying for a Lambda
+        # cold-start. New POST/PUT endpoints get their own explicit route
+        # above; longest-match wins, so +POST /feedback+ above is unaffected.
+        ApiAssetProxy:
+          Type: HttpApi
+          Properties:
+            Path: /{proxy+}
+            Method: GET
 
 Outputs:
   HttpApiUrl:

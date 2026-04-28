@@ -18,22 +18,20 @@
 #        a. dump-sense-glosses          → generated/sense_glosses.jsonl
 #        b. build-sense-vectors.py      → generated/model_sense_vectors.msgpack
 #        c. train-relatedness-classifier → generated/relatedness_classifier.json
+#   4. dict-build (slim, with classifier on)
+#        - re-runs Phase 12 to rescore word_dict.txt against the freshly-
+#          trained rarity classifier. CN+NB exports are already on disk from
+#          stage 1, so this pass uses the default slim flags.
 #
 # Prereqs (one-time): ./setup.sh, which provisions everything — gems,
-# corpora, the .venv used by stage 3b for MPNet encoding, and a slim
-# dict-build pass. setup.sh installs uv (https://astral.sh/uv) + a managed
-# CPython 3.12 if no GIL-enabled Python is on PATH, so this script never has
-# to think about Python at all.
+# corpora, and the .venv used by stage 3b for MPNet encoding. setup.sh
+# installs uv (https://astral.sh/uv) + a managed CPython 3.12 if no
+# GIL-enabled Python is on PATH, so this script never has to think about
+# Python at all.
 #
 # Stage 1 is ~25 min (mostly Numberbatch I/O). Stage 2 is ~1 min. Stage 3 is
-# ~20 min on CPU (MPNet encoding) + ~1 min for the classifier fit.
-#
-# After this finishes the rhyming dictionary is *not* yet rescored against the
-# freshly-trained rarity classifier — the rescore only runs in dict-build's
-# Phase 12, and stage 1 above runs with the classifier disabled (chicken-and-
-# egg: the classifier needs the dump that this build produces). Re-run
-# ./bin/dict-build (slim is fine; CN+NB are now on disk) to apply the rescore
-# and produce the final word_dict.txt.
+# ~20 min on CPU (MPNet encoding) + ~1 min for the classifier fit. Stage 4
+# is ~10–15 min (skips CN+NB export I/O).
 
 set -euo pipefail
 
@@ -47,18 +45,20 @@ cd "$REPO"
 DEFAULT_DUMP_PATH="$REPO/generated/rarity_signals_dump.jsonl"
 DUMP_PATH="${RHYMECRIME_RARITY_DUMP_SIGNALS:-$DEFAULT_DUMP_PATH}"
 
-echo "==> [1/3] dict-build (full: CN+NB exports + rarity signals dump)"
+echo "==> [1/4] dict-build (full: CN+NB exports + rarity signals dump)"
 echo "         dump path: $DUMP_PATH"
 RHYMECRIME_DICT_BUILD_CONCEPTNET_NUMBERBATCH=1 \
 RHYMECRIME_RARITY_DUMP_SIGNALS="$DUMP_PATH" \
   ./bin/dict-build
 
-echo "==> [2/3] training rarity classifier -> generated/rarity_classifier.json"
+echo "==> [2/4] training rarity classifier -> generated/rarity_classifier.json"
 ruby ./bin/train-rarity-classifier
 
-echo "==> [3/3] retrain-relatedness (sense glosses + MPNet vectors + classifier)"
+echo "==> [3/4] retrain-relatedness (sense glosses + MPNet vectors + classifier)"
 ./bin/retrain-relatedness --rebuild-vectors
 
+echo "==> [4/4] dict-build rescore (Phase 12 applies new rarity classifier to word_dict.txt)"
+./bin/dict-build
+
 echo
-echo "build done. Re-run ./bin/dict-build to apply the new rarity classifier"
-echo "to word_dict.txt (Phase 12 rescore)."
+echo "build done. Run +bundle exec rspec+ to validate."

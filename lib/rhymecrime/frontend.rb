@@ -13,12 +13,21 @@ DEBUG_MODE = false
 require "set"
 require_relative "crime"
 
-# Per-request "pruning debug" state. When +$debug_pruning+ is true,
-# +prune_suffix_redundant_rhyming_tuples+ retains (rather than drops) its victims
-# and records them in +$debug_pruned_tuples+; +print_tuple+ then renders them
-# inline with kept tuples but tagged with the +output_tuple_pruned+ CSS class.
-# Both live on globals because the pruning and rendering call sites are many
-# layers apart and threading a parameter through would be invasive.
+# Per-request debug flag, set true iff +?debug=1+ was on the URL. Two behaviors
+# are gated on this global because both fire deep inside the render path where
+# threading a kwarg through would touch dozens of call sites:
+#
+#   1. Pruning visualizer: +prune_suffix_redundant_rhyming_tuples+ retains
+#      (rather than drops) its victims and records them in +$debug_pruned_
+#      tuples+; +print_tuple+ then renders them inline with kept tuples but
+#      tagged with the +output_tuple_pruned+ CSS class.
+#   2. set_related coloring: +tuple_focal_word_for_goal+ returns +nil+ in
+#      production so set_related slots render in the default text color, and
+#      returns +word1+ under debug so each slot is tinted by its stored
+#      relatedness_score vs +word1+ (the diagnostic view).
+#
+# Name is +$debug_pruning+ (rather than +$debug_request+) for git-blame
+# stability — pruning was the original behavior; coloring piggybacked.
 $debug_pruning = false
 $debug_pruned_tuples = nil
 
@@ -97,11 +106,18 @@ def compute_and_print_html_middle(word1, word2)
 end
 
 # Per-column focal word for tuple coloring. Every slot in a +set_related+ tuple
-# is meant to be topically related to +word1+, so coloring each by its stored
-# relatedness_score vs +word1+ matches the column's semantic. Pair-rhyme goals
-# don't have a single focal (the two slots target different focals), so we
-# skip coloring there.
+# is meant to be topically related to +word1+, so under debug we color each by
+# its stored relatedness_score vs +word1+ to make the relatedness model legible.
+# Pair-rhyme goals don't have a single focal (the two slots target different
+# focals), so we skip coloring there.
+#
+# Production default returns +nil+ for every goal — set_related slots render in
+# the page's default text color so the visual hierarchy of the page (headers,
+# links, body text) reads cleanly without per-word color noise. Pass +?debug=1+
+# on the URL to flip back to the diagnostic view; see +$debug_pruning+'s
+# doc comment above for why this gate is shared with the pruning visualizer.
 def tuple_focal_word_for_goal(goal, word1)
+  return nil unless $debug_pruning
   goal == "set_related" ? word1 : nil
 end
 
@@ -189,8 +205,12 @@ end
 # without contaminating concurrent requests on other Puma threads.
 #
 # +debug:+ true (passed from the +debug=1+ URL param) turns on +$debug_pruning+,
-# which causes suffix-redundant tuples to be rendered inline with kept tuples
-# (greyed out via +output_tuple_pruned+) instead of silently dropped.
+# the catch-all per-request debug gate. Two behaviors fire from it: (1) suffix-
+# redundant tuples are rendered inline with kept tuples (greyed out via
+# +output_tuple_pruned+) instead of being silently dropped, and (2) set_related
+# slots are colored by stored relatedness_score vs +word1+ instead of rendering
+# in the default text color. See the +$debug_pruning+ doc comment for the full
+# list of behaviors gated on this flag.
 def build_rhymecrime_page(word1, word2, debug: false)
   Rhymecrime::DynamoRuntime.clear_session_cache! if defined?(Rhymecrime::DynamoRuntime) && Rhymecrime::DataSource.dynamodb?
   RelatedWords.reset_caches! if defined?(RelatedWords)

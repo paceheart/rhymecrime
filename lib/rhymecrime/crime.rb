@@ -32,6 +32,7 @@ require_relative "dict/phoneme.rb"
 require_relative "dict/inflect"
 require_relative "dict/lexical"
 require_relative "dict/pronunciation.rb"
+require_relative "timing"
 require "memery"
 
 #
@@ -175,19 +176,27 @@ end
 
 # Sorted list of RhymeCrime part-of-speech tags for +word+ (Kaikki +pos+ union, then lexical
 # Kaikki POS intersected with WordNet coarse POS when WN has the lemma; see apply_lexical_pos_layer_a!
-# in dict.rb (build). Empty if unknown or before generated/part_of_speech.json exists.
+# in dict.rb (build). Empty array if the word is unknown to the loaded map.
+#
+# Strict-load: raises +RuntimeError+ if +generated/part_of_speech.json+ is missing. The file
+# is *deliberately* excluded from the Lambda deploy bundle (see +bin/stage-lambda+) because
+# the only Lambda-reachable caller — +relatedness/signals.rb+'s +pos_count+ feature — is the
+# local-dev compute fallback that DDB mode short-circuits before ever requiring
+# +signals.rb+. If you trip this raise from inside a Lambda invocation, something has
+# pulled +signals.rb+ (or another POS reader) into the runtime path that shouldn't be there;
+# fix the offender rather than re-including the file in the deploy zip.
 $part_of_speech_by_word = nil
 def part_of_speech_tags(word)
   w = word.to_s.downcase.strip
   return [] if w.empty?
   if $part_of_speech_by_word.nil?
     path = generated_dict_path(PART_OF_SPEECH_FILENAME)
-    $part_of_speech_by_word =
-      if File.exist?(path)
-        JSON.parse(File.read(path, encoding: "UTF-8"))
-      else
-        {}
-      end
+    unless File.exist?(path)
+      raise "missing #{path}: run ./bin/dict-build to generate it. " \
+            "If this fired inside Lambda, the file is excluded by design — see " \
+            "bin/stage-lambda and the doc comment above part_of_speech_tags."
+    end
+    $part_of_speech_by_word = JSON.parse(File.read(path, encoding: "UTF-8"))
   end
   tags = $part_of_speech_by_word[w]
   tags.is_a?(Array) ? tags : []
@@ -969,12 +978,28 @@ end
 # +_dynamo+ variants of +find_rhyming_tuples+ / +find_rhyming_pairs+.
 def prefetch_dynamo_for_relateds!(*relateds_lists)
   return unless Rhymecrime::DataSource.dynamodb?
+  # Three-phase prefetch. After +find_related_words+'s own internal prefetch
+  # (which already pulled +word#+ + +rime#+ rows for the cue's related list),
+  # phases (1) and (2) are typically no-ops — every key is already in
+  # +DynamoRuntime+'s session cache. Phase (3) is the new work: for each rime
+  # the cue's relateds touch, look up the *rhyme cohort* (all words sharing
+  # that rime), then bulk-load their +word#+ entries so the main rhyme-bucket
+  # loop in +really_find_rhyming_tuples+ can ask +relateds1.include?(rhyme1)+
+  # without paying a per-rhyme +get_item+. This is the dominant fan-out for
+  # common cues — see the +[timing] prefetch.rhyme_cohort_words+ line in
+  # CloudWatch when +RHYMECRIME_LOG_TIMING=1+ is on.
   all_relateds = relateds_lists.flat_map(&:to_a).uniq
-  Rhymecrime::DynamoRuntime.batch_get_words(all_relateds)
+  Rhymecrime::Timing.measure("prefetch.relateds_words n=#{all_relateds.size}") do
+    Rhymecrime::DynamoRuntime.batch_get_words(all_relateds)
+  end
   rimes = all_relateds.flat_map { |rel| pronunciations(rel).map(&:rime) }.uniq
-  Rhymecrime::DynamoRuntime.batch_get_rimes(rimes)
+  Rhymecrime::Timing.measure("prefetch.relateds_rimes n=#{rimes.size}") do
+    Rhymecrime::DynamoRuntime.batch_get_rimes(rimes)
+  end
   rhyme_words = rimes.flat_map { |r| rdict_lookup(r) }.uniq
-  Rhymecrime::DynamoRuntime.batch_get_words(rhyme_words)
+  Rhymecrime::Timing.measure("prefetch.rhyme_cohort_words n=#{rhyme_words.size}") do
+    Rhymecrime::DynamoRuntime.batch_get_words(rhyme_words)
+  end
 end
 
 # True when the pair +[a, b]+ would collapse to a single member under Phase 0.5
@@ -1197,24 +1222,39 @@ def really_find_rhyming_tuples(input_rel1, common_only = false)
   #   If R is in RELATEDS1, compute R's rime and put RHYME1 in the bucket labeled by that rime.
   # Return all buckets with two or more words in them, after +prune_suffix_redundant_rhyming_tuples+
   # drops tuples that only parallel an earlier tuple's +Inflect+ suffixes (e.g. all plural or all past).
+  #
+  # +Rhymecrime::Timing.measure+ wrappers below are no-ops unless
+  # +RHYMECRIME_LOG_TIMING=1+ is set (template.yaml turns this on for the
+  # deployed Lambda). The phase labels mirror the algorithm steps above so a
+  # CloudWatch grep for +[timing] set_related[<word>]+ tells you whether the
+  # 29-second budget is being eaten by find_related (single +get_item+ on
+  # +related#<lemma>+ + N batched gets), prefetch (rhyme-cohort fan-out), the
+  # main rhyme-bucket loop (in-memory after prefetch), or prune (O(N^2) cross-
+  # tuple suffix-redundancy check).
   return [] if explicitly_forbidden?(input_rel1)
 
-  related_list = filter_related_words_to_common_preferred(
-    find_related_words(input_rel1, true, false, nil, common_only: true)
-  )
+  related_list = Rhymecrime::Timing.measure("set_related[#{input_rel1}] find+filter related") do
+    filter_related_words_to_common_preferred(
+      find_related_words(input_rel1, true, false, nil, common_only: true)
+    )
+  end
   relateds1 = related_list.to_set
-  prefetch_dynamo_for_relateds!(related_list)
+  Rhymecrime::Timing.measure("set_related[#{input_rel1}] prefetch dynamo n=#{related_list.size}") do
+    prefetch_dynamo_for_relateds!(related_list)
+  end
 
   related_rhymes = Hash.new { |h, k| h[k] = [] }
-  related_list.each do |rel1|
-    pronunciations(rel1).each do |rel1pron|
-      rime = rel1pron.rime
-      debug "Rhymes for #{rel1} [#{rime}] #{debug_info(rel1)}:"
-      find_rhyming_words_for_pronunciation(rel1pron, true).each do |rhyme1|
-        if relateds1.include?(rhyme1) # we only care about relateds of input_rel1
-          rhyme1 = preferred_form(rhyme1) # push 'honor' instead of 'honour'. This will ensure we don't push both.
-          related_rhymes[rime].push(rhyme1)
-          debug " #{rhyme1} #{debug_info(rhyme1)}"
+  Rhymecrime::Timing.measure("set_related[#{input_rel1}] rhyme-bucket loop n=#{related_list.size}") do
+    related_list.each do |rel1|
+      pronunciations(rel1).each do |rel1pron|
+        rime = rel1pron.rime
+        debug "Rhymes for #{rel1} [#{rime}] #{debug_info(rel1)}:"
+        find_rhyming_words_for_pronunciation(rel1pron, true).each do |rhyme1|
+          if relateds1.include?(rhyme1) # we only care about relateds of input_rel1
+            rhyme1 = preferred_form(rhyme1) # push 'honor' instead of 'honour'. This will ensure we don't push both.
+            related_rhymes[rime].push(rhyme1)
+            debug " #{rhyme1} #{debug_info(rhyme1)}"
+          end
         end
       end
     end
@@ -1228,7 +1268,9 @@ def really_find_rhyming_tuples(input_rel1, common_only = false)
   # Alternate pronunciations can yield different +rime+ keys (e.g. OW_L_IY_AH_N vs OW_L_Y_AH_N) with the
   # same sorted word set — dedupe before suffix pruning so output is not repeated line-for-line.
   tuples.uniq!
-  prune_suffix_redundant_rhyming_tuples(tuples, input_rel1).reject { |tup| tup.nil? || tup.size < 2 }
+  Rhymecrime::Timing.measure("set_related[#{input_rel1}] prune tuples=#{tuples.size}") do
+    prune_suffix_redundant_rhyming_tuples(tuples, input_rel1).reject { |tup| tup.nil? || tup.size < 2 }
+  end
 end
 
 $rhyming_pair_cache = {}

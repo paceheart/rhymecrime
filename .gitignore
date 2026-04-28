@@ -7,5 +7,6 @@ generated/*
 experiments/*
 tmp/*
 .aws-sam/
+lambda-build/
 .venv/
 .cache/
