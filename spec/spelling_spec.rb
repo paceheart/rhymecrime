@@ -127,6 +127,12 @@ describe "SPELLING VARIANTS" do
     prefer_spelling "icing", "iceing"
   end
 
+  context "unicode" do
+    prefer_spelling 'naive', 'naïve'
+    prefer_spelling 'cafe', 'café'
+    prefer_spelling 'oeuvre', 'œuvre'
+  end
+
   context "manual list (curated/spelling.csv)" do
     each_spelling_csv_pair do |preferred, alt|
       prefer_spelling preferred, alt

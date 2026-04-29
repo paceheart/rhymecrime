@@ -89,20 +89,24 @@ HEADER
 #
 # Detector precedence (first-write-wins inside +dedupe_variant_pairs+):
 #
-#   1. +-oes/-os+ plural alternation — shape-based, strongest morphological signal.
-#   2. VarCon (Atkinson's hand-verified US/UK/CA/AU mapping) — authoritative preference direction
+#   1. Diacritic / ligature ASCII fold — purely orthographic, fully deterministic. ASCII
+#      wins over any accented or ligature surface (+cafe/café+, +naive/naïve+, +oeuvre/œuvre+,
+#      +ore/øre+).
+#   2. +-oes/-os+ plural alternation — shape-based, strongest morphological signal.
+#   3. VarCon (Atkinson's hand-verified US/UK/CA/AU mapping) — authoritative preference direction
 #      for the regional-spelling axis.
-#   3. Wiktionary gloss/alt-of pointers — broadest coverage, but noisier. Complements VarCon for
+#   4. Wiktionary gloss/alt-of pointers — broadest coverage, but noisier. Complements VarCon for
 #      misspellings, eye-dialect, Hiberno/Scottish, archaic variants, and anything VarCon hasn't
 #      seen yet.
-#   4. Inflection propagation over Wiktionary base pairs — e.g. +cipher/cypher → ciphered/cyphered+.
-#   5. Apostrophe-stripped misspellings (+there'll/therell+, +whackin'/whackin+) — last so any
+#   5. Inflection propagation over Wiktionary base pairs — e.g. +cipher/cypher → ciphered/cyphered+.
+#   6. Apostrophe-stripped misspellings (+there'll/therell+, +whackin'/whackin+) — last so any
 #      higher-precedence detector that already picked a direction for an apostrophe pair wins.
 def emit_spelling_variants_auto!(word_dict, wordfreq_hash, kaikki_variant_map = nil, varcon_variant_map = nil)
   previous_word_dict = $word_dict
   previous_variants = $variants
   $word_dict = word_dict
   pairs = []
+  pairs.concat(diacritic_corpus_pairs(word_dict))
   pairs.concat(o_plural_corpus_pairs(word_dict, wordfreq_hash))
   pairs.concat(varcon_variant_pairs(word_dict, varcon_variant_map, wordfreq_hash)) if varcon_variant_map && !varcon_variant_map.empty?
   pairs.concat(wiktionary_variant_pairs(word_dict, wordfreq_hash, kaikki_variant_map)) if kaikki_variant_map && !kaikki_variant_map.empty?
@@ -121,6 +125,67 @@ ensure
   $variants = nil # force reload so downstream preferred_form sees the new pairs
   clear_spelling_variant_hyphen_caches!
   _ = previous_variants # referenced to silence unused-var lint; callers re-derive via variants()
+end
+
+# Single-letter ligatures and stroked letters that Unicode NFD/NFKD does NOT split (they
+# are encoded as distinct letters, not as +base + combining mark+ sequences). Each maps to
+# its conventional ASCII expansion. The truly-decomposable diacritics (+é → e + ́+,
+# +ñ → n + ̃+, +ö → o + ̈+, +ā → a + ̄+, +ồ → o + ̂ + ̀+, +š → s + ̌+, …) are handled
+# generically by +ascii_fold_word+'s NFD pass and don't need an entry here. Add new
+# entries when a new headword surfaces a ligature or stroke we haven't covered yet.
+ASCII_FOLD_LIGATURE_EXPANSIONS = {
+  "ø" => "o", "Ø" => "O",
+  "đ" => "d", "Đ" => "D",
+  "ð" => "d", "Ð" => "D",
+  "ł" => "l", "Ł" => "L",
+  "œ" => "oe", "Œ" => "Oe",
+  "æ" => "ae", "Æ" => "Ae",
+  "ß" => "ss",
+  "þ" => "th", "Þ" => "Th",
+  "ħ" => "h", "Ħ" => "H",
+  "ŋ" => "ng", "Ŋ" => "Ng",
+  "ı" => "i",
+}.freeze
+ASCII_FOLD_LIGATURE_EXPANSIONS_RE = Regexp.union(ASCII_FOLD_LIGATURE_EXPANSIONS.keys).freeze
+
+# Map +word+ to its ASCII surface by expanding ligatures and stroked letters via
+# +ASCII_FOLD_LIGATURE_EXPANSIONS+ (+æ → ae+, +ø → o+, +đ → d+, +ß → ss+, …) and stripping
+# combining marks from NFD-decomposed accents (+é → e+, +ñ → n+, +ồ → o+, …). Returns
+# +nil+ when the result still contains non-ASCII code points (emoji, symbols like +μ+,
+# +º+, +♥+ — these have no meaningful ASCII fold).
+def ascii_fold_word(word)
+  s = word.to_s
+  return s if s.bytes.all? { |b| b <= 127 }
+  s = s.gsub(ASCII_FOLD_LIGATURE_EXPANSIONS_RE, ASCII_FOLD_LIGATURE_EXPANSIONS)
+  s = s.unicode_normalize(:nfd).gsub(/\p{M}/, "")
+  s.bytes.all? { |b| b <= 127 } ? s : nil
+end
+
+# Spelling-variant pairs derived from ASCII-folding accented/ligature spellings of
+# +word_dict+ headwords. The ASCII surface is always preferred (+cafe+ over +café+,
+# +naive+ over +naïve+, +oeuvre+ over +œuvre+) — this matches the way ASCII spellings
+# show up in modern English corpus data, search queries, and the precomposed CMU
+# pronunciations dict-build inherits from cmudict / Wiktionary.
+#
+# When the ASCII fold collides with a different existing headword (+resume+ verb vs
+# +résumé+ noun), we gate on +headwords_share_full_pron?+: distinct words with
+# different pronunciations must not be conflated as spelling variants. Pairs whose
+# ASCII fold isn't itself a headword pass through unconditionally so search/display
+# normalizes the accented surface to its ASCII form.
+def diacritic_corpus_pairs(word_dict)
+  pairs = []
+  seen = Set.new
+  word_dict.each_key do |w|
+    next if w.bytes.all? { |b| b <= 127 }
+    folded = ascii_fold_word(w)
+    next if folded.nil? || folded.empty? || folded == w
+    next unless seen.add?([folded, w])
+    if word_dict.key?(folded) && !headwords_share_full_pron?(folded, w, word_dict)
+      next
+    end
+    pairs << [folded, w]
+  end
+  pairs
 end
 
 # Apostrophe-stripped misspellings: every +word_dict+ headword containing an

@@ -207,6 +207,12 @@ describe "RARITY" do
     oughta_be_common 'finessed'
   end
 
+  context 'unicode' do
+    oughta_be_forbidden '🌮'
+    oughta_be_forbidden '🍇'
+    oughta_be_forbidden '🧢'
+  end
+
   context "csv sweep (curated/rarity.csv)" do
     it "covers >= 1000 rows at >= 97.5% weighted pass rate" do
       expect(RARITY_EVALUATED).to be >= 2500

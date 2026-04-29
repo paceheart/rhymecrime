@@ -1107,4 +1107,8 @@ describe 'RHYMES' do
       oughta_rhyme 'bred', 'red'             # false-positive guard: 'br' is not a stem
     end
   end
+
+  context 'unicode' do
+    ought_not_rhyme '🍇', 'ape'
+  end
 end
