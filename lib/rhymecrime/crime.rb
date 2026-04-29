@@ -486,6 +486,35 @@ def inflection_suffix_kind_from_base(base, inflected)
     return :y_adj
   end
 
+  # Two-step +:y_adj+ + +:er+/+:est+ chain: +feather+→+feathery+→+featherier+,
+  # +leather+→+leathery+→+leatheriest+. Mirrors the +:ings+ chain above
+  # (+-ing+ + +-s+) — same construction, just bridging through the synthetic
+  # +base+"y"+ adjective intermediate that +:y_adj+ already recognizes. Distinct
+  # kinds (+:y_adj_er+ / +:y_adj_est+) so the same-length kind-lock in
+  # +rhyming_tuple_suffix_redundant_with?+ holds — both +featherier+ and
+  # +leatherier+ report +:y_adj_er+ from their respective bases, the lock
+  # accepts both, and the +featherier/leatherier+ tuple gets pruned when the
+  # +feather/leather/...+ base tuple is present. Without this, the pruner
+  # missed two-step adjective-comparative shadows of noun tuples — see
+  # +featherier/leatherier+ vs +feather/leather/tether/whether+ in
+  # +spec/prune_redundant_tuples_spec.rb+.
+  #
+  # +Inflect.match_suffix_kind+ is the second-stage probe rather than a
+  # recursive +inflection_suffix_kind_from_base+ call so we can't accidentally
+  # cascade further (+:y_adj_er_…+) — the chain is bounded at exactly two steps.
+  if inflected.end_with?("ier") &&
+      inflected.bytesize == base.bytesize + 3 &&
+      inflected.start_with?(base) &&
+      Inflect.send(:match_suffix_kind, base + "y", inflected) == :er
+    return :y_adj_er
+  end
+  if inflected.end_with?("iest") &&
+      inflected.bytesize == base.bytesize + 4 &&
+      inflected.start_with?(base) &&
+      Inflect.send(:match_suffix_kind, base + "y", inflected) == :est
+    return :y_adj_est
+  end
+
   nil
 end
 
@@ -690,10 +719,11 @@ end
 #     (synthetic test data; partially-loaded DDB cache) would silently fall
 #     out of the candidate pool. Found this trying to optimize the prune in
 #     a fixture-only test where the dict was empty — see commit history.
-#   * Surface reversals of the four custom branches in
+#   * Surface reversals of the custom branches in
 #     +inflection_suffix_kind_from_base+ that route around Inflect: +:y_adj+
 #     (+healthy → health+), +:er+ via +-or+ (+sailor → sail+), +:ing_gdrop+
-#     (+fakin' → faking+ / +fakin+), +:ings+ (+foistings → foisting / foist+).
+#     (+fakin' → faking+ / +fakin+), +:ings+ (+foistings → foisting / foist+),
+#     +:y_adj_er+ / +:y_adj_est+ (+featherier → feather+, +leatheriest → leather+).
 #
 # All entries are unvalidated by design — the fingerprint only narrows the
 # candidate pool the real +rhyming_tuple_redundant_with?+ predicate is then
@@ -725,6 +755,20 @@ def tuple_redundancy_keys_for_word(word)
   end
   if word.end_with?("ings") && word.bytesize >= 5
     keys.add(word[0...-1])
+    keys.add(word[0...-4])
+  end
+  # Surface reversal of the +:y_adj_er+ / +:y_adj_est+ chains added in
+  # +inflection_suffix_kind_from_base+ above: +featherier → feather+,
+  # +leatheriest → leather+. The fingerprint adds the chain-base
+  # unconditionally — the predicate's +Inflect.match_suffix_kind(base + "y", …)
+  # probe is what actually validates that the chain is real (e.g. +crazier+
+  # gets +craz+ added here, but the predicate rejects it because
+  # +Inflect.match_suffix_kind("crazy", "crazier") == :er+ requires +crazy+ to
+  # exist in Inflect's adjective table, not just the surface stripping).
+  if word.end_with?("ier") && word.bytesize >= 4
+    keys.add(word[0...-3])
+  end
+  if word.end_with?("iest") && word.bytesize >= 5
     keys.add(word[0...-4])
   end
 
@@ -1203,16 +1247,17 @@ end
 #
 # The fingerprint must be a *superset* of every reachable redundancy
 # match or we silently drop comparisons. +rhyming_tuple_word_bases+ alone
-# is too narrow because +inflection_suffix_kind_from_base+ has four
+# is too narrow because +inflection_suffix_kind_from_base+ has several
 # extensions beyond +Inflect.match_suffix_kind+ that don't show up in the
 # Inflect base table: +:y_adj+ (+health → healthy+), +:er+ via +-or+
-# (+sail → sailor+), +:ing_gdrop+ (+fakin' → faking+), and +:ings+
-# (+foist → foistings+, mostly already covered by Inflect's +-s+
-# stripping but mirrored here for safety).
-# +tuple_redundancy_keys_for_word+ inlines those four reversals against
-# the surface, *unvalidated* — false positives in the pre-filter just
-# mean we run the real predicate on a few extra pairs, which is cheap.
-# False negatives would silently change pruning output (regression in
+# (+sail → sailor+), +:ing_gdrop+ (+fakin' → faking+), +:ings+ (+foist →
+# foistings+, mostly already covered by Inflect's +-s+ stripping but
+# mirrored here for safety), and the two-step +:y_adj_er+ / +:y_adj_est+
+# chain (+feather → featherier+, +leather → leatheriest+).
+# +tuple_redundancy_keys_for_word+ inlines those reversals against the
+# surface, *unvalidated* — false positives in the pre-filter just mean we
+# run the real predicate on a few extra pairs, which is cheap. False
+# negatives would silently change pruning output (regression in
 # +spec/prune_redundant_tuples_spec.rb+).
 def prune_cross_tuple_redundancy_sweep(sorted_tuples)
   verbose_prunes = ENV["VERBOSE"] == "1"
