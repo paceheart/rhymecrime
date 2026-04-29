@@ -5,7 +5,7 @@
 #
 # Answers every relatedness question — "is this pair topically related?",
 # "what's the similarity score?", "which headwords are related to this cue?"
-# — from the precomputed +related#<lemma>+ rows exposed by
+# — from the computed +related#<lemma>+ rows exposed by
 # +Rhymecrime::Store+. The facade picks:
 #
 #   * +Rhymecrime::DynamoRuntime+ in Lambda (+RHYMECRIME_DATA_SOURCE=dynamodb+),
@@ -13,11 +13,11 @@
 #
 # Neither path pulls in Numberbatch, ConceptNet, WordNet, USF, MPNet, or the
 # learned classifier — those live in +lib/rhymecrime/relatedness/*+ and are
-# only required at seed time (+bin/precompute-relatedness+,
+# only required at seed time (+bin/compute-relatedness+,
 # +bin/train-relatedness-classifier+, related specs) or by the local-dev
 # fallback below.
 #
-# Local-dev fallback: when the LocalStore is absent (fresh clone, pre-precompute)
+# Local-dev fallback: when the LocalStore is absent (fresh clone, pre-compute)
 # or missing a row for a queried cue, +similarity+ returns 0 and the thematic
 # predicates lazy-require the full compute pipeline (+relatedness/signals+ +
 # +score+ + +scan+). Lambda never reaches this fallback because +Store.available?+
@@ -25,7 +25,7 @@
 #
 # Accepted trade-off: when neither (A, B) is a cached cue, +similarity(A, B)+
 # returns 0 and +thematically_related?(A, B)+ is false at runtime — typical
-# for pairs where both sides are rare headwords (no row in precompute).
+# for pairs where both sides are rare headwords (no row in compute).
 #
 
 require_relative "pace_utils"
@@ -35,7 +35,7 @@ require_relative "store"
 SIMILAR_MAX = 50000 # O_o
 
 # Composite-score threshold for "topically related" (see +relatedness_score+ in
-# +relatedness/score.rb+). Also the floor of every entry in a precomputed
+# +relatedness/score.rb+). Also the floor of every entry in a computed
 # related-words list — anything below 50 is by definition unrelated.
 RELATEDNESS_SCORE_THRESHOLD = 50
 
@@ -44,10 +44,10 @@ def related_trace_memo?
 end
 
 # Diagnostic knob for +spec/related_spec.rb+ and ad-hoc eval work: when set,
-# +thematically_related?+ / +why_thematically_related?+ skip the precomputed
+# +thematically_related?+ / +why_thematically_related?+ skip the computed
 # Store lookup and always run the compute pipeline. Lets post-retrain evals
 # measure the *current* classifier + rules against +curated/related.csv+
-# without waiting for a full +bin/precompute-relatedness+ rebuild. Never
+# without waiting for a full +bin/compute-relatedness+ rebuild. Never
 # consulted at Lambda runtime (production never sets the var).
 def related_bypass_store?
   ENV["RELATED_BYPASS_STORE"].to_s == "1"
@@ -78,7 +78,7 @@ end
 # --- Runtime similarity (cached relatedness_score 0..100) ---
 
 # Stored relatedness_score (0..100 integer) between two headwords, read from
-# the precomputed source. Returns 0 when neither endpoint is a cached cue or
+# the computed source. Returns 0 when neither endpoint is a cached cue or
 # either side is semantically promiscuous (those words short-circuit to
 # "related" in the predicate but contribute no UI-meaningful similarity score).
 def similarity(word1, word2)
@@ -144,10 +144,10 @@ end
 # +relatedness/score.rb+. Semantically promiscuous words are treated as
 # related to every other word (contentless glue). At runtime the predicate is
 # answered via +RelatedWords.pair_in_store?+ (also directional — only consults
-# +cue+'s precompute row); the local-dev fallback lazy-loads the compute
+# +cue+'s compute row); the local-dev fallback lazy-loads the compute
 # pipeline when the Store is absent. +RELATED_BYPASS_STORE=1+ skips the Store
 # entirely and forces the live compute path, useful for evaluating retrained
-# classifiers against rows whose precompute is stale.
+# classifiers against rows whose compute is stale.
 def thematically_related?(cue, related, include_self = false)
   if ENV["RELATED_TRACE_THEMATIC"] == "1"
     warn "thematically_related? cue=#{cue.inspect} related=#{related.inspect} include_self=#{include_self.inspect}"
@@ -173,8 +173,8 @@ def thematically_related?(cue, related, include_self = false)
   puts "  -> lemma key #{cue_lemma} -> #{related_lemma}" if related_trace_memo?
 
   unless related_bypass_store?
-    # Directional store hit: consults only +cue_lemma+'s precompute row, since
-    # the Store key IS the cue and the row entries are its precomputed relateds.
+    # Directional store hit: consults only +cue_lemma+'s compute row, since
+    # the Store key IS the cue and the row entries are its computed relateds.
     return true if RelatedWords.pair_in_store?(cue_lemma, related_lemma)
 
     # DDB is authoritative: "missing means unrelated," no compute fallback in
@@ -201,7 +201,7 @@ def why_thematically_related?(cue, related, include_self = false)
 
   unless related_bypass_store?
     score = RelatedWords.lookup_score_by_lemmas(cue_lemma, related_lemma)
-    return "precomputed: topically related (score=#{score})" if score >= RELATEDNESS_SCORE_THRESHOLD
+    return "computed: topically related (score=#{score})" if score >= RELATEDNESS_SCORE_THRESHOLD
 
     return nil if store_authoritative?
   end
@@ -215,12 +215,12 @@ end
 # Enumerates RhymeCrime headwords and returns those topically related to a cue.
 # Delegates to +Rhymecrime::Store+ (DDB in prod, SQLite locally); falls back to
 # a lazy-loaded full scan only when the Store has no row for the cue and isn't
-# authoritative (local-dev with incomplete precompute).
+# authoritative (local-dev with incomplete compute).
 class RelatedWords
   class << self
     # Clears every in-process cache derived from +Rhymecrime::Store+ data.
     # Call sites: every request entry point (Sinatra, Lambda, CLI) plus the
-    # +bin/precompute-relatedness+ shard loop that invalidates between cues
+    # +bin/compute-relatedness+ shard loop that invalidates between cues
     # to keep worker RSS bounded. Keep this list in sync with the caches
     # below so freshly-added memoization doesn't accidentally survive across
     # invalidations.
@@ -229,12 +229,12 @@ class RelatedWords
       $rhyming_tuple_word_bases_cache = {} if defined?($rhyming_tuple_word_bases_cache)
     end
 
-    # Membership test for a directional lemma pair: is +lemma_b+ a precomputed
+    # Membership test for a directional lemma pair: is +lemma_b+ a computed
     # related of +lemma_a+ (when +lemma_a+ is used as a cue)? Linear scan over
     # the cue's stored row, which is typically small (~SIMILAR_MAX entries).
     #
     # Strictly directional: we DO NOT consult +lemma_b+'s row to decide. The
-    # precompute pipeline writes (cue → relateds, scores) per cue, so +lemma_a+'s
+    # compute pipeline writes (cue → relateds, scores) per cue, so +lemma_a+'s
     # row is the authoritative answer for the +(cue=lemma_a, related=lemma_b)+
     # question. Asking +lemma_b+'s row would answer a different question
     # (+(cue=lemma_b, related=lemma_a)+) and conflate the two orientations —
@@ -250,7 +250,7 @@ class RelatedWords
     end
 
     # Stored +relatedness_score+ (0..100) for the directional pair
-    # +(cue=word1, related=word2)+. Returns 0 when +word1+ is not a precompute
+    # +(cue=word1, related=word2)+. Returns 0 when +word1+ is not a compute
     # cue or when its row does not list +word2+. Directional — see
     # +pair_in_store?+ for the orientation rationale.
     def lookup_score(word1, word2)
@@ -266,7 +266,7 @@ class RelatedWords
     end
 
     # +max_candidates+ default +SIMILAR_MAX+ used to cap the list by stored
-    # +relatedness_score+ for UI / display, but precompute rows top out
+    # +relatedness_score+ for UI / display, but compute rows top out
     # several orders of magnitude below 50K so the truncation never fires in
     # practice. We keep the +max_candidates+ knob for callers that pass an
     # explicit cap (the only cap path that's ever exercised), and when it
@@ -287,7 +287,7 @@ class RelatedWords
 
     # Cheap path: words only. Used by everything that doesn't need scores —
     # set_related, related, pair_related, related_rhymes goal handlers all
-    # land here. Stays on +Rhymecrime::Store.find_all_related_precomputed+
+    # land here. Stays on +Rhymecrime::Store.find_all_related_computed+
     # (one item / table read) rather than dropping scores from the score-
     # bearing variant.
     def find_all_thematically_related_words(word, include_rhymeless = true, common_only = false)
@@ -304,13 +304,13 @@ class RelatedWords
       lemma_key = lemma(word)
 
       if store_authoritative?
-        words = Rhymecrime::Store.find_all_related_precomputed(lemma_key, include_rhymeless, common_only)
+        words = Rhymecrime::Store.find_all_related_computed(lemma_key, include_rhymeless, common_only)
         debug "Finding words related to #{word} (store[authoritative], lemma=#{lemma_key})... #{words.length}\n"
         return @related_word_cache[key] = words
       end
 
       if Rhymecrime::Store.available? && Rhymecrime::Store.has_related?(lemma_key)
-        words = Rhymecrime::Store.find_all_related_precomputed(lemma_key, include_rhymeless, common_only)
+        words = Rhymecrime::Store.find_all_related_computed(lemma_key, include_rhymeless, common_only)
         debug "Finding words related to #{word} (store[cache], lemma=#{lemma_key})... #{words.length}\n"
         return @related_word_cache[key] = words
       end
@@ -333,7 +333,7 @@ class RelatedWords
       # Semantically promiscuous words are related to every other word;
       # short-circuit to +words_we_care_about+ rather than a per-pair scan /
       # Store lookup, which is both wasteful and (by convention) not
-      # populated for promiscuous keys (see +bin/precompute-relatedness+,
+      # populated for promiscuous keys (see +bin/compute-relatedness+,
       # which skips them). Promiscuous-word pairs have no meaningful stored
       # score — assign the +RELATEDNESS_SCORE_THRESHOLD+ floor so sort order
       # is stable.
@@ -349,7 +349,7 @@ class RelatedWords
 
       # DDB is authoritative — empty row means "no related words," full stop.
       if store_authoritative?
-        tuples = Rhymecrime::Store.find_all_related_precomputed_with_scores(lemma_key, include_rhymeless, common_only)
+        tuples = Rhymecrime::Store.find_all_related_computed_with_scores(lemma_key, include_rhymeless, common_only)
         debug "Finding words related to #{word} (store[authoritative], lemma=#{lemma_key})... #{tuples.length}\n"
         @related_word_cache[key] = tuples
         return tuples
@@ -357,13 +357,13 @@ class RelatedWords
 
       # Dev-mode LocalStore is a cache: hit it when the cue has a row, fall
       # through to the full-scan compute pipeline when it doesn't (pre-SQLite
-      # precompute-set cue miss — e.g. eval scripts or the user typing a
-      # rare headword that wasn't in +rep.keys+ at precompute time). We use
+      # compute-set cue miss — e.g. eval scripts or the user typing a
+      # rare headword that wasn't in +rep.keys+ at compute time). We use
       # +has_related?+ to distinguish "row exists but filtered to empty"
       # (legit "no related words" answer) from "row never built for this cue"
       # (fall through).
       if Rhymecrime::Store.available? && Rhymecrime::Store.has_related?(lemma_key)
-        tuples = Rhymecrime::Store.find_all_related_precomputed_with_scores(lemma_key, include_rhymeless, common_only)
+        tuples = Rhymecrime::Store.find_all_related_computed_with_scores(lemma_key, include_rhymeless, common_only)
         debug "Finding words related to #{word} (store[cache], lemma=#{lemma_key})... #{tuples.length}\n"
         @related_word_cache[key] = tuples
         return tuples

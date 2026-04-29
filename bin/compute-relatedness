@@ -17,7 +17,7 @@
 # Writes directly into the local SQLite store (generated/rhymecrime_local.sqlite3) — the same file
 # +Rhymecrime::LocalStore+ reads at runtime and +bin/upload-to-dynamodb+ streams to prod DDB.
 #
-#   ruby bin/precompute-relatedness
+#   ruby bin/compute-relatedness
 #
 # Options:
 #   --output=PATH          Override SQLite path (default: generated/rhymecrime_local.sqlite3)
@@ -62,7 +62,7 @@
 #   * memory cap: +(RAM - OS_RESERVE) / PER_WORKER_RSS+
 # so a 16 GB box doesn't try to run 5 workers just because it has 10 cores and
 # end up swapping. Override either cap with +--threads=N+, or tune the
-# +RHYMECRIME_PRECOMPUTE_PER_WORKER_GB+ / +RHYMECRIME_PRECOMPUTE_OS_RESERVE_GB+
+# +RHYMECRIME_COMPUTE_PER_WORKER_GB+ / +RHYMECRIME_COMPUTE_OS_RESERVE_GB+
 # env vars if the observed RSS drifts.
 #
 # Output: each worker writes to its own shard SQLite file (+.shardN.tmp+ next to
@@ -116,13 +116,13 @@ rescue StandardError
 end
 
 # Per-worker peak RSS assumption (GB). Measured around 2.5 GB on the +pirate+
-# precompute profile; rounded up a little for headroom (GC thrash bloats the
+# compute profile; rounded up a little for headroom (GC thrash bloats the
 # heap beyond the steady-state working set before major collections clean up).
-per_worker_gb = (ENV["RHYMECRIME_PRECOMPUTE_PER_WORKER_GB"] || "3").to_f
+per_worker_gb = (ENV["RHYMECRIME_COMPUTE_PER_WORKER_GB"] || "3").to_f
 # Leave this much RAM free for the OS + editors + browser + kernel caches.
 # Going below this tips the OS into swap, which tanks throughput far worse then
 # dropping a worker.
-os_reserve_gb = (ENV["RHYMECRIME_PRECOMPUTE_OS_RESERVE_GB"] || "4").to_f
+os_reserve_gb = (ENV["RHYMECRIME_COMPUTE_OS_RESERVE_GB"] || "4").to_f
 
 cpu_cap = [Etc.nprocessors / 2, 1].max
 
@@ -241,7 +241,7 @@ end
 # "alphabetical-among-the-mass" inside that bucket and adds no signal.
 lemmas.sort_by! { |l| [-curated_priority[l], l] }
 # Semantically promiscuous lemmas are related to every other word (see
-# +thematically_related?+), so their precompute entry would be the full
+# +thematically_related?+), so their compute entry would be the full
 # candidate list — ~20k headwords per cue. The runtime in
 # +RelatedWords.find_all_thematically_related_words+ short-circuits
 # promiscuous lookups to +words_we_care_about+ directly, so no row is needed.
@@ -295,7 +295,7 @@ end
 lemmas = lemmas.first(max_cues) if max_cues
 
 # +--incremental+: keep the existing +output_path+ DB and only process cues
-# not already present. Used to grow the precompute table after widening the
+# not already present. Used to grow the compute table after widening the
 # cue filter (or after adding new rare headwords to the dict) without redoing
 # hours of work the stored rows already cover. Everything downstream (shard
 # writes, merge via +INSERT OR REPLACE+) already tolerates this — we just
@@ -333,7 +333,7 @@ threads = 1 if threads < 1
 # rhyme partners). See +cue_word?+ vs +relatedness_target_word?+ in
 # +lib/rhymecrime/dict/rime.rb+.
 curated_count = lemmas.count { |l| curated_priority[l].positive? }
-puts "Precompute cues: #{n} preferred common lemmas (#{before_n} distinct common lemmas in word_dict before filter; rhymeless cues kept — see comment above)"
+puts "Compute cues: #{n} preferred common lemmas (#{before_n} distinct common lemmas in word_dict before filter; rhymeless cues kept — see comment above)"
 puts "Ordering: by +curated/related.csv+ row count desc, alpha tiebreak (#{curated_count} cues with ≥1 curated row run first; remaining #{n - curated_count} run alphabetically)."
 unless threads_user_supplied
   # Show how the default fell out so it's obvious whether CPU or RAM is the

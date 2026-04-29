@@ -7,12 +7,12 @@
 # through +relatedness_score+ (the score-combination stage) and keeping those at or above
 # +RELATEDNESS_SCORE_THRESHOLD+. Emits +(word, score)+ tuples so callers can sort /
 # cache / serialize the stored-pair score alongside the related-word list in one
-# pass (+bin/precompute-relatedness+).
+# pass (+bin/compute-relatedness+).
 #
 # Requires +relatedness/signals+ and +relatedness/score+ first; not loaded at
 # Lambda runtime. The runtime shim in +lib/rhymecrime/related.rb+ lazy-requires
-# this file only in the local-dev fallback path (no DynamoDB, no precompute
-# JSONL — typically running specs from a repo that hasn't done precompute yet).
+# this file only in the local-dev fallback path (no DynamoDB, no compute
+# JSONL — typically running specs from a repo that hasn't done compute yet).
 #
 
 require_relative "signals"
@@ -44,7 +44,7 @@ class RelatedWords
       results = []
       cue_lemma = lemma(cue)
       debug "Finding words related to #{cue}... "
-      # Precompute the ConceptNet single-source distance table from the cue so
+      # Compute the ConceptNet single-source distance table from the cue so
       # every per-candidate +cn_hops+ call collapses to a hash lookup instead of
       # a bidirectional BFS. Cleared after the scan so unrelated callers fall
       # back to the generic BFS.

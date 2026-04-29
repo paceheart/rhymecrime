@@ -784,6 +784,6 @@ def rebuild_rhymecrime_dictionaries()
   puts "word_dict: #{word_dict.size} entries"
   puts "  - #{common_n} common"
   puts "  - #{common_base_forms.size} common base forms"
-  puts "  - #{cue_n} cue words (precompute row PKs)"
+  puts "  - #{cue_n} cue words (compute row PKs)"
   puts "  - #{target_n} relatedness-target words (eligible to appear in a related list)"
 end

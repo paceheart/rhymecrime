@@ -225,7 +225,7 @@ def headword_has_nonidentical_rhyme_partner?(word, prons, rdict, word_dict)
   false
 end
 
-# Logical predicate: is +word+ eligible to be a precompute/DDB cue (the PK of a
+# Logical predicate: is +word+ eligible to be a compute/DDB cue (the PK of a
 # +related#<lemma>+ row)?
 #
 # Broader than +relatedness_target_word?+: cue coverage must include every
@@ -235,7 +235,7 @@ end
 # but they're perfectly valid questions on the cue side.
 #
 # Physical implementation today: +word_common_preferred_headword?+. Keep this
-# wrapper so precompute, eval scripts, and build-time stats all agree on what
+# wrapper so compute, eval scripts, and build-time stats all agree on what
 # "cue" means — and so widening the cue set later (e.g. to include dispreferred
 # forms a user might type) only requires a change here.
 def cue_word?(word, word_dict)

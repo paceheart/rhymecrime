@@ -11,8 +11,8 @@
 # Splitting +related+ from +related_scores+ keeps the cheap read path
 # (+fetch_related_words+) free of a JSON parse for the score array
 # whenever the caller doesn't need it (+/similar+ and +?debug=1+ are the
-# only consumers). +bin/precompute-relatedness+ writes both;
-# +bin/precompute-set-related+ writes the +set_related+ table after; and
+# only consumers). +bin/compute-relatedness+ writes both;
+# +bin/compute-set-related+ writes the +set_related+ table after; and
 # +bin/upload-to-dynamodb+ streams all three out as +related#<lemma>+,
 # +score#<lemma>+, and +set_related#<lemma>+ items respectively.
 #
@@ -34,7 +34,7 @@ module Rhymecrime
     class << self
       extend Forwardable
       def_delegators :instance, :fetch_related_tuples, :fetch_related_words,
-                     :find_all_related_precomputed, :find_all_related_precomputed_with_scores,
+                     :find_all_related_computed, :find_all_related_computed_with_scores,
                      :has_related?, :fetch_set_related_tuples, :has_set_related?,
                      :available?, :clear_session_cache!
 
@@ -43,7 +43,7 @@ module Rhymecrime
       end
 
       # Opens (or creates) a local store SQLite file for writing and yields a
-      # +Writer+. Used by +bin/precompute-relatedness+ (workers for per-shard
+      # +Writer+. Used by +bin/compute-relatedness+ (workers for per-shard
       # files, parent for the final merged file) and +bin/upload-to-dynamodb+.
       # Wraps the body in a single transaction by default — SQLite's per-commit
       # fsync dominates write throughput for many small +upsert_related+ calls.
@@ -80,7 +80,7 @@ module Rhymecrime
       end
 
       # Bulk-write PRAGMAs. WAL lets parallel readers (specs, a running web
-      # server) stay up while precompute is writing; +synchronous=NORMAL+ is
+      # server) stay up while compute is writing; +synchronous=NORMAL+ is
       # enough durability for a derivable local cache (we never keep the sole
       # copy of anything here — JSONL-style source-of-truth is the classifier
       # + the KBs).
@@ -158,7 +158,7 @@ module Rhymecrime
 
       # Attach +shard_path+ as a secondary database and bulk-copy its
       # +related+ / +related_scores+ rows into the main tables. Used by the
-      # parent process in +bin/precompute-relatedness+ to merge per-worker
+      # parent process in +bin/compute-relatedness+ to merge per-worker
       # shards. Must run in autocommit mode (see
       # +open_for_write(transaction: false)+): a wrapping transaction keeps a
       # read lock on the attached db, which prevents DETACH and collides on
@@ -187,11 +187,11 @@ module Rhymecrime
     def clear_session_cache!
       # Three caches: +@words_cache+ is the cheap +fetch_related_words+ path,
       # +@scores_cache+ is the lazy +fetch_related_tuples+ companion, and
-      # +@set_related_cache+ is the precomputed-tuples cache. They're
+      # +@set_related_cache+ is the computed-tuples cache. They're
       # separate so the cheap path doesn't pay the parse cost or memory of
       # data it doesn't need, and so a row absent from one table (e.g. a
-      # lemma with +related+ but no precomputed +set_related+ — which
-      # shouldn't happen post-precompute but is harmless mid-deploy)
+      # lemma with +related+ but no computed +set_related+ — which
+      # shouldn't happen post-compute but is harmless mid-deploy)
       # caches its emptiness independently of the others.
       #
       # +@set_related_table_exists+ is a per-DB-handle flag, not a per-
@@ -214,7 +214,7 @@ module Rhymecrime
     end
 
     # True when the local store exists on disk. Dev code uses this to decide
-    # whether to fall through to the full-scan compute pipeline (pre-precompute
+    # whether to fall through to the full-scan compute pipeline (pre-compute
     # checkouts).
     def available?
       File.exist?(database_path)
@@ -223,7 +223,7 @@ module Rhymecrime
     def db
       @db ||= begin
         # +readonly: true+ + +immutable: false+ lets Puma threads share a single
-        # handle safely; WAL mode means precompute can write while we read.
+        # handle safely; WAL mode means compute can write while we read.
         handle = SQLite3::Database.new(database_path, readonly: true)
         handle.execute("PRAGMA query_only = 1")
         announce_cache_age!
@@ -232,7 +232,7 @@ module Rhymecrime
     end
 
     # Print the cache path + creation/modification time exactly once per
-    # process. Loud-on-load so we never silently consume a stale precompute
+    # process. Loud-on-load so we never silently consume a stale compute
     # again when retraining the classifier or changing the score recipe — the
     # runtime predicate happily returns whatever scores the SQLite file holds,
     # which previously masked a +10pp+ accuracy delta in the live classifier
@@ -244,7 +244,7 @@ module Rhymecrime
       mtime = File.mtime(path) rescue nil
       size_mb = (File.size(path).to_f / 1024 / 1024).round(1) rescue nil
       stamp = mtime ? mtime.strftime("%Y-%m-%d %H:%M:%S %z") : "unknown"
-      warn "[related-cache] loading precomputed store from #{path} " \
+      warn "[related-cache] loading computed store from #{path} " \
            "(built #{stamp}, #{size_mb} MB) — set RELATED_BYPASS_STORE=1 to force live compute"
     end
 
@@ -300,7 +300,7 @@ module Rhymecrime
 
     # Cheap existence check — used by the dev-only fallback in +related.rb+ to
     # distinguish "cue has no related words" (row exists but empty after filter)
-    # from "cue is not precomputed at all" (no row → full-scan fallback).
+    # from "cue is not computed at all" (no row → full-scan fallback).
     def has_related?(lemma_key)
       return false unless available?
 
@@ -310,7 +310,7 @@ module Rhymecrime
     end
 
     # Hot-path read for the runtime +set_related+ goal: returns the
-    # precomputed Array of tuples (each a sorted Array of headwords) for
+    # computed Array of tuples (each a sorted Array of headwords) for
     # +lemma_key+, or +nil+ when no row exists for this cue. Mirrors
     # +DynamoRuntime.fetch_set_related_tuples+ in shape so the +Store+
     # facade can dispatch transparently.
@@ -318,13 +318,13 @@ module Rhymecrime
     # +nil+ vs +[]+ matters: an empty array is a valid "this cue survived
     # the cue universe filter but has no rhyming friends" answer that the
     # caller will render normally, while +nil+ signals "we never
-    # precomputed this cue" and routes to the friendly-message branch in
+    # computed this cue" and routes to the friendly-message branch in
     # +crime.rb+'s goal dispatch.
     def fetch_set_related_tuples(lemma_key)
       return @set_related_cache[lemma_key] if @set_related_cache.key?(lemma_key)
       return @set_related_cache[lemma_key] = nil unless available?
       # During the migration window after the +set_related+ schema lands
-      # but before +bin/precompute-set-related+ has populated the table,
+      # but before +bin/compute-set-related+ has populated the table,
       # the schema upgrade hasn't happened on the dev's local SQLite
       # file yet. Treat that as "no row" silently — the live-compute
       # fallback in +crime.rb+'s +find_rhyming_tuples+ still produces
@@ -355,12 +355,12 @@ module Rhymecrime
     end
 
     # Detected once per process: whether the +set_related+ table is
-    # present in the local SQLite. Pre-precompute-set-related checkouts
+    # present in the local SQLite. Pre-compute-set-related checkouts
     # have a +rhymecrime_local.sqlite3+ from an earlier
-    # +bin/precompute-relatedness+ run with only +related+ /
+    # +bin/compute-relatedness+ run with only +related+ /
     # +related_scores+; we don't want to spam stderr with a "no such
     # table" warning for every cue until the user runs the new
-    # precompute. The check itself is one cheap +sqlite_master+ lookup.
+    # compute. The check itself is one cheap +sqlite_master+ lookup.
     def set_related_table_exists?
       return @set_related_table_exists unless @set_related_table_exists.nil?
 
@@ -372,11 +372,11 @@ module Rhymecrime
       @set_related_table_exists = false
     end
 
-    # Mirror of +DynamoRuntime.find_all_related_precomputed+: returns the word
+    # Mirror of +DynamoRuntime.find_all_related_computed+: returns the word
     # list filtered by the caller's visibility flags, without fetching scores.
     # Uses the in-process Ruby dict helpers (+lexicon_word_entry+,
     # +rdict_lookup+) loaded by +crime.rb+.
-    def find_all_related_precomputed(lemma_key, include_rhymeless, common_only)
+    def find_all_related_computed(lemma_key, include_rhymeless, common_only)
       words = fetch_related_words(lemma_key)
       return [] if words.empty?
 
@@ -386,7 +386,7 @@ module Rhymecrime
     # Preserves the stored +relatedness_score+ on each surviving tuple so UI
     # sorting / coloring stays O(1) per candidate. Pays for the +related_scores+
     # lookup; only callers that need scores should reach this.
-    def find_all_related_precomputed_with_scores(lemma_key, include_rhymeless, common_only)
+    def find_all_related_computed_with_scores(lemma_key, include_rhymeless, common_only)
       raw = fetch_related_tuples(lemma_key)
       return [] if raw.empty?
 

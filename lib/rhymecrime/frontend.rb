@@ -278,7 +278,7 @@ end
 # so even a long-lived container that has cumulatively touched every cue
 # can't grow them past the dictionary size.
 #
-# +bin/precompute-relatedness+ still calls +reset_caches!+ between shards
+# +bin/compute-relatedness+ still calls +reset_caches!+ between shards
 # to bound worker RSS — that's a different access pattern (sequential
 # distinct-cue scan) where retention has no upside.
 def build_rhymecrime_page(word1, word2, debug: false)

@@ -54,7 +54,7 @@ WORD_SEMANTIC_BASE_MAP_TXT_FILENAME = "word_semantic_base_map.txt"
 # Local-dev key/value store that mirrors the DynamoDB schema used in Lambda:
 # the +related+ table is keyed by +"related#<lemma>"+ with parallel +words+ and
 # +scores+ JSON arrays. Single SQLite file, no daemon; boot is O(open file) and
-# per-lemma lookups are a single indexed SELECT. Built by bin/precompute-relatedness
+# per-lemma lookups are a single indexed SELECT. Built by bin/compute-relatedness
 # and consumed by +Rhymecrime::LocalStore+ (runtime shim) and by bin/upload-to-dynamodb
 # (when streaming rows up to prod DDB). In Lambda this file is absent and
 # +Rhymecrime::DataSource.dynamodb?+ routes everything to +DynamoRuntime+ instead.
@@ -282,7 +282,7 @@ end
 # headwords (+frequency+ at or below +RARE_FREQ_MAX+). Both predicates need +crime.rb+ loaded.
 #
 # Memoized per +(include_rhymeless, common_only)+ flag combination (4 possible
-# keys total) because the hot path in +bin/precompute-relatedness+ calls
+# keys total) because the hot path in +bin/compute-relatedness+ calls
 # +words_we_care_about(false, true)+ once per cue (~4000x per worker), and
 # rebuilding the ~20k-element filtered list — which includes a
 # +has_rhyming_word?+ pronunciations / rdict probe per candidate — dominated
@@ -290,7 +290,7 @@ end
 # at runtime, so the memo is safe; dict-build scripts that mutate
 # +word_dict+ do not call this function.
 #
-# The parent in +bin/precompute-relatedness+ primes this memo before +fork+
+# The parent in +bin/compute-relatedness+ primes this memo before +fork+
 # so all worker processes inherit the filled entry via copy-on-write instead
 # of each rebuilding it from scratch.
 $words_we_care_about_memo = {}

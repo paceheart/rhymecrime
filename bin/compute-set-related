@@ -1,21 +1,21 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 
-# Precompute the post-prune rhyming-tuple list for every cue lemma in the
-# precomputed +related#+ universe and stash it as a +set_related#<lemma>+
+# Compute the post-prune rhyming-tuple list for every cue lemma in the
+# computed +related#+ universe and stash it as a +set_related#<lemma>+
 # row in +generated/rhymecrime_local.sqlite3+.
 #
 # Why: the runtime +set_related+ goal in +lib/rhymecrime/crime.rb+ used to
 # run four phases live on every request (~6s/cue: find+filter related,
 # prefetch, rhyme-bucket loop, suffix-redundancy prune). That's blown up
 # the Lambda 29s budget for hub cues and made cold-start latency worse
-# than warm requests by an order of magnitude. With the precomputed
+# than warm requests by an order of magnitude. With the computed
 # +set_related#+ row in DDB, the hot path collapses to one +GetItem+ plus
 # render — see +Rhymecrime::Store.fetch_set_related_tuples+.
 #
 # Inputs:
 #   * +generated/rhymecrime_local.sqlite3+ populated by
-#     +bin/precompute-relatedness+ (the +related+ table — we read its rows
+#     +bin/compute-relatedness+ (the +related+ table — we read its rows
 #     to get the cue universe and the post-filter related-words list per
 #     cue).
 #   * +word_dict+ / +rdict+ (the in-process Ruby dict — shipped via the
@@ -24,14 +24,14 @@
 # Output: +set_related+ table in the same SQLite file, one row per cue
 # lemma. Empty +tuples+ ([]) is a valid "this cue has relateds but they
 # don't share a rime cohort" answer; the runtime renders it as an empty
-# tuples list (still a precomputed hit, no friendly-message fallback).
+# tuples list (still a computed hit, no friendly-message fallback).
 # Cues *outside* the universe (rare words, forbidden words, words with no
 # +related#+ row) get no +set_related#+ row and the runtime routes them
 # to the friendly "Oops, I don't know..." / "I don't like that word."
 # bad_input message.
 #
 # Usage:
-#   ruby bin/precompute-set-related
+#   ruby bin/compute-set-related
 #
 # Options:
 #   --output=PATH    Override SQLite path (default: generated/rhymecrime_local.sqlite3)
@@ -84,7 +84,7 @@ require_relative "../lib/rhymecrime/frontend"
 require_relative "../lib/rhymecrime/local_store"
 
 # Compact "Xh Ym Z.Zs" / "Ym Z.Zs" / "Z.Zs" formatter for the elapsed-
-# time prints below. Mirrors +bin/precompute-relatedness+'s final
+# time prints below. Mirrors +bin/compute-relatedness+'s final
 # wall-clock line so a user comparing run-to-run timings sees the same
 # shape from both scripts; bare seconds get one decimal so sub-minute
 # phases (e.g. the rime walk) still read cleanly.
@@ -113,7 +113,7 @@ OptionParser.new do |o|
 end.parse!
 
 unless File.exist?(output_path)
-  warn "Missing #{output_path}: run bin/precompute-relatedness first."
+  warn "Missing #{output_path}: run bin/compute-relatedness first."
   exit 1
 end
 
@@ -122,7 +122,7 @@ wd = word_dict
 rd = rdict
 puts "  word_dict=#{wd.size} entries, rdict=#{rd.size} rimes"
 
-# Precompute the +common-preferred headword+ universe once so the
+# Compute the +common-preferred headword+ universe once so the
 # per-row filter below is just a Set membership check instead of three
 # hash lookups + a +preferred_form+ resolve per word. The runtime's
 # +filter_related_words_to_common_preferred+ is what we're emulating,
@@ -142,15 +142,15 @@ puts "  #{common_preferred.size} common-preferred headwords (built in #{format_d
 
 # 1. Pull every +related#+ row out of the local store: that's our cue
 #    universe. We trust the stored rows as authoritative — they were
-#    already filtered to common-preferred at +bin/precompute-relatedness+
+#    already filtered to common-preferred at +bin/compute-relatedness+
 #    time, and re-filtering 27K rows × ~hundreds of words each through
 #    +word_common_preferred_for_tuple_or_pair?+ here would add minutes
 #    to startup with no observable signal change. We do +.uniq+ as
 #    cheap defence against duplicate entries (older shard merges had
 #    occasional duplicates near the seam).
 #
-#    +bin/precompute-relatedness+ is the source of truth for which
-#    cues we bothered to precompute, and we want symmetric coverage on
+#    +bin/compute-relatedness+ is the source of truth for which
+#    cues we bothered to compute, and we want symmetric coverage on
 #    +set_related#+ so a runtime hit on +related#+ implies a hit on
 #    +set_related#+.
 puts "Loading related# rows from #{output_path}..."
@@ -169,7 +169,7 @@ SQLite3::Database.new(output_path, readonly: true).then do |db|
       # Filter to common-preferred headwords (mirrors the runtime's
       # +filter_related_words_to_common_preferred+ pipeline step). Set
       # membership here is O(1) per word, not the +preferred_form+
-      # resolve that costs ~3-4 hash lookups; the precomputed
+      # resolve that costs ~3-4 hash lookups; the computed
       # +common_preferred+ Set above pays for itself many times over
       # across 27K rows × thousands of words each.
       filtered = raw.select { |w| common_preferred.include?(w) }
@@ -190,7 +190,7 @@ puts "  #{words_by_cue.size} cues loaded in #{format_duration(load_elapsed)}"
 
 # Optional --only / --max-cues filters before the heavy work. +--only+
 # resolves headwords through +word_dict+ so passing +running+ targets the
-# +run+ row (consistent with +bin/precompute-relatedness+).
+# +run+ row (consistent with +bin/compute-relatedness+).
 if only_words.any?
   requested = only_words.flat_map { |s| s.split(",") }.map { |w| w.to_s.strip.downcase }.reject(&:empty?).uniq
   resolved = requested.map do |w|
@@ -326,7 +326,7 @@ end
 
 # 5. Upsert every cue's tuples (including empty arrays — see the +nil+
 #    vs +[]+ contract in +LocalStore#fetch_set_related_tuples+) in a
-#    single transaction. Mirrors +bin/precompute-relatedness+'s write
+#    single transaction. Mirrors +bin/compute-relatedness+'s write
 #    pattern.
 puts "Writing #{n} set_related rows to #{output_path}..."
 write_started = Process.clock_gettime(Process::CLOCK_MONOTONIC)

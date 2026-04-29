@@ -7,11 +7,11 @@ if [[ "${SKIP_DICT_BUILD:-0}" != "1" ]]; then
   ./bin/dict-build
 fi
 
-if [[ "${SKIP_PRECOMPUTE:-0}" == "1" ]]; then
-  echo "==> skip precompute (SKIP_PRECOMPUTE=1)"
+if [[ "${SKIP_COMPUTE:-0}" == "1" ]]; then
+  echo "==> skip compute (SKIP_COMPUTE=1)"
 else
-  echo "==> precompute relatedness → generated/related_precompute.jsonl (long run; smoke: ruby bin/precompute-relatedness --max-cues=5 --dry-run)"
-  bundle exec ruby bin/precompute-relatedness
+  echo "==> compute relatedness → generated/related_compute.jsonl (long run; smoke: ruby bin/compute-relatedness --max-cues=5 --dry-run)"
+  bundle exec ruby bin/compute-relatedness
 fi
 
 echo "==> upload word + rime + related to DynamoDB"

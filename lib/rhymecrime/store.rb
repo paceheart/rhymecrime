@@ -1,20 +1,20 @@
 # frozen_string_literal: true
 
-# store.rb — backend-agnostic facade over the precomputed +related#<lemma>+,
+# store.rb — backend-agnostic facade over the computed +related#<lemma>+,
 # +score#<lemma>+, and +set_related#<lemma>+ partitions. Picks
 # +DynamoRuntime+ in Lambda (+RHYMECRIME_DATA_SOURCE=dynamodb+) and
 # +LocalStore+ (SQLite) everywhere else. Both backends expose the same
 # API so +related.rb+ / +crime.rb+ don't branch on data source:
 #
-#   * cheap (hot path) — +fetch_related_words+, +find_all_related_precomputed+:
+#   * cheap (hot path) — +fetch_related_words+, +find_all_related_computed+:
 #     pull just the cue's word list, no relatedness_score work. The non-debug
 #     rhyme page goes through these.
 #   * lazy (debug, +/similar+, +similarity()+) — +fetch_related_tuples+,
-#     +find_all_related_precomputed_with_scores+: also resolve the parallel
+#     +find_all_related_computed_with_scores+: also resolve the parallel
 #     score array (a second GetItem in DDB, a second table SELECT in SQLite).
-#   * +set_related+ — +fetch_set_related_tuples+: returns the precomputed
+#   * +set_related+ — +fetch_set_related_tuples+: returns the computed
 #     post-prune rhyming-tuple list for the cue, or +nil+ when the cue
-#     wasn't in the precompute universe. The runtime +set_related+ goal in
+#     wasn't in the compute universe. The runtime +set_related+ goal in
 #     +crime.rb+ goes through here; +nil+ routes the caller to the
 #     friendly "Oops, I don't know..." / "I don't like that word."
 #     bad_input branch.
@@ -64,14 +64,14 @@ module Rhymecrime
 
     # Cheap path: filter the cue's word list by visibility flags (rhymeless,
     # common-only) without touching scores. Hot rhyme-page entry point.
-    def find_all_related_precomputed(lemma_key, include_rhymeless, common_only)
-      backend.find_all_related_precomputed(lemma_key, include_rhymeless, common_only)
+    def find_all_related_computed(lemma_key, include_rhymeless, common_only)
+      backend.find_all_related_computed(lemma_key, include_rhymeless, common_only)
     end
 
     # Score-aware companion. Used by callers that actually consume the
     # +relatedness_score+ (debug coloring, +/similar+, score-aware sort).
-    def find_all_related_precomputed_with_scores(lemma_key, include_rhymeless, common_only)
-      backend.find_all_related_precomputed_with_scores(lemma_key, include_rhymeless, common_only)
+    def find_all_related_computed_with_scores(lemma_key, include_rhymeless, common_only)
+      backend.find_all_related_computed_with_scores(lemma_key, include_rhymeless, common_only)
     end
 
     # True when the backing store is ready to answer queries. DDB is assumed
@@ -97,7 +97,7 @@ module Rhymecrime
       end
     end
 
-    # Hot-path read for the +set_related+ goal: returns the precomputed
+    # Hot-path read for the +set_related+ goal: returns the computed
     # Array of tuples for +lemma_key+, or +nil+ when no row exists.
     # Symmetric across backends; both cache the result so the typical
     # "cache miss → GetItem → cache hit forever" warm-container shape

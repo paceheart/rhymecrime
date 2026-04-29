@@ -186,7 +186,7 @@ End-to-end data flow runs in five phases. Each phase's outputs are inputs to the
 3. `bin/retrain-relatedness --rebuild-vectors`: dumps `generated/sense_glosses.jsonl`, encodes them with MPNet (the only Python step) into `generated/model_sense_vectors.msgpack`, and trains `generated/relatedness_classifier.json`.
 4. `dict-build` (slim): re-runs over `word_dict.txt` so the freshly-trained rarity classifier can rescore borderline words.
 
-**Phase 3 — Relatedness precompute** (`bin/precompute-relatedness` then `bin/precompute-set-related`). For every cue lemma, runs the full relatedness pipeline (Numberbatch + ConceptNet + USF + sense-vector cosine + WordNet glosses → classifier) to produce the `related#<lemma>` and `score#<lemma>` rows, then computes the post-prune rhyming-tuple list for each cue as `set_related#<lemma>`. Output is one SQLite file (`generated/rhymecrime_local.sqlite3`) with three tables. Cue order is descending by `curated/related.csv` row count, alpha tiebreak — so `Ctrl-C`-resumable runs and `--max-cues=N` smoke runs front-load the cues you've curated most (`cat`, `pirate`, `food`, `hell`, `crime`, …).
+**Phase 3 — Relatedness compute** (`bin/compute-relatedness` then `bin/compute-set-related`). For every cue lemma, runs the full relatedness pipeline (Numberbatch + ConceptNet + USF + sense-vector cosine + WordNet glosses → classifier) to produce the `related#<lemma>` and `score#<lemma>` rows, then computes the post-prune rhyming-tuple list for each cue as `set_related#<lemma>`. Output is one SQLite file (`generated/rhymecrime_local.sqlite3`) with three tables. Cue order is descending by `curated/related.csv` row count, alpha tiebreak — so `Ctrl-C`-resumable runs and `--max-cues=N` smoke runs front-load the cues you've curated most (`cat`, `pirate`, `food`, `hell`, `crime`, …).
 
 **Phase 4 — Deploy** (two independent halves):
 - *Code path:* `bin/deploy-aws` runs `bin/stage-lambda` (copies `lambda_handler.rb`, `lib/`, `assets/`, `curated/`, and the runtime-needed `generated/*.msgpack` files into `lambda-build/`), then `sam build --use-container` (so native gems compile for arm64-linux), then `sam deploy`.
@@ -241,8 +241,8 @@ curated/                          ├─ conceptnet_edges.json       │ Phase 3
 
 **Runbook:**
 
-- *Fresh clone → working app:* `./setup.sh` (Phases 1-2, ~60 min) → `./bin/precompute-relatedness && ./bin/precompute-set-related` (Phase 3, ~2-3 hr) → `./bin/deploy-aws && AWS_PROFILE=… ./bin/upload-to-dynamodb` (Phase 4).
-- *Retrain relatedness after a `curated/related.csv` edit:* `./bin/retrain-relatedness` (~1 min) → smoke-test → `./bin/precompute-relatedness && ./bin/precompute-set-related && ./bin/upload-to-dynamodb` (data half of Phase 4).
+- *Fresh clone → working app:* `./setup.sh` (Phases 1-2, ~60 min) → `./bin/compute-relatedness && ./bin/compute-set-related` (Phase 3, ~2-3 hr) → `./bin/deploy-aws && AWS_PROFILE=… ./bin/upload-to-dynamodb` (Phase 4).
+- *Retrain relatedness after a `curated/related.csv` edit:* `./bin/retrain-relatedness` (~1 min) → smoke-test → `./bin/compute-relatedness && ./bin/compute-set-related && ./bin/upload-to-dynamodb` (data half of Phase 4).
 
 ## Credits
 

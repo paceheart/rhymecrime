@@ -6,9 +6,9 @@
 # Holds every knowledge-base loader and per-pair raw-feature extractor needed to
 # compute +relatedness_score+: Numberbatch vectors, ConceptNet graph, USF
 # free-association norms, MPNet contextualized embeddings, WordNet glosses. This
-# is the *seed-time* side of the codebase: loaded by +bin/precompute-relatedness+,
+# is the *seed-time* side of the codebase: loaded by +bin/compute-relatedness+,
 # +bin/train-relatedness-classifier+, related specs, and the local-dev escape
-# hatch in +lib/rhymecrime/related.rb+ when no precomputed data is available.
+# hatch in +lib/rhymecrime/related.rb+ when no computed data is available.
 #
 # Not required at Lambda runtime. Every offline tunable, data loader, and the
 # +PairSignals+ class live here so the runtime graph can stay free of the
@@ -148,14 +148,14 @@ end
 CN_MAX_HOPS = 4 unless defined?(CN_MAX_HOPS)
 
 # Source-fixed BFS cache. When a scan loop is about to evaluate thousands of pairs
-# against a single cue, it can call +prepare_cn_hops_source!(cue)+ to precompute the
+# against a single cue, it can call +prepare_cn_hops_source!(cue)+ to compute the
 # full distance table from the cue once (single-source BFS, ~50ms) and then
 # +conceptnet_shortest_hops+ short-circuits to a hash lookup for any pair where one
 # endpoint is that cue. Scoped to the current process; +clear_cn_hops_source!+ or
 # replacing with +nil+ disables the fast path.
 $cn_hops_source = nil
 
-# Precompute and cache the shortest-path distance from +cue+ to every ConceptNet
+# Compute and cache the shortest-path distance from +cue+ to every ConceptNet
 # node reachable within +max_hops+. Idempotent: replaces any previously cached
 # source. Safe to call when +cue+ has no ConceptNet node (the cache is cleared so
 # the fast path is skipped and the generic BFS still returns +max_hops + 2+).
@@ -392,7 +392,7 @@ end
 # was trained against +model_*+ features and the classifier doesn't know how to
 # behave when those features are silently zero. Bootstrap by running
 # +bin/dump-sense-glosses+ → +bin/build-sense-vectors.py+ before retraining /
-# precomputing. Per-word OOV is still handled gracefully: +headword[word]+ /
+# computing. Per-word OOV is still handled gracefully: +headword[word]+ /
 # +senses[word]+ may legitimately be +nil+ for words not in the encoder vocabulary,
 # and the in-vocab flag features (+model_both_in_vocab?+, +def_both_in_vocab?+)
 # let the classifier condition on that.
@@ -403,7 +403,7 @@ end
 # The cosine helpers below are then one +Numo+ +dot+ call apiece — each 768-dim
 # dot product offloads to the native BLAS shipped with +numo-narray+, giving a
 # ~12x speed-up over the previous pure-Ruby +va.size.times { |i| ... }+ loops
-# (measured: 40 kpairs/s vs 3.3 kpairs/s on the +pirate+ precompute cue). The
+# (measured: 40 kpairs/s vs 3.3 kpairs/s on the +pirate+ compute cue). The
 # float32 cast is lossless for cosine purposes: vectors are already stored as
 # +Float+ in the msgpack but their dynamic range is well within float32's
 # precision, and the +(* 100).round+ quantization at the call sites hides any
@@ -519,7 +519,7 @@ end
 # Gated by +$MODEL_SENSE_COSINE_GATE+ on the raw headword-headword cosine: when the
 # two words are near-orthogonal in MPNet space, none of their per-sense cosines are
 # going to cross the classifier's decision threshold either, so we skip the K_a + K_b
-# vector-matrix products entirely. Accepts an optional precomputed +headword_cos+ to
+# vector-matrix products entirely. Accepts an optional computed +headword_cos+ to
 # avoid recomputing what +PairSignals+ already cached.
 def model_directional_sense_cosines(word1, word2, headword_cos = nil)
   v2_head = model_headword_vector(word2)
@@ -773,7 +773,7 @@ def morphy_directional_sense_cosines(word1, word2)
   [d1, d2]
 end
 
-# Numberbatch + ConceptNet centile score for two dictionary lemmas. Precompute-time
+# Numberbatch + ConceptNet centile score for two dictionary lemmas. Compute-time
 # input to +PairSignals#base_similarity+. Not used at Lambda runtime (the runtime
 # +similarity+ reads the stored +relatedness_score+ directly from DynamoDB).
 def lemmilarity(l1, l2)

@@ -151,7 +151,7 @@ RSpec.describe Rhymecrime::LocalStore do
   end
 
   describe "set_related table" do
-    # +set_related#<lemma>+ is the precomputed post-prune rhyming-tuple list
+    # +set_related#<lemma>+ is the computed post-prune rhyming-tuple list
     # the runtime hot path reads (see +Rhymecrime::Store.fetch_set_related_
     # tuples+). Schema lives in its own table so a missing-row miss
     # (+fetch_set_related_tuples+ returns +nil+) cleanly distinguishes
@@ -192,9 +192,9 @@ RSpec.describe Rhymecrime::LocalStore do
         expect(described_class.has_set_related?("cat")).to be true
       end
 
-      it "round-trips an empty tuples list as +[]+ (precomputed-but-no-rhymes contract)" do
+      it "round-trips an empty tuples list as +[]+ (computed-but-no-rhymes contract)" do
         # Empty arrays are valid: the runtime renders them as a
-        # precomputed hit with no tuples, distinct from the +nil+ "unknown
+        # computed hit with no tuples, distinct from the +nil+ "unknown
         # cue" fallback that triggers the friendly message.
         described_class.open_for_write(db_path) do |writer|
           writer.upsert_set_related("lonely_cue", [])

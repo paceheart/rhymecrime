@@ -792,7 +792,7 @@ end
 # (+booting / fluting+ vs +booted / fluted / fruited+, +prompt / romped / swamped+ vs
 # +prompts / romps / swamps+).
 # Optional cross-cue memoization layer for +rhyming_tuple_redundant_with?+.
-# Populated only by +bin/precompute-set-related+ (which sets it to a fresh
+# Populated only by +bin/compute-set-related+ (which sets it to a fresh
 # Hash before kicking off the en-masse prune loop). Runtime never sets it,
 # so the predicate stays a pure function call on the hot path. The keys are
 # +[ear, tup]+ array pairs; Ruby Hashes hash arrays-of-strings naturally,
@@ -804,7 +804,7 @@ end
 # "+rhyming_tuple_redundant_with?+, whose entire transitive call graph is
 # pure over +(ear, tup)+ (no +focal_word+ dependency anywhere). Safe to
 # share a +rhyming_tuple_redundant_with?+ memoization layer across cues."
-# That's exactly what this memo exploits: in the en-masse precompute, the
+# That's exactly what this memo exploits: in the en-masse compute, the
 # same tuple-pair recurs across many cues' tuple sets (animal / transport /
 # emotion clusters share heavily) — collapsing the redundant calls drops
 # the prune phase from ~8h to ~10min across the full ~28K cue universe.
@@ -1149,7 +1149,7 @@ $disable_cross_tuple_redundancy_pruning = false
 #
 # Pure function of +tup+: no $debug_pruned_tuples / VERBOSE side effects,
 # no consultation of +focal_word+. Same +tup+ always yields the same
-# result. This is the seam exposed for an en-masse precompute caller that
+# result. This is the seam exposed for an en-masse compute caller that
 # wants to memoize the focal-independent prune work across many cues
 # (~50× hit rate when iterating all ~28K +set_related#+ rows; the same
 # tuple recurs across many cues' tuple sets) before layering the
@@ -1461,10 +1461,10 @@ end
 
 $rhyming_tuple_cache = {}
 def find_rhyming_tuples(input_rel1, common_only = false)
-  # Skip the precomputed-store and LRU paths when +$debug_pruning+ is true:
+  # Skip the computed-store and LRU paths when +$debug_pruning+ is true:
   # the pruner side-effects +$debug_pruned_tuples+ (a per-request Set consulted
   # by +print_tuple+ for the grey pruning color), and returning cached results
-  # (whether from +$rhyming_tuple_cache+ or the precomputed +set_related#+ row)
+  # (whether from +$rhyming_tuple_cache+ or the computed +set_related#+ row)
   # would bypass that population, leaving retained-pruned tuples un-colored.
   # Debug requests are rare so recomputing is fine. We also avoid populating
   # +$rhyming_tuple_cache+ from debug-mode results, since those include tuples
@@ -1472,7 +1472,7 @@ def find_rhyming_tuples(input_rel1, common_only = false)
   return really_find_rhyming_tuples(input_rel1, common_only) if $debug_pruning
   return really_find_rhyming_tuples(input_rel1, common_only) if $disable_cross_tuple_redundancy_pruning
 
-  # Precomputed-store path: +bin/precompute-set-related+ stashes the fully
+  # Computed-store path: +bin/compute-set-related+ stashes the fully
   # post-pruned tuple list for every cue lemma in the cue universe. The Lambda
   # runtime (+DataSource.dynamodb?+ → +store_authoritative?+) treats a missing
   # row as "this cue isn't in our common-word set" and returns +nil+ here so
@@ -1480,7 +1480,7 @@ def find_rhyming_tuples(input_rel1, common_only = false)
   # bad_input message ("I don't like that word." for forbid_list cues, "Oops,
   # I don't know what words are related to <cue>..." otherwise). Local-dev
   # (+LocalStore+, non-authoritative) falls through to the live-compute path
-  # so spec runs and pre-precompute checkouts still produce results.
+  # so spec runs and pre-compute checkouts still produce results.
   if Rhymecrime::Store.available?
     cached = Rhymecrime::Store.fetch_set_related_tuples(lemma(input_rel1))
     return cached if cached
@@ -1817,7 +1817,7 @@ def print_word(word, focal_word=false, cue: nil)
     # @todo urlencode
     cgi_print "<a href='/?word1=#{word}'>"
   end
-  # Color the word by its precomputed relatedness_score to +focal_word+ when one
+  # Color the word by its computed relatedness_score to +focal_word+ when one
   # is supplied (e.g. +set_related+ tuples, where every slot should be related
   # to +word1+). Skipped when +focal_word+ is falsy (word lists that have no
   # single focal, or +pair_related+ tuples whose two slots use different focals).
@@ -1952,12 +1952,12 @@ def rhymecrime(word1, word2, goal, output_format='text', debug_mode=false)
   when "set_related"
     tuples = find_rhyming_tuples(word1)
     if tuples.nil?
-      # +find_rhyming_tuples+ returns +nil+ only when the precomputed-store
+      # +find_rhyming_tuples+ returns +nil+ only when the computed-store
       # path is authoritative (Lambda) and the cue has no +set_related#<lemma>+
       # row. Three reasons the cue might land here, each with its own copy:
       #
       #   * +explicitly_forbidden?(word1)+ — the word is on +forbid_list.txt+,
-      #     deleted from +word_dict+ at build time, and the precompute pass
+      #     deleted from +word_dict+ at build time, and the compute pass
       #     deliberately skipped it. Curt response — we know about that word
       #     and chose not to serve it.
       #   * +unrhymable_stop_word?(word1) || semantically_promiscuous?(word1)+
@@ -1966,18 +1966,18 @@ def rhymecrime(word1, word2, goal, output_format='text', debug_mode=false)
       #     decline to compute relateds for. The +set_related+ goal is the
       #     one place we want the *union* of those two lists: unrhymable
       #     stop words are deleted from +word_dict+ at build (so they
-      #     never get a precompute row); semantically-promiscuous words
+      #     never get a compute row); semantically-promiscuous words
       #     are also caught upfront by +compute_column_for_goal+ in
       #     +frontend.rb+, but we keep the predicate here as the
       #     authoritative answer when callers reach +rhymecrime+ via paths
       #     that bypass the upfront filter (CLI tools, eval scripts). The
       #     message matches +promiscuous_message+ in +frontend.rb+ so the
       #     two upstream paths render identically.
-      #   * otherwise — the cue is rare / outside the precomputed cue
+      #   * otherwise — the cue is rare / outside the computed cue
       #     universe. Apologetic response; the "I'll make a note" trailer
       #     is literal — +FeedbackStore.record_uncomputed_cue!+ writes a
       #     row tagged with +UNCOMPUTED_RELATED_TOKEN+ so the next
-      #     precompute round can surface and add the most-asked-about
+      #     compute round can surface and add the most-asked-about
       #     uncomputed cues. Soft-fails on backend trouble (see the
       #     rescue in +FeedbackStore.record!+) so a flaky feedback writer
       #     never 500s the user-visible response.

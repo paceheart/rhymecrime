@@ -8,7 +8,7 @@ require_relative "data_source"
 require_relative "timing"
 
 module Rhymecrime
-  # Read-side adapter over the precomputed +related#<lemma>+ / +score#<lemma>+
+  # Read-side adapter over the computed +related#<lemma>+ / +score#<lemma>+
   # / +set_related#<lemma>+ partitions in DynamoDB. The lexicon (+word#+)
   # and rime cohort (+rime#+) partitions were retired once the corresponding
   # +.msgpack+ files got small enough (~5.5 MB and ~700 KB respectively) to
@@ -19,7 +19,7 @@ module Rhymecrime
   #
   # +DynamoRuntime+ is therefore a thin wrapper around three GetItems:
   # +related#<lemma>+ (cheap words list), +score#<lemma>+ (lazy scores
-  # companion), and +set_related#<lemma>+ (precomputed post-prune
+  # companion), and +set_related#<lemma>+ (computed post-prune
   # rhyming-tuple list, the runtime hot-path answer for the +set_related+
   # goal). Mirrors +Rhymecrime::LocalStore+'s API so +Rhymecrime::Store+
   # can switch on +DataSource.dynamodb?+ without the caller knowing which
@@ -28,15 +28,15 @@ module Rhymecrime
     include Singleton
 
     # FIFO upper bound for the in-process +set_related#+ cache. Sized to
-    # cover the full cue universe (~28K headwords precomputed by
-    # +bin/precompute-set-related+) so a long-lived warm Lambda container
+    # cover the full cue universe (~28K headwords computed by
+    # +bin/compute-set-related+) so a long-lived warm Lambda container
     # eventually serves every cached cue from RAM.
     DDB_SET_RELATED_CACHE_CAP = (ENV["RHYMECRIME_DDB_SET_RELATED_CACHE_CAP"] || "30000").to_i
 
     class << self
       extend Forwardable
       def_delegators :instance, :fetch_related_words, :fetch_related_tuples,
-                     :find_all_related_precomputed, :find_all_related_precomputed_with_scores,
+                     :find_all_related_computed, :find_all_related_computed_with_scores,
                      :fetch_set_related_tuples, :has_set_related?
     end
 
@@ -55,7 +55,7 @@ module Rhymecrime
     end
 
     # Print the DynamoDB table identity once per process. Mirrors
-    # +LocalStore#announce_cache_age!+ so any precompute-cache consumer
+    # +LocalStore#announce_cache_age!+ so any compute-cache consumer
     # surfaces the data source it's about to trust — DDB doesn't expose a
     # cheap "last write" timestamp without a +describe_table+ round-trip, so
     # we just identify the table and region.
@@ -69,7 +69,7 @@ module Rhymecrime
     def announce_cache_source!
       return if @announced
       @announced = true
-      warn "[related-cache] using DynamoDB precomputed store table=#{table_name} " \
+      warn "[related-cache] using DynamoDB computed store table=#{table_name} " \
            "region=#{ENV.fetch('AWS_REGION', 'us-east-1')} (authoritative; no live-compute fallback)"
     end
 
@@ -79,7 +79,7 @@ module Rhymecrime
 
     # Cheap path: words only, no score GetItem. Used by everything that
     # doesn't need the +relatedness_score+ band — the non-debug rhyme page,
-    # +pair_in_store?+ membership checks, +find_all_related_precomputed+'s
+    # +pair_in_store?+ membership checks, +find_all_related_computed+'s
     # filter loop. Touches one item (+related#<lemma>+); a missing attribute
     # or a parse failure both yield +[]+, matching the legacy behavior.
     def fetch_related_words(lemma_key)
@@ -89,7 +89,7 @@ module Rhymecrime
 
     # Lazy companion to +fetch_related_words+: GetItems +score#<lemma>+ and
     # returns the parallel score array, or +[]+ when the row is missing
-    # (legacy data, or this lemma simply had no precomputed scores). Only
+    # (legacy data, or this lemma simply had no computed scores). Only
     # called by +fetch_related_tuples+ — i.e. by +/similar+, +?debug=1+, and
     # +lookup_score_by_lemmas+ — so the production rhyme page never pays for
     # it.
@@ -129,18 +129,18 @@ module Rhymecrime
     # Hot-path entry point: filters the cheap +related#<lemma>+ words list
     # without ever touching +score#<lemma>+. This is what the non-debug rhyme
     # page goes through.
-    def find_all_related_precomputed(lemma_key, include_rhymeless, common_only)
+    def find_all_related_computed(lemma_key, include_rhymeless, common_only)
       words = fetch_related_words(lemma_key)
       return [] if words.empty?
 
       filter_related_words(words, include_rhymeless, common_only)
     end
 
-    # Companion to +find_all_related_precomputed+ that preserves the stored
+    # Companion to +find_all_related_computed+ that preserves the stored
     # +relatedness_score+ alongside each surviving word. Pays for the
     # +score#<lemma>+ GetItem; only callers that actually consume the score
     # (+/similar+, +?debug=1+, score-aware sorts) should reach this.
-    def find_all_related_precomputed_with_scores(lemma_key, include_rhymeless, common_only)
+    def find_all_related_computed_with_scores(lemma_key, include_rhymeless, common_only)
       raw = fetch_related_tuples(lemma_key)
       return [] if raw.empty?
 
@@ -149,14 +149,14 @@ module Rhymecrime
       raw.select { |(w, _s)| survivors.include?(w) }
     end
 
-    # Hot-path read for the +set_related+ goal: returns the precomputed
+    # Hot-path read for the +set_related+ goal: returns the computed
     # Array of tuples (each a sorted Array of headwords) for +lemma_key+,
     # or +nil+ when the +set_related#<lemma>+ row doesn't exist for this
     # cue. Mirrors +LocalStore#fetch_set_related_tuples+ in shape.
     #
     # +nil+ vs +[]+ matters: an empty array is a valid "this cue has no
     # rhyming friends" answer the caller renders normally, while +nil+
-    # signals "we never precomputed this cue" and routes to the
+    # signals "we never computed this cue" and routes to the
     # friendly-message branch in +crime.rb+'s goal dispatch
     # (+explicitly_forbidden?+ → "I don't like that word."; otherwise →
     # "Oops, I don't know what words are related to <cue>...").

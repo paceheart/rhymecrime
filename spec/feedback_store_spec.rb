@@ -4,8 +4,8 @@
 # the runtime call site in +crime.rb+'s +set_related+ goal dispatch logs
 # a feedback row whenever +Store.fetch_set_related_tuples+ misses on an
 # authoritative store, so a follow-up export step can surface the most-
-# asked-about cues outside the precomputed universe and feed them to
-# the next +bin/precompute-set-related+ run.
+# asked-about cues outside the computed universe and feed them to
+# the next +bin/compute-set-related+ run.
 #
 # The user-driven thumbs-feedback path (+up+/+down+/+undo+) goes through
 # the same +record!+ entry point and is exercised end-to-end by the

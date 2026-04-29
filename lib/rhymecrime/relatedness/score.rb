@@ -19,7 +19,7 @@
 #     ordered lemma pair (callers must not pre-canonicalize).
 #
 # Not required at Lambda runtime. The runtime shim in +lib/rhymecrime/related.rb+
-# lazy-requires this file only when neither DynamoDB nor the precompute JSONL has
+# lazy-requires this file only when neither DynamoDB nor the compute JSONL has
 # an answer for the pair — the local-dev fallback path.
 #
 
@@ -218,9 +218,9 @@ end
 # combined score with the learned component, +off+ to isolate the rule bundle.
 #
 # NOTE: flipping the default only affects live compute (local-dev fallback, spec
-# eval with +RELATED_BYPASS_STORE=1+, +bin/precompute-relatedness+). Runtime lookups
-# via +Rhymecrime::Store+ still read whatever scores the most recent precompute
-# wrote — rebuild the store with +bin/precompute-relatedness+ to materialize the
+# eval with +RELATED_BYPASS_STORE=1+, +bin/compute-relatedness+). Runtime lookups
+# via +Rhymecrime::Store+ still read whatever scores the most recent compute
+# wrote — rebuild the store with +bin/compute-relatedness+ to materialize the
 # replace-mode scores for production.
 
 $RELATED_LEARNED_MODE = ENV["RELATED_LEARNED_MODE"] || "replace"
@@ -367,7 +367,7 @@ def relatedness_contributions(signals)
   # signals is the *only* contribution (except the promiscuous-word short-circuit above).
   #
   # Score and reason both need the classifier probability, but the GBT is the
-  # hot-path bottleneck in +bin/precompute-relatedness+ (~70% of per-cue scan
+  # hot-path bottleneck in +bin/compute-relatedness+ (~70% of per-cue scan
   # time). Compute +p+ once and derive the display score from it rather than
   # calling the classifier twice.
   if $RELATED_LEARNED_MODE == "replace"
@@ -499,7 +499,7 @@ def thematically_related_pair_memoized?(cue, related)
 end
 
 # Full-pipeline thematic relatedness predicate. Used by the local-dev / spec fallback
-# in +lib/rhymecrime/related.rb+ when no precomputed data (DynamoDB or JSONL) is
+# in +lib/rhymecrime/related.rb+ when no computed data (DynamoDB or JSONL) is
 # available. At Lambda runtime the runtime shim's DDB lookup handles this path.
 #
 # Directional: +cue+ is the input word, +related+ is the candidate output word. No
@@ -515,7 +515,7 @@ end
 
 # Same decision as +thematically_related_full?+, but returns a short reason string
 # when true (the highest-scoring rule from +relatedness_contributions+), or +nil+
-# when false. Used at seed-time (precompute + spec diagnostics) and by the local-dev
+# when false. Used at seed-time (compute + spec diagnostics) and by the local-dev
 # fallback in +lib/rhymecrime/related.rb+. Directional in +(cue, related)+ — see
 # +thematically_related_full?+.
 def why_thematically_related_full?(cue, related, include_self = false)
