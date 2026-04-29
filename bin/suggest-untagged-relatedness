@@ -112,7 +112,7 @@ def track_a_candidates(cue_raw, cue_lemma, seen_pairs, max)
   pool.each do |(w, s)|
     key = pair_key(cue_raw, w)
     next if seen_pairs.include?(key)
-    next if stop_word?(w)
+    next if semantically_promiscuous?(w)
     next unless common_preferred?(w)
     picks << [w, s, :pos]
     seen_pairs << key
@@ -139,14 +139,14 @@ def track_b_candidates(cue_raw, cue_lemma, seen_pairs, max)
   scored.first(NB_NEIGHBORS_PER_CUE).each do |(w, _cos)|
     next if w == cue_raw || w == cue_lemma || w == hyphens_to_underscores(cue_raw)
     next unless word_dict_includes_headword?(w)
-    next if stop_word?(w)
+    next if semantically_promiscuous?(w)
     next unless common_preferred?(w)
 
     key = pair_key(cue_raw, w)
     next if seen_pairs.include?(key)
 
     signals = PairSignals.new(cue_raw, w)
-    next if signals.involves_stop_word?
+    next if signals.involves_semantically_promiscuous?
     s = learned_relatedness_score(signals)
     next if s.nil?
     next unless s >= TRACK_B_LOW && s <= TRACK_B_HIGH

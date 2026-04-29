@@ -53,10 +53,10 @@ class RelatedWords
         words_we_care_about(include_rhymeless, common_only).each do |related|
           next if related == cue
 
-          # Stop words (+stop_word?+) are related to every other word; mirror
-          # +thematically_related?+'s short-circuit so the scan's output matches
-          # the predicate exactly.
-          if stop_word?(cue) || stop_word?(related)
+          # Semantically promiscuous words (+semantically_promiscuous?+) are
+          # related to every other word; mirror +thematically_related?+'s
+          # short-circuit so the scan's output matches the predicate exactly.
+          if semantically_promiscuous?(cue) || semantically_promiscuous?(related)
             results << [related, 100]
             next
           end

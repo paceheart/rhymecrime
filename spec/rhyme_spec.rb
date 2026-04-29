@@ -1022,6 +1022,9 @@ describe 'RHYMES' do
     oughta_rhyme 'froggy', 'doggie'
     oughta_rhyme 'swaggy', 'baggy' # fixed via an authoritative pronunciation
     ought_not_rhyme 'a', 'into'
+    ought_not_rhyme 'been', 'fun'
+    oughta_rhyme 'been', 'seen' # yeah it's RP but so common in rhyming
+    oughta_rhyme 'again', 'bane' # ditto
   end
 
   context 'ire' do

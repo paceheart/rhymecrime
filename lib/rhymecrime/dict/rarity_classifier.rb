@@ -65,7 +65,7 @@ LEARNED_RARITY_FEATURE_NAMES = %w[
   neol_flag
   common_words_flag
   rare_words_flag
-  stop_word_flag
+  semantically_promiscuous_flag
   wiktionary_words_flag
   wn_entry_flag
   wn_synset_count
@@ -120,7 +120,7 @@ def learned_rarity_feature_vector(sig)
     _rf(sig.neol_flag),
     _rf(sig.common_words_flag),
     _rf(sig.rare_words_flag),
-    _rf(sig.stop_word_flag),
+    _rf(sig.semantically_promiscuous_flag),
     _rf(sig.wiktionary_words_flag),
     _rf(sig.wn_entry_flag),
     sig.wn_synset_count.to_f,
@@ -386,11 +386,12 @@ def rarity_classify(sig)
   [cat, freq]
 end
 
-# Rescoring freqs that exceed this are treated as "structural sentinels" (stop_word
-# 999999, common_words 99, neol 98) and NOT touched by the classifier — a
-# classifier that fires :forbidden on a stop word is almost certainly wrong and we'd
-# rather leak some rescore opportunities than lose stop words. Headwords at or below
-# this still get rescored.
+# Rescoring freqs that exceed this are treated as "structural sentinels"
+# (semantically_promiscuous 999999, common_words 99, neol 98) and NOT touched
+# by the classifier — a classifier that fires :forbidden on a promiscuous
+# word is almost certainly wrong and we'd rather leak some rescore
+# opportunities than lose promiscuous headwords. Headwords at or below this
+# still get rescored.
 RARITY_CLASSIFIER_RESCORE_MAX_FREQ = 90
 
 $rarity_usf_associations = nil

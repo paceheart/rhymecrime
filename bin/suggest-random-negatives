@@ -169,7 +169,7 @@ loop do
   end
 
   signals = PairSignals.new(a, b)
-  next if signals.involves_stop_word?
+  next if signals.involves_semantically_promiscuous?
   s = learned_relatedness_score(signals)
   next if s.nil?
 

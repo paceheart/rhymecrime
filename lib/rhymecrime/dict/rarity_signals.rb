@@ -85,7 +85,7 @@ RaritySignals = Struct.new(
   :neol_flag,
   :common_words_flag,
   :rare_words_flag,
-  :stop_word_flag,
+  :semantically_promiscuous_flag,
   :wiktionary_words_flag,
 
   # --- WordNet (presence + coarse POS) ---
@@ -202,7 +202,7 @@ def extract_rarity_signals(word, ctx)
     in_neol,
     in_common_list,
     in_rare_list,
-    stop_word?(word),
+    semantically_promiscuous?(word),
     in_wiktionary,
 
     wn_in,

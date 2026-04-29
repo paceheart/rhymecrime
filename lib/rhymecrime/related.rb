@@ -79,10 +79,10 @@ end
 
 # Stored relatedness_score (0..100 integer) between two headwords, read from
 # the precomputed source. Returns 0 when neither endpoint is a cached cue or
-# either side is a stop word (stop words short-circuit to "related" in the
-# predicate but contribute no UI-meaningful similarity score).
+# either side is semantically promiscuous (those words short-circuit to
+# "related" in the predicate but contribute no UI-meaningful similarity score).
 def similarity(word1, word2)
-  return 0 if stop_word?(word1) || stop_word?(word2)
+  return 0 if semantically_promiscuous?(word1) || semantically_promiscuous?(word2)
   RelatedWords.lookup_score(word1, word2)
 end
 
@@ -141,12 +141,12 @@ end
 
 # True iff +cue+ is topically related to +related+. Directional in
 # +(cue, related)+ — see +thematically_related_pair_memoized?+ in
-# +relatedness/score.rb+. Stop words are treated as related to every other
-# word (contentless glue). At runtime the predicate is answered via
-# +RelatedWords.pair_in_store?+ (also directional — only consults +cue+'s
-# precompute row); the local-dev fallback lazy-loads the compute pipeline
-# when the Store is absent. +RELATED_BYPASS_STORE=1+ skips the Store entirely
-# and forces the live compute path, useful for evaluating retrained
+# +relatedness/score.rb+. Semantically promiscuous words are treated as
+# related to every other word (contentless glue). At runtime the predicate is
+# answered via +RelatedWords.pair_in_store?+ (also directional — only consults
+# +cue+'s precompute row); the local-dev fallback lazy-loads the compute
+# pipeline when the Store is absent. +RELATED_BYPASS_STORE=1+ skips the Store
+# entirely and forces the live compute path, useful for evaluating retrained
 # classifiers against rows whose precompute is stale.
 def thematically_related?(cue, related, include_self = false)
   if ENV["RELATED_TRACE_THEMATIC"] == "1"
@@ -154,7 +154,7 @@ def thematically_related?(cue, related, include_self = false)
   end
 
   return true if include_self && (cue == related || lemma(cue) == lemma(related))
-  return true if stop_word?(cue) || stop_word?(related)
+  return true if semantically_promiscuous?(cue) || semantically_promiscuous?(related)
 
   puts "thematically_related? #{cue} -> #{related}" if related_trace_memo?
 
@@ -193,8 +193,8 @@ end
 def why_thematically_related?(cue, related, include_self = false)
   return "self: same headword" if include_self && cue == related
   return "self: same lexeme (lemma)" if include_self && lemma(cue) == lemma(related)
-  return "stop_word: #{cue.inspect} is a stop word (related to everything)" if stop_word?(cue)
-  return "stop_word: #{related.inspect} is a stop word (related to everything)" if stop_word?(related)
+  return "semantically_promiscuous: #{cue.inspect} is related to everything" if semantically_promiscuous?(cue)
+  return "semantically_promiscuous: #{related.inspect} is related to everything" if semantically_promiscuous?(related)
 
   cue_lemma = ENV["RELATED_SKIP_LEMMA"] == "1" ? cue : lemma(cue)
   related_lemma = ENV["RELATED_SKIP_LEMMA"] == "1" ? related : lemma(related)
@@ -295,9 +295,9 @@ class RelatedWords
       key = [:words, word, include_rhymeless, common_only]
       return @related_word_cache[key] if @related_word_cache.key?(key)
 
-      if stop_word?(word) || stop_word?(lemma(word))
+      if semantically_promiscuous?(word) || semantically_promiscuous?(lemma(word))
         words = words_we_care_about(include_rhymeless, common_only).reject { |w| w == word }
-        debug "Finding words related to #{word} (stop word, all candidates)... #{words.length}\n"
+        debug "Finding words related to #{word} (semantically promiscuous, all candidates)... #{words.length}\n"
         return @related_word_cache[key] = words
       end
 
@@ -330,16 +330,17 @@ class RelatedWords
       key = [word, include_rhymeless, common_only]
       return @related_word_cache[key] if @related_word_cache.key?(key)
 
-      # Stop words (+stop_word?+) are related to every other word; short-circuit
-      # to +words_we_care_about+ rather than a per-pair scan / Store lookup,
-      # which is both wasteful and (by convention) not populated for stop-word
-      # keys (see +bin/precompute-relatedness+, which skips them). Stop-word
-      # pairs have no meaningful stored score — assign the
-      # +RELATEDNESS_SCORE_THRESHOLD+ floor so sort order is stable.
-      if stop_word?(word) || stop_word?(lemma(word))
+      # Semantically promiscuous words are related to every other word;
+      # short-circuit to +words_we_care_about+ rather than a per-pair scan /
+      # Store lookup, which is both wasteful and (by convention) not
+      # populated for promiscuous keys (see +bin/precompute-relatedness+,
+      # which skips them). Promiscuous-word pairs have no meaningful stored
+      # score — assign the +RELATEDNESS_SCORE_THRESHOLD+ floor so sort order
+      # is stable.
+      if semantically_promiscuous?(word) || semantically_promiscuous?(lemma(word))
         candidates = words_we_care_about(include_rhymeless, common_only).reject { |w| w == word }
         tuples = candidates.map { |w| [w, RELATEDNESS_SCORE_THRESHOLD] }
-        debug "Finding words related to #{word} (stop word, all candidates)... #{tuples.length}\n"
+        debug "Finding words related to #{word} (semantically promiscuous, all candidates)... #{tuples.length}\n"
         @related_word_cache[key] = tuples
         return tuples
       end

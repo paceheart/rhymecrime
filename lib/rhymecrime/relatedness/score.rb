@@ -355,15 +355,16 @@ end
 # Returns an array of +[score, reason]+ tuples: one per rule whose preconditions are
 # satisfied by +signals+. May be empty when no signal passes its gate.
 def relatedness_contributions(signals)
-  # Stop words are contentless glue: related to every other word. Fully saturates
-  # the composite score so no other signal is consulted.
-  if signals.involves_stop_word?
-    stop = signals.stop_word_cue? ? signals.cue : signals.related
-    return [[100, "stop_word: #{stop.inspect} is a stop word (related to everything)"]]
+  # Semantically promiscuous words are contentless glue: related to every
+  # other word. Fully saturates the composite score so no other signal is
+  # consulted.
+  if signals.involves_semantically_promiscuous?
+    sp = signals.semantically_promiscuous_cue? ? signals.cue : signals.related
+    return [[100, "semantically_promiscuous: #{sp.inspect} is related to everything"]]
   end
 
   # Learned-classifier replace mode: the logistic regression over all gathered
-  # signals is the *only* contribution (except the stop-word short-circuit above).
+  # signals is the *only* contribution (except the promiscuous-word short-circuit above).
   #
   # Score and reason both need the classifier probability, but the GBT is the
   # hot-path bottleneck in +bin/precompute-relatedness+ (~70% of per-cue scan
@@ -505,7 +506,7 @@ end
 # lex-order canonicalization — see +thematically_related_pair_memoized?+.
 def thematically_related_full?(cue, related, include_self = false)
   return true if include_self && (cue == related || lemma(cue) == lemma(related))
-  return true if stop_word?(cue) || stop_word?(related)
+  return true if semantically_promiscuous?(cue) || semantically_promiscuous?(related)
 
   cue_lemma = ENV["RELATED_SKIP_LEMMA"] == "1" ? cue : lemma(cue)
   related_lemma = ENV["RELATED_SKIP_LEMMA"] == "1" ? related : lemma(related)

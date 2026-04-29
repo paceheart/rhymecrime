@@ -660,7 +660,7 @@ def add_frequency_info(cmudict, subtlex_hash, subtlex_total_hash, wordfreq_hash,
   ref_nb = ref_nb_path ? numberbatch_corpus_token_set(ref_nb_path) : nil
   ref_usf = usf_corpus_word_set
   for word, prons in cmudict
-    if(stop_word?(word))
+    if(semantically_promiscuous?(word))
       freq = 999999
     elsif(common_words.include?(word))
       freq = 99
@@ -682,7 +682,7 @@ def add_frequency_info(cmudict, subtlex_hash, subtlex_total_hash, wordfreq_hash,
   subtlex_hash.each_key do |word|
     next if hash.key?(word)
     next unless word.match?(/\A[a-z]([a-z'\-]*[a-z])?\z/)
-    if(stop_word?(word))
+    if(semantically_promiscuous?(word))
       freq = 999999
     elsif(common_words.include?(word))
       freq = 99
@@ -995,8 +995,8 @@ def add_frequency_info(cmudict, subtlex_hash, subtlex_total_hash, wordfreq_hash,
         dict_trace_puts(base, "morph_expand_listed: skip (not in common_words.txt)") if tb
         next
       end
-      if stop_word?(base)
-        dict_trace_puts(base, "morph_expand_listed: skip (stop word)") if tb
+      if semantically_promiscuous?(base)
+        dict_trace_puts(base, "morph_expand_listed: skip (semantically promiscuous)") if tb
         next
       end
       if rare_words.include?(base)
@@ -1101,8 +1101,8 @@ def add_frequency_info(cmudict, subtlex_hash, subtlex_total_hash, wordfreq_hash,
         dict_trace_puts(base, "morph_expand_subtlex: skip (no row or freq #{bent ? bent[0] : 'nil'} ≤ #{RARE_FREQ_MAX})") if tb
         next
       end
-      if stop_word?(base) || rare_words.include?(base)
-        dict_trace_puts(base, "morph_expand_subtlex: skip (stop/rare_words)") if tb
+      if semantically_promiscuous?(base) || rare_words.include?(base)
+        dict_trace_puts(base, "morph_expand_subtlex: skip (semantically promiscuous/rare_words)") if tb
         next
       end
       if morph_kaikki_lists_surface_as_inflected_nonlemma?(base)
@@ -1383,6 +1383,15 @@ def add_frequency_info(cmudict, subtlex_hash, subtlex_total_hash, wordfreq_hash,
     forbidden_scrub += 1
   end
   puts "#{forbidden_scrub} explicitly forbidden surface forms removed after frequency phases" if forbidden_scrub > 0
+
+  unrhymable_scrub = 0
+  hash.keys.each do |word|
+    next unless unrhymable_stop_word?(word)
+    dict_trace_puts(word, "unrhymable_scrub: DELETE (in unrhymable_stop_words)") if dict_trace_word?(word)
+    hash.delete(word)
+    unrhymable_scrub += 1
+  end
+  puts "#{unrhymable_scrub} unrhymable stop words removed after frequency phases" if unrhymable_scrub > 0
 
   hyp_edge = delete_headwords_with_edge_hyphen!(hash)
   puts "#{hyp_edge} headwords with a leading or trailing '-' removed after frequency phases" if hyp_edge > 0

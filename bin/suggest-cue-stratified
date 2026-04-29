@@ -120,7 +120,7 @@ begin
   wd.each_key do |w|
     examined += 1
     next if w == CUE || w == cue_lemma
-    next if stop_word?(w)
+    next if semantically_promiscuous?(w)
     next unless relatedness_target?(w, wd, rd)
     key = pair_key(CUE, w)
     next if seen_pairs.include?(key)
@@ -129,7 +129,7 @@ begin
     next unless picked_keys.add?(key)
 
     signals = PairSignals.new(CUE, w)
-    next if signals.involves_stop_word?
+    next if signals.involves_semantically_promiscuous?
     s = learned_relatedness_score(signals)
     next if s.nil?
 

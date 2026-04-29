@@ -33,31 +33,43 @@ masquerading as words, single-letter junk, etc.). Loaded at runtime by
 `forbid_list()` in `lib/rhymecrime/dict/utils_rhyme.rb` and consulted by
 `explicitly_forbidden?`. Plain newline-delimited list.
 
-### `semantically_promiscuous.txt` + `unrhymable_stop_words.txt`
+### `unrhymable_stop_words.txt`
 
-Two disjoint single-purpose stop-word lists; the runtime takes the union for
-anything that wants "treat as stop word" semantics:
+Function words and apostrophe-heavy contractions that are valid English but
+would make awful rhyme targets — articles / possessives (`the`, `a`, `my`),
+contractions (`he'd've`, `couldn't've`, `they're`), interjections (`huh`,
+`mm`, `oh`). **Deleted from `word_dict` entirely** at dict-build time by
+`delete_unrhymable_stop_words_from_hash` in `lib/rhymecrime/dict/phonology.rb`,
+alongside `forbid_list.txt` — the runtime never sees these words as
+headwords. Predicate: `unrhymable_stop_word?`. Conceptually parallel to
+`forbid_list.txt`: both lists name words to delete, but `forbid_list.txt`
+is for "shouldn't be a word at all" (typos, junk acronyms) while
+`unrhymable_stop_words.txt` is for "valid word, but useless as a rhyme
+target."
 
-- `semantically_promiscuous.txt` — content-empty function words (articles,
-  pronouns, modals, prepositions, conjunctions). Drives the relatedness
-  short-circuit message and saturates the relatedness score so these never
-  reach the classifier. Based on <https://gist.github.com/sebleier/554280>
-  with local additions. Predicate: `semantically_promiscuous?`.
-- `unrhymable_stop_words.txt` — words you wouldn't want at the end of a line
-  or sentence, so they don't make for good rhyme targets: ultra-short
-  articles/possessives (`the`, `a`, `my`), apostrophe-heavy contractions
-  (`he'd've`, `couldn't've`, `they're`), and interjections (`huh`, `mm`,
-  `oh`). Predicate: `unrhymable_stop_word?`.
+### `semantically_promiscuous.txt`
 
-Both files use `#` for comment / blank lines. Loaded lazily by
-`semantically_promiscuous_words` / `unrhymable_stop_words` /
-`stop_words` (the union) in `lib/rhymecrime/dict/utils_rhyme.rb`.
+Content-light words ("could", "perhaps", "henceforth", "thereby", "however")
+that are valid headwords but are "related to everything" by relatedness
+policy. **Kept in `word_dict`** at sentinel-high frequency; the relatedness
+predicates short-circuit them in scoring / display (see the
+`semantically_promiscuous?` short-circuit in `relatedness/score.rb` and the
+"is semantically promiscuous; can't compute related words" abort in
+`frontend.rb`). Predicate: `semantically_promiscuous?`. Based loosely on
+<https://gist.github.com/sebleier/554280>, with non-promiscuous entries
+moved to `unrhymable_stop_words.txt` and local additions.
 
-The two files must remain disjoint: a word's *purpose* in being a stop
-word determines which file it lives in (semantic emptiness vs. structural
-unrhymability), and the runtime union picks up both. Verify with
-`comm -12 <(grep -v '^#' curated/semantically_promiscuous.txt | sort -u)
-            <(grep -v '^#' curated/unrhymable_stop_words.txt    | sort -u)`.
+Both files use `#` for comment / blank lines. Loaded lazily via
+`unrhymable_stop_words` / `semantically_promiscuous_words` in
+`lib/rhymecrime/dict/utils_rhyme.rb`.
+
+A small overlap (currently seven entries: `eh`, `mhm`, `mm`, `thees`,
+`thou'd`, `thou'll`, `ye`) between the two files is intentional and
+harmless: deletion wins, so they leave the dict and the runtime never sees
+them. There is intentionally **no `stop_word?` union predicate** — every
+runtime call site goes through `semantically_promiscuous?` directly, so
+missed call sites fail loudly instead of silently picking up unrhymable
+entries that were supposed to be deleted.
 
 ### `neol_supplement.txt`
 

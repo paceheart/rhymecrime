@@ -34,7 +34,7 @@ raw.each do |r|
   l2 = lemma(w2) || w2
   a, b = l1 <= l2 ? [l1, l2] : [l2, l1]
   signals = PairSignals.new(a, b)
-  next if signals.involves_stop_word?
+  next if signals.involves_semantically_promiscuous?
 
   direct = signals.usf_direct_max.to_i
   twohop = signals.usf_twohop_validated?

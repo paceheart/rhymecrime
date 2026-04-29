@@ -15,9 +15,9 @@
 # hundreds of MB of data files these modules pull in.
 #
 # Callers are expected to have already loaded +rhymecrime/frontend+ (or
-# +rhymecrime/crime+) so helpers like +lemma+, +stop_word?+, +frequency+,
-# +rare?+, +word_dict_includes_headword?+, and +part_of_speech_tags+ are
-# available.
+# +rhymecrime/crime+) so helpers like +lemma+, +semantically_promiscuous?+,
+# +frequency+, +rare?+, +word_dict_includes_headword?+, and
+# +part_of_speech_tags+ are available.
 #
 
 require "json"
@@ -777,7 +777,7 @@ end
 # input to +PairSignals#base_similarity+. Not used at Lambda runtime (the runtime
 # +similarity+ reads the stored +relatedness_score+ directly from DynamoDB).
 def lemmilarity(l1, l2)
-  return 0 if stop_word?(l1) || stop_word?(l2)
+  return 0 if semantically_promiscuous?(l1) || semantically_promiscuous?(l2)
 
   cos = numberbatch_cosine(l1, l2)
   edge_w = conceptnet_edge_weight(l1, l2)
@@ -940,18 +940,18 @@ class PairSignals
 
   # --- boolean features ---
 
-  def stop_word_cue?
-    return @stop_word_cue if defined?(@stop_word_cue)
-    @stop_word_cue = stop_word?(@cue)
+  def semantically_promiscuous_cue?
+    return @semantically_promiscuous_cue if defined?(@semantically_promiscuous_cue)
+    @semantically_promiscuous_cue = semantically_promiscuous?(@cue)
   end
 
-  def stop_word_related?
-    return @stop_word_related if defined?(@stop_word_related)
-    @stop_word_related = stop_word?(@related)
+  def semantically_promiscuous_related?
+    return @semantically_promiscuous_related if defined?(@semantically_promiscuous_related)
+    @semantically_promiscuous_related = semantically_promiscuous?(@related)
   end
 
-  def involves_stop_word?
-    stop_word_cue? || stop_word_related?
+  def involves_semantically_promiscuous?
+    semantically_promiscuous_cue? || semantically_promiscuous_related?
   end
 
   def gloss_match?

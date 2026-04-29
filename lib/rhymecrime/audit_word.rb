@@ -41,7 +41,16 @@ module Rhymecrime
       else
         io.puts "forbid_list.txt: not listed"
       end
-      io.puts "stop_word?: #{stop_word?(w)} (trivial or non-relatable list)"
+      if unrhymable_stop_word?(w)
+        io.puts "unrhymable_stop_words.txt: LISTED (deleted from word_dict at build time)"
+      else
+        io.puts "unrhymable_stop_words.txt: not listed"
+      end
+      if semantically_promiscuous?(w)
+        io.puts "semantically_promiscuous.txt: LISTED (kept as headword; relatedness short-circuits)"
+      else
+        io.puts "semantically_promiscuous.txt: not listed"
+      end
       begin
         pf = preferred_form(w)
         io.puts "preferred_form: #{pf.inspect}#{pf == w ? '' : " (input was #{w.inspect})"}"

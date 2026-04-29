@@ -202,21 +202,23 @@ end
 # deterministic alpha sort inside each band (handy for diffing progress logs
 # between runs).
 lemmas.sort_by! { |l| [-wd[l][0].to_i, l] }
-# Stop words are related to every other word (see +thematically_related?+), so their
-# precompute entry would be the full candidate list — ~20k headwords per stop word.
-# The runtime in +RelatedWords.find_all_thematically_related_words+ short-circuits
-# stop-word lookups to +words_we_care_about+ directly, so no row is needed. Peel
-# them off before +--start-after+ / +--max-cues+ apply so a +--max-cues=5+ smoke
-# test doesn't burn its entire budget on +a+/+about+/+above+ (all freq-99 stop
-# words that sort ahead of the real work).
-stopword_lemmas, lemmas = lemmas.partition { |l| stop_word?(l) }
-puts "Skipping #{stopword_lemmas.size} stop-word lemmas (runtime short-circuits to words_we_care_about): #{stopword_lemmas.inspect}" if stopword_lemmas.any?
+# Semantically promiscuous lemmas are related to every other word (see
+# +thematically_related?+), so their precompute entry would be the full
+# candidate list — ~20k headwords per cue. The runtime in
+# +RelatedWords.find_all_thematically_related_words+ short-circuits
+# promiscuous lookups to +words_we_care_about+ directly, so no row is needed.
+# Peel them off before +--start-after+ / +--max-cues+ apply so a
+# +--max-cues=5+ smoke test doesn't burn its entire budget on
+# +could+/+perhaps+/+thereby+ (all freq-999999 promiscuous words that sort
+# ahead of the real work).
+promiscuous_lemmas, lemmas = lemmas.partition { |l| semantically_promiscuous?(l) }
+puts "Skipping #{promiscuous_lemmas.size} semantically promiscuous lemmas (runtime short-circuits to words_we_care_about): #{promiscuous_lemmas.inspect}" if promiscuous_lemmas.any?
 
 # +--only+: explicit cue allowlist. Resolve each passed word to its dictionary
 # lemma (so +running+ targets the +run+ row, matching how the runtime keys
 # +thematically_related?+ lookups), then intersect with the filtered cue set
 # while preserving the freq-desc / alpha order. Anything that doesn't survive
-# the intersection (rare, stop word, non-cue, unknown headword) gets warned
+# the intersection (rare, promiscuous, non-cue, unknown headword) gets warned
 # once so a typo doesn't silently produce an empty run.
 unless only_words.empty?
   requested = only_words

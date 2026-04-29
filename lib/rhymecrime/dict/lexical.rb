@@ -442,8 +442,8 @@ WN_ENCYCLOPEDIC_SINGLE_SYNSET_LEXNAMES = Set.new(%w[
 
 # Kaikki POS tags that designate closed-class function words. An OOV headword tagged
 # exclusively with these is nonstandard (+hisself+) or foreign-closed-class (+hor+ particle,
-# +raison+ fragments); genuine function-word commons (+of+, +his+, +yours+) are +stop_word?+
-# entries that bypass compute_frequency entirely.
+# +raison+ fragments); genuine function-word commons (+of+, +his+, +yours+) are
+# +unrhymable_stop_word?+ entries that get deleted from +word_dict+ at build time.
 OOV_FUNCTION_WORD_POS_TAGS = Set.new(%w[
   pron particle det conj prep num article postp
 ]).freeze

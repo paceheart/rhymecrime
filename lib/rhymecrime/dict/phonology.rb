@@ -18,6 +18,20 @@ def delete_explicitly_forbidden_keys_from_hash(cmudict)
   puts "Removed #{count} explicitly_forbidden words from the dictionary"
 end
 
+# Sibling of +delete_explicitly_forbidden_keys_from_hash+ that drops every
+# entry in +curated/unrhymable_stop_words.txt+ from +hash+. Same shape, same
+# call sites: the early scrub on raw cmudict in +dict.rb+ and the late
+# +forbidden_scrub+ pass in +frequency.rb+. Two scrubs because SUBTLEX /
+# wiktionary expansion can re-introduce a word like "the" between the two
+# passes; the late scrub catches anything that snuck back in.
+def delete_unrhymable_stop_words_from_hash(hash)
+  count = 0
+  unrhymable_stop_words.each do |w|
+    count += 1 if hash.delete(w)
+  end
+  puts "Removed #{count} unrhymable stop words from the dictionary"
+end
+
 # Incomplete / artifact headwords (e.g. truncated compounds); not useful as lookup keys.
 def delete_headwords_with_edge_hyphen!(hash)
   n = 0
@@ -427,7 +441,7 @@ def final_consonant_cluster_ok?(cluster)
 end
 
 def redundant_apostrophe_word?(word, cmudict)
-  if word.include?("'") && !stop_word?(word)
+  if word.include?("'") && !semantically_promiscuous?(word)
     root = word.tr("'", "")
     if(cmudict.key?(root) && (cmudict[root].sort == cmudict[word].sort)) # if pronunciations are the same (ignoring order)
       return true

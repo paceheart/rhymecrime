@@ -43,13 +43,13 @@ puts "current classifier threshold = #{format('%.3f', clf_t)}"
 path = File.join(repo, "curated", "related.csv")
 raw_rows = CSV.parse(File.read(path, encoding: "UTF-8"), headers: true)
 
-skipped_stopword = 0
+skipped_promiscuous = 0
 rows = raw_rows.reject do |r|
   w1 = r["cue"]
   w2 = r["related"]
   next true if w1.nil? || w2.nil?
-  drop = stop_word?(w1) || stop_word?(w2) || stop_word?(lemma(w1)) || stop_word?(lemma(w2))
-  skipped_stopword += 1 if drop
+  drop = semantically_promiscuous?(w1) || semantically_promiscuous?(w2) || semantically_promiscuous?(lemma(w1)) || semantically_promiscuous?(lemma(w2))
+  skipped_promiscuous += 1 if drop
   drop
 end
 
@@ -83,8 +83,8 @@ rows.each do |r|
 end
 
 puts format(
-  "curated/related.csv  n=%d  positive=%d  negative=%d  (+%d whatever skipped, %d stop-word pairs filtered)",
-  scored.size, n_pos, n_neg, skipped_whatever, skipped_stopword
+  "curated/related.csv  n=%d  positive=%d  negative=%d  (+%d whatever skipped, %d semantically-promiscuous pairs filtered)",
+  scored.size, n_pos, n_neg, skipped_whatever, skipped_promiscuous
 )
 puts
 

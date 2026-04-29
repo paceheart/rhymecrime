@@ -129,39 +129,43 @@ def ensure_generated_dict_dir!
 end
 
 #
-# stop words
-#
-# Curated as two disjoint single-purpose lists (Option A: no overlap):
+# stop words — split by purpose into two disjoint-in-spirit curated lists.
 #
 #   semantically_promiscuous.txt — content-empty words that "relate to
-#       everything"; drives the relatedness short-circuit message and
-#       saturates the relatedness score in +relatedness/score.rb+.
-#   unrhymable_stop_words.txt    — words you wouldn't want at the end of
-#       a line/sentence (ultra-short articles, contractions like +he'd've+,
-#       interjections like +huh+/+uh+).
+#       everything" ("could", "perhaps", "henceforth", "thereby"). Kept in
+#       +word_dict+ at sentinel-high frequency; relatedness predicates short-
+#       circuit them in scoring / display. Predicate: +semantically_promiscuous?+.
+#   unrhymable_stop_words.txt    — function words and contractions ("the",
+#       "a", "you'll", "they're", "huh", "uh") that are valid English but
+#       make poor rhyme targets. Deleted from +word_dict+ entirely at dict-
+#       build time (see +delete_unrhymable_stop_words_from_hash+ in
+#       +phonology.rb+), alongside +forbid_list.txt+. Predicate:
+#       +unrhymable_stop_word?+.
 #
-# Every other use of "stop word" (frequency sentinel in +frequency.rb+, the
-# tuple-pruning all-stop-words wholesale drop in +crime.rb+, the link-
-# suppression branch in +print_word+, the inflection-inheritance gates) wants
-# the *union* — anything that should not be treated as a normal content
-# word — so +stop_word?+ below is the union. The finer-grained predicates
-# +semantically_promiscuous?+ and +unrhymable_stop_word?+ are exposed for
-# call sites that need to distinguish (today: only the relatedness-message
-# branch in +frontend.rb+, which still uses +stop_word?+ for backward
-# compatibility — accuracy of the message is preserved because every entry
-# in +unrhymable_stop_words.txt+ is also a stop word in the broader sense).
+# Every runtime call site uses +semantically_promiscuous?+ — unrhymable
+# entries are deleted from the dictionary, so they can never appear as a
+# headword the relatedness / UI / pruning code might consult. There is no
+# +stop_word?+ shim: any leftover call site is a bug we want to find at
+# load time, not silently route through a union.
+#
+# A small overlap (seven entries: "eh", "mhm", "mm", "thees", "thou'd",
+# "thou'll", "ye") between the two files is intentional — deletion wins
+# (the unrhymable scrub runs before any +semantically_promiscuous?+ check
+# the runtime can reach), so they leave the dict and the runtime never
+# sees them.
 #
 # +#+ comment lines and blank lines are skipped; trailing whitespace on each
 # entry is stripped (so +"hey "+ in the file matches +"hey"+).
 
-STOP_WORDS_SEMANTICALLY_PROMISCUOUS_FILENAME = "semantically_promiscuous.txt"
-STOP_WORDS_UNRHYMABLE_FILENAME = "unrhymable_stop_words.txt"
+UNRHYMABLE_STOP_WORDS_FILENAME = "unrhymable_stop_words.txt"
+SEMANTICALLY_PROMISCUOUS_FILENAME = "semantically_promiscuous.txt"
 
-$semantically_promiscuous = nil
 $unrhymable_stop_words = nil
-$stop_words = nil
+$semantically_promiscuous_words = nil
 
-def load_word_set_from(filename)
+# Shared loader for newline-delimited curated word lists. +#+ comment lines
+# and blank lines are skipped; trailing whitespace is stripped.
+def load_curated_word_set(filename)
   set = Set.new
   path = File.join(CURATED_DIR, filename)
   File.foreach(path, chomp: true, encoding: "UTF-8") do |line|
@@ -172,28 +176,20 @@ def load_word_set_from(filename)
   set
 end
 
-def semantically_promiscuous_words
-  $semantically_promiscuous ||= load_word_set_from(STOP_WORDS_SEMANTICALLY_PROMISCUOUS_FILENAME)
-end
-
 def unrhymable_stop_words
-  $unrhymable_stop_words ||= load_word_set_from(STOP_WORDS_UNRHYMABLE_FILENAME)
-end
-
-def stop_words
-  $stop_words ||= semantically_promiscuous_words | unrhymable_stop_words
-end
-
-def semantically_promiscuous?(word)
-  semantically_promiscuous_words.include?(word)
+  $unrhymable_stop_words ||= load_curated_word_set(UNRHYMABLE_STOP_WORDS_FILENAME)
 end
 
 def unrhymable_stop_word?(word)
   unrhymable_stop_words.include?(word)
 end
 
-def stop_word?(word)
-  stop_words.include?(word)
+def semantically_promiscuous_words
+  $semantically_promiscuous_words ||= load_curated_word_set(SEMANTICALLY_PROMISCUOUS_FILENAME)
+end
+
+def semantically_promiscuous?(word)
+  semantically_promiscuous_words.include?(word)
 end
 
 #

@@ -723,6 +723,7 @@ def rebuild_rhymecrime_dictionaries()
     end
   end
   delete_explicitly_forbidden_keys_from_hash(cmudict)
+  delete_unrhymable_stop_words_from_hash(cmudict)
   hyp_cmudict_edge = delete_headwords_with_edge_hyphen!(cmudict)
   puts "Removed #{hyp_cmudict_edge} cmudict headwords with a leading or trailing '-'" if hyp_cmudict_edge > 0
   append_r_to_orthographic_r_pronunciations!(cmudict, label: "cmudict")

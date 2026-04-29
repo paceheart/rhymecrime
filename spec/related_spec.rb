@@ -69,15 +69,15 @@ def relatedness_row_weight(kind)
   relatedness_kind_ish?(kind) ? 1 : 3
 end
 
-# +true+ iff either side of the pair (surface or lemma) is a stop word —
-# +thematically_related?+ short-circuits those pairs to +true+ regardless of
-# what the classifier would say, so they tell us nothing about predicate
-# quality. Mirrors the trainer's load-time filter.
-def relatedness_row_stop_word_filtered?(row)
+# +true+ iff either side of the pair (surface or lemma) is semantically
+# promiscuous — +thematically_related?+ short-circuits those pairs to +true+
+# regardless of what the classifier would say, so they tell us nothing about
+# predicate quality. Mirrors the trainer's load-time filter.
+def relatedness_row_promiscuous_filtered?(row)
   cue = row["cue"]
   rel = row["related"]
   return true if cue.nil? || rel.nil?
-  stop_word?(cue) || stop_word?(rel) || stop_word?(lemma(cue)) || stop_word?(lemma(rel))
+  semantically_promiscuous?(cue) || semantically_promiscuous?(rel) || semantically_promiscuous?(lemma(cue)) || semantically_promiscuous?(lemma(rel))
 end
 
 # Sweep curated/related.csv against the live directional +thematically_related?+
@@ -98,7 +98,7 @@ def evaluate_relatedness_csv
   exact = 0
 
   rows.each_with_index do |row, i|
-    if relatedness_row_stop_word_filtered?(row)
+    if relatedness_row_promiscuous_filtered?(row)
       filtered_stopword += 1
       next
     end

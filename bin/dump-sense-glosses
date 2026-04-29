@@ -83,7 +83,7 @@ else
   end
 end
 
-lemmas.reject! { |l| stop_word?(l) || l.nil? || l.empty? }
+lemmas.reject! { |l| semantically_promiscuous?(l) || l.nil? || l.empty? }
 STDERR.puts "collected #{lemmas.size} lemmas"
 
 def wordnet_glosses_for(word, max_senses, include_morphy)

@@ -1099,7 +1099,7 @@ $disable_cross_tuple_redundancy_pruning = false
 # homophones by stored relatedness to the cue) and so can't be cached
 # cue-agnostically.
 def prune_tuple_cue_independent_steps(tup)
-  return nil if tup.all? { |w| stop_word?(w) }
+  return nil if tup.all? { |w| semantically_promiscuous?(w) }
   return nil if rhyming_tuple_all_spelling_variants?(tup)
   condense_tuple_derived_forms(tup)
 end
@@ -1294,8 +1294,8 @@ def prune_suffix_redundant_rhyming_tuples(tuples, focal_word = nil)
   tuples = tuples.flat_map do |tup|
     survivor = prune_tuple_cue_independent_steps(tup)
     if survivor.nil?
-      # Wholesale drop (stop-word or spelling-variant).
-      reason = tup.all? { |w| stop_word?(w) } ? "all stop words" : "all spelling variants of one root"
+      # Wholesale drop (semantically-promiscuous or spelling-variant).
+      reason = tup.all? { |w| semantically_promiscuous?(w) } ? "all semantically promiscuous" : "all spelling variants of one root"
       puts "pruned rhyming tuple (#{reason}): #{tup.join(' / ')}" if verbose_prunes
       $debug_pruned_tuples << tup if debug_pruning
       next debug_pruning ? [tup] : []
@@ -1493,15 +1493,17 @@ def really_find_rhyming_pairs(input_rel1, input_rel2, common_only = false)
   #   If RHYME rhymes with REL1 and is related to INPUT_REL2, we win! "REL1 / RHYME" is a pair.
   return [] if explicitly_forbidden?(input_rel1) || explicitly_forbidden?(input_rel2)
 
-  # Stop words are thematically related to everything by policy, which would otherwise flood
-  # the pair output with pairs like [a, duh] / [a, the]. A 2-element pair has no room for a
-  # go-word anchor when either side is a stop word, so we drop those before the rhyme cross.
+  # Semantically promiscuous words are thematically related to everything by
+  # policy, which would otherwise flood the pair output with pairs like
+  # [perhaps, duh] / [could, then]. A 2-element pair has no room for a
+  # go-word anchor when either side is promiscuous, so we drop those before
+  # the rhyme cross.
   relateds1 = filter_related_words_to_common_preferred(
     find_related_words(input_rel1, true, false, nil, common_only: true)
-  ).reject { |w| stop_word?(w) }
+  ).reject { |w| semantically_promiscuous?(w) }
   relateds2 = filter_related_words_to_common_preferred(
     find_related_words(input_rel2, true, false, nil, common_only: true)
-  ).reject { |w| stop_word?(w) }.to_set
+  ).reject { |w| semantically_promiscuous?(w) }.to_set
 
   related_rhymes = Hash.new { |h, k| h[k] = [] }
   relateds1.each do |rel1|
@@ -1700,17 +1702,19 @@ end
 def print_word(word, focal_word=false, cue: nil)
   word = word.gsub(/\(.*\)/, '') # remove stuff in parentheses
   got_rhymes = !pronunciations(word).empty?
-  # Stop words ("the", "of", "and", ...) get rendered (mostly via the rhymes
-  # column — "the" rhymes with "we" / "she" / "be") but we strip the click
-  # link off them: clicking a stop word would land the user on a page where
-  # the related/set_related columns short-circuit with the "semantically
+  # Semantically promiscuous words ("could", "perhaps", "henceforth", ...)
+  # get rendered (mostly via the rhymes column) but we strip the click link
+  # off them: clicking such a word would land the user on a page where the
+  # related/set_related columns short-circuit with the "semantically
   # promiscuous" message in +frontend.rb+, which is a dead-end UX. Letting
-  # them rhyme is fine, but linking them is not. The +.stop-word+ CSS class
-  # below paints them in the "non-actionable text" color (+#eeeefa+); without
-  # it they'd inherit the +.output_p+ container's cyan and look identical to
-  # clickable links.
-  is_stop_word = stop_word?(word)
-  link_word = got_rhymes && !is_stop_word
+  # them rhyme is fine, but linking them is not. (Unrhymable stop words like
+  # "the"/"a"/"you'll" are deleted from +word_dict+ at build time, so they
+  # never reach this render path.) The +.stop-word+ CSS class below paints
+  # them in the "non-actionable text" color (+#eeeefa+); without it they'd
+  # inherit the +.output_p+ container's cyan and look identical to clickable
+  # links.
+  is_promiscuous = semantically_promiscuous?(word)
+  link_word = got_rhymes && !is_promiscuous
   # Decided here (not at +emit_relatedness_feedback_widget+'s call site) so the
   # +<nobr>+ wrapper below uses exactly the same predicate as the widget itself
   # — we never want a +<nobr>+ that wraps just the word with no thumbs to glue
@@ -1736,20 +1740,20 @@ def print_word(word, focal_word=false, cue: nil)
   # is supplied (e.g. +set_related+ tuples, where every slot should be related
   # to +word1+). Skipped when +focal_word+ is falsy (word lists that have no
   # single focal, or +pair_related+ tuples whose two slots use different focals).
-  # Stop words can never set both branches simultaneously: the +set_related+
-  # rendering path that drives +similarity_span+ short-circuits before
-  # +print_word+ when +word1+ is a stop word (see +compute_column_for_goal+),
-  # and the rhymes columns that would render a stop word as a result don't
+  # Promiscuous words can never set both branches simultaneously: the
+  # +set_related+ rendering path that drives +similarity_span+ short-circuits
+  # before +print_word+ when +word1+ is promiscuous (see +compute_column_for_goal+),
+  # and the rhymes columns that would render a promiscuous word as a result don't
   # set +focal_word+.
   similarity_span = focal_word && focal_word != "" && word != focal_word
   if similarity_span
     cgi_print "<span style='color: #{word_similarity_color(word, focal_word)}'>"
-  elsif is_stop_word
+  elsif is_promiscuous
     cgi_print "<span class='stop-word'>"
   end
   display_word = word.gsub('_', ' ')
   emit_text display_word
-  cgi_print "</span>" if similarity_span || is_stop_word
+  cgi_print "</span>" if similarity_span || is_promiscuous
   if(link_word)
     cgi_print "</a>"
   end
