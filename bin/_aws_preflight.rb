@@ -1,7 +1,8 @@
 # frozen_string_literal: true
 
 # Shared AWS pre-flight for dev scripts that hit AWS APIs (currently
-# +bin/upload-to-dynamodb+ + +bin/export-feedback-from-dynamodb+; any future
+# +bin/upload-to-dynamodb+ and +bin/augment-related-from-feedback+ (DynamoDB
+# by default; +--from-file+ skips AWS); any future
 # +bin/<verb>-...-aws+ should reuse this rather than re-rolling the
 # +AWS_PROFILE+ check).
 #

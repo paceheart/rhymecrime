@@ -2,15 +2,14 @@
 # frozen_string_literal: true
 # encoding: UTF-8
 #
-# Importer: fold thumbs-up/down clicks from +generated/feedback.csv+ into
-# +curated/related.csv+ as new hand-tag rows. Mirrors the +DynamoFeedbackStore+
-# +Scan+ → CSV importer story documented in +lib/rhymecrime/feedback_store.rb+,
-# but for the local CSV sink. Idempotent: pairs already present in
-# +curated/related.csv+ (lowercased exact match on +cue+/+related+) are left
-# untouched, so re-running after another play session only appends genuinely
-# new pairs.
+# Importer: fold thumbs-up/down feedback into +curated/related.csv+ as new
+# hand-tag rows. **Default:** scan the prod +rhymecrime-feedback+ DynamoDB table
+# into +generated/feedback-from-ddb.csv+ (or +--ddb-out+), then import from
+# that file — the full loop from +lib/rhymecrime/feedback_store.rb+ in one
+# command. Use +--from-file+ to read the local-dev sink (+generated/feedback.csv+
+# or +FEEDBACK_CSV+) instead, without touching AWS.
 #
-# Aggregation:
+# Aggregation (file path, local or exported):
 #   1. Replay each session's events in timestamp order through a tiny state
 #      machine — +up+ / +down+ set the active verdict, +undo+ clears it. The
 #      retained-but-meaningful +undo+ rows in the audit trail (per the
@@ -23,39 +22,213 @@
 #        up_sessions > down_sessions   → "related"
 #        down_sessions > up_sessions   → "unrelated"
 #        tie / zero / pure-undo        → skipped (left untagged; a human can
-#                                        sweep them via the active-learning
-#                                        scripts later)
+#                                        sweep them later)
 #      We intentionally never emit +related_ish+ — that label captures human
 #      nuance the thumbs UI can't express, and inferring it would silently
 #      degrade the training signal.
 #
-# Knobs (env vars):
-#   FEEDBACK_CSV   path     (default: generated/feedback.csv)
+# DynamoDB scan (default unless +--from-file+):
+#   +pk+ is +"feedback#<cue>#<related>"+. +String#split("#", 2)+ after stripping
+#   the prefix keeps a hypothetical +#+ inside +related+ from mis-splitting.
+#   Pagination: +Scan+ loops on +LastEvaluatedKey+ until exhausted.
+#   +AWS_PROFILE+ is required (see +bin/_aws_preflight.rb+): wrong-account scans
+#   would silently return zero items.
+#
+# Knobs (env vars, +--from-file+ path only):
+#   FEEDBACK_CSV   path     (default: generated/feedback.csv; with default
+#                            DynamoDB mode, use +--ddb-out+ instead)
 #   RELATED_CSV    path     (default: curated/related.csv)
 #   DRY_RUN        truthy   if set, print the planned diff and exit without
-#                           touching the file
+#                           appending to +RELATED_CSV+. Equivalent to +--dry-run+.
+#
+# CLI flags:
+#   --from-file             Read +FEEDBACK_CSV+ / generated/feedback.csv only
+#                           (no DynamoDB scan).
+#   --from-dynamodb         Scan DynamoDB then import (this is the default;
+#                           flag kept for explicit scripts).
+#   --export-only           After DDB scan: write +--ddb-out+ CSV + summary
+#                           only; do not append +RELATED_CSV+. (+--from-file+
+#                           incompatible.)
+#   --ddb-out=PATH          DDB scan output (default: generated/feedback-from-ddb.csv)
+#   --table=NAME            Override feedback table name
+#   --region=REGION         AWS region (default: us-east-1 or +AWS_REGION+)
+#   -y, --yes               Skip the interactive confirmation prompt
+#   -n, --dry-run           Print proposed rows; do not append to +RELATED_CSV+
+#   -h, --help
 #
 # Usage:
-#   bundle exec bin/augment-related-from-feedback
-#   DRY_RUN=1 bundle exec bin/augment-related-from-feedback
+#   AWS_PROFILE=paceheart bundle exec bin/augment-related-from-feedback
+#   AWS_PROFILE=paceheart bundle exec bin/augment-related-from-feedback --yes
+#   AWS_PROFILE=paceheart bundle exec bin/augment-related-from-feedback --dry-run
+#   AWS_PROFILE=paceheart bundle exec bin/augment-related-from-feedback --export-only
+#   bundle exec bin/augment-related-from-feedback --from-file
 
 Encoding.default_external = Encoding::UTF_8
 
 require "csv"
+require "fileutils"
+require "optparse"
 require "set"
-require "time"
 
 ROOT = File.expand_path("..", __dir__)
-FEEDBACK_CSV = ENV["FEEDBACK_CSV"] || File.join(ROOT, "generated", "feedback.csv")
-RELATED_CSV  = ENV["RELATED_CSV"]  || File.join(ROOT, "curated", "related.csv")
-DRY_RUN = !ENV["DRY_RUN"].to_s.strip.empty? && ENV["DRY_RUN"] != "0"
+DEFAULT_FEEDBACK_CSV = File.join(ROOT, "generated", "feedback.csv")
+DEFAULT_DDB_OUT = File.join(ROOT, "generated", "feedback-from-ddb.csv")
+RELATED_CSV_DEFAULT = File.join(ROOT, "curated", "related.csv")
 
-unless File.file?(FEEDBACK_CSV)
-  warn "no feedback file at #{FEEDBACK_CSV}; nothing to import"
+dry_run = !ENV["DRY_RUN"].to_s.strip.empty? && ENV["DRY_RUN"] != "0"
+auto_yes = false
+source_mode = :dynamodb
+export_only = false
+ddb_out = DEFAULT_DDB_OUT
+ddb_table = nil
+ddb_region = ENV.fetch("AWS_REGION", "us-east-1")
+
+original_argv = ARGV.dup
+
+OptionParser.new do |o|
+  o.banner = "Usage: bin/augment-related-from-feedback [options]"
+  o.on("--from-file", "Import from FEEDBACK_CSV / generated/feedback.csv (skip DynamoDB)") { source_mode = :file }
+  o.on("--from-dynamodb", "Scan DynamoDB then import (default)") { source_mode = :dynamodb }
+  o.on("--export-only", "After DDB scan: only write --ddb-out; skip curated append") { export_only = true }
+  o.on("--ddb-out=PATH", "DDB scan output (default: #{DEFAULT_DDB_OUT.sub(ROOT + '/', '')})") { |p| ddb_out = File.expand_path(p) }
+  o.on("--table=NAME", "Override DDB feedback table name") { |n| ddb_table = n }
+  o.on("--region=REGION", "AWS region (default: us-east-1 or AWS_REGION)") { |r| ddb_region = r }
+  o.on("-y", "--yes", "Skip the interactive confirmation prompt and append immediately") { auto_yes = true }
+  o.on("-n", "--dry-run", "Print proposed rows and exit without prompting or appending") { dry_run = true }
+  o.on("-h", "--help") { puts o; exit 0 }
+end.parse!
+
+from_dynamodb = (source_mode == :dynamodb)
+
+if export_only && !from_dynamodb
+  warn "--export-only requires DynamoDB mode (omit --from-file)"
+  exit 2
+end
+
+if dry_run && auto_yes
+  warn "--dry-run and --yes are mutually exclusive (--dry-run wins)"
+  auto_yes = false
+end
+
+feedback_csv =
+  if from_dynamodb
+    ddb_out
+  else
+    path = ENV["FEEDBACK_CSV"]
+    path ? File.expand_path(path) : DEFAULT_FEEDBACK_CSV
+  end
+
+related_csv = ENV["RELATED_CSV"] ? File.expand_path(ENV["RELATED_CSV"]) : RELATED_CSV_DEFAULT
+
+module FeedbackDynamoExport
+  module_function
+
+  def split_pk(pk)
+    return nil unless pk.is_a?(String) && pk.start_with?("feedback#")
+    parts = pk.sub(/\Afeedback#/, "").split("#", 2)
+    return nil if parts.size != 2
+    cue, rel = parts
+    return nil if cue.empty? || rel.empty?
+    [cue, rel]
+  end
+
+  def scan_to_rows(client, table_name)
+    rows = []
+    last_key = nil
+    page = 0
+    loop do
+      page += 1
+      resp = client.scan(
+        table_name: table_name,
+        exclusive_start_key: last_key,
+      )
+      resp.items.each do |item|
+        pk = item["pk"]
+        next unless (parsed = split_pk(pk))
+        cue, rel = parsed
+        rows << {
+          timestamp: item["sk"].to_s,
+          cue: cue,
+          related: rel,
+          verdict: item["verdict"].to_s,
+          ip: item["ip"].to_s,
+          user_agent: item["user_agent"].to_s,
+          session: item["session"].to_s,
+        }
+      end
+      warn "  page #{page}: scanned=#{resp.scanned_count} cumulative=#{rows.size}"
+      last_key = resp.last_evaluated_key
+      break if last_key.nil? || last_key.empty?
+    end
+    rows.sort_by! { |r| r[:timestamp] }
+    rows
+  end
+
+  def write_feedback_csv(out_path, rows, header)
+    FileUtils.mkdir_p(File.dirname(out_path))
+    CSV.open(out_path, "w", encoding: "UTF-8") do |csv|
+      csv << header
+      rows.each { |r| csv << header.map { |k| r[k.to_sym] } }
+    end
+  end
+
+  def print_ddb_summary(rows)
+    verdict_counts = Hash.new(0)
+    per_pair = Hash.new { |h, k| h[k] = { up: 0, down: 0, undo: 0 } }
+    rows.each do |r|
+      v = r[:verdict].to_sym
+      verdict_counts[v] += 1
+      per_pair[[r[:cue], r[:related]]][v] += 1 if %i[up down undo].include?(v)
+    end
+
+    puts
+    puts "==> verdict totals: #{verdict_counts.map { |k, v| "#{k}=#{v}" }.join(" ")}"
+    unless per_pair.empty?
+      puts "==> per-pair clicks (alphabetical):"
+      per_pair.sort.each do |(cue, rel), c|
+        puts "    #{cue} → #{rel}: up=#{c[:up]} down=#{c[:down]}#{c[:undo].positive? ? " undo=#{c[:undo]}" : ""}"
+      end
+    end
+  end
+end
+
+if from_dynamodb
+  $LOAD_PATH.unshift File.expand_path("../lib", __dir__)
+  require "aws-sdk-dynamodb"
+  require_relative "_aws_preflight"
+  require_relative "../lib/rhymecrime/feedback_store"
+
+  profile, _identity = AwsPreflight.preflight!(
+    script_name: "augment-related-from-feedback",
+    original_argv: original_argv,
+    region: ddb_region,
+  )
+
+  table_name = ddb_table || Rhymecrime::FeedbackStore.feedback_table_name
+
+  puts "    region=#{ddb_region} table=#{table_name}"
+  puts "    ddb-out=#{ddb_out}"
+
+  client = Aws::DynamoDB::Client.new(region: ddb_region, profile: profile)
+  header = Rhymecrime::FeedbackStore::CsvFeedbackStore::HEADER
+  rows = FeedbackDynamoExport.scan_to_rows(client, table_name)
+  FeedbackDynamoExport.write_feedback_csv(ddb_out, rows, header)
+  puts "==> wrote #{rows.size} rows to #{ddb_out}"
+  FeedbackDynamoExport.print_ddb_summary(rows)
+
+  if export_only
+    puts
+    puts "==> --export-only: skipped curated/related.csv import."
+    exit 0
+  end
+end
+
+unless File.file?(feedback_csv)
+  warn "no feedback file at #{feedback_csv}; nothing to import"
   exit 0
 end
-unless File.file?(RELATED_CSV)
-  warn "missing #{RELATED_CSV}; refusing to create from scratch"
+unless File.file?(related_csv)
+  warn "missing #{related_csv}; refusing to create from scratch"
   exit 1
 end
 
@@ -74,11 +247,6 @@ def load_existing_pairs(path)
   seen
 end
 
-# Stream feedback rows into a per-(session, cue, related) ordered event list.
-# We bucket by session before sorting because timestamps across sessions are
-# not directly comparable (different clocks, parallel users) — only the
-# sequence within a single session encodes the user's intent for the state
-# machine.
 def replay_feedback(path)
   by_cell = Hash.new { |h, k| h[k] = [] }
   CSV.foreach(path, headers: true, encoding: "UTF-8") do |row|
@@ -92,7 +260,6 @@ def replay_feedback(path)
     by_cell[[session, cue, rel]] << [ts, verdict]
   end
 
-  # pair -> { up: Integer, down: Integer }
   pair_tally = Hash.new { |h, k| h[k] = { up: 0, down: 0 } }
   by_cell.each do |(_session, cue, rel), events|
     state = nil
@@ -110,11 +277,11 @@ def replay_feedback(path)
   pair_tally
 end
 
-existing = load_existing_pairs(RELATED_CSV)
-warn "loaded #{existing.size} existing (cue, related) pairs from #{RELATED_CSV}"
+existing = load_existing_pairs(related_csv)
+warn "loaded #{existing.size} existing (cue, related) pairs from #{related_csv}"
 
-tally = replay_feedback(FEEDBACK_CSV)
-warn "replayed feedback into #{tally.size} pair-level tallies from #{FEEDBACK_CSV}"
+tally = replay_feedback(feedback_csv)
+warn "replayed feedback into #{tally.size} pair-level tallies from #{feedback_csv}"
 
 new_rows = []
 skipped_existing = 0
@@ -144,17 +311,31 @@ if new_rows.empty?
   exit 0
 end
 
-if DRY_RUN
-  warn "DRY_RUN: would append the following rows to #{RELATED_CSV}"
-  new_rows.each { |r| puts r.to_csv }
+warn "Proposed additions to #{related_csv} (#{new_rows.size} row#{new_rows.size == 1 ? '' : 's'}):"
+new_rows.each { |r| puts r.to_csv }
+
+if dry_run
+  warn "--dry-run: not appending."
   exit 0
 end
 
-# +CSV.open+ in "a" mode would handle quoting for us, but +curated/related.csv+
-# was hand-written and most existing rows are unquoted; we match that style
-# only when no special chars need escaping, otherwise let +CSV+ quote.
-CSV.open(RELATED_CSV, "a", encoding: "UTF-8") do |csv|
+unless auto_yes
+  unless $stdin.tty?
+    warn "stdin is not a TTY; refusing to prompt. Pass --yes to auto-append, or --dry-run to print and exit."
+    exit 1
+  end
+
+  $stderr.print "Append #{new_rows.size} row#{new_rows.size == 1 ? '' : 's'} to #{related_csv}? [y/N]: "
+  $stderr.flush
+  answer = ($stdin.gets || "").strip.downcase
+  unless %w[y yes].include?(answer)
+    warn "aborted (#{answer.empty? ? 'no answer' : answer.inspect}); nothing appended."
+    exit 1
+  end
+end
+
+CSV.open(related_csv, "a", encoding: "UTF-8") do |csv|
   new_rows.each { |r| csv << r }
 end
 
-warn "appended #{new_rows.size} rows to #{RELATED_CSV}"
+warn "appended #{new_rows.size} rows to #{related_csv}"
