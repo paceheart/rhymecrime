@@ -222,6 +222,12 @@ def filter_out_prefix_words(words, focal_word)
   return words - prefix_words(words, focal_word)
 end
 
+# After stripping +prefix+ (+non+, +anti+, …), hyphenated forms yield +-rest+ (+-alcoholic+ → +alcoholic+).
+def lexical_root_after_prefix(word, prefix)
+  return nil unless word.start_with?(prefix)
+  word[prefix.length..-1].sub(/\A-+/, "")
+end
+
 def prefix_words(words, focal_word)
   # All words in WORDS that would share the same root as FOCAL_WORD if you removed its prefix.
   # For example, if WORDS contains "able" and "disable", the prefix_words are ["disable"].
@@ -236,12 +242,8 @@ def prefix_words(words, focal_word)
   focal_roots = Array.new
   focal_roots << focal_word
   for prefix in COMMON_PREFIXES
-    if focal_word.start_with?(prefix)
-      root = focal_word[prefix.length..-1]
-      if words.include?(root)
-        focal_roots << root
-      end
-    end
+    root = lexical_root_after_prefix(focal_word, prefix)
+    focal_roots << root if root && words.include?(root)
   end
 
   result = Array.new
@@ -250,12 +252,8 @@ def prefix_words(words, focal_word)
       result << word
     else
       for prefix in COMMON_PREFIXES
-        if word.start_with?(prefix)
-          root = word[prefix.length..-1]
-          if focal_roots.include?(root)
-            result << word
-          end
-        end
+        root = lexical_root_after_prefix(word, prefix)
+        result << word if root && focal_roots.include?(root)
       end
     end
   end
@@ -286,11 +284,44 @@ def find_rhyming_words(word, identical_ok=true)
   return rhyming_words || [ ]
 end
 
+# Returns true when two ARPABET tokens describe the same surface phone for duplicate-pron
+# trapping: collapse secondary stress (digit 2) with unstressed (0); keep primary (1) distinct from both.
+def homophone_trap_equivalent_phone_tokens?(a, b)
+  return true if a == b
+  normalize_secondary_stress_to_unstressed_for_homophone_trap(a.to_s) == normalize_secondary_stress_to_unstressed_for_homophone_trap(b.to_s)
+end
+
+def normalize_secondary_stress_to_unstressed_for_homophone_trap(s)
+  return s if s == "."
+  if s =~ /\A(.+)([012])\z/
+    base = Regexp.last_match(1).to_s
+    d = Regexp.last_match(2).to_i
+    nd = (d == 1) ? 1 : 0
+    "#{base}#{nd}"
+  else
+    s
+  end
+end
+
+def pronunciation_phoneme_homophone_trap_duplicate?(pron_a, pron_b)
+  return false unless pron_a.phonemes.length == pron_b.phonemes.length
+
+  pron_a.phonemes.each_with_index do |ph, i|
+    return false unless homophone_trap_equivalent_phone_tokens?(ph, pron_b.phonemes[i])
+  end
+  true
+end
+
 def identical_rhyme?(rhyme, target_pron)
   # Catches true homophones (same full pronunciation): +write+/+right+, +plain+/+plane+,
   # +symbol+/+cymbal+, +flour+/+flower+, +puffin+/+puffin'+. These would pass a
   # rime-cohort lookup but almost never count as legitimate rhymes; they're
   # "homophone / spelling-variant traps".
+  #
+  # CMU marks secondary syllable stress with +2+ and unstressed with +0+; perceptually close
+  # pairs (+sunday+/+sundae+, +marquee+/+marquis+) differ only there. Collapse +2+ onto +0+
+  # (+1+ unchanged) when comparing phoneme tuples so those become duplicate-pronunciation
+  # traps (+plumber+/+demur+ stays distinct: mismatched consonants and primary stresses).
   #
   # Morphological prefix cases (+loading+/+unloading+, +end+/+upend+, +able+/+disable+)
   # are intentionally _not_ caught here -- they're handled by +filter_out_prefix_words+
@@ -301,7 +332,8 @@ def identical_rhyme?(rhyme, target_pron)
   target_rime = target_pron.rime
   for pron in pronunciations(rhyme)
     next unless pron.rime == target_rime
-    return true if pron.phonemes == target_pron.phonemes
+    next unless pronunciation_phoneme_homophone_trap_duplicate?(pron, target_pron)
+    return true
   end
   return false
 end

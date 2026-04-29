@@ -84,12 +84,17 @@ describe "SPELLING VARIANTS" do
     prefer_spelling "desperados",  "desperadoes"
     prefer_spelling "mottos",      "mottoes"
     prefer_spelling "ghettos",     "ghettoes"
+    prefer_spelling "solos",       "soloes"
+    prefer_spelling 'tuxedos',     'tuxedoes'
   end
 
   # Native English -o nouns that take the older -oes plural in standard orthography.
   context "native -o nouns prefer -oes" do
     prefer_spelling "heroes",    "heros"
     prefer_spelling "tomatoes",  "tomatos"
+    prefer_spelling "tornadoes", "tornados"
+    prefer_spelling "torpedoes", "torpedos"
+    prefer_spelling "tuxedoes", "torpedos"
     prefer_spelling "potatoes",  "potatos"
     prefer_spelling "echoes",    "echos"
   end

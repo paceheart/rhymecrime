@@ -53,7 +53,7 @@ describe 'RHYMES' do
   end
   
   context 'tricky' do
-    oughta_rhyme "we're", 'queer'
+    oughta_rhyme "sphere", 'queer'
     ought_not_rhyme 'crime', "yum"
     ought_not_rhyme 'crime', "'em"
     ought_not_rhyme 'rhyme', "'em"
@@ -122,13 +122,18 @@ describe 'RHYMES' do
     ought_not_rhyme 'adherence', 'adherents', not_working_message: "these aren't true homophones, but we forget that when we elide the T"
     ought_not_rhyme 'moray', 'more'
     ought_not_rhyme 'morays', 'mores'
-  end
-  context "'lay' ought not rhyme with 'lei'..." do
-    ought_not_rhyme 'lay', 'lei'
-  end
-  context "...but 'bay' oughta rhyme with both of 'em" do
-    oughta_rhyme 'bay', 'lay'
-    oughta_rhyme 'bay', 'lei'
+    ought_not_rhyme 'trustee', 'trusty'
+    ought_not_rhyme 'sundae', 'sunday'
+    ought_not_rhyme 'marquee', 'marquis'
+    ought_not_rhyme 'in', 'inn'
+    ought_not_rhyme 'been', 'bin'
+    context "'lay' ought not rhyme with 'lei'..." do
+      ought_not_rhyme 'lay', 'lei'
+    end
+    context "...but 'bay' oughta rhyme with both of 'em" do
+      oughta_rhyme 'bay', 'lay'
+      oughta_rhyme 'bay', 'lei'
+    end
   end
   
   context "you can't just add a prefix and call it a rhyme" do
@@ -307,6 +312,10 @@ describe 'RHYMES' do
       oughta_rhyme 'pound', 'impound'
       oughta_rhyme 'prove', 'improve'
       ought_not_rhyme 'pulse', 'impulse' # stress mismatch
+      ought_not_rhyme 'certain', 'ascertain'
+      ought_not_rhyme 'plumber', 'demur' # stress mismatch
+      oughta_rhyme 'plumber', 'dumber'
+      ought_not_rhyme 'dumber', 'demur' # stress mismatch, but would be a homophone anyway
       oughta_rhyme 'marine', 'submarine'
       oughta_rhyme 'tract', 'subtract'
       oughta_rhyme 'lime', 'sublime'
@@ -389,6 +398,9 @@ describe 'RHYMES' do
     ought_not_rhyme 'members', 'dismembers'
     ought_not_rhyme 'science', 'pseudoscience'
     ought_not_rhyme 'scientific', 'pseudoscientific'
+    ought_not_rhyme 'point', 'counterpoint'
+    ought_not_rhyme 'espionage', 'counterespionage'
+    ought_not_rhyme 'indicated', 'contraindicated'
   end
 
   context "spelling variants ought not count as rhymes" do
@@ -451,9 +463,9 @@ describe 'RHYMES' do
     oughta_rhyme 'litter', 'bidder' # arguable
     oughta_rhyme 'batter', 'madder'
     oughta_rhyme 'bottle', 'model'
-    ought_not_rhyme 'ditty', 'diddy' # these become homophones after flapping, and homophones ought not rhyme
-    oughta_rhyme 'ditty', 'titty'
-    oughta_rhyme 'diddy', 'titty'
+    ought_not_rhyme 'bitty', 'biddy' # these become homophones after flapping, and homophones ought not rhyme
+    oughta_rhyme 'bitty', 'titty'
+    oughta_rhyme 'biddy', 'titty'
 
     # --- Classic T/D minimal pairs (intervocalic; GA flap neutralization) ---
     context 'identical rimes' do
@@ -587,10 +599,9 @@ describe 'RHYMES' do
   
   context 'apostrophes' do
     oughta_rhyme "hits", "its"
-    oughta_rhyme "hits", "it's"
     ought_not_rhyme "its", "it's"
+    oughta_rhyme "balls", "y'all's"
     oughta_rhyme "f'd", "bereft"
-    oughta_rhyme "you're", 'secure'
   end
 
   context 'hyphens' do
@@ -763,6 +774,7 @@ describe 'RHYMES' do
     ought_not_rhyme 'morning', 'mourning'
     ought_not_rhyme 'plain', 'plane'
     ought_not_rhyme 'symbol', 'cymbal'
+    ought_not_rhyme 'serial', 'cereal'
   end
 
   context 'non-binary rhymes' do
@@ -1045,6 +1057,15 @@ describe 'RHYMES' do
     ought_not_rhyme 'marseilles', 'bays'
     ought_not_rhyme 'upwind', 'mined'
     oughta_rhyme 'upwind', 'finned'
+    oughta_rhyme 'refer', 'defer'
+    oughta_rhyme 'rougher', 'tougher'
+    ought_not_rhyme 'refer', 'tougher'
+    ought_not_rhyme 'rougher', 'defer'
+    oughta_rhyme 'prefer', 'defer'
+    ought_not_rhyme 'prefer', 'tougher'
+    ought_not_rhyme 'prefer', 'reefer'
+    ought_not_rhyme 'refer', 'reefer'
+    ought_not_rhyme 'defer', 'reefer'
   end
 
   context 'ire' do

@@ -1374,6 +1374,7 @@ COMMON_PREFIXES = [
   'over',
   'post',
   'pre',
+  'pseudo',  # pseudoscience/science etc.
   'pro',
   're',
   'south',
