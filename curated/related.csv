@@ -50,7 +50,7 @@ black,dark,related,prereq: food+dark/snack+black
 bleak,dark,related,prereq: food+dark/leek+bleak
 blessed,heaven,related,prereq: crime+heaven/confessed+blessed
 blood,water,related,prereq: water/blood+flood
-bow,music,related,prereq: music/flow+bow
+bow,music,related,music prereq: flow / bow
 brain,beam,unrelated,
 brain,brick,unrelated,
 brain,chimera,unrelated,
@@ -84,8 +84,8 @@ carbon,ester,related,prereq: carbon/ester+sequester
 carbon,extract,related,prereq: carbon/extract+react
 carbon,react,related,prereq: carbon/extract+react
 carbon,sequester,related,prereq: carbon/ester+sequester
-carbon,sink,related,prereq: carbon/sink+zinc
-carbon,zinc,related,prereq: carbon/sink+zinc
+carbon,sink,related,carbon prereq: sink / zinc
+carbon,zinc,related,carbon prereq: sink / zinc
 cats,siamese,related,prereq: please+cats -> siamese
 celebration,halloween,related,prereq: halloween/celebration+decoration
 cell,algebra,unrelated,
@@ -286,7 +286,7 @@ diamond,ring,related,diamond ring
 dinner,food,related,prereq: food+evil/dinner+sinner
 dish,pasta,related,prereq: pasta/dish+fish
 doom,evil,related,prereq: food+evil/mushroom+doom
-enjoys,music,related,prereq: music/enjoys+noise
+enjoys,music,related,music prereq: enjoys / noise
 evil,greed,related,prereq: food+evil/feed+greed
 evil,hurt,related,prereq: food+evil/dessert+hurt
 evil,malign,related,prereq: food+evil/wine+malign
@@ -323,7 +323,7 @@ fish,pasta,related,prereq: pasta/dish+fish
 flan,food,related,prereq: gay+food/pan+flan
 flans,food,related,prereq: gay+food/trans+flans
 flood,water,related,prereq: water/blood+flood
-flow,music,related,prereq: music/flow+bow
+flow,music,related,music prereq: flow / bow
 fluidity,water,related,
 food,abrasion,unrelated,bulk random lemma base + common preferred + rime (seed 42)
 food,abusive,unrelated,bulk random lemma base + common preferred + rime (seed 42)
@@ -992,9 +992,9 @@ george,davisdon,unrelated,
 george,washington,related,
 god,heaven,related,prereq: crime+heaven/fraud+god
 grave,death,related,basic
-halloween,bat,related,
-halloween,cat,related,
-halloween,cider,related,
+halloween,bat,related,halloween prereq: bat / cat
+halloween,cat,related,halloween prereq: bat / cat
+halloween,cider,related,halloween prereq: cider / spider
 halloween,costume,related,
 halloween,decoration,related,
 halloween,fairy,related,
@@ -1008,8 +1008,8 @@ halloween,pauline,unrelated,
 halloween,pumpkin,related,
 halloween,scary,related,
 halloween,snyder,unrelated,prereq: halloween ought_not cider+snyder
-halloween,spider,related,
-halloween,treat,related,prereq: halloween/sheet+treat
+halloween,spider,related,halloween prereq: cider / spider
+halloween,treat,related,halloween prereq: sheet / treat
 ham,pasta,related,prereq: pasta/clam+ham
 harley,davidson,related,
 harley,washington,unrelated,
@@ -1076,9 +1076,9 @@ music,baroque,related,
 music,bars,related,
 music,base,unrelated,
 music,bass,related,
-music,beat,related,
+music,beat,related,music prereq: beat / repeat
 music,brass,related,
-music,bridal,related,
+music,bridal,related,music prereq: bridal / idol
 music,bridge,related,polysemy: musical bridge vs structure
 music,cantata,related,
 music,cello,related,
@@ -1094,7 +1094,7 @@ music,dance,related,thematically associated
 music,drumsticks,related,
 music,duck,unrelated,
 music,duet,related,
-music,ears,related,
+music,ears,related,music prereq: ears / spheres
 music,flat,related,
 music,flute,related,
 music,folk,related,
@@ -1104,14 +1104,14 @@ music,glissando,related,'glissando' is related to 'musical' so we just have to g
 music,gong,related,
 music,harmonic,related,
 music,harp,related,
-music,idol,related,
+music,idol,related,music prereq: bridal / idol
 music,instrumental,related,
 music,jingle,related,
 music,justice,unrelated,
 music,key,related,polysemy: musical key vs door key
 music,lute,related,
 music,lyric,related,clearly related
-music,mandolin,related,
+music,mandolin,related,music prereq: violin / mandolin
 music,march,related,march music / military march
 music,measure,related,polysemy: musical measure vs measurement
 music,melody,related,clearly related
@@ -1120,11 +1120,11 @@ music,mix,related,
 music,mortgage,unrelated,
 music,movement,related,polysemy: symphony movement vs physical movement
 music,natural,related_ish,natural note vs nature
-music,noise,related,
+music,noise,related,music prereq: enjoys / noise
 music,notation,related,
 music,note,related,musical note
 music,oboe,related,prereq: music/oboe+piano
-music,orchestration,related,
+music,orchestration,related,music prereq: orchestration / vibration
 music,overtone,related,
 music,penguin,unrelated,
 music,pianissimo,related,
@@ -1138,13 +1138,13 @@ music,quartet,related,
 music,quintet,related,
 music,rancid,unrelated,
 music,rave,related,
-music,recital,related,
+music,recital,related,music prereq: recital / title
 music,record,related,
 music,recorded,related,
 music,release,related,
-music,repeat,related,
+music,repeat,related,music prereq: beat / repeat
 music,repertoire,related,
-music,rest,related,
+music,rest,related,music prereq: rest / expressed
 music,rhombus,unrelated,
 music,rhythm,related,clearly related
 music,scale,related,polysemy: musical scale vs fish scale
@@ -1164,7 +1164,7 @@ music,sonata,related,
 music,song,related,
 music,sonic,related,
 music,soprano,related,
-music,spheres,related,
+music,spheres,related,music prereq: ears / spheres
 music,staff,related,polysemy: musical staff vs employees
 music,strings,related,
 music,suite,related_ish,musical suite
@@ -1174,14 +1174,14 @@ music,tango,related,
 music,telescope,unrelated,
 music,tempo,related,musical term
 music,timpani,related,prereq: music/symphony+timpani
-music,title,related,
+music,title,related,music prereq: recital / title
 music,tonal,related,
 music,trombone,related,
 music,tune,related,
 music,tuner,related,
-music,vibration,related,
+music,vibration,related,music prereq: orchestration / vibration
 music,viola,related,
-music,violin,related,prereq: music/mandolin+violin
+music,violin,related,music prereq: violin / mandolin
 music,violins,related,
 music,volcano,unrelated,
 music,wave,related,
@@ -1296,7 +1296,7 @@ pirate,billionth,unrelated,bulk random lemma base + common preferred + rime (see
 pirate,bipartisan,unrelated,bulk random lemma base + common preferred + rime (seed 42)
 pirate,bloke,unrelated,bulk random lemma base + common preferred + rime (seed 42)
 pirate,bohemia,unrelated,bulk random lemma base + common preferred + rime (seed 42)
-pirate,bold,related,
+pirate,bold,related,pirate prereq: bold / gold
 pirate,booker,unrelated,bulk random lemma base + common preferred + rime (seed 42)
 pirate,bounty,related,bounty on pirates
 pirate,brag,related,bulk random lemma base + common preferred + rime (seed 42)
@@ -1307,7 +1307,7 @@ pirate,buccaneer,related,
 pirate,buffet,unrelated,bulk random lemma base + common preferred + rime (seed 42)
 pirate,bungee,unrelated,
 pirate,buried,related,buried treasure
-pirate,cache,related,
+pirate,cache,related,pirate prereq: cache / lash
 pirate,cannon,related,ship's cannon
 pirate,canst,unrelated,bulk random lemma base + common preferred + rime (seed 42)
 pirate,chimpanzee,whatever,bulk random lemma base + common preferred + rime (seed 42)
@@ -1327,7 +1327,7 @@ pirate,cracker,related,
 pirate,creek,unrelated,bulk random lemma base + common preferred + rime (seed 42)
 pirate,crew,related,
 pirate,crybaby,unrelated,bulk random lemma base + common preferred + rime (seed 42)
-pirate,daring,related,
+pirate,daring,related,pirate prereq: daring / swearing
 pirate,defendant,whatever,bulk random lemma base + common preferred + rime (seed 42)
 pirate,deleterious,whatever,bulk random lemma base + common preferred + rime (seed 42)
 pirate,denounce,related,bulk random lemma base + common preferred + rime (seed 42)
@@ -1357,19 +1357,19 @@ pirate,frantically,unrelated,bulk random lemma base + common preferred + rime (s
 pirate,frisbee,unrelated,
 pirate,frock,unrelated,bulk random lemma base + common preferred + rime (seed 42)
 pirate,fulfilled,whatever,bulk random lemma base + common preferred + rime (seed 42)
-pirate,fursona,related,prereq: pirate/fursona+jonah
+pirate,fursona,related,pirate prereq: fursona / jonah
 pirate,galaxy,unrelated,
 pirate,gamey,whatever,bulk random lemma base + common preferred + rime (seed 42)
-pirate,gang,related,
+pirate,gang,related,pirate prereq: gang / hang
 pirate,genetic,unrelated,bulk random lemma base + common preferred + rime (seed 42)
 pirate,ghost,related,
-pirate,gold,related,
+pirate,gold,related,pirate prereq: bold / gold
 pirate,gong,unrelated,bulk random lemma base + common preferred + rime (seed 42)
 pirate,gotta,unrelated,bulk random lemma base + common preferred + rime (seed 42)
 pirate,governmental,unrelated,bulk random lemma base + common preferred + rime (seed 42)
 pirate,grifter,unrelated,bulk random lemma base + common preferred + rime (seed 42)
 pirate,hacker,related,
-pirate,hang,related,
+pirate,hang,related,pirate prereq: gang / hang
 pirate,headfirst,unrelated,bulk random lemma base + common preferred + rime (seed 42)
 pirate,hemostasis,unrelated,bulk random lemma base + common preferred + rime (seed 42)
 pirate,herewith,unrelated,bulk random lemma base + common preferred + rime (seed 42)
@@ -1395,7 +1395,7 @@ pirate,isaac,unrelated,
 pirate,island,related,pirate island
 pirate,isn't,related,stop word
 pirate,jewish,unrelated,bulk random lemma base + common preferred + rime (seed 42)
-pirate,jonah,related,prereq: pirate/fursona+jonah
+pirate,jonah,related,pirate prereq: fursona / jonah
 pirate,judicious,unrelated,bulk random lemma base + common preferred + rime (seed 42)
 pirate,jury,whatever,bulk random lemma base + common preferred + rime (seed 42)
 pirate,kindle,unrelated,bulk random lemma base + common preferred + rime (seed 42)
@@ -1433,7 +1433,7 @@ pirate,parrot,related,cultural association
 pirate,patch,related,eyepatch
 pirate,pedantic,unrelated,
 pirate,peer-to-peer,related,
-pirate,peg,related,
+pirate,peg,related,pirate prereq: peg / leg
 pirate,penguin,unrelated,
 pirate,peritoneum,unrelated,bulk random lemma base + common preferred + rime (seed 42)
 pirate,perry,unrelated,bulk random lemma base + common preferred + rime (seed 42)
@@ -1455,7 +1455,7 @@ pirate,pupil,unrelated,
 pirate,quisling,unrelated,bulk random lemma base + common preferred + rime (seed 42)
 pirate,quitter,unrelated,bulk random lemma base + common preferred + rime (seed 42)
 pirate,raison,unrelated,bulk random lemma base + common preferred + rime (seed 42)
-pirate,ransom,related,
+pirate,ransom,related,pirate prereq: handsome / ransom
 pirate,redevelop,unrelated,bulk random lemma base + common preferred + rime (seed 42)
 pirate,reef,related,
 pirate,reentry,unrelated,bulk random lemma base + common preferred + rime (seed 42)
@@ -1499,7 +1499,7 @@ pirate,swank,whatever,bulk random lemma base + common preferred + rime (seed 42)
 pirate,swashbucke,related,bulk random lemma base + common preferred + rime (seed 42)
 pirate,swashbuckler,related,bulk random lemma base + common preferred + rime (seed 42)
 pirate,swashbuckling,related,bulk random lemma base + common preferred + rime (seed 42)
-pirate,swearing,related,
+pirate,swearing,related,pirate prereq: daring / swearing
 pirate,tattoo,related,
 pirate,thief,related,
 pirate,tinkle,unrelated,bulk random lemma base + common preferred + rime (seed 42)
@@ -1527,7 +1527,8 @@ pirate,where's,unrelated,bulk random lemma base + common preferred + rime (seed 
 pirate,whip,related_ish,lash/whip/flogging association
 pirate,yang,unrelated,bulk random lemma base + common preferred + rime (seed 42)
 prayers,appeal,related,
-prayers,blessed,related,
+prayers,blessed,related,prayers prereq: blessed / request
+prayers,request,related,prayers prereq: blessed / request
 prayers,duck,unrelated,
 prayers,exhortations,related,
 prayers,fandango,unrelated,
@@ -1545,7 +1546,6 @@ prayers,priest,related,
 prayers,priests,related,prereq: prayers/feast+priest
 prayers,rancid,unrelated,
 prayers,recites,related,prereq: prayers/recites+rites
-prayers,request,related,
 prayers,rhombus,unrelated,
 prayers,sever,unrelated,
 rain,beam,unrelated,
@@ -5205,28 +5205,28 @@ gay,traumatize,related_ish,bulk random lemma base + common preferred + rime (see
 gay,wang,related,off the top of my head 
 gay,wiener,related,off the top of my head 
 geometry,sacred,related,
-halloween,sheet,related,prereq: halloween/sheet+treat 
+halloween,sheet,related,halloween prereq: sheet / treat
 medical,ccs,related,
 medicine,ccs,related,
 medicine,fees,related,
-music,expressed,related,
+music,expressed,related,music prereq: rest / expressed
 music,hemiola,related,
 pirate,accent,related,bulk random lemma base + common preferred + rime (seed 42) 
-pirate,alcoholic,related,prereq: pirate/diabolic+alcoholic 
+pirate,alcoholic,related,pirate prereq: diabolic / alcoholic 
 pirate,ascend,related_ish,bulk random lemma base + common preferred + rime (seed 42) 
 pirate,bone,related,bulk random lemma base + common preferred + rime (seed 42) 
 pirate,braggadocio,related,bulk random lemma base + common preferred + rime (seed 42) 
 pirate,choke,related_ish,bulk random lemma base + common preferred + rime (seed 42) 
 pirate,cleave,related_ish,bulk random lemma base + common preferred + rime (seed 42) 
 pirate,damages,related_ish,bulk random lemma base + common preferred + rime (seed 42) 
-pirate,diabolic,related_ish,prereq: pirate/diabolic+alcoholic 
+pirate,diabolic,related,pirate prereq: diabolic / alcoholic 
 pirate,dismember,related_ish,bulk random lemma base + common preferred + rime (seed 42) 
-pirate,handsome,related,
+pirate,handsome,related,pirate prereq: handsome / ransom
 pirate,hold,related,bulk random lemma base + common preferred + rime (seed 42) 
 pirate,immodest,related,bulk random lemma base + common preferred + rime (seed 42) 
 pirate,labor,related_ish,bulk random lemma base + common preferred + rime (seed 42) 
-pirate,lash,related,
-pirate,leg,related,
+pirate,lash,related,pirate prereq: cache / lash
+pirate,leg,related,pirate prereq: peg / leg
 pirate,looker,related_ish,bulk random lemma base + common preferred + rime (seed 42) 
 pirate,map,related,treasure map 
 pirate,modest,whatever,bulk random lemma base + common preferred + rime (seed 42) 
@@ -9106,7 +9106,7 @@ loot,crime,related_ish,symmetry-breaking sweep 2026-04-26
 mean,evil,related_ish,symmetry-breaking sweep 2026-04-26
 military,gay,related_ish,symmetry-breaking sweep 2026-04-26
 music,fandango,related_ish,symmetry-breaking sweep 2026-04-26
-music,flow,related_ish,symmetry-breaking sweep 2026-04-26
+music,flow,related,music prereq: flow / bow
 pan,food,related_ish,symmetry-breaking sweep 2026-04-26
 pass,football,related_ish,symmetry-breaking sweep 2026-04-26
 pie,apple,related_ish,symmetry-breaking sweep 2026-04-26
@@ -9162,7 +9162,7 @@ dishonesty,crime,unrelated_ish,assumed unrelated due to symmetry
 excuse,clumsy,unrelated_ish,assumed unrelated due to symmetry
 extract,carbon,unrelated_ish,assumed unrelated due to symmetry
 flop,clumsy,unrelated_ish,assumed unrelated due to symmetry
-music,bow,unrelated_ish,assumed unrelated due to symmetry
+music,bow,related,music prereq: flow / bow
 sequester,carbon,unrelated_ish,assumed unrelated due to symmetry
 truth,crime,unrelated_ish,assumed unrelated due to symmetry
 warm,food,unrelated_ish,assumed unrelated due to symmetry
@@ -9682,7 +9682,7 @@ pirate,harpoons,related,feedback: 1 up / 0 down
 pirate,hat,related,feedback: 1 up / 0 down
 pirate,isle,related,feedback: 1 up / 0 down
 pirate,lagoons,related,feedback: 1 up / 0 down
-pirate,marauding,related,feedback: 1 up / 0 down
+pirate,marauding,related,pirate prereq: marauding / plotting
 pirate,maroons,related,feedback: 1 up / 0 down
 pirate,mean,related,feedback: 1 up / 0 down
 pirate,mizzen,related,feedback: 1 up / 0 down
@@ -9818,42 +9818,42 @@ pirate,blaster,unrelated,feedback: 0 up / 1 down
 pirate,marine,related,feedback: 1 up / 0 down
 pirate,sail,related,feedback: 1 up / 0 down
 pirate,steal,related,feedback: 1 up / 0 down
-pirate,attitude,related,recoup pirate awesomeness
+pirate,attitude,related,pirate prereq: attitude / latitude
 pirate,buggery,related,recoup pirate awesomeness
 pirate,commandeer,related,recoup pirate awesomeness
 pirate,commandeering,related,recoup pirate awesomeness
-pirate,crude,related_ish,recoup pirate awesomeness
-pirate,crypto,related,recoup pirate awesomeness
+pirate,crude,related,pirate prereq: crude / pursued
+pirate,crypto,related,pirate prereq: crypto / tiptoe
 pirate,dagger,related_ish,recoup pirate awesomeness
 pirate,drunken,related,recoup pirate awesomeness
 pirate,fiend,whatever,recoup pirate awesomeness
 pirate,fiends,whatever,recoup pirate awesomeness
 pirate,flaunt,whatever,recoup pirate awesomeness
-pirate,flaunted,whatever,recoup pirate awesomeness
-pirate,gallows,related_ish,recoup pirate awesomeness
+pirate,flaunted,related,pirate prereq: flaunted / haunted; pirate prereq: flaunted / undaunted
+pirate,gallows,related,pirate prereq: gallows / shallows
 pirate,harbor,related,recoup pirate awesomeness
 pirate,harbored,related,recoup pirate awesomeness
 pirate,haunt,related_ish,recoup pirate awesomeness
-pirate,haunted,related_ish,recoup pirate awesomeness
+pirate,haunted,related,pirate prereq: flaunted / haunted; pirate prereq: haunted / undaunted
 pirate,hull,related,recoup pirate awesomeness
 pirate,illegal,related,recoup pirate awesomeness
-pirate,latitude,related_ish,recoup pirate awesomeness
-pirate,leisure,whatever,recoup pirate awesomeness
+pirate,latitude,related,pirate prereq: attitude / latitude
+pirate,leisure,related,pirate prereq: leisure / seizure; pirate prereq: leisure / treasure
 pirate,lobster,related_ish,recoup pirate awesomeness
 pirate,manatee,related_ish,recoup pirate awesomeness
 pirate,mobster,related_ish,recoup pirate awesomeness
 pirate,plot,related_ish,recoup pirate awesomeness
-pirate,plotting,related_ish,recoup pirate awesomeness
+pirate,plotting,related,pirate prereq: marauding / plotting
 pirate,profanity,related_ish,recoup pirate awesomeness
 pirate,profiteer,related,recoup pirate awesomeness
 pirate,profiteering,related,recoup pirate awesomeness
 pirate,pursue,related,recoup pirate awesomeness
-pirate,pursued,related,recoup pirate awesomeness
+pirate,pursued,related,pirate prereq: crude / pursued
 pirate,rowboat,related_ish,recoup pirate awesomeness
 pirate,seagull,related_ish,recoup pirate awesomeness
-pirate,seizure,related,recoup pirate awesomeness
+pirate,seizure,related,pirate prereq: leisure / seizure
 pirate,shallow,whatever,recoup pirate awesomeness
-pirate,shallows,whatever,recoup pirate awesomeness
+pirate,shallows,related,pirate prereq: gallows / shallows
 pirate,shanty,related,recoup pirate awesomeness
 pirate,showboat,related_ish,recoup pirate awesomeness
 pirate,skull,related,recoup pirate awesomeness
@@ -9869,9 +9869,9 @@ pirate,tattoos,related,recoup pirate awesomeness
 pirate,thieve,related,recoup pirate awesomeness
 pirate,thieves,related,recoup pirate awesomeness
 pirate,thuggery,related_ish,recoup pirate awesomeness
-pirate,tiptoe,related_ish,recoup pirate awesomeness
-pirate,treasure,related,recoup pirate awesomeness
-pirate,undaunted,related_ish,recoup pirate awesomeness
+pirate,tiptoe,related,pirate prereq: crypto / tiptoe
+pirate,treasure,related,pirate prereq: leisure / treasure
+pirate,undaunted,related,pirate prereq: flaunted / undaunted; pirate prereq: haunted / undaunted
 pirate,vigilante,related_ish,recoup pirate awesomeness
 pirate,explores,related,feedback: 1 up / 0 down
 pirate,extort,related,feedback: 1 up / 0 down

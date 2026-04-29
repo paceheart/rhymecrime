@@ -206,7 +206,7 @@ describe 'RHYMES' do
     # the verb). The second shares a rime with +find+, so this only fails because both prons
     # are accepted. Fixing properly needs primary-pron selection or a morphological check
     # that +upwind+'s root is +wind+ (not +find+).
-    ought_not_rhyme 'find', 'upwind', not_working_message: 'upwind secondary pron shares rime with find'
+    ought_not_rhyme 'find', 'upwind'
     ought_not_rhyme 'game', 'pregame' # pre-
     ought_not_rhyme 'game', 'postgame' # post-
     ought_not_rhyme 'space', 'hyperspace' # hyper-
@@ -280,66 +280,71 @@ describe 'RHYMES' do
     ought_not_rhyme 'train', 'retrain'
     ought_not_rhyme 'derive', 'rederive'
     context "unless they're not derivationally related" do
+      # Nested so +before(:each)+ below does not skip these: hooks apply to the whole group.
+      context "pairs that do not need pseudo-prefix deferral" do
+        ought_not_rhyme 'pulse', 'impulse' # stress mismatch
+        ought_not_rhyme 'certain', 'ascertain'
+        ought_not_rhyme 'plumber', 'demur' # stress mismatch
+        oughta_rhyme 'plumber', 'dumber'
+        ought_not_rhyme 'dumber', 'demur' # stress mismatch, but would be a homophone anyway
+        ought_not_rhyme 'national', 'international'
+      end
+
       # Pseudo-prefixes (the +re-+, +a-+, +im-+ isn't really derivational here) would need
       # lemma-aware / etymological reasoning to distinguish from real prefix rhymes. For now
-      # every pair in this subcontext is skipped: we accept splash damage from
-      # +filter_out_prefix_words+ and revisit when we have a signal that tells real
-      # prefixation (atonal, impure) apart from opaque or borrowed look-alikes
-      # (abasement, impact, ahead).
-      before(:each) { skip_if_not_working('pseudo-prefix: filter_out_prefix_words overfilters') }
-      nwm = 'splash damage: filter_out_prefix_words treats the false re- as derivational'
-      oughta_rhyme 'percussion', 'repercussion', not_working_message: nwm
-      oughta_rhyme 'lied', 'relied', not_working_message: nwm
-      oughta_rhyme 'corded', 'recorded', not_working_message: nwm
-      oughta_rhyme 'tween', 'between', not_working_message: nwm
-      oughta_rhyme 'basement', 'abasement'
-      oughta_rhyme 'bashed', 'abashed'
-      oughta_rhyme 'but', 'abut'
-      oughta_rhyme 'do', 'ado'
-      oughta_rhyme 'go', 'ago'
-      oughta_rhyme 'head', 'ahead'
-      oughta_rhyme 'pathetic', 'apathetic'
-      oughta_rhyme 'spire', 'aspire'
-      oughta_rhyme 'void', 'avoid'
-      oughta_rhyme 'based', 'abased'
-      oughta_rhyme 'bode', 'abode'
-      oughta_rhyme 'bodes', 'abodes'
-      oughta_rhyme 'butter', 'abutter'
-      oughta_rhyme 'pact', 'impact'
-      oughta_rhyme 'peach', 'impeach'
-      oughta_rhyme 'plied', 'implied'
-      oughta_rhyme 'port', 'import' # arguable
-      oughta_rhyme 'pound', 'impound'
-      oughta_rhyme 'prove', 'improve'
-      ought_not_rhyme 'pulse', 'impulse' # stress mismatch
-      ought_not_rhyme 'certain', 'ascertain'
-      ought_not_rhyme 'plumber', 'demur' # stress mismatch
-      oughta_rhyme 'plumber', 'dumber'
-      ought_not_rhyme 'dumber', 'demur' # stress mismatch, but would be a homophone anyway
-      oughta_rhyme 'marine', 'submarine'
-      oughta_rhyme 'tract', 'subtract'
-      oughta_rhyme 'lime', 'sublime'
-      oughta_rhyme 'due', 'subdue'
-      oughta_rhyme 'scribe', 'subscribe'
-      oughta_rhyme 'merge', 'submerge'
-      oughta_rhyme 'sect', 'intersect'
-      oughta_rhyme 'turn', 'return'
-      oughta_rhyme 'member', 'remember'
-      oughta_rhyme 'mind', 'remind'
-      context "arguable" do
-        oughta_rhyme 'bide', 'abide'
-        oughta_rhyme 'new', 'anew'
-        oughta_rhyme 'part', 'apart'
-        oughta_rhyme 'rise', 'arise'
-        oughta_rhyme 'wait', 'await'
-        oughta_rhyme 'waits', 'awaits'
-        oughta_rhyme 'wake', 'awake'
-        oughta_rhyme 'wakes', 'awakes'
-        oughta_rhyme 'waken', 'awaken'
-        oughta_rhyme 'wakening', 'awakening'
-        oughta_rhyme 'woke', 'awoke'
-        oughta_rhyme 'woken', 'awoken'
-        ought_not_rhyme 'national', 'international'
+      # every pair below is skipped: we accept splash damage from +filter_out_prefix_words+
+      # and revisit when we have a signal that tells real prefixation (atonal, impure) apart
+      # from opaque or borrowed look-alikes (abasement, impact, ahead).
+      context "deferred pending better prefix-vs-opaque detection" do
+        before(:each) { skip_if_not_working('pseudo-prefix: filter_out_prefix_words overfilters') }
+        nwm = 'splash damage: filter_out_prefix_words treats the false re- as derivational'
+        oughta_rhyme 'percussion', 'repercussion', not_working_message: nwm
+        oughta_rhyme 'lied', 'relied', not_working_message: nwm
+        oughta_rhyme 'corded', 'recorded', not_working_message: nwm
+        oughta_rhyme 'tween', 'between', not_working_message: nwm
+        oughta_rhyme 'basement', 'abasement'
+        oughta_rhyme 'bashed', 'abashed'
+        oughta_rhyme 'but', 'abut'
+        oughta_rhyme 'do', 'ado'
+        oughta_rhyme 'go', 'ago'
+        oughta_rhyme 'head', 'ahead'
+        oughta_rhyme 'pathetic', 'apathetic'
+        oughta_rhyme 'spire', 'aspire'
+        oughta_rhyme 'void', 'avoid'
+        oughta_rhyme 'based', 'abased'
+        oughta_rhyme 'bode', 'abode'
+        oughta_rhyme 'bodes', 'abodes'
+        oughta_rhyme 'butter', 'abutter'
+        oughta_rhyme 'pact', 'impact'
+        oughta_rhyme 'peach', 'impeach'
+        oughta_rhyme 'plied', 'implied'
+        oughta_rhyme 'port', 'import' # arguable
+        oughta_rhyme 'pound', 'impound'
+        oughta_rhyme 'prove', 'improve'
+        oughta_rhyme 'marine', 'submarine'
+        oughta_rhyme 'tract', 'subtract'
+        oughta_rhyme 'lime', 'sublime'
+        oughta_rhyme 'due', 'subdue'
+        oughta_rhyme 'scribe', 'subscribe'
+        oughta_rhyme 'merge', 'submerge'
+        oughta_rhyme 'sect', 'intersect'
+        oughta_rhyme 'turn', 'return'
+        oughta_rhyme 'member', 'remember'
+        oughta_rhyme 'mind', 'remind'
+        context "arguable" do
+          oughta_rhyme 'bide', 'abide'
+          oughta_rhyme 'new', 'anew'
+          oughta_rhyme 'part', 'apart'
+          oughta_rhyme 'rise', 'arise'
+          oughta_rhyme 'wait', 'await'
+          oughta_rhyme 'waits', 'awaits'
+          oughta_rhyme 'wake', 'awake'
+          oughta_rhyme 'wakes', 'awakes'
+          oughta_rhyme 'waken', 'awaken'
+          oughta_rhyme 'wakening', 'awakening'
+          oughta_rhyme 'woke', 'awoke'
+          oughta_rhyme 'woken', 'awoken'
+        end
       end
     end
   end
@@ -369,7 +374,8 @@ describe 'RHYMES' do
     oughta_rhyme 'attribution', 'distribution' # arguable
     oughta_rhyme 'nest', 'finessed'
     oughta_rhyme 'keto', 'mosquito', not_working_message: "bad wiktionary pron for keto"
-    oughta_rhyme 'cord', 'record', not_working_message: 'splash damage: re- prefix filter (record is etymologically re+cord)'
+    oughta_rhyme_one_way 'record', 'cord'
+    oughta_rhyme_one_way 'cord', 'record', not_working_message: 'splash damage: re- prefix filter (record is etymologically re+cord)'
     oughta_rhyme 'chord', 'record'
     # hemiola isn't in our lexicon at all; mandolin/violin have genuinely different rimes
     # (+AE_N_D_AH_L_AH_N+ vs +IH_N+ -- the stress lands in different places), so they

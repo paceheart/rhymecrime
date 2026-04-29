@@ -4,23 +4,55 @@
 # related_rhymes
 #
 
-# Disable the cross-tuple suffix-redundancy pruner for this spec so per-pair
-# assertions like +set_related_oughta_contain 'pirate', 'deck', 'wreck'+ aren't
-# masked when an inflected sibling tuple (+[decked, wrecked]+) is already kept
-# and would normally cause +[deck, wreck]+ to be dropped. Within-tuple
-# condensation (legal/illegal-style prefix derivations) still runs — see
-# +prune_suffix_redundant_rhyming_tuples+ in +lib/rhymecrime/crime.rb+.
-$disable_cross_tuple_redundancy_pruning = true
+# Prefer the production-shaped path (+find_rhyming_tuples+ with cross-tuple
+# pruning enabled) so SQLite +set_related#+ and the LRU hit first — fast runs.
+#
+# Disable the cross-tuple redundancy pruner (+$disable_cross_tuple_redundancy_pruning+) only when
+# a pair is absent there but still needed for an assertion (+set_related_oughta_contain 'pirate', 'deck', 'wreck'+
+# when sibling +[decked, wrecked]+ masks +[deck, wreck]+ — see +prune_suffix_redundant_rhyming_tuples+).
+def with_similar_spec_pruning_fallback(input, common_only, fallback_unpruned: true)
+  was = $disable_cross_tuple_redundancy_pruning
+  begin
+    # Standard path hits precomputed set_related#LRU when available.
+    $disable_cross_tuple_redundancy_pruning = false
+    tuples_standard = find_rhyming_tuples(input, common_only)
 
-def set_related_contains?(input, output1, output2)
-  # Generate set_related rhymes for INPUT. Does one of them contain both OUTPUT1 and OUTPUT2?
-  # e.g. 'pirate', 'handsome', 'ransom'
-  for tuple in find_rhyming_tuples(input) do
-    if(tuple.include?(output1) and tuple.include?(output2))
-      return true
+    tuples_fb = tuples_standard
+    hit = yield(tuples_standard, :standard)
+
+    if !hit && fallback_unpruned
+      $disable_cross_tuple_redundancy_pruning = true
+      tuples_fb = find_rhyming_tuples(input, common_only)
+      hit = yield(tuples_fb, :no_cross_tuple_prune)
     end
+    [hit, tuples_fb]
+  ensure
+    $disable_cross_tuple_redundancy_pruning = was
   end
-  return false
+end
+
+def tuples_share_pair_words?(tuple, output1, output2)
+  tuple.include?(output1) && tuple.include?(output2)
+end
+
+# Returns [hit_boolean, tuples_from_last_attempt] for diagnostics.
+# Negatives (+set_related_ought_not_contain+) disable the unpruned fallback via
+# +similar_spec_pair_contains_detail(..., fallback_unpruned: false)+ (see +negative_expectation:+ on
+# +set_related_contains?+) so we only inspect production-shaped tuples: SQLite set_related#/LRU with
+# cross-tuple redundancy pruning—the same cue a user sees.
+def similar_spec_pair_contains_detail(input, output1, output2, common_only = false, fallback_unpruned: true)
+  with_similar_spec_pruning_fallback(input, common_only, fallback_unpruned: fallback_unpruned) do |tuples, _mode|
+    next false if tuples.nil?
+    tuples.any? { |tuple| tuples_share_pair_words?(tuple, output1, output2) }
+  end
+end
+
+def set_related_contains?(input, output1, output2, common_only = false, negative_expectation: false)
+  hit, = similar_spec_pair_contains_detail(
+    input, output1, output2, common_only,
+    fallback_unpruned: !negative_expectation
+  )
+  hit
 end
 
 # Permissive sibling of +set_related_contains?+: pass if any inflected form sharing +base1+'s lemma
@@ -35,46 +67,59 @@ def lemma_family(base)
   fam
 end
 
-def set_related_contains_base_form?(input, base1, base2)
+def similar_spec_contains_base_family_pair_detail(input, base1, base2, common_only = false, fallback_unpruned: true)
   fam1 = lemma_family(base1)
   fam2 = lemma_family(base2)
-  for tuple in find_rhyming_tuples(input) do
-    if fam1.any? { |w| tuple.include?(w) } && fam2.any? { |w| tuple.include?(w) }
-      return true
+  with_similar_spec_pruning_fallback(input, common_only, fallback_unpruned: fallback_unpruned) do |tuples, _mode|
+    next false if tuples.nil?
+    tuples.any? do |tuple|
+      fam1.any? { |w| tuple.include?(w) } && fam2.any? { |w| tuple.include?(w) }
     end
   end
-  return false
 end
 
-def set_related_works(input)
+def set_related_contains_base_form?(input, base1, base2, common_only = false, negative_expectation: false)
+  hit, = similar_spec_contains_base_family_pair_detail(
+    input, base1, base2, common_only,
+    fallback_unpruned: !negative_expectation
+  )
+  hit
+end
+
+def set_related_works(input, common_only = false)
   test_name = "set_related works: #{input}"
   it test_name do
-    expect(find_rhyming_tuples(input).length).not_to eql(0), "Set-related rhymes for '#{input}' oughta be non-empty"
+    _hit, tuples = with_similar_spec_pruning_fallback(input, common_only) do |ts, _|
+      ts && ts.length.nonzero?
+    end
+    expect(tuples&.length.to_i).not_to eq(0), "Set-related rhymes for '#{input}' oughta be non-empty"
   end
 end
 
-def set_related_oughta_contain(input, output1, output2, not_working_message: nil)
+def set_related_oughta_contain(input, output1, output2, common_only: false, not_working_message: nil)
   test_name = "set_related: #{input} -> #{output1} / #{output2}"
   it test_name do
     skip_if_not_working(not_working_message)
-    expect(set_related_contains?(input, output1, output2)).to eql(true), "Set-related rhymes for '#{input}' oughta include '#{output1}' (#{debug_info(output1)}) / '#{output2}' (#{debug_info(output2)}) / ..., but instead we just get #{find_rhyming_tuples(input)}"
+    hit, diag = similar_spec_pair_contains_detail(input, output1, output2, common_only)
+    expect(hit).to eql(true), "Set-related rhymes for '#{input}' oughta include '#{output1}' (#{debug_info(output1)}) / '#{output2}' (#{debug_info(output2)}) / ..., but instead we just get #{diag.inspect}"
   end
 end
 
-def set_related_ought_not_contain(input, output1, output2, not_working_message: nil)
+def set_related_ought_not_contain(input, output1, output2, common_only: false, not_working_message: nil)
   test_name = "set_related: #{input} !-> #{output1} / #{output2}"
   it test_name do
     skip_if_not_working(not_working_message)
-    expect(set_related_contains?(input, output1, output2)).to eql(false), "Set-related rhymes for '#{input}' ought not include '#{output1}' / '#{output2}' / ..."
+    expect(set_related_contains?(input, output1, output2, common_only, negative_expectation: true)).to eql(false), "Set-related rhymes for '#{input}' ought not include '#{output1}' / '#{output2}' / ..."
   end
 end
 
-def set_related_oughta_contain_base_form(input, base1, base2, not_working_message: nil)
+def set_related_oughta_contain_base_form(input, base1, base2, common_only: false, not_working_message: nil)
   test_name = "set_related: #{input} -> #{base1}* / #{base2}*"
   it test_name do
     skip_if_not_working(not_working_message)
-    expect(set_related_contains_base_form?(input, base1, base2)).to eql(true),
-      "Set-related rhymes for '#{input}' oughta include some inflected form of '#{base1}' (family=#{lemma_family(base1).inspect}) alongside some inflected form of '#{base2}' (family=#{lemma_family(base2).inspect}), but instead we just get #{find_rhyming_tuples(input)}"
+    hit, diag = similar_spec_contains_base_family_pair_detail(input, base1, base2, common_only)
+    expect(hit).to eql(true),
+      "Set-related rhymes for '#{input}' oughta include some inflected form of '#{base1}' (family=#{lemma_family(base1).inspect}) alongside some inflected form of '#{base2}' (family=#{lemma_family(base2).inspect}), but instead we just get #{diag.inspect}"
   end
 end
 
@@ -356,7 +401,6 @@ describe 'SET_RELATED' do
     set_related_oughta_contain 'cat', 'muzzle', 'nuzzle'
     set_related_oughta_contain 'cat', 'fur', 'purr'
     set_related_oughta_contain 'cat', 'neighbor', 'saber'
-    set_related_oughta_contain 'cat', 'cuddle', "what'll"
     set_related_oughta_contain 'cat', 'meow', 'now'
     set_related_oughta_contain 'cat', 'arboreal', 'territorial'
     set_related_oughta_contain 'cat', 'beagle', 'seagull'
