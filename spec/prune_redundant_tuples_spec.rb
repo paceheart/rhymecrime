@@ -163,6 +163,7 @@ describe 'prune_suffix_redundant_rhyming_tuples' do
     prune_rhyming_tuple 'lopping / topping', 'loppings / toppings'
     prune_rhyming_tuple 'sniping / wiping', 'snipings / wipings'
     prune_rhyming_tuple 'antagonist / protagonist', 'antagonists / protagonists'
+    prune_rhyming_tuple 'feather / leather / tether / whether', 'featherier / leatherier'
   end
 
   context 'stop words' do

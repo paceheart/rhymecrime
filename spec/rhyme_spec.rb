@@ -120,6 +120,8 @@ describe 'RHYMES' do
     ought_not_rhyme 'lindsay', 'lindsey'
     ought_not_rhyme 'hanukkah', 'chanukah' # what if the initial sounds are different, though? Then how do we know to eliminate this?
     ought_not_rhyme 'adherence', 'adherents', not_working_message: "these aren't true homophones, but we forget that when we elide the T"
+    ought_not_rhyme 'moray', 'more'
+    ought_not_rhyme 'morays', 'mores'
   end
   context "'lay' ought not rhyme with 'lei'..." do
     ought_not_rhyme 'lay', 'lei'
@@ -383,6 +385,10 @@ describe 'RHYMES' do
     ought_not_rhyme 'served', 'underserved'
     ought_not_rhyme 'millionaire', 'multimillionaire'
     ought_not_rhyme 'meter', 'multimeter'
+    ought_not_rhyme 'member', 'dismember'
+    ought_not_rhyme 'members', 'dismembers'
+    ought_not_rhyme 'science', 'pseudoscience'
+    ought_not_rhyme 'scientific', 'pseudoscientific'
   end
 
   context "spelling variants ought not count as rhymes" do

@@ -34,7 +34,7 @@ A short rule sheet derived from 1.1 (POS disjoint → reject; hub bleed → reje
 Optionally: an LLM judge call on the ~5% borderline pairs, cached offline.
 Borderline-only means you eat the cost on ~hundreds of pairs, not millions; the precompute already supports a second pass.
 
-2.3 Targeted hard-FP active learning. Your bin/suggest-untagged-relatedness does uncertainty sampling near threshold. Add a complementary mode: sample pairs where the classifier is highly confident "related" (score 70–90) on words not covered by any prior cue. The TP/FP mix among those reveals where the classifier is over-confident — every FP you find there is a triple-strong negative training example. This complements your current tagging effort rather than competing with it.
+2.3 Targeted hard-FP active learning. Uncertainty sampling near threshold helps fill the queue. Add a complementary mode: sample pairs where the classifier is highly confident "related" (score 70–90) on words not covered by any prior cue. The TP/FP mix among those reveals where the classifier is over-confident — every FP you find there is a triple-strong negative training example. This complements your current tagging effort rather than competing with it.
 
 Tier 3 — adjuncts (don't expect headlines)
 Composite-objective rebalance. If user-facing harm is "too many bad rhymes" rather than "missing rhymes", train with --fn-weight 0.7 to push the classifier conservative. This is threshold tuning expressed in training-loss space; it doesn't add discriminative power.
