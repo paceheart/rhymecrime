@@ -60,13 +60,7 @@ bin/run-local              # http://localhost:9292/
 
 **On AWS** (Lambda + HTTP API + DynamoDB):
 
-The deploy is described by `template.yaml` (AWS SAM). Generated dictionary data is loaded from DynamoDB at runtime instead of `generated/` — see `bin/upload-to-dynamodb` and `RHYMECRIME_DATA_SOURCE=dynamodb`. Typical flow:
-
-```bash
-./bin/dict-build           # build generated/ locally
-./bin/upload-to-dynamodb   # push generated/ into the rhymecrime table
-sam build && sam deploy --guided
-```
+The deploy is described by `template.yaml` (AWS SAM). The Lambda bundle ships the lexicon (`word_dict.msgpack` / `rime_dict.msgpack`) and reads the larger relatedness cache from DynamoDB — see `bin/stage-lambda`, `bin/upload-to-dynamodb`, and `RHYMECRIME_DATA_SOURCE=dynamodb`. The full pipeline that produces those artifacts is described in [Data pipeline](#data-pipeline) below.
 
 ## Examples:
 
@@ -179,6 +173,76 @@ Compute the set of all words thematically related to INPUT_REL2, call it RELATED
 For each word REL1 in RELATEDS1,  
   Get all rhymes RHYME of REL1.  
   If RHYME rhymes with REL1 and is related to INPUT_REL2, we win! "REL1 / RHYME" is a pair.  
+
+## Data pipeline
+
+End-to-end data flow runs in five phases. Each phase's outputs are inputs to the next; every step is idempotent and self-detects already-done state.
+
+**Phase 1 — Fetch corpora** (`bin/setup-corpora`). Downloads Wiktionary, ConceptNet 5.7, and Numberbatch 19.08 to `corpora/`; pre-aggregates USF associations, ConceptNet lemma cache, and the wordfreq Zipf table into `generated/`. CMUdict, VarCon, SUBTLEX-US, neol, and USF shards are vendored in the repo.
+
+**Phase 2 — Dictionary + classifier build** (`bin/build`, four stages). The orchestrator runs `bin/dict-build` twice (full first, slim rescore last) around two classifier-training stages:
+1. `dict-build` (full): merges every corpus into the canonical lexicon — `generated/word_dict.{txt,msgpack}`, `generated/rime_dict.{txt,msgpack}`, lemma / semantic-base / spelling-variant / hyphen-variant maps. Also exports `generated/conceptnet_edges.json`, `generated/numberbatch_vectors.msgpack`, and `generated/rarity_signals_dump.jsonl`.
+2. `bin/train-rarity-classifier` → `generated/rarity_classifier.json`.
+3. `bin/retrain-relatedness --rebuild-vectors`: dumps `generated/sense_glosses.jsonl`, encodes them with MPNet (the only Python step) into `generated/model_sense_vectors.msgpack`, and trains `generated/relatedness_classifier.json`.
+4. `dict-build` (slim): re-runs over `word_dict.txt` so the freshly-trained rarity classifier can rescore borderline words.
+
+**Phase 3 — Relatedness precompute** (`bin/precompute-relatedness` then `bin/precompute-set-related`). For every cue lemma, runs the full relatedness pipeline (Numberbatch + ConceptNet + USF + sense-vector cosine + WordNet glosses → classifier) to produce the `related#<lemma>` and `score#<lemma>` rows, then computes the post-prune rhyming-tuple list for each cue as `set_related#<lemma>`. Output is one SQLite file (`generated/rhymecrime_local.sqlite3`) with three tables. Cue order is descending by `curated/related.csv` row count, alpha tiebreak — so `Ctrl-C`-resumable runs and `--max-cues=N` smoke runs front-load the cues you've curated most (`cat`, `pirate`, `food`, `hell`, `crime`, …).
+
+**Phase 4 — Deploy** (two independent halves):
+- *Code path:* `bin/deploy-aws` runs `bin/stage-lambda` (copies `lambda_handler.rb`, `lib/`, `assets/`, `curated/`, and the runtime-needed `generated/*.msgpack` files into `lambda-build/`), then `sam build --use-container` (so native gems compile for arm64-linux), then `sam deploy`.
+- *Data path:* `bin/upload-to-dynamodb` streams the SQLite store from Phase 3 into the `rhymecrime` DynamoDB table as `related#…` / `score#…` / `set_related#…` items. AWS preflight is centralized in `bin/_aws_preflight.rb`.
+
+**Phase 5 — Runtime**. Lambda cold-starts by loading the bundled msgpack lexicon. `Rhymecrime::Store` dispatches reads to `DynamoRuntime` (because `RHYMECRIME_DATA_SOURCE=dynamodb` is set in `template.yaml`). Hot path for `set_related` is one DDB `GetItem` + render. Feedback thumbs `put_item` into the separate `rhymecrime-feedback` table; `bin/augment-related-from-feedback` (DynamoDB by default; pass `--from-file` for local `generated/feedback.csv`) scans prod feedback and folds verdicts into `curated/related.csv` for the next training cycle.
+
+```text
+External sources                  Build artifacts                   Runtime
+================                  ===============                   =======
+
+corpora/                          generated/
+├─ wiktionary/      ──┐           ├─ word_dict.msgpack ──────────┐  Lambda bundle
+├─ conceptnet/      ──┤           ├─ rime_dict.msgpack ──────────┤  (lambda-build/)
+├─ numberbatch/     ──┤           ├─ word_lemma_map.msgpack ─────┤
+├─ varcon/          ──┤── Phase 2 ├─ word_semantic_base_map.msg ─┤
+├─ subtlex/         ──┤  bin/build├─ spelling_variants_auto.txt ─┤
+├─ cmudict/         ──┤           ├─ hyphen_variant_map.json ────┘
+└─ usf/             ──┘           │
+                                  ├─ numberbatch_vectors.msgpack ┐
+curated/                          ├─ conceptnet_edges.json       │ Phase 3
+├─ rarity.csv      ──── Stage 2/4 ├─ usf_associations.json       │ inputs only
+├─ related.csv     ──── Stage 3/4 ├─ model_sense_vectors.msgpack │
+├─ lemma.csv       ─┐             ├─ part_of_speech.json         │
+├─ spelling.csv    ─┤             ├─ rarity_classifier.json     ─┘
+├─ forbid_list.txt ─┤── Stage 1/4 │
+├─ stop word txts  ─┤  via dict.rb├─ relatedness_classifier.json ──┐
+├─ common_words    ─┤             │                                │
+└─ rare_words      ─┘             ├─ rhymecrime_local.sqlite3 ────┐│
+                                  │  ├─ related table             ││ Phase 3 outputs
+                                  │  ├─ related_scores table      ││ (Phase 4 inputs)
+                                  │  └─ set_related table         ││
+                                  │                               ││
+                                  └─ feedback-from-ddb.csv        ││
+                                     (DDB feedback table)         ││
+                                                                  ▼▼
+                                                            ┌─────────────────┐
+                                                            │ rhymecrime DDB  │
+                                                            │ pk:             │
+                                                            │  related#…      │
+                                                            │  score#…        │
+                                                            │  set_related#…  │
+                                                            └────────┬────────┘
+                                                                     │
+                                                                     ▼
+                                                            ┌─────────────────┐
+                                                            │ Lambda          │
+                                                            │ + HTTP API GW   │
+                                                            │ + custom domain │
+                                                            └─────────────────┘
+```
+
+**Runbook:**
+
+- *Fresh clone → working app:* `./setup.sh` (Phases 1-2, ~60 min) → `./bin/precompute-relatedness && ./bin/precompute-set-related` (Phase 3, ~2-3 hr) → `./bin/deploy-aws && AWS_PROFILE=… ./bin/upload-to-dynamodb` (Phase 4).
+- *Retrain relatedness after a `curated/related.csv` edit:* `./bin/retrain-relatedness` (~1 min) → smoke-test → `./bin/precompute-relatedness && ./bin/precompute-set-related && ./bin/upload-to-dynamodb` (data half of Phase 4).
 
 ## Credits
 
