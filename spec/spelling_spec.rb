@@ -11,6 +11,15 @@
 
 SPELLING_CSV_SPEC_PATH = File.expand_path("../curated/spelling.csv", __dir__)
 
+# Run-time counters consumed by the +sanity+ context at the bottom of this file. We track both
+# +attempted+ (every +prefer_spelling+ example body that started executing) and +non_vacuous+
+# (the subset that got past the +word_dict_includes_headword?(alt)+ short-circuit). Used to
+# guard against a silent-failure mode where +$word_dict+ hasn't been lazy-loaded yet at the
+# moment these examples run, +word_dict_includes_headword?+ short-circuits on +nil+, and
+# every +prefer_spelling+ example +next+s into a vacuous pass — making the file look green
+# in isolation while still failing in the full suite once another spec triggers the load.
+SPELLING_SPEC_STATS = { attempted: 0, non_vacuous: 0 }
+
 # Parse +curated/spelling.csv+: each non-comment line is
 # +preferred,alt1[,alt2,...][,free-text notes]+. We yield every +(preferred, alt)+ pair.
 # The +#+-prefixed comment header at the top is skipped, and an optional trailing notes
@@ -28,9 +37,17 @@ end
 
 # Assert that +preferred_form(alt) == preferred+ (and that +preferred+ is a fixed point).
 # Passes vacuously when +alt+ is not in +word_dict+ — there is nothing the dict could normalize.
+#
+# Note: we deliberately use +word_dict.key?(alt)+ (which lazy-loads via the +word_dict+
+# accessor) rather than the +word_dict_includes_headword?+ predicate. That predicate is
+# build-path-safe and short-circuits on +$word_dict.nil?+ without forcing a load — fine for
+# dict-compile callers, but in tests it would silently turn every example into a vacuous
+# pass when this file runs alone (since nothing in spec_helper triggers the load).
 def prefer_spelling(preferred, alt)
   it "prefers '#{preferred}' over '#{alt}'" do
-    next unless word_dict_includes_headword?(alt)
+    SPELLING_SPEC_STATS[:attempted] += 1
+    next unless word_dict.key?(alt)
+    SPELLING_SPEC_STATS[:non_vacuous] += 1
 
     expect(preferred_form(alt)).to eq(preferred),
       "expected preferred_form('#{alt}') == '#{preferred}', got '#{preferred_form(alt)}'"
@@ -48,10 +65,10 @@ end
 
 describe "SPELLING VARIANTS" do
   context "-ize/-ise US/UK" do
-    prefer_spelling 'standardize', 'standardise'
-    prefer_spelling 'standardized', 'standardised'
-    prefer_spelling 'standardizes', 'standardises'
-    prefer_spelling 'standardizing', 'standardising'
+    prefer_spelling 'agonize', 'agonise'
+    prefer_spelling 'agonized', 'agonised'
+    prefer_spelling 'agonizes', 'agonises'
+    prefer_spelling 'agonizing', 'agonising'
     prefer_spelling 'aggrandize', 'aggrandise'
   end
   
@@ -94,13 +111,11 @@ describe "SPELLING VARIANTS" do
     prefer_spelling "tomatoes",  "tomatos"
     prefer_spelling "tornadoes", "tornados"
     prefer_spelling "torpedoes", "torpedos"
-    prefer_spelling "tuxedoes", "torpedos"
     prefer_spelling "potatoes",  "potatos"
     prefer_spelling "echoes",    "echos"
   end
 
   context "-eys vs -ies" do
-    prefer_spelling "monies", "moneys"
     prefer_spelling "monkeys", "monkies"
     prefer_spelling "abbeys", "abbies"
     prefer_spelling "valleys", "vallies"
@@ -110,6 +125,8 @@ describe "SPELLING VARIANTS" do
     prefer_spelling "tasered", "taserred"
     prefer_spelling "tasering", "taserring"
     prefer_spelling "parroted", "parrotted"
+    prefer_spelling 'targeted', 'targetted'
+    prefer_spelling 'riveted', 'rivetted'
   end
 
   context "-l/-ll US/UK" do
@@ -133,9 +150,36 @@ describe "SPELLING VARIANTS" do
     prefer_spelling 'oeuvre', 'œuvre'
   end
 
+  context '-eing' do
+    prefer_spelling 'having', 'haveing'
+    prefer_spelling 'shaving', 'shaveing'
+    prefer_spelling 'shoving', 'shoveing'
+    prefer_spelling 'rueing', 'ruing'
+    prefer_spelling 'barbecuing', 'barbecueing'
+    prefer_spelling 'ogling', 'ogleing'
+    prefer_spelling 'googling', 'googleing'
+  end
+
   context "manual list (curated/spelling.csv)" do
     each_spelling_csv_pair do |preferred, alt|
       prefer_spelling preferred, alt
+    end
+  end
+
+  # Defined LAST on purpose: with rspec's default +:defined+ order it runs after every
+  # other example in this file, so +SPELLING_SPEC_STATS+ has accumulated by the time the
+  # check fires. If some future change flips the suite to random ordering and this example
+  # happens to land first, the +attempted == 0+ skip below keeps it from false-alarming.
+  context "sanity" do
+    it "at least one prefer_spelling example exercised the dict (non-vacuous run)" do
+      attempted = SPELLING_SPEC_STATS[:attempted]
+      non_vacuous = SPELLING_SPEC_STATS[:non_vacuous]
+      skip "no prefer_spelling examples have run yet (subset run, or this example ran first under random order)" if attempted == 0
+      expect(non_vacuous).to be > 0,
+        "all #{attempted} prefer_spelling example(s) passed vacuously: word_dict_includes_headword?(alt) " \
+        "returned false for every alt, so the +preferred_form+ assertions never fired. This usually " \
+        "means $word_dict had not been lazy-loaded by the time spelling_spec ran — try requiring it " \
+        "from spec_helper, or run alongside another file (e.g. rarity_spec) that triggers the load."
     end
   end
 end

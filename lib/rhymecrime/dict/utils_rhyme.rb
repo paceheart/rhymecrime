@@ -1275,23 +1275,24 @@ def split_spelling_row(line)
 end
 
 # Returns an array of form-arrays: each inner array is +[preferred, alt1[, alt2, ...]]+.
-# Sources, in order:
+# Sources, in load order (later sources OVERRIDE earlier ones because +load_variants+
+# does last-write-wins per surface form):
+#   * +generated/spelling_variants_auto.txt+ — emitted by dict-build, whitespace-separated
+#                                   +preferred alt+ pairs. Optional (skipped when missing,
+#                                   e.g. on a fresh checkout before the first build).
 #   * +curated/spelling.csv+     — hand-edited list, CSV (comma-separated) with +#+ comment
 #                                   header lines and an optional trailing free-text notes
 #                                   column (silently dropped at load time; see
 #                                   +split_spelling_row+).
-#   * +generated/spelling_variants_auto.txt+ — emitted by dict-build, whitespace-separated
-#                                   +preferred alt+ pairs. Optional (skipped when missing,
-#                                   e.g. on a fresh checkout before the first build).
+# Curated MUST come last: detectors in +emit_spelling_variants_auto!+ sometimes pick the
+# opposite preference direction from the human-curated list (corpus Zipf can favor +adapter+
+# over +adaptor+, +ax+ over +axe+, +disc+ over +disk+, +mamma+ over +mama+) and we want the
+# hand-edited choice to win for any pair that appears in both files.
+#
 # Comment lines (starting with +#+) and lines that don't begin with an alphabetic character
 # are skipped at parse time, matching the legacy +/A[[:alpha:]]/+ filter.
 def load_variants_raw
   result = []
-  File.foreach(SPELLING_CSV_PATH, chomp: true, encoding: "UTF-8") do |line|
-    next unless line =~ /\A[[:alpha:]]/
-    forms, _notes = split_spelling_row(line)
-    result << forms unless forms.empty?
-  end
   auto_path = generated_dict_path(SPELLING_VARIANTS_AUTO_FILENAME)
   if File.exist?(auto_path)
     File.foreach(auto_path, chomp: true, encoding: "UTF-8") do |line|
@@ -1299,6 +1300,11 @@ def load_variants_raw
       forms = line.split.map(&:strip).reject(&:empty?)
       result << forms unless forms.empty?
     end
+  end
+  File.foreach(SPELLING_CSV_PATH, chomp: true, encoding: "UTF-8") do |line|
+    next unless line =~ /\A[[:alpha:]]/
+    forms, _notes = split_spelling_row(line)
+    result << forms unless forms.empty?
   end
   result
 end

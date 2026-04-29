@@ -456,3 +456,7 @@ le
 luh
 hms
 hors
+toing
+froing
+los
+ros

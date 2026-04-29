@@ -85,3 +85,5 @@ try again to strengthen lemma to semantic_base and see if it helps
 When we have explicit curated data with a clear relatedness decision, override the classifier's guess of the related words
 
 do something about ever / however / howsoever / whatever / whatsoever / whenever / wherever / whichever / whichsoever / whoever / whomever / whomsoever / whosoever
+
+on mobile, don't do columns

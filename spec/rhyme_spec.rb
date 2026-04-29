@@ -1111,4 +1111,11 @@ describe 'RHYMES' do
   context 'unicode' do
     ought_not_rhyme '🍇', 'ape'
   end
+  
+  context 'spelling variants' do
+    oughta_rhyme 'agonize', 'antagonize'
+    oughta_rhyme 'agonize', 'antagonise'
+    oughta_rhyme 'agonise', 'antagonize'
+    oughta_rhyme 'agonise', 'antagonise'
+  end
 end
