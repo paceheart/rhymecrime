@@ -83,6 +83,21 @@ require_relative "../lib/rhymecrime/dict/utils_rhyme"
 require_relative "../lib/rhymecrime/frontend"
 require_relative "../lib/rhymecrime/local_store"
 
+# Compact "Xh Ym Z.Zs" / "Ym Z.Zs" / "Z.Zs" formatter for the elapsed-
+# time prints below. Mirrors +bin/precompute-relatedness+'s final
+# wall-clock line so a user comparing run-to-run timings sees the same
+# shape from both scripts; bare seconds get one decimal so sub-minute
+# phases (e.g. the rime walk) still read cleanly.
+def format_duration(seconds)
+  s = seconds.to_f
+  hh = (s / 3600).to_i
+  mm = ((s % 3600) / 60).to_i
+  ss = s % 60
+  return "#{hh}h #{mm}m #{format('%.1f', ss)}s" if hh.positive?
+  return "#{mm}m #{format('%.1f', ss)}s" if mm.positive?
+  "#{format('%.1f', ss)}s"
+end
+
 output_path = Rhymecrime::LocalStore.database_path
 dry_run = false
 max_cues = nil
@@ -123,7 +138,7 @@ wd.each_key do |w|
   common_preferred << w
 end
 preferred_set_elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC) - preferred_set_started
-puts "  #{common_preferred.size} common-preferred headwords (built in #{format('%.1f', preferred_set_elapsed)}s)"
+puts "  #{common_preferred.size} common-preferred headwords (built in #{format_duration(preferred_set_elapsed)})"
 
 # 1. Pull every +related#+ row out of the local store: that's our cue
 #    universe. We trust the stored rows as authoritative — they were
@@ -171,7 +186,7 @@ SQLite3::Database.new(output_path, readonly: true).then do |db|
   end
 end
 load_elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC) - load_started
-puts "  #{words_by_cue.size} cues loaded in #{format('%.1f', load_elapsed)}s"
+puts "  #{words_by_cue.size} cues loaded in #{format_duration(load_elapsed)}"
 
 # Optional --only / --max-cues filters before the heavy work. +--only+
 # resolves headwords through +word_dict+ so passing +running+ targets the
@@ -235,7 +250,7 @@ rd.each do |rime, cohort|
   rimes_done += 1
   if (rimes_done % 5000).zero?
     elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC) - rime_walk_started
-    puts "  [rime walk] #{rimes_done}/#{rd.size} (#{format('%.1f', elapsed)}s elapsed)"
+    puts "  [rime walk] #{rimes_done}/#{rd.size} (#{format_duration(elapsed)} elapsed)"
   end
 
   in_index = cohort.select { |w| cues_by_word.key?(w) }
@@ -251,7 +266,7 @@ rd.each do |rime, cohort|
   end
 end
 rime_walk_elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC) - rime_walk_started
-puts "Rime walk complete in #{format('%.1f', rime_walk_elapsed)}s — #{buckets.size} cues seeded with at least one bucket."
+puts "Rime walk complete in #{format_duration(rime_walk_elapsed)} — #{buckets.size} cues seeded with at least one bucket."
 
 # 4. Per-cue dedupe + prune. Enable the cross-cue redundancy memo for
 #    the prune sweep — see +$rhyming_tuple_redundant_memo+ over the
@@ -297,7 +312,7 @@ words_by_cue.each_key do |cue|
 end
 
 prune_elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC) - prune_started
-puts "Prune complete in #{format('%.1f', prune_elapsed)}s — #{n} cues, #{n - empty_cues} non-empty (#{total_tuples} tuples total), memo=#{$rhyming_tuple_redundant_memo.size}."
+puts "Prune complete in #{format_duration(prune_elapsed)} — #{n} cues, #{n - empty_cues} non-empty (#{total_tuples} tuples total), memo=#{$rhyming_tuple_redundant_memo.size}."
 
 # Free the memo before the write phase so SQLite's page cache has room
 # to breathe. Bigger cue universes have driven the memo into the multi-
@@ -322,4 +337,4 @@ Rhymecrime::LocalStore.open_for_write(output_path) do |writer|
 end
 write_elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC) - write_started
 size_mb = (File.size(output_path).to_f / (1024 * 1024)).round(1)
-puts "Wrote #{n} rows in #{format('%.1f', write_elapsed)}s (#{size_mb} MB total file size)."
+puts "Wrote #{n} rows in #{format_duration(write_elapsed)} (#{size_mb} MB total file size)."
