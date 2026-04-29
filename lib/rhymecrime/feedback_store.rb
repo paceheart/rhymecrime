@@ -10,8 +10,9 @@
 #       sk = ISO 8601 timestamp with sub-second precision
 #       attrs = verdict, ip, user_agent, session
 #     The (pk, sk) layout means we can +Query+ for "every vote on this pair"
-#     in one call (sort-key range over time), and +Scan+ the table to export
-#     all feedback into +curated/related.csv+ when re-importing training data.
+#     in one call (sort-key range over time), and +Scan+ the table so
+#     +bin/augment-related-from-feedback+ (DynamoDB by default; +--from-file+
+#     for local CSV) can fold feedback into +curated/related.csv+ when re-importing training data.
 #
 #   * +CsvFeedbackStore+ — local dev. Appends a row to
 #     +generated/feedback.csv+ on every click. Same column set as the
@@ -103,9 +104,8 @@ module Rhymecrime
     # goal dispatch. The "make a note" half of that message is literally
     # this call: it emits one feedback row whose +cue+ is the user's
     # surface input and whose +related+ slot is +UNCOMPUTED_RELATED_TOKEN+,
-    # so a follow-up export step (+bin/export-feedback-from-dynamodb+,
-    # +bin/augment-related-from-feedback+) can rank the most-asked-about
-    # uncomputed cues and add them to the next precompute round's cue
+    # so a follow-up +bin/augment-related-from-feedback+ run (default:
+    # DynamoDB; +--from-file+ for local) can rank the most-asked-about uncomputed cues and add them to the next precompute round's cue
     # universe.
     #
     # Soft-fails by design (mirrors +record!+'s rescue): a flaky feedback
