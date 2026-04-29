@@ -1,0 +1,321 @@
+# based on https://gist.github.com/sebleier/554280
+# see also unrhymable_stop_words.txt
+'cause
+'em
+'tis
+'twas
+'twasn't
+'twere
+'twould
+about
+above
+accordingly
+# across
+after
+again
+against
+ahem
+ain't
+albeit
+all
+along
+also
+although
+am
+among
+amongst
+another
+any
+anybody
+anyone
+anything
+anywhere
+are
+aren't
+arguably
+around
+as
+at
+# back
+be
+because
+been
+before
+being
+below
+besides
+between
+# beyond
+both
+but
+by
+# can: should be related to 'tin'
+cannot
+consequently
+could
+could've
+coulda
+couldn't
+cuz
+despite
+did
+didn't
+do
+does
+doesn't
+doing
+don't
+# down
+during
+e'er
+each
+either
+else
+# er: rare because ER
+# even
+ever
+everybody
+everyone
+everything
+everywhere
+# farther
+# few
+for
+from
+# further
+furthermore
+get
+gets
+getter
+getting
+# gimme
+# go
+gonna
+got
+gotta
+gotten
+had
+hadn't
+has
+hasn't
+have
+haven't
+having
+he
+hence
+henceforth
+her
+here
+hereby
+herein
+hereof
+hereto
+heretofore
+hereupon
+hers
+herself
+hey
+him
+himself
+his
+hither
+hitherto
+how
+however
+howsoever
+i
+if
+in
+indeed
+# inside
+instead
+into
+is
+ish
+isn't
+it
+its
+itself
+# just
+kinda
+# lemme
+let
+let's
+lets
+letting
+literally
+# make
+# may: nope because it's also a month
+maybe
+me
+meanwhile
+might've
+# might: nope because it's also a noun
+mightn't
+# mine: also a noun (gold mine, mine field)
+more
+moreover
+most
+must
+must've
+musta
+mustn't
+myself
+needn't
+neither
+nevertheless
+no
+no-one
+nobody
+none
+nonetheless
+noone
+nor
+not
+# nothing: this should be related to void, empty, zero, etc.
+notwithstanding
+now
+# nowhere: this should be related to void, empty, zero, etc.
+of
+off
+on
+once
+oneself
+only
+onto
+or
+other
+otherwise
+ought
+oughtn't
+our
+ours
+ourselves
+out
+# outside
+# over
+own
+perhaps
+put
+puts
+quite
+rather
+really
+regardless
+same
+# say
+shall
+shan't
+she
+should
+should've
+shoulda
+shouldn't
+since
+so
+some
+somebody
+someone
+something
+somewhere
+sorta
+# still
+subsequently
+such
+# sure
+than
+that
+thee
+their
+theirs
+them
+themself
+themselves
+then
+thenceforth
+there
+thereafter
+thereby
+therefore
+therein
+thereof
+thereto
+thereupon
+these
+they
+thine
+thing
+things
+this
+thither
+those
+thou
+though
+thous
+through
+throughout
+thus
+to
+too
+toward
+towards
+# under
+unless
+until
+up
+upon
+very
+wanna
+was
+wasn't
+# way
+we
+# well
+were
+weren't
+what
+whatever
+whatsoever
+when
+whenever
+whensoever
+where
+whereas
+whereby
+wherefore
+wherein
+whereof
+wheresoever
+whereupon
+wherever
+whether
+which
+whichever
+whichsoever
+while
+whither
+who
+whoever
+whom
+whomever
+whomsoever
+whose
+whosoever
+why
+will
+with
+within
+without
+won't
+would
+would've
+woulda
+wouldn't
+y'all
+y'all's
+ya
+yet
+you
+yours
+yourself
+yourselves

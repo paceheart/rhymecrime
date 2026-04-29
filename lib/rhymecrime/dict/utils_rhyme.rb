@@ -131,23 +131,65 @@ end
 #
 # stop words
 #
+# Curated as two disjoint single-purpose lists (Option A: no overlap):
+#
+#   semantically_promiscuous.txt — content-empty words that "relate to
+#       everything"; drives the relatedness short-circuit message and
+#       saturates the relatedness score in +relatedness/score.rb+.
+#   unrhymable_stop_words.txt    — words you wouldn't want at the end of
+#       a line/sentence (ultra-short articles, contractions like +he'd've+,
+#       interjections like +huh+/+uh+).
+#
+# Every other use of "stop word" (frequency sentinel in +frequency.rb+, the
+# tuple-pruning all-stop-words wholesale drop in +crime.rb+, the link-
+# suppression branch in +print_word+, the inflection-inheritance gates) wants
+# the *union* — anything that should not be treated as a normal content
+# word — so +stop_word?+ below is the union. The finer-grained predicates
+# +semantically_promiscuous?+ and +unrhymable_stop_word?+ are exposed for
+# call sites that need to distinguish (today: only the relatedness-message
+# branch in +frontend.rb+, which still uses +stop_word?+ for backward
+# compatibility — accuracy of the message is preserved because every entry
+# in +unrhymable_stop_words.txt+ is also a stop word in the broader sense).
+#
+# +#+ comment lines and blank lines are skipped; trailing whitespace on each
+# entry is stripped (so +"hey "+ in the file matches +"hey"+).
 
+STOP_WORDS_SEMANTICALLY_PROMISCUOUS_FILENAME = "semantically_promiscuous.txt"
+STOP_WORDS_UNRHYMABLE_FILENAME = "unrhymable_stop_words.txt"
+
+$semantically_promiscuous = nil
+$unrhymable_stop_words = nil
 $stop_words = nil
 
-# Lazily load +curated/stop_words.txt+ into a +Set+ for O(1) lookups.
-# +#+ comment lines and blank lines are skipped; trailing whitespace on each entry is
-# stripped (so e.g. +"hey "+ in the file matches the word +"hey"+).
-def stop_words
-  $stop_words ||= begin
-    set = Set.new
-    path = File.join(CURATED_DIR, "stop_words.txt")
-    File.foreach(path, chomp: true, encoding: "UTF-8") do |line|
-      w = line.strip
-      next if w.empty? || w.start_with?("#")
-      set << w
-    end
-    set
+def load_word_set_from(filename)
+  set = Set.new
+  path = File.join(CURATED_DIR, filename)
+  File.foreach(path, chomp: true, encoding: "UTF-8") do |line|
+    w = line.strip
+    next if w.empty? || w.start_with?("#")
+    set << w
   end
+  set
+end
+
+def semantically_promiscuous_words
+  $semantically_promiscuous ||= load_word_set_from(STOP_WORDS_SEMANTICALLY_PROMISCUOUS_FILENAME)
+end
+
+def unrhymable_stop_words
+  $unrhymable_stop_words ||= load_word_set_from(STOP_WORDS_UNRHYMABLE_FILENAME)
+end
+
+def stop_words
+  $stop_words ||= semantically_promiscuous_words | unrhymable_stop_words
+end
+
+def semantically_promiscuous?(word)
+  semantically_promiscuous_words.include?(word)
+end
+
+def unrhymable_stop_word?(word)
+  unrhymable_stop_words.include?(word)
 end
 
 def stop_word?(word)

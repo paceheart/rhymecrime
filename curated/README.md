@@ -33,13 +33,31 @@ masquerading as words, single-letter junk, etc.). Loaded at runtime by
 `forbid_list()` in `lib/rhymecrime/dict/utils_rhyme.rb` and consulted by
 `explicitly_forbidden?`. Plain newline-delimited list.
 
-### `stop_words.txt`
+### `semantically_promiscuous.txt` + `unrhymable_stop_words.txt`
 
-English stop-word set for relatedness scoring (drops cue/target pairs where
-either side is a function word before they reach the classifier). Based on
-<https://gist.github.com/sebleier/554280> with local additions. Loaded lazily
-by `stop_words` in `lib/rhymecrime/dict/utils_rhyme.rb`. Lines starting with
-`#` are comments.
+Two disjoint single-purpose stop-word lists; the runtime takes the union for
+anything that wants "treat as stop word" semantics:
+
+- `semantically_promiscuous.txt` — content-empty function words (articles,
+  pronouns, modals, prepositions, conjunctions). Drives the relatedness
+  short-circuit message and saturates the relatedness score so these never
+  reach the classifier. Based on <https://gist.github.com/sebleier/554280>
+  with local additions. Predicate: `semantically_promiscuous?`.
+- `unrhymable_stop_words.txt` — words you wouldn't want at the end of a line
+  or sentence, so they don't make for good rhyme targets: ultra-short
+  articles/possessives (`the`, `a`, `my`), apostrophe-heavy contractions
+  (`he'd've`, `couldn't've`, `they're`), and interjections (`huh`, `mm`,
+  `oh`). Predicate: `unrhymable_stop_word?`.
+
+Both files use `#` for comment / blank lines. Loaded lazily by
+`semantically_promiscuous_words` / `unrhymable_stop_words` /
+`stop_words` (the union) in `lib/rhymecrime/dict/utils_rhyme.rb`.
+
+The two files must remain disjoint: a word's *purpose* in being a stop
+word determines which file it lives in (semantic emptiness vs. structural
+unrhymability), and the runtime union picks up both. Verify with
+`comm -12 <(grep -v '^#' curated/semantically_promiscuous.txt | sort -u)
+            <(grep -v '^#' curated/unrhymable_stop_words.txt    | sort -u)`.
 
 ### `neol_supplement.txt`
 
