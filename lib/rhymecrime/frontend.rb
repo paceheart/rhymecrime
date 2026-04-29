@@ -128,7 +128,8 @@ end
 # promiscuous word through search or a typed URL doesn't get tempted by
 # clickable rhymes that would only land them back on this same dead-end
 # message. (Unrhymable stop words like "the" are deleted from +word_dict+ at
-# build time, so this dispatch never sees them.)
+# build time, so this dispatch never sees them.) Color: +.stop-word+ (+#bbb+)
+# in +assets/crimestyle.css+ wraps those surfaces in +print_word+.
 def compute_column_for_goal(goal, word1, word2)
   cue = feedback_cue_for_goal(goal, word1, word2)
   promiscuous = promiscuous_words_in_cue(cue)
@@ -155,7 +156,7 @@ end
 # Loses a bit of info in that rare case, but the user can see the full query
 # in the form/URL anyway.
 def promiscuous_message(promiscuous_words)
-  "#{promiscuous_words.first} is semantically promiscuous; can't compute related words"
+  "\"#{promiscuous_words.first}\" is semantically promiscuous; can't compute related words"
 end
 
 # Per-column focal word for tuple coloring. Every slot in a +set_related+ tuple

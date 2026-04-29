@@ -1025,6 +1025,20 @@ describe 'RHYMES' do
     ought_not_rhyme 'been', 'fun'
     oughta_rhyme 'been', 'seen' # yeah it's RP but so common in rhyming
     oughta_rhyme 'again', 'bane' # ditto
+    ought_not_rhyme 'sloth', 'both'
+    oughta_rhyme 'sloth', 'moth'
+    oughta_rhyme 'snarf', 'barf'
+    ought_not_rhyme 'snarf', 'cough'
+    oughta_rhyme 'pigment', 'figment'
+    ought_not_rhyme 'pigmented', 'dreaded'
+    ought_not_rhyme 'midi', 'needy'
+    oughta_rhyme 'midi', 'city'
+    ought_not_rhyme 'marseille', 'isle'
+    oughta_rhyme 'marseille', 'bay'
+    oughta_rhyme 'marseilles', 'bay'
+    ought_not_rhyme 'marseilles', 'bays'
+    ought_not_rhyme 'upwind', 'mined'
+    oughta_rhyme 'upwind', 'finned'
   end
 
   context 'ire' do

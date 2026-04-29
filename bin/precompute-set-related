@@ -1,0 +1,325 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# Precompute the post-prune rhyming-tuple list for every cue lemma in the
+# precomputed +related#+ universe and stash it as a +set_related#<lemma>+
+# row in +generated/rhymecrime_local.sqlite3+.
+#
+# Why: the runtime +set_related+ goal in +lib/rhymecrime/crime.rb+ used to
+# run four phases live on every request (~6s/cue: find+filter related,
+# prefetch, rhyme-bucket loop, suffix-redundancy prune). That's blown up
+# the Lambda 29s budget for hub cues and made cold-start latency worse
+# than warm requests by an order of magnitude. With the precomputed
+# +set_related#+ row in DDB, the hot path collapses to one +GetItem+ plus
+# render — see +Rhymecrime::Store.fetch_set_related_tuples+.
+#
+# Inputs:
+#   * +generated/rhymecrime_local.sqlite3+ populated by
+#     +bin/precompute-relatedness+ (the +related+ table — we read its rows
+#     to get the cue universe and the post-filter related-words list per
+#     cue).
+#   * +word_dict+ / +rdict+ (the in-process Ruby dict — shipped via the
+#     msgpacks under +generated/+).
+#
+# Output: +set_related+ table in the same SQLite file, one row per cue
+# lemma. Empty +tuples+ ([]) is a valid "this cue has relateds but they
+# don't share a rime cohort" answer; the runtime renders it as an empty
+# tuples list (still a precomputed hit, no friendly-message fallback).
+# Cues *outside* the universe (rare words, forbidden words, words with no
+# +related#+ row) get no +set_related#+ row and the runtime routes them
+# to the friendly "Oops, I don't know..." / "I don't like that word."
+# bad_input message.
+#
+# Usage:
+#   ruby bin/precompute-set-related
+#
+# Options:
+#   --output=PATH    Override SQLite path (default: generated/rhymecrime_local.sqlite3)
+#   --dry-run        Compute only; print progress, do not write rows
+#   --max-cues=N     Only process the first N cues (smoke test)
+#   --only=W[,W...]  Restrict run to these cue lemmas (resolved via word_dict)
+#
+# Algorithm (two optimizations over a naive per-cue loop, both essential
+# at full scale — naive runs would take ~14h, optimized ~12 min):
+#
+#   1. Inverted-index bucket loop. The naive per-cue loop walks every
+#      related word's pronunciations and intersects each rime cohort with
+#      the cue's relateds set. That's O(cues × |relateds(cue)| × prons ×
+#      cohort) ≈ 6h across the full ~28K cue universe. Instead we build
+#      a once-global +cues_by_word+ inverted index (word → Set<cue>) and
+#      walk +rdict+ exactly once: for each rime cohort, for each pair of
+#      cohort members, intersect their cue sets and push the pair into
+#      every shared cue's per-rime bucket. Drops to ~30-60s.
+#
+#   2. Cross-cue prune memoization. +rhyming_tuple_redundant_with?+ is
+#      pure over +(ear, tup)+ — see the comment over its definition in
+#      +crime.rb+ — so we enable a global memo (+$rhyming_tuple_redundant_
+#      memo+) for the duration of this script. Tuple pairs that recur
+#      across cues (animal / transport / emotion clusters share heavily)
+#      hit the memo on the second cue onward. Drops the prune phase from
+#      ~8h to ~10min.
+#
+# Single-process: workers can't share the bucket accumulator without
+# serialization overhead that defeats the parallelism, the inverted-index
+# pass is the bottleneck (and inherently global), and the prune memo
+# wants a single in-memory hash. Forking buys us nothing and fragments
+# the memo.
+
+$LOAD_PATH.unshift File.expand_path("../lib", __dir__)
+
+# Force unbuffered stdout so the progress lines below stream live to the
+# user instead of getting buffered until exit when this script is run via
+# a pipe or redirection (the default Ruby block-buffering on non-TTY
+# stdout).
+$stdout.sync = true
+
+ENV.delete("RHYMECRIME_DATA_SOURCE")
+
+require "json"
+require "optparse"
+require "set"
+require "sqlite3"
+require_relative "../lib/rhymecrime/dict/utils_rhyme"
+require_relative "../lib/rhymecrime/frontend"
+require_relative "../lib/rhymecrime/local_store"
+
+output_path = Rhymecrime::LocalStore.database_path
+dry_run = false
+max_cues = nil
+only_words = []
+
+OptionParser.new do |o|
+  o.on("--output=PATH", "SQLite output path") { |p| output_path = File.expand_path(p) }
+  o.on("--dry-run", "Compute only; do not write") { dry_run = true }
+  o.on("--max-cues=N", Integer) { |n| max_cues = n }
+  o.on("--only=W[,W...]", Array, "Restrict run to these cue lemmas (resolved via word_dict)") do |list|
+    only_words.concat(list)
+  end
+end.parse!
+
+unless File.exist?(output_path)
+  warn "Missing #{output_path}: run bin/precompute-relatedness first."
+  exit 1
+end
+
+puts "Loading dict + rdict..."
+wd = word_dict
+rd = rdict
+puts "  word_dict=#{wd.size} entries, rdict=#{rd.size} rimes"
+
+# Precompute the +common-preferred headword+ universe once so the
+# per-row filter below is just a Set membership check instead of three
+# hash lookups + a +preferred_form+ resolve per word. The runtime's
+# +filter_related_words_to_common_preferred+ is what we're emulating,
+# in bulk: drop entries that aren't in +word_dict+, are too rare, or
+# whose preferred form is something other than themselves. Ratio is
+# typically ~20K survivors out of ~210K +word_dict+ keys, so the Set
+# is cheap to keep resident for the rest of the run.
+puts "Building common-preferred headword set..."
+preferred_set_started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+common_preferred = Set.new
+wd.each_key do |w|
+  next unless word_common_preferred_for_tuple_or_pair?(w)
+  common_preferred << w
+end
+preferred_set_elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC) - preferred_set_started
+puts "  #{common_preferred.size} common-preferred headwords (built in #{format('%.1f', preferred_set_elapsed)}s)"
+
+# 1. Pull every +related#+ row out of the local store: that's our cue
+#    universe. We trust the stored rows as authoritative — they were
+#    already filtered to common-preferred at +bin/precompute-relatedness+
+#    time, and re-filtering 27K rows × ~hundreds of words each through
+#    +word_common_preferred_for_tuple_or_pair?+ here would add minutes
+#    to startup with no observable signal change. We do +.uniq+ as
+#    cheap defence against duplicate entries (older shard merges had
+#    occasional duplicates near the seam).
+#
+#    +bin/precompute-relatedness+ is the source of truth for which
+#    cues we bothered to precompute, and we want symmetric coverage on
+#    +set_related#+ so a runtime hit on +related#+ implies a hit on
+#    +set_related#+.
+puts "Loading related# rows from #{output_path}..."
+load_started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+words_by_cue = {}
+SQLite3::Database.new(output_path, readonly: true).then do |db|
+  begin
+    db.execute("PRAGMA query_only = 1")
+    db.execute("SELECT pk, words FROM related") do |pk, words_json|
+      lemma_key = pk.to_s.delete_prefix("related#")
+      next if lemma_key.empty?
+
+      raw = JSON.parse(words_json)
+      next unless raw.is_a?(Array)
+
+      # Filter to common-preferred headwords (mirrors the runtime's
+      # +filter_related_words_to_common_preferred+ pipeline step). Set
+      # membership here is O(1) per word, not the +preferred_form+
+      # resolve that costs ~3-4 hash lookups; the precomputed
+      # +common_preferred+ Set above pays for itself many times over
+      # across 27K rows × thousands of words each.
+      filtered = raw.select { |w| common_preferred.include?(w) }
+
+      # Add the cue itself so cohorts containing the cue (+cat+ itself
+      # rhymes with +bat+, +hat+, …) participate in the bucket loop.
+      # Runtime mirrors this via +include_self=true+ on the
+      # +find_related_words+ call in +really_find_rhyming_tuples+.
+      filtered << lemma_key if common_preferred.include?(lemma_key)
+      words_by_cue[lemma_key] = filtered.uniq
+    end
+  ensure
+    db.close
+  end
+end
+load_elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC) - load_started
+puts "  #{words_by_cue.size} cues loaded in #{format('%.1f', load_elapsed)}s"
+
+# Optional --only / --max-cues filters before the heavy work. +--only+
+# resolves headwords through +word_dict+ so passing +running+ targets the
+# +run+ row (consistent with +bin/precompute-relatedness+).
+if only_words.any?
+  requested = only_words.flat_map { |s| s.split(",") }.map { |w| w.to_s.strip.downcase }.reject(&:empty?).uniq
+  resolved = requested.map do |w|
+    if wd.key?(w) && (entry = wd[w]) && entry[2] && !entry[2].to_s.strip.empty?
+      entry[2].to_s.strip
+    else
+      w
+    end
+  end.to_set
+  before_only = words_by_cue.size
+  words_by_cue = words_by_cue.select { |cue, _| resolved.include?(cue) }
+  missing = resolved - words_by_cue.keys
+  warn "--only: #{missing.size} requested cues not in related# rows: #{missing.to_a.first(20).inspect}#{missing.size > 20 ? '…' : ''}" if missing.any?
+  puts "--only: limiting to #{words_by_cue.size} of #{before_only} cues."
+end
+
+if max_cues
+  before = words_by_cue.size
+  words_by_cue = words_by_cue.first(max_cues).to_h
+  puts "--max-cues: limited to #{words_by_cue.size} of #{before} cues."
+end
+
+n = words_by_cue.size
+if n.zero?
+  warn "No cues to process."
+  exit 0
+end
+
+# 2. Build the inverted index: word → Set<cue_lemma>. Sized to cover the
+#    union of every cue's relateds (typically ~20K distinct words across
+#    the full universe). The +Set+ payload is small per word (a few
+#    dozen cues on average) and gives O(1) membership checks for the
+#    rime walk below.
+puts "Building inverted index (word -> Set<cue>)..."
+cues_by_word = Hash.new { |h, k| h[k] = Set.new }
+words_by_cue.each do |cue, words|
+  words.each { |w| cues_by_word[w] << cue }
+end
+puts "  inverted index: #{cues_by_word.size} distinct relateds (avg #{(cues_by_word.values.sum(&:size).to_f / [cues_by_word.size, 1].max).round(1)} cues per word)"
+
+# 3. Walk +rdict+ once, accumulating per-cue per-rime buckets. For each
+#    rime cohort, find members that appear in +cues_by_word+ (i.e. are
+#    related to at least one cue), enumerate pairs, and intersect each
+#    pair's cue sets — every shared cue gets both members pushed into
+#    its bucket for this rime.
+#
+#    Why pairs (and not "for each cue, intersect cohort with relateds"):
+#    pairwise scales with the *square of the in-index cohort size*, which
+#    is bounded by the rime structure (cohorts >50 are rare); per-cue
+#    scales with |cues| per rime, which is ~28K. The pair approach is
+#    typically 2-3 orders of magnitude faster on this data.
+puts "Walking #{rd.size} rimes for bucket accumulation..."
+buckets = Hash.new { |h, cue| h[cue] = Hash.new { |hh, rime| hh[rime] = [] } }
+rime_walk_started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+rimes_done = 0
+rd.each do |rime, cohort|
+  rimes_done += 1
+  if (rimes_done % 5000).zero?
+    elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC) - rime_walk_started
+    puts "  [rime walk] #{rimes_done}/#{rd.size} (#{format('%.1f', elapsed)}s elapsed)"
+  end
+
+  in_index = cohort.select { |w| cues_by_word.key?(w) }
+  next if in_index.size < 2
+
+  in_index.combination(2).each do |w1, w2|
+    shared = cues_by_word[w1] & cues_by_word[w2]
+    next if shared.empty?
+    shared.each do |cue|
+      buckets[cue][rime] << w1
+      buckets[cue][rime] << w2
+    end
+  end
+end
+rime_walk_elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC) - rime_walk_started
+puts "Rime walk complete in #{format('%.1f', rime_walk_elapsed)}s — #{buckets.size} cues seeded with at least one bucket."
+
+# 4. Per-cue dedupe + prune. Enable the cross-cue redundancy memo for
+#    the prune sweep — see +$rhyming_tuple_redundant_memo+ over the
+#    +rhyming_tuple_redundant_with?+ definition in +crime.rb+. The memo
+#    is only correct in the en-masse offline pass: the runtime never
+#    sets it, so the predicate stays a pure call on the hot path.
+$rhyming_tuple_redundant_memo = {}
+
+prune_started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+empty_cues = 0
+total_tuples = 0
+cues_done = 0
+results = {}
+words_by_cue.each_key do |cue|
+  cues_done += 1
+  if (cues_done % 1000).zero? || cues_done == n
+    elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC) - prune_started
+    rate = cues_done / [elapsed, 0.001].max
+    eta = ((n - cues_done) / [rate, 0.001].max).to_i
+    eta_str = "#{eta / 3600}h #{(eta % 3600) / 60}m"
+    memo_size = $rhyming_tuple_redundant_memo.size
+    puts "  [prune] #{cues_done}/#{n} (#{format('%.1f', rate)} cues/s, ~#{eta_str} remaining, memo=#{memo_size})"
+  end
+
+  rime_buckets = buckets[cue]
+  raw_tuples = rime_buckets.values.map { |words| words.sort.uniq }
+  raw_tuples.reject! { |t| t.size < 2 || all_identical_rhymes?(t) }
+  raw_tuples.uniq!
+
+  pruned =
+    if raw_tuples.empty?
+      []
+    else
+      prune_suffix_redundant_rhyming_tuples(raw_tuples, cue).reject { |t| t.nil? || t.size < 2 }
+    end
+
+  if pruned.empty?
+    empty_cues += 1
+  else
+    total_tuples += pruned.size
+  end
+  results[cue] = pruned
+end
+
+prune_elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC) - prune_started
+puts "Prune complete in #{format('%.1f', prune_elapsed)}s — #{n} cues, #{n - empty_cues} non-empty (#{total_tuples} tuples total), memo=#{$rhyming_tuple_redundant_memo.size}."
+
+# Free the memo before the write phase so SQLite's page cache has room
+# to breathe. Bigger cue universes have driven the memo into the multi-
+# GB range; we don't need it anymore.
+$rhyming_tuple_redundant_memo = nil
+
+if dry_run
+  puts "--dry-run: not writing rows."
+  exit 0
+end
+
+# 5. Upsert every cue's tuples (including empty arrays — see the +nil+
+#    vs +[]+ contract in +LocalStore#fetch_set_related_tuples+) in a
+#    single transaction. Mirrors +bin/precompute-relatedness+'s write
+#    pattern.
+puts "Writing #{n} set_related rows to #{output_path}..."
+write_started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+Rhymecrime::LocalStore.open_for_write(output_path) do |writer|
+  results.each do |cue, tuples|
+    writer.upsert_set_related(cue, tuples)
+  end
+end
+write_elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC) - write_started
+size_mb = (File.size(output_path).to_f / (1024 * 1024)).round(1)
+puts "Wrote #{n} rows in #{format('%.1f', write_elapsed)}s (#{size_mb} MB total file size)."

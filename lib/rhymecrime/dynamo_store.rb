@@ -9,29 +9,40 @@ require_relative "timing"
 
 module Rhymecrime
   # Read-side adapter over the precomputed +related#<lemma>+ / +score#<lemma>+
-  # partitions in DynamoDB. The lexicon (+word#+) and rime cohort (+rime#+)
-  # partitions were retired once the corresponding +.msgpack+ files got small
-  # enough (~5.5 MB and ~700 KB respectively) to ship in the Lambda deploy
-  # bundle — see +lib/rhymecrime/dict/utils_rhyme.rb+ (+WORD_DICT_MSGPACK_
-  # FILENAME+, +RIME_DICT_MSGPACK_FILENAME+) and +bin/upload-to-dynamodb+
-  # (which now only writes +related#+ / +score#+).
+  # / +set_related#<lemma>+ partitions in DynamoDB. The lexicon (+word#+)
+  # and rime cohort (+rime#+) partitions were retired once the corresponding
+  # +.msgpack+ files got small enough (~5.5 MB and ~700 KB respectively) to
+  # ship in the Lambda deploy bundle — see +lib/rhymecrime/dict/utils_rhyme.rb+
+  # (+WORD_DICT_MSGPACK_FILENAME+, +RIME_DICT_MSGPACK_FILENAME+) and
+  # +bin/upload-to-dynamodb+ (which now writes +related#+, +score#+, and
+  # +set_related#+).
   #
-  # +DynamoRuntime+ is therefore a thin wrapper around two GetItems
-  # (+related#<lemma>+ for the cheap path; +score#<lemma>+ for the lazy
-  # score-aware companion). Mirrors +Rhymecrime::LocalStore+'s API so
-  # +Rhymecrime::Store+ can switch on +DataSource.dynamodb?+ without the
-  # caller knowing which backend is live.
+  # +DynamoRuntime+ is therefore a thin wrapper around three GetItems:
+  # +related#<lemma>+ (cheap words list), +score#<lemma>+ (lazy scores
+  # companion), and +set_related#<lemma>+ (precomputed post-prune
+  # rhyming-tuple list, the runtime hot-path answer for the +set_related+
+  # goal). Mirrors +Rhymecrime::LocalStore+'s API so +Rhymecrime::Store+
+  # can switch on +DataSource.dynamodb?+ without the caller knowing which
+  # backend is live.
   class DynamoRuntime
     include Singleton
+
+    # FIFO upper bound for the in-process +set_related#+ cache. Sized to
+    # cover the full cue universe (~28K headwords precomputed by
+    # +bin/precompute-set-related+) so a long-lived warm Lambda container
+    # eventually serves every cached cue from RAM.
+    DDB_SET_RELATED_CACHE_CAP = (ENV["RHYMECRIME_DDB_SET_RELATED_CACHE_CAP"] || "30000").to_i
 
     class << self
       extend Forwardable
       def_delegators :instance, :fetch_related_words, :fetch_related_tuples,
-                     :find_all_related_precomputed, :find_all_related_precomputed_with_scores
+                     :find_all_related_precomputed, :find_all_related_precomputed_with_scores,
+                     :fetch_set_related_tuples, :has_set_related?
     end
 
     def initialize
       @client = nil
+      @set_related_cache = {}
     end
 
     def client
@@ -138,6 +149,36 @@ module Rhymecrime
       raw.select { |(w, _s)| survivors.include?(w) }
     end
 
+    # Hot-path read for the +set_related+ goal: returns the precomputed
+    # Array of tuples (each a sorted Array of headwords) for +lemma_key+,
+    # or +nil+ when the +set_related#<lemma>+ row doesn't exist for this
+    # cue. Mirrors +LocalStore#fetch_set_related_tuples+ in shape.
+    #
+    # +nil+ vs +[]+ matters: an empty array is a valid "this cue has no
+    # rhyming friends" answer the caller renders normally, while +nil+
+    # signals "we never precomputed this cue" and routes to the
+    # friendly-message branch in +crime.rb+'s goal dispatch
+    # (+explicitly_forbidden?+ → "I don't like that word."; otherwise →
+    # "Oops, I don't know what words are related to <cue>...").
+    #
+    # In-process FIFO cache (+@set_related_cache+) covers warm-container
+    # repeats; cap is +DDB_SET_RELATED_CACHE_CAP+. Negative results are
+    # cached too so a typo'd cue doesn't re-GetItem on every refresh.
+    def fetch_set_related_tuples(lemma_key)
+      return @set_related_cache[lemma_key] if @set_related_cache.key?(lemma_key)
+
+      item = get_item("set_related##{lemma_key}")
+      put_set_related(lemma_key, parse_tuples_attr(item))
+    end
+
+    # Cheap existence check sibling of +fetch_set_related_tuples+. Used by
+    # callers that just need a yes/no answer without paying the JSON parse
+    # of the tuples attribute. Hits the same in-process cache the fetch
+    # does, so the typical "has? then fetch?" pattern only round-trips once.
+    def has_set_related?(lemma_key)
+      !fetch_set_related_tuples(lemma_key).nil?
+    end
+
     # Shared filter step. The lexicon (+lexicon_word_entry+) and rime cohort
     # (+rdict_lookup+) are now in-process from the bundled msgpacks, so the
     # filter is a pure CPU loop — no DDB round-trip. Mirrors
@@ -177,6 +218,47 @@ module Rhymecrime
       parsed.is_a?(Array) ? parsed.map(&:to_s) : []
     rescue JSON::ParserError
       []
+    end
+
+    # Decodes the +tuples+ attribute on +set_related#<lemma>+ items into an
+    # Array of Arrays of words. Returns +nil+ when +item+ is itself nil
+    # (missing row → distinct from "row exists but empty list" so the
+    # runtime can route to the friendly-message branch). Tolerates List-of-
+    # Lists (modern uploads) and JSON-encoded String shapes; a decode
+    # failure on a present row degrades to an empty Array rather than +nil+
+    # (the row exists, we just couldn't read it — render an empty result
+    # rather than the "unknown cue" message that would mislead the user).
+    def parse_tuples_attr(item)
+      return nil unless item
+
+      t = item["tuples"]
+      return [] unless t
+
+      arr =
+        if t.is_a?(Array)
+          t
+        elsif t.is_a?(String) && !t.empty?
+          JSON.parse(t)
+        end
+
+      return [] unless arr.is_a?(Array)
+
+      arr.map { |tup| tup.is_a?(Array) ? tup.map(&:to_s) : [] }.reject(&:empty?)
+    rescue JSON::ParserError
+      []
+    end
+
+    # FIFO-bounded write to +@set_related_cache+. Returns the value so
+    # callers can chain "miss → fetch → cache → return" in one expression.
+    # Capacity matches +DDB_SET_RELATED_CACHE_CAP+; eviction is FIFO
+    # (Ruby Hash insertion order) — same rationale as +put_word+ in the
+    # legacy +word#+ cache: writes are once-per-cue and we don't pay for
+    # access-order bookkeeping when the workload is "scan every cue once
+    # over the container's lifetime."
+    def put_set_related(lemma_key, value)
+      @set_related_cache[lemma_key] = value
+      @set_related_cache.shift while @set_related_cache.size > DDB_SET_RELATED_CACHE_CAP
+      value
     end
 
     def get_item(pk)

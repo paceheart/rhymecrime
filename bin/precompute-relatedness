@@ -39,9 +39,17 @@
 #                          with +--start-after+ / +--max-cues+ / +--incremental+
 #                          (intersection).
 #
-# Ordering: cues are processed frequency-descending, alphabetical within band.
-# This front-loads the high-value common cues so a Ctrl-C partway through still
-# leaves the hub lemmas persisted; the long tail of lower-freq cues runs last.
+# Ordering: cues are processed in descending order of how often they appear as
+# the +cue+ column in +curated/related.csv+ (resolved through the +word_dict+
+# lemma so e.g. +running+ rows fold into +run+'s count), alphabetical within
+# band. This front-loads the cues you've actually invested curation effort in
+# (+cat+ first at ~2K rows, then +pirate+, +food+, +hell+, …) so a +Ctrl-C+
+# partway through leaves the hub lemmas persisted and the long tail of cues
+# nobody has labeled runs last. +word_dict+ frequency is *not* used as a
+# tiebreak: it has only ~5 distinct values and the vast majority of cues
+# share +freq=10+, so it degenerates into "alphabetical-among-the-mass"
+# inside that bucket and provides no useful signal. Cues not in
+# +related.csv+ at all share count 0 and tiebreak alphabetically.
 #
 # Threading notes: the compute is pure-Ruby CPU-bound, so we fork worker processes
 # rather than native threads (MRI's GVL prevents parallel Ruby execution). All
@@ -70,6 +78,7 @@ $LOAD_PATH.unshift File.expand_path("../lib", __dir__)
 
 ENV.delete("RHYMECRIME_DATA_SOURCE")
 
+require "csv"
 require "etc"
 require "optparse"
 require_relative "../lib/rhymecrime/dict/utils_rhyme"
@@ -196,12 +205,41 @@ lemmas = rep.keys.select do |lem|
 
   cue_word?(lem, wd)
 end
-# Process high-frequency cues first so a mid-run Ctrl-C leaves the hub lemmas
-# persisted. +frequency+ is heavily quantized in +word_dict+ (mostly 99 vs
-# ~10), so this degenerates into a two-bucket priority queue with a
-# deterministic alpha sort inside each band (handy for diffing progress logs
-# between runs).
-lemmas.sort_by! { |l| [-wd[l][0].to_i, l] }
+
+# +curated/related.csv+ row count keyed by lemma — used as the primary sort
+# key below. We tally counts per surface first, then fold them into lemmas via
+# the +word_dict+ lemma column so e.g. +running+ rows fold into +run+'s count
+# (matching how the runtime keys +thematically_related?+ lookups). When
+# several surfaces map to the same lemma we take +max+ rather than +sum+,
+# since the same labeled relationship is often duplicated across inflected
+# variants and we'd otherwise double-count curation effort. Built once here
+# so the sort below is O(n log n) hash lookups, not n× CSV scans.
+curated_priority = Hash.new(0)
+related_csv_path = File.expand_path("../curated/related.csv", __dir__)
+if File.exist?(related_csv_path)
+  surface_counts = Hash.new(0)
+  CSV.foreach(related_csv_path, headers: true, encoding: "UTF-8") do |row|
+    surface = row["cue"]&.strip&.downcase
+    surface_counts[surface] += 1 if surface && !surface.empty?
+  end
+  surface_counts.each do |surface, n|
+    entry = wd[surface]
+    lemma_raw = entry && entry[2]
+    lem = (lemma_raw && !lemma_raw.to_s.strip.empty?) ? lemma_raw.to_s.strip : surface
+    curated_priority[lem] = [curated_priority[lem], n].max
+  end
+end
+
+# Sort cues by descending +curated_priority+ — i.e. how often the lemma
+# appears as a +cue+ in +curated/related.csv+ — with an alpha tiebreak. This
+# front-loads the lemmas you've put real curation effort into (+cat+ at ~2K
+# rows, then +pirate+, +food+, +hell+, +music+, +crime+, …) so a mid-run
+# +Ctrl-C+ leaves the lemmas you most care about persisted; lemmas with no
+# +related.csv+ row share count 0 and tiebreak alphabetically. +word_dict+
+# frequency is intentionally not consulted: it has only ~5 distinct values
+# and the vast majority of cues share +freq=10+, so it degenerates into
+# "alphabetical-among-the-mass" inside that bucket and adds no signal.
+lemmas.sort_by! { |l| [-curated_priority[l], l] }
 # Semantically promiscuous lemmas are related to every other word (see
 # +thematically_related?+), so their precompute entry would be the full
 # candidate list — ~20k headwords per cue. The runtime in
@@ -294,7 +332,9 @@ threads = 1 if threads < 1
 # +[acquire, crier, entire, squire]+ — even though pirate itself has no
 # rhyme partners). See +cue_word?+ vs +relatedness_target_word?+ in
 # +lib/rhymecrime/dict/rime.rb+.
+curated_count = lemmas.count { |l| curated_priority[l].positive? }
 puts "Precompute cues: #{n} preferred common lemmas (#{before_n} distinct common lemmas in word_dict before filter; rhymeless cues kept — see comment above)"
+puts "Ordering: by +curated/related.csv+ row count desc, alpha tiebreak (#{curated_count} cues with ≥1 curated row run first; remaining #{n - curated_count} run alphabetically)."
 unless threads_user_supplied
   # Show how the default fell out so it's obvious whether CPU or RAM is the
   # binding constraint; users with more RAM can then override with +--threads+.
@@ -371,8 +411,8 @@ run_shard = lambda do |shard, writer, tag|
         end
       paren = eta_suffix.empty? ? "" : " (#{eta_suffix})"
       count = result ? result[0].size : 0
-      freq = wd[lem] && wd[lem][0]
-      puts "  [#{tag} #{i}/#{total}] #{lem} (freq=#{freq}): #{count} related#{paren}"
+      curated = curated_priority[lem]
+      puts "  [#{tag} #{i}/#{total}] #{lem} (curated_rows=#{curated}): #{count} related#{paren}"
     end
     next unless result && writer
 

@@ -1,9 +1,10 @@
 # frozen_string_literal: true
 
-# store.rb — backend-agnostic facade over the precomputed +related#<lemma>+
-# table. Picks +DynamoRuntime+ in Lambda (+RHYMECRIME_DATA_SOURCE=dynamodb+)
-# and +LocalStore+ (SQLite) everywhere else. Both backends expose the same
-# split API so +related.rb+ doesn't branch on data source:
+# store.rb — backend-agnostic facade over the precomputed +related#<lemma>+,
+# +score#<lemma>+, and +set_related#<lemma>+ partitions. Picks
+# +DynamoRuntime+ in Lambda (+RHYMECRIME_DATA_SOURCE=dynamodb+) and
+# +LocalStore+ (SQLite) everywhere else. Both backends expose the same
+# API so +related.rb+ / +crime.rb+ don't branch on data source:
 #
 #   * cheap (hot path) — +fetch_related_words+, +find_all_related_precomputed+:
 #     pull just the cue's word list, no relatedness_score work. The non-debug
@@ -11,10 +12,16 @@
 #   * lazy (debug, +/similar+, +similarity()+) — +fetch_related_tuples+,
 #     +find_all_related_precomputed_with_scores+: also resolve the parallel
 #     score array (a second GetItem in DDB, a second table SELECT in SQLite).
+#   * +set_related+ — +fetch_set_related_tuples+: returns the precomputed
+#     post-prune rhyming-tuple list for the cue, or +nil+ when the cue
+#     wasn't in the precompute universe. The runtime +set_related+ goal in
+#     +crime.rb+ goes through here; +nil+ routes the caller to the
+#     friendly "Oops, I don't know..." / "I don't like that word."
+#     bad_input branch.
 #
-# The split mirrors the on-disk shape: words and scores live in independent
-# items / tables, so the cheap calls never pay the per-row JSON parse cost
-# of the score array.
+# The split mirrors the on-disk shape: each kind lives in an independent
+# item / table, so the cheap calls never pay the per-row JSON parse cost
+# of data they don't need.
 #
 # Loading: +require "rhymecrime/store"+ pulls in +DataSource+ and only the
 # backend actually selected; the other gem tree stays unloaded. Keeps Lambda's
@@ -88,6 +95,23 @@ module Rhymecrime
       else
         backend.has_related?(lemma_key)
       end
+    end
+
+    # Hot-path read for the +set_related+ goal: returns the precomputed
+    # Array of tuples for +lemma_key+, or +nil+ when no row exists.
+    # Symmetric across backends; both cache the result so the typical
+    # "cache miss → GetItem → cache hit forever" warm-container shape
+    # only round-trips DDB once per cue.
+    def fetch_set_related_tuples(lemma_key)
+      backend.fetch_set_related_tuples(lemma_key)
+    end
+
+    # Cheap existence check for +set_related#<lemma_key>+. Both backends
+    # service this from the same in-process cache that +fetch_set_related_
+    # tuples+ populates — a "has? then fetch?" sequence only round-trips
+    # the backing store once.
+    def has_set_related?(lemma_key)
+      backend.has_set_related?(lemma_key)
     end
   end
 end

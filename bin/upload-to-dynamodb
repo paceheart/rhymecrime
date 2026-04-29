@@ -4,8 +4,15 @@
 # Batch-write into DynamoDB (single-table design, pk partition key). Only the
 # precompute output ships to DDB now:
 #   - rhymecrime_local.sqlite3 (from bin/precompute-relatedness):
-#       + related table         → related#… (cheap path, words only)
-#       + related_scores table  → score#…   (lazy companion, parallel scores)
+#       + related table         → related#…     (cheap path, words only)
+#       + related_scores table  → score#…       (lazy companion, parallel scores)
+#   - rhymecrime_local.sqlite3 (from bin/precompute-set-related):
+#       + set_related table     → set_related#… (post-prune rhyming-tuple list,
+#                                                runtime hot-path answer for the
+#                                                +set_related+ goal — collapses a
+#                                                4-phase live compute into one
+#                                                +GetItem+; see +crime.rb+'s
+#                                                +find_rhyming_tuples+)
 #
 # The lexicon (+word_dict+) and rime cohort (+rime_dict+) live entirely in the
 # Lambda deploy bundle as +word_dict.msgpack+ / +rime_dict.msgpack+ — see
@@ -107,9 +114,9 @@ class ProgressMeter
     msg = if @total && @total > 0
             pct = (100.0 * @count / @total).round(1)
             eta = rate > 0 ? ((@total - @count) / rate).round : 0
-            "  #{@label}: #{@count}/#{@total} (#{pct}%) — #{rate.round} items/sec, #{elapsed.round}s elapsed, ~#{eta}s left"
+            "  #{@label}: #{@count}/#{@total} (#{pct}%) — #{rate.round} items/sec, #{format_duration(elapsed)} elapsed, ~#{format_duration(eta)} left"
           else
-            "  #{@label}: #{@count} items — #{rate.round} items/sec, #{elapsed.round}s elapsed"
+            "  #{@label}: #{@count} items — #{rate.round} items/sec, #{format_duration(elapsed)} elapsed"
           end
     if @tty
       @io.write("\r#{msg}\e[K")
@@ -117,6 +124,15 @@ class ProgressMeter
       @io.write("#{msg}\n")
     end
     @io.flush
+  end
+
+  # Compact "1h02m03s" / "5m32s" / "42s" formatting; seconds are rounded to int.
+  # Drops the minutes/hours prefix when zero so short runs stay readable.
+  def format_duration(seconds)
+    s = seconds.to_i
+    return "#{s}s" if s < 60
+    return "#{s / 60}m#{s % 60}s" if s < 3600
+    "#{s / 3600}h#{(s % 3600) / 60}m#{s % 60}s"
   end
 end
 
@@ -204,6 +220,38 @@ else
     end
     score_meter.finish
     puts "  #{n_scores} score# items"
+
+    # Set_related#<lemma> stream. Independent loop for the same reasons
+    # as +score#+ above: the runtime treats a missing row as the friendly
+    # "Oops, I don't know..." / "I don't like that word." bad_input
+    # branch (in +crime.rb+'s +set_related+ goal dispatch), so we want
+    # every cue precomputed by +bin/precompute-set-related+ to land in
+    # DDB — including the empty-tuples rows that mean "we know this cue
+    # but nothing rhymes among its relateds." Empty +tuples+ values are
+    # legal: DDB stores them as an empty List, and
+    # +DynamoRuntime#parse_tuples_attr+ returns +[]+ (precomputed hit,
+    # not the "unknown cue" fallback).
+    set_related_total = db.get_first_value("SELECT COUNT(*) FROM set_related").to_i
+    set_related_meter = ProgressMeter.new("set_related#", total: set_related_total)
+    n_set_related = 0
+    buf = []
+    db.execute("SELECT pk, tuples FROM set_related") do |pk, tuples_json|
+      tuples = JSON.parse(tuples_json)
+      raise "row missing tuples: #{pk}" unless tuples.is_a?(Array)
+
+      buf << { "pk" => pk, "tuples" => tuples }
+      if buf.size >= 500
+        put_batch(client, table, buf) { |n| set_related_meter.advance(n) }
+        n_set_related += buf.size
+        buf.clear
+      end
+    end
+    unless buf.empty?
+      put_batch(client, table, buf) { |n| set_related_meter.advance(n) }
+      n_set_related += buf.size
+    end
+    set_related_meter.finish
+    puts "  #{n_set_related} set_related# items"
   ensure
     db.close
   end

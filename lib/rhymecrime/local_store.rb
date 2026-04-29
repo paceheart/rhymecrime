@@ -2,15 +2,19 @@
 
 # local_store.rb — SQLite-backed local mirror of the Lambda DynamoDB schema.
 #
-# Only the +related#<lemma>+ partition is mirrored today; words / rimes still
-# load from the in-process Ruby dict in dev. The schema mirrors the DDB
-# split: +related+ holds just +words+ (one row per cue) and +related_scores+
-# holds the parallel +scores+ array. Splitting the two tables keeps the hot
-# read path (+fetch_related_words+) free of a JSON parse for the score array
-# whenever the caller doesn't need it (+/similar+ and +?debug=1+ are the only
-# consumers). +bin/precompute-relatedness+ writes both tables; +bin/upload-
-# to-dynamodb+ streams them out as +related#<lemma>+ and +score#<lemma>+
-# items respectively.
+# Three partitions are mirrored: +related#<lemma>+ (cheap words list),
+# +score#<lemma>+ (lazy parallel scores), and +set_related#<lemma>+
+# (post-prune rhyming-tuple list, the runtime hot-path answer for the
+# +set_related+ goal). Words / rimes still load from the in-process Ruby
+# dict in dev.
+#
+# Splitting +related+ from +related_scores+ keeps the cheap read path
+# (+fetch_related_words+) free of a JSON parse for the score array
+# whenever the caller doesn't need it (+/similar+ and +?debug=1+ are the
+# only consumers). +bin/precompute-relatedness+ writes both;
+# +bin/precompute-set-related+ writes the +set_related+ table after; and
+# +bin/upload-to-dynamodb+ streams all three out as +related#<lemma>+,
+# +score#<lemma>+, and +set_related#<lemma>+ items respectively.
 #
 # Not loaded in Lambda runtime: +Rhymecrime::Store+ picks +DynamoRuntime+
 # when +RHYMECRIME_DATA_SOURCE=dynamodb+ and only requires this file otherwise.
@@ -31,7 +35,8 @@ module Rhymecrime
       extend Forwardable
       def_delegators :instance, :fetch_related_tuples, :fetch_related_words,
                      :find_all_related_precomputed, :find_all_related_precomputed_with_scores,
-                     :has_related?, :available?, :clear_session_cache!
+                     :has_related?, :fetch_set_related_tuples, :has_set_related?,
+                     :available?, :clear_session_cache!
 
       def database_path
         generated_dict_path(LOCAL_STORE_FILENAME)
@@ -98,6 +103,10 @@ module Rhymecrime
           pk TEXT PRIMARY KEY,
           scores TEXT NOT NULL
         ) WITHOUT ROWID;
+        CREATE TABLE IF NOT EXISTS set_related (
+          pk TEXT PRIMARY KEY,
+          tuples TEXT NOT NULL
+        ) WITHOUT ROWID;
       SQL
 
       def initialize(db)
@@ -111,6 +120,10 @@ module Rhymecrime
           "ON CONFLICT(pk) DO UPDATE SET scores = excluded.scores"
         )
         @delete_scores = db.prepare("DELETE FROM related_scores WHERE pk = ?")
+        @upsert_set_related = db.prepare(
+          "INSERT INTO set_related (pk, tuples) VALUES (?, ?) " \
+          "ON CONFLICT(pk) DO UPDATE SET tuples = excluded.tuples"
+        )
       end
 
       # +words+ and +scores+ are parallel arrays. Pass +nil+ or +[]+ for
@@ -126,6 +139,21 @@ module Rhymecrime
         else
           @delete_scores.execute(pk)
         end
+      end
+
+      # Stash the post-prune rhyming-tuple list for +lemma_key+. +tuples+ is
+      # an Array of Arrays — each inner Array is a sorted list of headwords
+      # that rhyme with each other and are all related to the cue. Mirrors
+      # the runtime contract of +really_find_rhyming_tuples+ in +crime.rb+:
+      # tuples are sorted-uniq, contain at least 2 entries, and are
+      # cross-tuple-redundancy-pruned. Empty +tuples+ array is a valid
+      # "this cue has no rhyming friends" answer (rare but real — e.g.
+      # cues with relateds that have no shared rime cohorts) and gets
+      # written as such; the reader distinguishes "empty tuples" from
+      # "no row" via +has_set_related?+.
+      def upsert_set_related(lemma_key, tuples)
+        pk = "set_related##{lemma_key}"
+        @upsert_set_related.execute(pk, JSON.generate(tuples))
       end
 
       # Attach +shard_path+ as a secondary database and bulk-copy its
@@ -146,6 +174,10 @@ module Rhymecrime
             "INSERT OR REPLACE INTO related_scores (pk, scores) " \
             "SELECT pk, scores FROM shard.related_scores"
           )
+          @db.execute(
+            "INSERT OR REPLACE INTO set_related (pk, tuples) " \
+            "SELECT pk, tuples FROM shard.set_related"
+          )
         ensure
           @db.execute("DETACH DATABASE shard")
         end
@@ -153,12 +185,24 @@ module Rhymecrime
     end
 
     def clear_session_cache!
-      # Two caches so the cheap path (+fetch_related_words+) doesn't pay the
-      # parse cost or memory of the score array, and the lazy path
-      # (+fetch_related_tuples+) can pull scores once and keep them resident
-      # for repeat lookups (e.g. the +/similar+ page sorting).
+      # Three caches: +@words_cache+ is the cheap +fetch_related_words+ path,
+      # +@scores_cache+ is the lazy +fetch_related_tuples+ companion, and
+      # +@set_related_cache+ is the precomputed-tuples cache. They're
+      # separate so the cheap path doesn't pay the parse cost or memory of
+      # data it doesn't need, and so a row absent from one table (e.g. a
+      # lemma with +related+ but no precomputed +set_related+ — which
+      # shouldn't happen post-precompute but is harmless mid-deploy)
+      # caches its emptiness independently of the others.
+      #
+      # +@set_related_table_exists+ is a per-DB-handle flag, not a per-
+      # request one (the schema doesn't change mid-process); we reset
+      # it here so test fixtures that swap +@db+ between examples pick
+      # up the new file's schema instead of carrying the previous file's
+      # detection result.
       @words_cache = {}
       @scores_cache = {}
+      @set_related_cache = {}
+      @set_related_table_exists = nil
     end
 
     def initialize
@@ -263,6 +307,69 @@ module Rhymecrime
       !db.get_first_value("SELECT 1 FROM related WHERE pk = ? LIMIT 1", "related##{lemma_key}").nil?
     rescue SQLite3::Exception
       false
+    end
+
+    # Hot-path read for the runtime +set_related+ goal: returns the
+    # precomputed Array of tuples (each a sorted Array of headwords) for
+    # +lemma_key+, or +nil+ when no row exists for this cue. Mirrors
+    # +DynamoRuntime.fetch_set_related_tuples+ in shape so the +Store+
+    # facade can dispatch transparently.
+    #
+    # +nil+ vs +[]+ matters: an empty array is a valid "this cue survived
+    # the cue universe filter but has no rhyming friends" answer that the
+    # caller will render normally, while +nil+ signals "we never
+    # precomputed this cue" and routes to the friendly-message branch in
+    # +crime.rb+'s goal dispatch.
+    def fetch_set_related_tuples(lemma_key)
+      return @set_related_cache[lemma_key] if @set_related_cache.key?(lemma_key)
+      return @set_related_cache[lemma_key] = nil unless available?
+      # During the migration window after the +set_related+ schema lands
+      # but before +bin/precompute-set-related+ has populated the table,
+      # the schema upgrade hasn't happened on the dev's local SQLite
+      # file yet. Treat that as "no row" silently — the live-compute
+      # fallback in +crime.rb+'s +find_rhyming_tuples+ still produces
+      # results — and only reach for the warn-on-corruption branch on
+      # real read failures.
+      return @set_related_cache[lemma_key] = nil unless set_related_table_exists?
+
+      row = db.get_first_row("SELECT tuples FROM set_related WHERE pk = ?", "set_related##{lemma_key}")
+      return @set_related_cache[lemma_key] = nil unless row
+
+      parsed = JSON.parse(row[0])
+      @set_related_cache[lemma_key] = parsed.is_a?(Array) ? parsed : nil
+    rescue JSON::ParserError, SQLite3::Exception => e
+      warn "local_store: fetch_set_related_tuples(#{lemma_key.inspect}) failed: #{e.message}"
+      @set_related_cache[lemma_key] = nil
+    end
+
+    # Cheap existence check sibling of +has_related?+. Used by the runtime
+    # to short-circuit goal dispatch with a friendly message when no row
+    # is present, without paying the JSON parse of +fetch_set_related_tuples+.
+    def has_set_related?(lemma_key)
+      return false unless available?
+      return false unless set_related_table_exists?
+
+      !db.get_first_value("SELECT 1 FROM set_related WHERE pk = ? LIMIT 1", "set_related##{lemma_key}").nil?
+    rescue SQLite3::Exception
+      false
+    end
+
+    # Detected once per process: whether the +set_related+ table is
+    # present in the local SQLite. Pre-precompute-set-related checkouts
+    # have a +rhymecrime_local.sqlite3+ from an earlier
+    # +bin/precompute-relatedness+ run with only +related+ /
+    # +related_scores+; we don't want to spam stderr with a "no such
+    # table" warning for every cue until the user runs the new
+    # precompute. The check itself is one cheap +sqlite_master+ lookup.
+    def set_related_table_exists?
+      return @set_related_table_exists unless @set_related_table_exists.nil?
+
+      @set_related_table_exists =
+        !db.get_first_value(
+          "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'set_related' LIMIT 1"
+        ).nil?
+    rescue SQLite3::Exception
+      @set_related_table_exists = false
     end
 
     # Mirror of +DynamoRuntime.find_all_related_precomputed+: returns the word

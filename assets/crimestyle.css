@@ -95,17 +95,14 @@ a:visited {
     color: #1ac0d0;
 }
 
-/* Stop words ("the", "of", "and", ...) are rendered without an +<a>+ wrap
-   in +print_word+ — clicking through to a page that immediately
-   short-circuits with the "semantically promiscuous" message would be a
-   dead-end UX. The visual signal (no link) needs the color signal too:
-   inside the surrounding +.output_p+ container the cyan +#22dce1+
-   inherits down to bare text, so without an override stop words look
-   identical to clickable links. +#eeeefa+ matches the heading/label
-   color elsewhere on the page (+.crime_main+, +h1+, +.fieldlabel+) —
-   the "non-actionable static text" tier. */
+/* Semantically promiscuous words (+perhaps+, +however+, ...) are rendered
+   without an +<a>+ wrap in +print_word+ (lib/rhymecrime/crime.rb): clicking
+   would land on relatedness columns that +frontend.rb+ short-circuits — dead-end
+   UX. The visual signal (no link) needs a color cue: inside +.output_p+ cyan
+   +#22dce1+ inherits to bare text, so without an override they'd match links.
+   Gray +#bbb+ reads clearly against the pink body (+#ffdce1+). */
 .stop-word {
-    color: #eeeefa;
+    color: #59a9ab
 }
 
 /* Inline thumbs-up / thumbs-down widget rendered after every "related word"

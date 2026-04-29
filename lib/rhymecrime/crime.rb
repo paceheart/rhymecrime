@@ -67,6 +67,7 @@ def emit_line(string = "")
 end
 
 require_relative "related"
+require_relative "feedback_store"
 require_relative "dynamo_store" if Rhymecrime::DataSource.dynamodb?
 
 #
@@ -758,7 +759,37 @@ end
 # absent base that +Inflect.match_suffix_kind+ can't directly bridge
 # (+booting / fluting+ vs +booted / fluted / fruited+, +prompt / romped / swamped+ vs
 # +prompts / romps / swamps+).
+# Optional cross-cue memoization layer for +rhyming_tuple_redundant_with?+.
+# Populated only by +bin/precompute-set-related+ (which sets it to a fresh
+# Hash before kicking off the en-masse prune loop). Runtime never sets it,
+# so the predicate stays a pure function call on the hot path. The keys are
+# +[ear, tup]+ array pairs; Ruby Hashes hash arrays-of-strings naturally,
+# and tuples in this codebase are already sorted before they reach
+# +prune_suffix_redundant_rhyming_tuples+, so the same pair always normalizes
+# to the same key without explicit canonicalization.
+#
+# Per the doc comment on +prune_cross_tuple_redundancy_sweep+:
+# "+rhyming_tuple_redundant_with?+, whose entire transitive call graph is
+# pure over +(ear, tup)+ (no +focal_word+ dependency anywhere). Safe to
+# share a +rhyming_tuple_redundant_with?+ memoization layer across cues."
+# That's exactly what this memo exploits: in the en-masse precompute, the
+# same tuple-pair recurs across many cues' tuple sets (animal / transport /
+# emotion clusters share heavily) — collapsing the redundant calls drops
+# the prune phase from ~8h to ~10min across the full ~28K cue universe.
+$rhyming_tuple_redundant_memo = nil
+
 def rhyming_tuple_redundant_with?(ear, tup)
+  if $rhyming_tuple_redundant_memo
+    key = [ear, tup]
+    return $rhyming_tuple_redundant_memo[key] if $rhyming_tuple_redundant_memo.key?(key)
+    result = really_rhyming_tuple_redundant_with?(ear, tup)
+    $rhyming_tuple_redundant_memo[key] = result
+    return result
+  end
+  really_rhyming_tuple_redundant_with?(ear, tup)
+end
+
+def really_rhyming_tuple_redundant_with?(ear, tup)
   if ear.size == tup.size
     return true if rhyming_tuple_suffix_redundant_with?(ear, tup)
     kinds = rhyming_tuples_share_hidden_base(ear, tup)
@@ -1398,14 +1429,31 @@ end
 
 $rhyming_tuple_cache = {}
 def find_rhyming_tuples(input_rel1, common_only = false)
-  # Skip the cache when +$debug_pruning+ is true: the pruner side-effects
-  # +$debug_pruned_tuples+ (a per-request Set consulted by +print_tuple+ for the
-  # grey pruning color), and returning cached results would bypass that population,
-  # leaving retained-pruned tuples un-colored. Debug requests are rare so recomputing
-  # is fine. We also avoid populating the cache from debug-mode results, since those
-  # include tuples that non-debug callers expect to have been dropped.
+  # Skip the precomputed-store and LRU paths when +$debug_pruning+ is true:
+  # the pruner side-effects +$debug_pruned_tuples+ (a per-request Set consulted
+  # by +print_tuple+ for the grey pruning color), and returning cached results
+  # (whether from +$rhyming_tuple_cache+ or the precomputed +set_related#+ row)
+  # would bypass that population, leaving retained-pruned tuples un-colored.
+  # Debug requests are rare so recomputing is fine. We also avoid populating
+  # +$rhyming_tuple_cache+ from debug-mode results, since those include tuples
+  # that non-debug callers expect to have been dropped.
   return really_find_rhyming_tuples(input_rel1, common_only) if $debug_pruning
   return really_find_rhyming_tuples(input_rel1, common_only) if $disable_cross_tuple_redundancy_pruning
+
+  # Precomputed-store path: +bin/precompute-set-related+ stashes the fully
+  # post-pruned tuple list for every cue lemma in the cue universe. The Lambda
+  # runtime (+DataSource.dynamodb?+ → +store_authoritative?+) treats a missing
+  # row as "this cue isn't in our common-word set" and returns +nil+ here so
+  # the goal-dispatch branch in +rhymecrime+ can render the friendly
+  # bad_input message ("I don't like that word." for forbid_list cues, "Oops,
+  # I don't know what words are related to <cue>..." otherwise). Local-dev
+  # (+LocalStore+, non-authoritative) falls through to the live-compute path
+  # so spec runs and pre-precompute checkouts still produce results.
+  if Rhymecrime::Store.available?
+    cached = Rhymecrime::Store.fetch_set_related_tuples(lemma(input_rel1))
+    return cached if cached
+    return nil if store_authoritative?
+  end
 
   lru_cache_fetch($rhyming_tuple_cache, [input_rel1, common_only], RHYMING_LRU_CACHE_SIZE) do
     really_find_rhyming_tuples(input_rel1, common_only)
@@ -1710,7 +1758,7 @@ def print_word(word, focal_word=false, cue: nil)
   # them rhyme is fine, but linking them is not. (Unrhymable stop words like
   # "the"/"a"/"you'll" are deleted from +word_dict+ at build time, so they
   # never reach this render path.) The +.stop-word+ CSS class below paints
-  # them in the "non-actionable text" color (+#eeeefa+); without it they'd
+  # them gray (+#bbb+); without it they'd
   # inherit the +.output_p+ container's cyan and look identical to clickable
   # links.
   is_promiscuous = semantically_promiscuous?(word)
@@ -1718,8 +1766,9 @@ def print_word(word, focal_word=false, cue: nil)
   # Decided here (not at +emit_relatedness_feedback_widget+'s call site) so the
   # +<nobr>+ wrapper below uses exactly the same predicate as the widget itself
   # — we never want a +<nobr>+ that wraps just the word with no thumbs to glue
-  # it to. Predicate matches the original guard verbatim.
-  emit_thumbs = cue && !cue.to_s.empty? && cue != word
+  # it to. Predicate matches the original guard verbatim, plus suppression for
+  # semantically promiscuous words (no meaningful relatedness vote).
+  emit_thumbs = cue && !cue.to_s.empty? && cue != word && !is_promiscuous
   # +<nobr>+ keeps the word + (optional similarity span) + (optional similarity
   # %) + thumbs widget on the same display line. Without it, the inline span
   # for the word and the inline span for +.feedback-thumbs+ are independent
@@ -1761,8 +1810,10 @@ def print_word(word, focal_word=false, cue: nil)
     print_html_percent_similarity(display_word, focal_word)
   end
   # Inline thumbs-up / thumbs-down for relatedness feedback. Suppressed when
-  # +cue+ is nil (no relatedness column, e.g. plain rhymes), or when the
-  # rendered word is the cue itself (relatedness to self is uninteresting).
+  # +cue+ is nil (no relatedness column, e.g. plain rhymes), when the
+  # rendered word is the cue itself (relatedness to self is uninteresting), or
+  # when the word is semantically promiscuous (+thematically_related?+ treats those
+  # pairs as trivially related, so a vote would be meaningless).
   # The data attributes carry the *underscore* surface so what we POST to
   # +/feedback+ matches the shape of +curated/related.csv+'s +cue+/+related+
   # columns; +feedback.js+ wires the click → fetch and uses +sessionStorage+
@@ -1867,9 +1918,53 @@ def rhymecrime(word1, word2, goal, output_format='text', debug_mode=false)
     result, dregs = filter_out_rare_words(filter_out_rhymeless_words(find_related_words(word1, false)))
     result_type = :words
   when "set_related"
-    result_header = "Rhyming word sets related to " + focal_word(word1) + header_eol
-    result, dregs = filter_out_rare_tuples(find_rhyming_tuples(word1))
-    result_type = :tuples
+    tuples = find_rhyming_tuples(word1)
+    if tuples.nil?
+      # +find_rhyming_tuples+ returns +nil+ only when the precomputed-store
+      # path is authoritative (Lambda) and the cue has no +set_related#<lemma>+
+      # row. Three reasons the cue might land here, each with its own copy:
+      #
+      #   * +explicitly_forbidden?(word1)+ — the word is on +forbid_list.txt+,
+      #     deleted from +word_dict+ at build time, and the precompute pass
+      #     deliberately skipped it. Curt response — we know about that word
+      #     and chose not to serve it.
+      #   * +unrhymable_stop_word?(word1) || semantically_promiscuous?(word1)+
+      #     — the word is a function word ("the", "of") or a generic
+      #     emotional/discourse term ("nice", "good") that we explicitly
+      #     decline to compute relateds for. The +set_related+ goal is the
+      #     one place we want the *union* of those two lists: unrhymable
+      #     stop words are deleted from +word_dict+ at build (so they
+      #     never get a precompute row); semantically-promiscuous words
+      #     are also caught upfront by +compute_column_for_goal+ in
+      #     +frontend.rb+, but we keep the predicate here as the
+      #     authoritative answer when callers reach +rhymecrime+ via paths
+      #     that bypass the upfront filter (CLI tools, eval scripts). The
+      #     message matches +promiscuous_message+ in +frontend.rb+ so the
+      #     two upstream paths render identically.
+      #   * otherwise — the cue is rare / outside the precomputed cue
+      #     universe. Apologetic response; the "I'll make a note" trailer
+      #     is literal — +FeedbackStore.record_uncomputed_cue!+ writes a
+      #     row tagged with +UNCOMPUTED_RELATED_TOKEN+ so the next
+      #     precompute round can surface and add the most-asked-about
+      #     uncomputed cues. Soft-fails on backend trouble (see the
+      #     rescue in +FeedbackStore.record!+) so a flaky feedback writer
+      #     never 500s the user-visible response.
+      result_header =
+        if explicitly_forbidden?(word1)
+          "I don't like that word."
+        elsif unrhymable_stop_word?(word1) || semantically_promiscuous?(word1)
+          "\"#{word1}\" is semantically promiscuous; can't compute related words"
+        else
+          Rhymecrime::FeedbackStore.record_uncomputed_cue!(cue: word1)
+          "Oops, I don't know what words are related to #{focal_word(word1)}, sorry! I'll make a note."
+        end
+      result, dregs = [], []
+      result_type = :bad_input
+    else
+      result_header = "Rhyming word sets related to " + focal_word(word1) + header_eol
+      result, dregs = filter_out_rare_tuples(tuples)
+      result_type = :tuples
+    end
   when "pair_related"
     if(word1 == "" or word2 == "")
       result_header = "I need two words to find rhyming pairs. For example, Word 1 = <span class='focal_word'>crime</span>, Word 2 = <span class='focal_word'>heaven</span>"

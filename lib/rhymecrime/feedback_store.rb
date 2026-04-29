@@ -43,7 +43,23 @@ module Rhymecrime
     # distinguish "user retracted" from "user never voted" — useful if we
     # want to weight retracted votes differently when training, or surface
     # ambivalence in disagreement-resolution UIs.
-    VALID_VERDICTS = %w[up down undo].freeze
+    #
+    # +uncomputed+: not a user-driven click. Logged by the runtime when a
+    # +set_related+ request lands on a cue that has no precomputed
+    # +set_related#<lemma>+ row in the authoritative store (i.e. it's
+    # outside the cue universe +bin/precompute-set-related+ covered).
+    # See +record_uncomputed_cue!+ below; the +"[uncomputed]"+ marker
+    # sentinel goes in the +related+ column so importers can grep
+    # +pk = "feedback#<cue>#[uncomputed]"+ to surface the long tail of
+    # cues users actually ask about, and feed that list to the next
+    # precompute round.
+    VALID_VERDICTS = %w[up down undo uncomputed].freeze
+
+    # Sentinel placed in the +related+ slot of an +uncomputed+-verdict row.
+    # Bracketed so it can never collide with a real headword (no real
+    # vocabulary item starts with +[+) and is trivially grep-friendly when
+    # exporting feedback for the next precompute pass.
+    UNCOMPUTED_RELATED_TOKEN = "[uncomputed]"
 
     # Top-level entry point. Returns true on success, false on a (logged)
     # write failure — the UI treats either as "click registered" so a flaky
@@ -78,6 +94,33 @@ module Rhymecrime
     rescue StandardError => e
       warn "feedback_store: dropped #{cue.inspect}/#{related.inspect}=#{verdict.inspect}: #{e.class}: #{e.message}"
       false
+    end
+
+    # Log an "uncomputed cue" event — the runtime asked +Store.fetch_set_
+    # related_tuples+ for a cue that has no precomputed row, so the user
+    # got the friendly "Oops, I don't know what words are related to X,
+    # sorry! I'll make a note." message in +crime.rb+'s +set_related+
+    # goal dispatch. The "make a note" half of that message is literally
+    # this call: it emits one feedback row whose +cue+ is the user's
+    # surface input and whose +related+ slot is +UNCOMPUTED_RELATED_TOKEN+,
+    # so a follow-up export step (+bin/export-feedback-from-dynamodb+,
+    # +bin/augment-related-from-feedback+) can rank the most-asked-about
+    # uncomputed cues and add them to the next precompute round's cue
+    # universe.
+    #
+    # Soft-fails by design (mirrors +record!+'s rescue): a flaky feedback
+    # backend should not surface as a 500 on the user-visible
+    # +set_related+ response, which already has a graceful copy path. The
+    # row is best-effort observability, not part of the contract.
+    def record_uncomputed_cue!(cue:, ip: nil, user_agent: nil, session: nil)
+      record!(
+        cue: cue,
+        related: UNCOMPUTED_RELATED_TOKEN,
+        verdict: "uncomputed",
+        ip: ip,
+        user_agent: user_agent,
+        session: session,
+      )
     end
 
     def backend

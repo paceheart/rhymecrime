@@ -149,4 +149,108 @@ RSpec.describe Rhymecrime::LocalStore do
       expect(frog_scores).to be_nil
     end
   end
+
+  describe "set_related table" do
+    # +set_related#<lemma>+ is the precomputed post-prune rhyming-tuple list
+    # the runtime hot path reads (see +Rhymecrime::Store.fetch_set_related_
+    # tuples+). Schema lives in its own table so a missing-row miss
+    # (+fetch_set_related_tuples+ returns +nil+) cleanly distinguishes
+    # "this cue isn't in our universe — show the friendly bad_input
+    # message" from "this cue exists but happened to have no rhyming
+    # friends — render an empty result list."
+    it "creates a +set_related+ table with the documented schema" do
+      described_class.open_for_write(db_path) do |writer|
+        writer.upsert_set_related("cat", [%w[bat hat], %w[mouse louse]])
+      end
+
+      raw = SQLite3::Database.new(db_path, readonly: true)
+      tables = raw.execute("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name").flatten
+      expect(tables).to include("set_related")
+      cols = raw.execute("PRAGMA table_info(set_related)").map { |r| r[1] }
+      expect(cols).to contain_exactly("pk", "tuples")
+      raw.close
+    end
+
+    describe "Reader cache" do
+      before do
+        allow(described_class).to receive(:database_path).and_return(db_path)
+        described_class.instance.instance_variable_set(:@db, nil)
+        described_class.instance.clear_session_cache!
+      end
+
+      after do
+        described_class.instance.instance_variable_set(:@db, nil)
+        described_class.instance.clear_session_cache!
+      end
+
+      it "round-trips the tuples list" do
+        described_class.open_for_write(db_path) do |writer|
+          writer.upsert_set_related("cat", [%w[bat hat], %w[mouse louse]])
+        end
+
+        expect(described_class.fetch_set_related_tuples("cat")).to eq([%w[bat hat], %w[mouse louse]])
+        expect(described_class.has_set_related?("cat")).to be true
+      end
+
+      it "round-trips an empty tuples list as +[]+ (precomputed-but-no-rhymes contract)" do
+        # Empty arrays are valid: the runtime renders them as a
+        # precomputed hit with no tuples, distinct from the +nil+ "unknown
+        # cue" fallback that triggers the friendly message.
+        described_class.open_for_write(db_path) do |writer|
+          writer.upsert_set_related("lonely_cue", [])
+        end
+
+        expect(described_class.fetch_set_related_tuples("lonely_cue")).to eq([])
+        expect(described_class.has_set_related?("lonely_cue")).to be true
+      end
+
+      it "returns +nil+ when the cue is absent (signal for the friendly-message branch)" do
+        described_class.open_for_write(db_path) do |writer|
+          writer.upsert_set_related("cat", [%w[bat hat]])
+        end
+
+        expect(described_class.fetch_set_related_tuples("missing_cue")).to be_nil
+        expect(described_class.has_set_related?("missing_cue")).to be false
+      end
+
+      it "caches both hits and misses across calls without re-reading SQLite" do
+        described_class.open_for_write(db_path) do |writer|
+          writer.upsert_set_related("cat", [%w[bat hat]])
+        end
+
+        # Prime the cache: one hit, one miss.
+        expect(described_class.fetch_set_related_tuples("cat")).to eq([%w[bat hat]])
+        expect(described_class.fetch_set_related_tuples("missing_cue")).to be_nil
+
+        # Now break the underlying handle so any second SQLite read raises;
+        # the cache must satisfy both calls without going to disk.
+        described_class.instance.instance_variable_set(:@db, nil)
+        allow(described_class.instance).to receive(:db).and_raise(SQLite3::Exception.new("forced"))
+
+        expect(described_class.fetch_set_related_tuples("cat")).to eq([%w[bat hat]])
+        expect(described_class.fetch_set_related_tuples("missing_cue")).to be_nil
+      end
+    end
+
+    it "merge_shard copies set_related rows alongside related / related_scores" do
+      shard_path = File.join(tmpdir, "shard.sqlite3")
+      described_class.open_for_write(shard_path) do |w|
+        w.upsert_set_related("cat", [%w[bat hat]])
+        w.upsert_set_related("frog", [])
+      end
+
+      described_class.open_for_write(db_path, transaction: false) do |w|
+        w.upsert_set_related("cat", [%w[mat]]) # later merge should overwrite
+        w.merge_shard(shard_path)
+      end
+
+      raw = SQLite3::Database.new(db_path, readonly: true)
+      cat_tuples = JSON.parse(raw.get_first_value("SELECT tuples FROM set_related WHERE pk = 'set_related#cat'"))
+      frog_tuples = JSON.parse(raw.get_first_value("SELECT tuples FROM set_related WHERE pk = 'set_related#frog'"))
+      raw.close
+
+      expect(cat_tuples).to eq([%w[bat hat]])
+      expect(frog_tuples).to eq([])
+    end
+  end
 end
