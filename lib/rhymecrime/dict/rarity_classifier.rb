@@ -46,6 +46,7 @@
 require "json"
 require "fileutils"
 require_relative "rarity_signals"
+require_relative "rarity_curated_overrides"
 require_relative "utils_rhyme"
 require_relative "constants"
 
@@ -446,6 +447,14 @@ def rarity_rescore_and_dump!(hash, **ctx_kwargs)
   clf = rarity_classifier
   return if clf.nil? && !dump_enabled
 
+  # Load + announce the curated/rarity.csv overrides before the rescore loop
+  # so the per-word override lookup is a single hash probe and the operator
+  # sees the override coverage in the build log alongside the classifier
+  # rescore counts. Skipped entirely when the classifier itself is disabled
+  # (nothing to override) — the dump-only path doesn't need or use overrides.
+  overrides = clf ? rarity_curated_overrides : {}
+  announce_rarity_curated_overrides! if clf
+
   cn_adj, cn_loaded = rarity_conceptnet_adjacency_for_build
   ctx = RarityContext.build(
     usf_associations: rarity_usf_associations_for_build,
@@ -456,6 +465,9 @@ def rarity_rescore_and_dump!(hash, **ctx_kwargs)
   rescored = 0
   deleted = 0
   skipped_sentinel = 0
+  override_applied = 0
+  override_rescored = 0
+  override_deleted = 0
 
   dump_file = nil
   if dump_enabled
@@ -489,6 +501,31 @@ def rarity_rescore_and_dump!(hash, **ctx_kwargs)
 
       next if clf.nil?
 
+      # Curated override: short-circuit the classifier when the word has an
+      # unambiguous verdict in +curated/rarity.csv+ (see
+      # +rarity_curated_overrides.rb+). Bypasses both the sentinel-freq skip
+      # (the CSV is authoritative — if a curator marked a sentinel-freq word
+      # +rare+, we trust that more than the +99+ floor that put it there) and
+      # the classifier itself.
+      if (verdict = overrides[word])
+        override_applied += 1
+        new_freq = CURATED_RARITY_OVERRIDE_FREQ[verdict]
+        if verdict == :forbidden
+          dict_trace_puts(word, "rarity_classifier_rescore: DELETE (curated override :forbidden, was freq=#{entry[0]})") if dict_trace_word?(word)
+          hash.delete(word)
+          deleted += 1
+          override_deleted += 1
+        elsif entry[0] != new_freq
+          dict_trace_puts(word, "rarity_classifier_rescore: curated override #{entry[0]} -> #{new_freq} (cat=#{verdict})") if dict_trace_word?(word)
+          entry[0] = new_freq
+          rescored += 1
+          override_rescored += 1
+        else
+          dict_trace_puts(word, "rarity_classifier_rescore: curated override kept freq=#{entry[0]} (cat=#{verdict})") if dict_trace_word?(word)
+        end
+        next
+      end
+
       if entry[0] > RARITY_CLASSIFIER_RESCORE_MAX_FREQ
         skipped_sentinel += 1
         dict_trace_puts(word, "rarity_classifier_rescore: skip (sentinel freq=#{entry[0]} > #{RARITY_CLASSIFIER_RESCORE_MAX_FREQ})") if dict_trace_word?(word)
@@ -520,6 +557,9 @@ def rarity_rescore_and_dump!(hash, **ctx_kwargs)
 
   if clf
     puts "rarity classifier: rescored #{rescored} entries, deleted #{deleted} forbidden entries, skipped #{skipped_sentinel} sentinel-freq entries"
+    if override_applied > 0
+      puts "rarity classifier: of those, #{override_applied} came from curated/rarity.csv overrides (#{override_rescored} rescored, #{override_deleted} deleted)"
+    end
   end
   if dump_enabled
     puts "rarity signals dumped to #{dump_path}"
