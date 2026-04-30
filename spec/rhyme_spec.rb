@@ -191,7 +191,9 @@ describe 'RHYMES' do
     ought_not_rhyme 'operate', 'teleoperate' # tele-
     ought_not_rhyme 'logical', 'teleological' # teleo-
     ought_not_rhyme 'enemy', 'archenemy' # arch-
+    ought_not_rhyme 'enemies', 'archenemies' # arch-
     ought_not_rhyme 'villain', 'archvillain' # arch-
+    ought_not_rhyme 'villains', 'archvillains' # arch-
     ought_not_rhyme 'distribution', 'redistribution' # re-
     ought_not_rhyme 'loading', 'unloading' # un-
     ought_not_rhyme 'loading', 'reloading' # re-
@@ -279,6 +281,7 @@ describe 'RHYMES' do
     ought_not_rhyme 'bisect', 'intersect'
     ought_not_rhyme 'train', 'retrain'
     ought_not_rhyme 'derive', 'rederive'
+    ought_not_rhyme 'distribute', 'redistribute'
     context "unless they're not derivationally related" do
       # Nested so +before(:each)+ below does not skip these: hooks apply to the whole group.
       context "pairs that do not need pseudo-prefix deferral" do

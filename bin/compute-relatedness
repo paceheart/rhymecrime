@@ -346,6 +346,12 @@ unless threads_user_supplied
 end
 puts "Scanning #{n} lemmas → #{dry_run ? '(dry-run, no file)' : output_path} with #{threads} worker#{threads == 1 ? '' : 's'} (SQLite row only when ≥1 related word)"
 
+# Eager-load + announce curated/related.csv overrides before fork so workers
+# inherit the populated map via copy-on-write rather than each rebuilding it
+# from the CSV at first scan. Default ON; disable with RHYMECRIME_RELATED_CSV_OVERRIDE=0.
+curated_relatedness_overrides
+announce_curated_relatedness_overrides!
+
 RelatedWords.reset_caches!
 
 # Wall-clock timer covers warm-up + scan + merge; reported at the end alongside

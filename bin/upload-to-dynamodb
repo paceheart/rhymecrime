@@ -2,17 +2,25 @@
 # frozen_string_literal: true
 
 # Batch-write into DynamoDB (single-table design, pk partition key). Only the
-# compute output ships to DDB now:
-#   - rhymecrime_local.sqlite3 (from bin/compute-relatedness):
-#       + related table         → related#…     (cheap path, words only)
-#       + related_scores table  → score#…       (lazy companion, parallel scores)
-#   - rhymecrime_local.sqlite3 (from bin/compute-set-related):
-#       + set_related table     → set_related#… (post-prune rhyming-tuple list,
+# compute output ships to DDB now. Phases run in decreasing-criticality order so
+# a +Ctrl-C+ part-way leaves the most-needed rows already uploaded:
+#   1. rhymecrime_local.sqlite3 (from bin/compute-relatedness):
+#        + related table       → related#…     (cheap path, words only — the
+#                                                runtime "related to X?" answer)
+#   2. rhymecrime_local.sqlite3 (from bin/compute-set-related):
+#        + set_related table   → set_related#… (post-prune rhyming-tuple list,
 #                                                runtime hot-path answer for the
 #                                                +set_related+ goal — collapses a
 #                                                4-phase live compute into one
 #                                                +GetItem+; see +crime.rb+'s
 #                                                +find_rhyming_tuples+)
+#   3. rhymecrime_local.sqlite3 (from bin/compute-relatedness):
+#        + related_scores table → score#…      (lazy parallel scores; runtime
+#                                                tolerates a missing row and
+#                                                falls back to
+#                                                +RELATEDNESS_SCORE_THRESHOLD+,
+#                                                so this phase is the cheapest
+#                                                to lose to a partial run)
 #
 # The lexicon (+word_dict+) and rime cohort (+rime_dict+) live entirely in the
 # Lambda deploy bundle as +word_dict.msgpack+ / +rime_dict.msgpack+ — see
@@ -194,10 +202,50 @@ else
     related_meter.finish
     puts "  #{n_related} related# items"
 
-    # Score#<lemma> stream. Independent loop (rather than a JOIN with
-    # +related+) so the +related#+ phase isn't held back by the full second
-    # table scan, and so a row with words but no scores doesn't waste a DDB
-    # write on a missing +scores+ payload.
+    # Set_related#<lemma> stream — uploaded second because it's the runtime
+    # hot path: the +set_related+ goal in +crime.rb+ collapses a multi-phase
+    # live compute into a single +GetItem+ on this row, so it's the one we
+    # most want already in DDB by the time anything reads from the table.
+    # Independent loop (rather than a JOIN) so the +related#+ phase isn't
+    # held back by the second table scan. Empty +tuples+ values are legal:
+    # the runtime treats a missing row as the friendly "Oops, I don't
+    # know..." / "I don't like that word." bad_input branch (in +crime.rb+'s
+    # +set_related+ goal dispatch), so we want every cue computed by
+    # +bin/compute-set-related+ to land in DDB — including the empty-tuples
+    # rows that mean "we know this cue but nothing rhymes among its
+    # relateds." DDB stores empty as an empty List, and
+    # +DynamoRuntime#parse_tuples_attr+ returns +[]+ (computed hit, not the
+    # "unknown cue" fallback).
+    set_related_total = db.get_first_value("SELECT COUNT(*) FROM set_related").to_i
+    set_related_meter = ProgressMeter.new("set_related#", total: set_related_total)
+    n_set_related = 0
+    buf = []
+    db.execute("SELECT pk, tuples FROM set_related") do |pk, tuples_json|
+      tuples = JSON.parse(tuples_json)
+      raise "row missing tuples: #{pk}" unless tuples.is_a?(Array)
+
+      buf << { "pk" => pk, "tuples" => tuples }
+      if buf.size >= 500
+        put_batch(client, table, buf) { |n| set_related_meter.advance(n) }
+        n_set_related += buf.size
+        buf.clear
+      end
+    end
+    unless buf.empty?
+      put_batch(client, table, buf) { |n| set_related_meter.advance(n) }
+      n_set_related += buf.size
+    end
+    set_related_meter.finish
+    puts "  #{n_set_related} set_related# items"
+
+    # Score#<lemma> stream — uploaded last because it's the least critical:
+    # the runtime tolerates a missing +score#<lemma>+ row and falls back to
+    # +RELATEDNESS_SCORE_THRESHOLD+ for every entry, so a +Ctrl-C+ during
+    # this phase still leaves a fully-functional table (only similarity
+    # scores degrade to the threshold floor; the related word lists and
+    # the set_related hot path are already in DDB). Independent loop
+    # (rather than a JOIN with +related+) so a row with words but no
+    # scores doesn't waste a DDB write on a missing +scores+ payload.
     score_total = db.get_first_value("SELECT COUNT(*) FROM related_scores").to_i
     score_meter = ProgressMeter.new("score#", total: score_total)
     n_scores = 0
@@ -220,38 +268,6 @@ else
     end
     score_meter.finish
     puts "  #{n_scores} score# items"
-
-    # Set_related#<lemma> stream. Independent loop for the same reasons
-    # as +score#+ above: the runtime treats a missing row as the friendly
-    # "Oops, I don't know..." / "I don't like that word." bad_input
-    # branch (in +crime.rb+'s +set_related+ goal dispatch), so we want
-    # every cue computed by +bin/compute-set-related+ to land in
-    # DDB — including the empty-tuples rows that mean "we know this cue
-    # but nothing rhymes among its relateds." Empty +tuples+ values are
-    # legal: DDB stores them as an empty List, and
-    # +DynamoRuntime#parse_tuples_attr+ returns +[]+ (computed hit,
-    # not the "unknown cue" fallback).
-    set_related_total = db.get_first_value("SELECT COUNT(*) FROM set_related").to_i
-    set_related_meter = ProgressMeter.new("set_related#", total: set_related_total)
-    n_set_related = 0
-    buf = []
-    db.execute("SELECT pk, tuples FROM set_related") do |pk, tuples_json|
-      tuples = JSON.parse(tuples_json)
-      raise "row missing tuples: #{pk}" unless tuples.is_a?(Array)
-
-      buf << { "pk" => pk, "tuples" => tuples }
-      if buf.size >= 500
-        put_batch(client, table, buf) { |n| set_related_meter.advance(n) }
-        n_set_related += buf.size
-        buf.clear
-      end
-    end
-    unless buf.empty?
-      put_batch(client, table, buf) { |n| set_related_meter.advance(n) }
-      n_set_related += buf.size
-    end
-    set_related_meter.finish
-    puts "  #{n_set_related} set_related# items"
   ensure
     db.close
   end

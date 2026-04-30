@@ -10,11 +10,13 @@ fi
 if [[ "${SKIP_COMPUTE:-0}" == "1" ]]; then
   echo "==> skip compute (SKIP_COMPUTE=1)"
 else
-  echo "==> compute relatedness → generated/related_compute.jsonl (long run; smoke: ruby bin/compute-relatedness --max-cues=5 --dry-run)"
+  echo "==> compute relatedness → related rows in generated/rhymecrime_local.sqlite3 (long run; smoke: ruby bin/compute-relatedness --max-cues=5 --dry-run)"
   bundle exec ruby bin/compute-relatedness
+  echo "==> compute set_related → set_related rows in generated/rhymecrime_local.sqlite3"
+  bundle exec ruby bin/compute-set-related
 fi
 
-echo "==> upload word + rime + related to DynamoDB"
+echo "==> upload related + set_related + score to DynamoDB (word_dict + rime_dict ship as msgpack in the Lambda bundle, not DDB)"
 bundle exec ruby bin/upload-to-dynamodb
 
 echo "Done."
