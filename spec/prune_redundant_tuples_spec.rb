@@ -164,6 +164,8 @@ describe 'prune_suffix_redundant_rhyming_tuples' do
     prune_rhyming_tuple 'sniping / wiping', 'snipings / wipings'
     prune_rhyming_tuple 'antagonist / protagonist', 'antagonists / protagonists'
     prune_rhyming_tuple 'feather / leather / tether / whether', 'featherier / leatherier'
+    prune_rhyming_tuple 'quiz / whiz', 'quizzes / whizzes'
+    prune_rhyming_tuple "'tis / biz / his / is / quiz / whiz", 'quizzes / whizzes'
   end
 
   context 'stop words' do

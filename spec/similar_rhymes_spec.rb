@@ -189,6 +189,10 @@ describe 'SET_RELATED' do
     set_related_oughta_contain 'pirate', 'crypto', 'tiptoe'
     set_related_oughta_contain 'pirate', 'flaunted', 'haunted'
     set_related_oughta_contain 'pirate', 'flaunted', 'undaunted'
+    set_related_oughta_contain 'pirate', 'anchored', 'tankard'
+    set_related_oughta_contain 'pirate', 'blackguard', 'swaggered'
+    set_related_oughta_contain 'pirate', 'drunken', 'sunken'
+    set_related_oughta_contain 'pirate', 'hull', 'skull'
     set_related_ought_not_contain 'pirate', 'barreled', 'barrelled'
     set_related_ought_not_contain 'pirate', 'barreling', 'barrelling'
     set_related_ought_not_contain 'pirate', 'facie', 'racy' # I don't like "facie" without "prima", and even with "prima" I'm not sure it should be related to "pirate"
@@ -405,6 +409,10 @@ describe 'SET_RELATED' do
     set_related_oughta_contain 'cat', 'arboreal', 'territorial'
     set_related_oughta_contain 'cat', 'beagle', 'seagull'
     set_related_oughta_contain 'cat', 'bird', 'purred'
+  end
+
+  context 'math' do
+    set_related_oughta_contain 'math', 'inferred', 'nerd'
   end
 
   context 'no spelling variants' do
