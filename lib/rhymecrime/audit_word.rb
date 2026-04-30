@@ -37,9 +37,9 @@ module Rhymecrime
       # --- Lexicon / runtime helpers (no full crime.rb) ---
       io.puts "--- Spelling / policy ---"
       if explicitly_forbidden?(w)
-        io.puts "forbid_list.txt: LISTED (explicitly forbidden)"
+        io.puts "rarity.csv: LISTED forbidden/forbidden_ish (explicitly forbidden)"
       else
-        io.puts "forbid_list.txt: not listed"
+        io.puts "rarity.csv: not listed as forbidden"
       end
       if unrhymable_stop_word?(w)
         io.puts "unrhymable_stop_words.txt: LISTED (deleted from word_dict at build time)"

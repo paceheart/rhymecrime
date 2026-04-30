@@ -59,9 +59,11 @@ CORPORA_ROOT = File.join(REPO_ROOT, "corpora")
 
 CMUDICT_FILENAME = File.join(CORPORA_ROOT, "cmudict", "cmudict-0.7c.txt")
 # Hand-curated inputs live under +curated/+; +CURATED_DIR+ is defined in +utils_rhyme.rb+
-# (parallel to +REPO_ROOT+ / +GENERATED_DIR+) and shared by every loader.
-RARE_WORDS_FILENAME = File.join(CURATED_DIR, "rare_words.txt")
-COMMON_WORDS_FILENAME = File.join(CURATED_DIR, "common_words.txt")
+# (parallel to +REPO_ROOT+ / +GENERATED_DIR+) and shared by every loader. The
+# common / rare / forbidden word sets are not surfaced as +*_FILENAME+
+# constants any more — they're consumed by kind out of +curated/rarity.csv+
+# via +rarity_csv_common_words+ / +rarity_csv_rare_words+ /
+# +rarity_csv_forbidden_words+ in +utils_rhyme.rb+.
 NEOL2016_FILENAME = File.join(CORPORA_ROOT, "neol", "neol2016.txt")
 NEOL_SUPPLEMENT_FILENAME = File.join(CURATED_DIR, "neol_supplement.txt")
 

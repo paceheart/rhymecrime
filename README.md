@@ -33,7 +33,7 @@ Data and build artifacts are split so **sources** stay under `corpora/` and **re
 | **`corpora/varcon/`** | VarCon `varcon.txt` (US/UK/CA/AU spelling-variant clusters by Atkinson & Titze, MIT-style). Vendored along with the upstream `README.txt` carrying the license. |
 | **`corpora/conceptnet/`** | Optional **ConceptNet** assertions gzip (`conceptnet-assertions-5.7.0.csv.gz`) for thematic edge weights in `generated/conceptnet_edges.json` (large; **gitignored**). |
 | **`corpora/numberbatch/`** | Optional **Numberbatch** English vectors (`numberbatch-en-19.08.txt`) for `generated/numberbatch_vectors.msgpack` (large; **gitignored**). |
-| **`curated/`** | All hand-edited inputs in one flat directory: word lists (`common_words.txt`, `rare_words.txt`, `forbid_list.txt`, `semantically_promiscuous.txt` + `unrhymable_stop_words.txt`, `neol_supplement.txt`), the `authoritative_pronunciations.txt` overrides, the manually-declared `spelling.csv` variant clusters, and the labeled `lemma.csv` / `rarity.csv` / `related.csv` test/training sets. See `curated/README.md`. |
+| **`curated/`** | All hand-edited inputs in one flat directory: stop-word lists (`semantically_promiscuous.txt`, `unrhymable_stop_words.txt`, `neol_supplement.txt`), the `authoritative_pronunciations.txt` overrides, the manually-declared `spelling.csv` variant clusters, and the labeled `lemma.csv` / `rarity.csv` / `related.csv` test/training sets. `rarity.csv` doubles as the source of truth for the common / rare / forbidden curated word lists (the retired `common_words.txt` / `rare_words.txt` / `forbid_list.txt`); rows are projected by `kind` into `rarity_csv_common_words` / `rarity_csv_rare_words` / `rarity_csv_forbidden_words`. See `curated/README.md`. |
 | **`generated/`** | **Outputs** of `./bin/dict-build` (see `lib/rhymecrime/dict/dict.rb`): `word_dict.txt`, `rime_dict.txt`, `part_of_speech.json`, `hyphen_variant_map.json`, `wordfreq.tsv`, and when source corpora are present `conceptnet_edges.json`, `numberbatch_vectors.msgpack`. Semantic relatedness also reads `usf_associations.json` here if present. Entire directory is **gitignored**; clone → run `setup.sh` (wordfreq, Kaikki, …) then `./bin/dict-build`. |
 | **`lib/rhymecrime/dict/`** | Dictionary compiler (`dict.rb`), pronunciation / inflection / Wiktionary loaders, and `dict/wordfreq/export_wordfreq_tsv.py`. (Hand-edited word lists previously kept here now live under `curated/`.) |
 | **`spec/`** | RSpec examples and supporting harnesses. Hand-labeled CSVs (`related.csv`, `rarity.csv`, `lemma.csv`, `spelling.csv`) live under `curated/`. |
@@ -146,7 +146,7 @@ misfiled as rare. So instead we put them in the 'dregs' bucket,
 which shows up as "For the desperate:" on the website.
 
 Rare vs common uses SUBTLEX, wordfreq Zipf, WordNet (surface string lookup), Wiktionary
-floors, and manual `common_words.txt` / `rare_words.txt`.
+floors, and the manual common / rare rows in `curated/rarity.csv`.
 
 Also we filter out slurs.
 
@@ -211,11 +211,13 @@ curated/                          ├─ conceptnet_edges.json       │ Phase 3
 ├─ rarity.csv      ──── Stage 2/4 ├─ usf_associations.json       │ inputs only
 ├─ related.csv     ──── Stage 3/4 ├─ model_sense_vectors.msgpack │
 ├─ lemma.csv       ─┐             ├─ part_of_speech.json         │
-├─ spelling.csv    ─┤             ├─ rarity_classifier.json     ─┘
-├─ forbid_list.txt ─┤── Stage 1/4 │
-├─ stop word txts  ─┤  via dict.rb├─ relatedness_classifier.json ──┐
-├─ common_words    ─┤             │                                │
-└─ rare_words      ─┘             ├─ rhymecrime_local.sqlite3 ────┐│
+├─ spelling.csv    ─┤── Stage 1/4 ├─ rarity_classifier.json     ─┘
+└─ stop word txts  ─┘  via dict.rb│
+                                  ├─ relatedness_classifier.json ──┐
+(rarity.csv also drives           │                                │
+the common/rare/                  ├─ rhymecrime_local.sqlite3 ────┐│
+forbidden word lists                                              ││
+at build/runtime)                                                 ││
                                   │  ├─ related table             ││ Phase 3 outputs
                                   │  ├─ related_scores table      ││ (Phase 4 inputs)
                                   │  └─ set_related table         ││

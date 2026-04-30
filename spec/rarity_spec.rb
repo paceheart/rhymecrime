@@ -108,6 +108,42 @@ def expected_category_for_kind(kind)
   end
 end
 
+# Coarse +rarity family+ for contradiction detection. +foo+ and +foo_ish+ (and
+# +foo_no_rhymes+) all collapse to the same family, so listing a word as both
+# +common+ and +common_ish+ is fine. +have_rhymes+ is orthogonal to commonness
+# (returns nil) and is excluded from the contradiction check.
+def rarity_kind_family(kind)
+  case kind.to_s.strip
+  when "common", "common_ish", "common_no_rhymes" then :common
+  when "rare", "rare_ish", "rare_no_rhymes" then :rare
+  when "uncommon" then :uncommon
+  when "forbidden", "forbidden_ish" then :forbidden
+  when "have_rhymes" then nil
+  end
+end
+
+# Group rarity.csv rows by +word+ and return only those words whose rows
+# disagree about the rarity family (e.g. +ok+ listed as both +forbidden+ and
+# +rare+). Returns +[[word, [{kind:, family:, line:, context:}, ...]], ...]+
+# sorted by word. +foo+/+foo_ish+ pairs are NOT contradictions.
+def find_contradictory_rarity_rows
+  rows = load_rarity_csv_rows
+  by_word = Hash.new { |h, k| h[k] = [] }
+  rows.each_with_index do |row, i|
+    family = rarity_kind_family(row["kind"])
+    next if family.nil?
+    by_word[row["word"].to_s] << {
+      kind: row["kind"].to_s.strip,
+      family: family,
+      line: i + 2,
+      context: row["context"].to_s,
+    }
+  end
+  by_word
+    .select { |_, occurrences| occurrences.map { |o| o[:family] }.uniq.size > 1 }
+    .sort_by { |word, _| word }
+end
+
 # Symmetric mismatch scoring — no FN/FP discount. Returns 1.0 on exact match,
 # else a partial-credit base in [0.0, 0.9] depending on how far apart the two
 # categories are on the rare/common/forbidden spectrum.
@@ -218,6 +254,19 @@ describe "RARITY" do
       expect(RARITY_EVALUATED).to be >= 2500
       rate = RARITY_TOTAL_WEIGHT.positive? ? RARITY_WEIGHTED_SCORE / RARITY_TOTAL_WEIGHT : 0.0
       expect(rate).to be >= 0.97
+    end
+
+    it "has no contradictory rows" do
+      contradictions = find_contradictory_rarity_rows
+      contradictions.each do |word, occurrences|
+        details = occurrences
+          .map { |o| "line #{o[:line]} (#{o[:context]}): #{o[:kind]}" }
+          .join("; ")
+        puts "CONTRADICTION #{word.inspect}: #{details}"
+      end
+      expect(contradictions).to be_empty,
+        "found #{contradictions.size} contradictory word(s) in curated/rarity.csv " \
+        "(same word listed with disagreeing rarity families; see CONTRADICTION lines above)"
     end
   end
 end

@@ -96,7 +96,7 @@ end
 # corpus use is negligible. OOV bases (no WordNet entry) keep the legacy open policy.
 #
 # When +list_authoritative_base+ is true (list-pivot Inflect inheritance only), skip
-# Kaikki/corpus verb attestation: entries in common_words.txt are curated list headwords
+# Kaikki/corpus verb attestation: entries tagged common/common_ish in curated/rarity.csv are curated list headwords
 # (*finesse*→*finessed* must inherit).
 #
 # +kaikki_verb_morph+ (from +load_wiktionary+): blocks Inflect *-ed*/*-ing* when Kaikki already documents

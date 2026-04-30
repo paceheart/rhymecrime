@@ -583,7 +583,7 @@ def compute_frequency(word, subtlex_hash, wordfreq_hash, subtlex_total_hash: nil
 end
 
 # List-pivot Inflect inheritance: try to lift +word+ to donor freq via +listed+
-# (common_words.txt), forward or reverse Inflect match.
+# (rarity.csv: common/common_ish), forward or reverse Inflect match.
 def morph_inherit_listed_once!(word, listed, forward, hash, rare_words, common_words, pos_map, forms_map, kaikki_verb_morph, subtlex_hash, wordfreq_hash, cmudict_orig, ref_cn, ref_nb, ref_usf, neol_words)
   entry = hash[word]
   return false unless entry
@@ -652,8 +652,8 @@ def add_frequency_info(cmudict, subtlex_hash, subtlex_total_hash, wordfreq_hash,
   $freq_propagation_metadata = {}
   count = 0
   hash = Hash.new
-  rare_words = load_word_list_set(RARE_WORDS_FILENAME)
-  common_words = load_word_list_set(COMMON_WORDS_FILENAME)
+  rare_words = rarity_csv_rare_words
+  common_words = rarity_csv_common_words
   cmudict_orig = original_cmudict_headwords || Set.new
   ref_cn = conceptnet_lemma_vocab_for_attestation
   ref_nb_path = numberbatch_txt_path
@@ -698,12 +698,12 @@ def add_frequency_info(cmudict, subtlex_hash, subtlex_total_hash, wordfreq_hash,
   end
   puts "#{extra} extra words added from SUBTLEX"
 
-  # Common-list floor: add (or sentinel-floor) words from common_words.txt. Freq 99 is a
-  # structural sentinel: it lands above +RARITY_CLASSIFIER_RESCORE_MAX_FREQ+ so the
-  # rarity-classifier rescore pass won't delete these curated headwords as forbidden.
-  # Pre-existing entries at or below +RARE_FREQ_MAX+ get bumped (otherwise a word like
-  # +mitten+ — legit but sparse in SUBTLEX — can be floored at freq 4 and then nuked by
-  # the classifier).
+  # Common-list floor: add (or sentinel-floor) words tagged common/common_ish in
+  # +curated/rarity.csv+. Freq 99 is a structural sentinel: it lands above
+  # +RARITY_CLASSIFIER_RESCORE_MAX_FREQ+ so the rarity-classifier rescore pass won't
+  # delete these curated headwords as forbidden. Pre-existing entries at or below
+  # +RARE_FREQ_MAX+ get bumped (otherwise a word like +mitten+ — legit but sparse in
+  # SUBTLEX — can be floored at freq 4 and then nuked by the classifier).
   common_extra = 0
   common_bumped = 0
   common_words.each do |word|
@@ -717,8 +717,8 @@ def add_frequency_info(cmudict, subtlex_hash, subtlex_total_hash, wordfreq_hash,
       common_extra += 1
     end
   end
-  puts "#{common_extra} extra words added from common_words.txt" if common_extra > 0
-  puts "#{common_bumped} existing rare-band headwords floored by common_words.txt" if common_bumped > 0
+  puts "#{common_extra} extra words added from rarity.csv (common/common_ish)" if common_extra > 0
+  puts "#{common_bumped} existing rare-band headwords floored by rarity.csv (common/common_ish)" if common_bumped > 0
 
   # Neol promotion: modern neologisms from neol2016 (12dicts) + supplement.
   # Neither list is a complete inventory of inflections, so the union serves as attestation
@@ -797,7 +797,7 @@ def add_frequency_info(cmudict, subtlex_hash, subtlex_total_hash, wordfreq_hash,
       next
     end
     if rare_words.include?(inflected)
-      dict_trace_puts(inflected, "morph_inherit_kaikki ← #{base}: skip (in rare_words.txt)") if tr
+      dict_trace_puts(inflected, "morph_inherit_kaikki ← #{base}: skip (in rarity.csv: rare)") if tr
       next
     end
     infl_freq = hash[inflected][0]
@@ -917,13 +917,13 @@ def add_frequency_info(cmudict, subtlex_hash, subtlex_total_hash, wordfreq_hash,
   end
   puts "#{inherited} inflected forms inherited frequency from base words" if inherited > 0
 
-  # List-pivot Inflect inheritance: suffix inheritance from common_words.txt (Inflect
+  # List-pivot Inflect inheritance: suffix inheritance from rarity.csv common rows (Inflect
   # spelling patterns). Kaikki morph inheritance lifts Kaikki-linked inflections through
   # the rare bins; this pass still handles list-driven cases. Match forward (listed +
   # suffix = word) or reverse (word + suffix = listed, e.g. regionalize… ← regionalized).
   # Structural junk guards only; list headwords skip Kaikki verb attestation (see
   # +list_authoritative_base+ on +morph_base_allows_verb_forms?+). When +listed+ is in
-  # common_words.txt, also skip +inflection_surface_reference_attested?+ so curated lemmas
+  # rarity.csv (common), also skip +inflection_surface_reference_attested?+ so curated lemmas
   # can lift OOV inflections.
   cw_sorted = common_words.sort_by { |b| -b.length }
   cw_inherited = 0
@@ -943,7 +943,7 @@ def add_frequency_info(cmudict, subtlex_hash, subtlex_total_hash, wordfreq_hash,
           next
         end
         if rare_words.include?(w)
-          dict_trace_puts(w, "morph_inherit_listed: skip row (in rare_words.txt)") if dict_trace_word?(w)
+          dict_trace_puts(w, "morph_inherit_listed: skip row (in rarity.csv: rare)") if dict_trace_word?(w)
           next
         end
         next unless morph_inherit_listed_once!(w, listed, true, hash, rare_words, common_words, pos_map, forms_map, kaikki_verb_morph, subtlex_hash, wordfreq_hash, cmudict_orig, ref_cn, ref_nb, ref_usf, neol_words)
@@ -961,7 +961,7 @@ def add_frequency_info(cmudict, subtlex_hash, subtlex_total_hash, wordfreq_hash,
           next
         end
         if rare_words.include?(w)
-          dict_trace_puts(w, "morph_inherit_listed: skip row (in rare_words.txt)") if dict_trace_word?(w)
+          dict_trace_puts(w, "morph_inherit_listed: skip row (in rarity.csv: rare)") if dict_trace_word?(w)
           next
         end
         next unless morph_inherit_listed_once!(w, listed, false, hash, rare_words, common_words, pos_map, forms_map, kaikki_verb_morph, subtlex_hash, wordfreq_hash, cmudict_orig, ref_cn, ref_nb, ref_usf, neol_words)
@@ -972,9 +972,9 @@ def add_frequency_info(cmudict, subtlex_hash, subtlex_total_hash, wordfreq_hash,
     end
     break if round == 0
   end
-  puts "#{cw_inherited} forms inherited frequency from common_words.txt bases" if cw_inherited > 0
+  puts "#{cw_inherited} forms inherited frequency from rarity.csv (common) bases" if cw_inherited > 0
 
-  # Common-list Inflect expansion: morphological extensions from common_words.txt headwords
+  # Common-list Inflect expansion: morphological extensions from rarity.csv common headwords
   # only (Inflect matcher). Unlike an “any freq>RARE_FREQ_MAX lemma” scan, this avoids
   # promoting foxed/gooses/bruisers from ordinary common nouns and avoids hyphenated blast
   # (topsy-turvy → topsy-turvys). OOV rows: list headwords are authoritative (no SUBTLEX/Wikt
@@ -992,7 +992,7 @@ def add_frequency_info(cmudict, subtlex_hash, subtlex_total_hash, wordfreq_hash,
         next
       end
       unless common_words.include?(base)
-        dict_trace_puts(base, "morph_expand_listed: skip (not in common_words.txt)") if tb
+        dict_trace_puts(base, "morph_expand_listed: skip (not in rarity.csv: common)") if tb
         next
       end
       if semantically_promiscuous?(base)
@@ -1000,7 +1000,7 @@ def add_frequency_info(cmudict, subtlex_hash, subtlex_total_hash, wordfreq_hash,
         next
       end
       if rare_words.include?(base)
-        dict_trace_puts(base, "morph_expand_listed: skip (in rare_words.txt)") if tb
+        dict_trace_puts(base, "morph_expand_listed: skip (in rarity.csv: rare)") if tb
         next
       end
       if base.include?("-")
@@ -1023,7 +1023,7 @@ def add_frequency_info(cmudict, subtlex_hash, subtlex_total_hash, wordfreq_hash,
           next
         end
         if rare_words.include?(w)
-          dict_trace_puts(w, "morph_expand_listed ← #{base}: skip (in rare_words.txt)") if tr
+          dict_trace_puts(w, "morph_expand_listed ← #{base}: skip (in rarity.csv: rare)") if tr
           next
         end
         unless Inflect.inflection_of_base?(base, w)
@@ -1054,7 +1054,7 @@ def add_frequency_info(cmudict, subtlex_hash, subtlex_total_hash, wordfreq_hash,
           dict_trace_puts(w, "morph_expand_listed ← #{base}: skip (Zipf #{wf} ≥ #{WORDFREQ_COMMON_ZIPF})") if tr
           next
         end
-        # Common-list Inflect expansion scans only common_words.txt bases; list headwords are authoritative (no reference-corpus gate).
+        # Common-list Inflect expansion scans only rarity.csv (common) bases; list headwords are authoritative (no reference-corpus gate).
         if hash.key?(w)
           if hash[w][0] > RARE_FREQ_MAX
             dict_trace_puts(w, "morph_expand_listed ← #{base}: skip (existing freq #{hash[w][0]} > #{RARE_FREQ_MAX})") if tr
@@ -1089,7 +1089,7 @@ def add_frequency_info(cmudict, subtlex_hash, subtlex_total_hash, wordfreq_hash,
     hash.keys.each do |base|
       tb = dict_trace_word?(base)
       if common_words.include?(base)
-        dict_trace_puts(base, "morph_expand_subtlex: skip (in common_words.txt)") if tb
+        dict_trace_puts(base, "morph_expand_subtlex: skip (in rarity.csv: common)") if tb
         next
       end
       if base.include?("-")

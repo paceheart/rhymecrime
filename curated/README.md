@@ -11,27 +11,25 @@ line so diffs stay small.
 
 ## Word lists
 
-### `common_words.txt`
+The common / rare / forbidden curated word lists used to be three separate
+plain-text files (`common_words.txt`, `rare_words.txt`, `forbid_list.txt`).
+They were merged into `rarity.csv` (see below) — every previously-listed word
+now lives there as a row whose `kind` is one of `common` / `common_ish` /
+`rare` / `rare_ish` / `forbidden` / `forbidden_ish`. Both `bin/dict-build`
+and the runtime read from `rarity.csv` directly:
 
-Headwords that the rare-word filter would otherwise drop but should stay in the
-rhyming dictionary anyway (`audiophile`, `cul-de-sac`, `glock`, …). Loaded by
-`bin/dict-build` via `COMMON_WORDS_FILENAME` in
-`lib/rhymecrime/dict/constants.rb`. Plain newline-delimited list, one word per
-line, comments not supported.
+  * `common` / `common_ish` rows → the build-time "common floor" (was
+    `common_words.txt`); accessor `rarity_csv_common_words`.
+  * `rare` / `rare_ish` rows → forced-rare headwords (was `rare_words.txt`);
+    accessor `rarity_csv_rare_words`.
+  * `forbidden` / `forbidden_ish` rows → headwords deleted from the
+    dictionary (was `forbid_list.txt`); accessors
+    `rarity_csv_forbidden_words` / `forbid_list()` /
+    `explicitly_forbidden?`.
 
-### `rare_words.txt`
-
-The inverse: headwords whose corpus frequency is above the rarity floor but
-that we want treated as rare anyway — typically place names, surname
-fragments, and orthographic ghosts that the rhyme cohorts shouldn't surface.
-Loaded as `RARE_WORDS_FILENAME`. Same format as `common_words.txt`.
-
-### `forbid_list.txt`
-
-Headwords that should never appear in the dictionary at all (typos, acronyms
-masquerading as words, single-letter junk, etc.). Loaded at runtime by
-`forbid_list()` in `lib/rhymecrime/dict/utils_rhyme.rb` and consulted by
-`explicitly_forbidden?`. Plain newline-delimited list.
+All three accessors live in `lib/rhymecrime/dict/utils_rhyme.rb`. See the
+`rarity.csv` section below for column layout, all valid `kind` values, and
+how the spec/eval harness consumes the same file.
 
 ### `unrhymable_stop_words.txt`
 
@@ -113,6 +111,17 @@ harness in `spec/rarity_spec.rb` consumes this file directly (sweeps every
 row against live `rarity_category`, prints a `FAIL …` line per mismatch, and
 gates on a single weighted-pass-rate aggregate spec). It also drives the
 rarity classifier training in `bin/train-rarity-classifier`.
+
+The file doubles as the input for the build-time + runtime word lists that
+used to live in `common_words.txt` / `rare_words.txt` / `forbid_list.txt`:
+`rarity_csv_common_words`, `rarity_csv_rare_words`, and
+`rarity_csv_forbidden_words` (in `lib/rhymecrime/dict/utils_rhyme.rb`)
+project the matching `kind` rows into Sets. So a row like
+`stop words,a,common,1,"",""` is consulted by both the spec sweep AND
+`add_frequency_info` in `lib/rhymecrime/dict/frequency.rb`. Rows imported
+from the retired `*.txt` files carry an `imported from <file>` marker in
+the `notes` column and use the source filename as their `context`; future
+edits should pick a more specific context if you have one.
 
 ### `related.csv`
 

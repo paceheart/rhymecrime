@@ -139,7 +139,8 @@ end
 #       "a", "you'll", "they're", "huh", "uh") that are valid English but
 #       make poor rhyme targets. Deleted from +word_dict+ entirely at dict-
 #       build time (see +delete_unrhymable_stop_words_from_hash+ in
-#       +phonology.rb+), alongside +forbid_list.txt+. Predicate:
+#       +phonology.rb+), alongside the +forbidden+/+forbidden_ish+ rows in
+#       +curated/rarity.csv+ (see +rarity_csv_forbidden_words+). Predicate:
 #       +unrhymable_stop_word?+.
 #
 # Every runtime call site uses +semantically_promiscuous?+ — unrhymable
@@ -193,26 +194,93 @@ def semantically_promiscuous?(word)
 end
 
 #
-# forbid_list
+# rarity-list-driven word sets — common / rare / forbidden — read from
+# +curated/rarity.csv+ (a single CSV is the source of truth, replacing the
+# retired +common_words.txt+, +rare_words.txt+, and +forbid_list.txt+).
+#
+# Per-kind dispatch (matches the spec sweep in +spec/rarity_spec.rb+ and the
+# eval scoring buckets):
+#   +common+ / +common_ish+        -> rarity_csv_common_words
+#   +rare+   / +rare_ish+          -> rarity_csv_rare_words
+#   +forbidden+ / +forbidden_ish+  -> rarity_csv_forbidden_words
+# Other kinds (+uncommon+, +common_no_rhymes+, +rare_no_rhymes+,
+# +have_rhymes+) are eval-only labels and contribute nothing to these sets.
+#
+# Loaded lazily on first access (Set/Array memoized in process-globals) and
+# the file is only opened once per process. CSV is parsed with the stdlib
+# +CSV+ module — encoding is UTF-8 (matches +curated/rarity.csv+ on disk).
 #
 
-$forbid_list = nil
-def forbid_list()
-  if $forbid_list.nil?
-    $forbid_list = load_forbid_list_as_array
+RARITY_CSV_PATH = File.join(CURATED_DIR, "rarity.csv")
+
+RARITY_CSV_COMMON_KINDS = %w[common common_ish].freeze
+RARITY_CSV_RARE_KINDS = %w[rare rare_ish].freeze
+RARITY_CSV_FORBIDDEN_KINDS = %w[forbidden forbidden_ish].freeze
+
+$rarity_csv_common_words = nil
+$rarity_csv_rare_words = nil
+$rarity_csv_forbidden_words_array = nil
+$rarity_csv_forbidden_words_set = nil
+
+def rarity_csv_common_words
+  load_rarity_csv_word_sets! if $rarity_csv_common_words.nil?
+  $rarity_csv_common_words
+end
+
+def rarity_csv_rare_words
+  load_rarity_csv_word_sets! if $rarity_csv_rare_words.nil?
+  $rarity_csv_rare_words
+end
+
+# Forbidden as an Array (insertion order = file order). Old +forbid_list+
+# call sites used Array#include? semantics; preserved here so anything that
+# expected an Array surface (e.g. iterations, +length+) keeps working.
+def rarity_csv_forbidden_words
+  load_rarity_csv_word_sets! if $rarity_csv_forbidden_words_array.nil?
+  $rarity_csv_forbidden_words_array
+end
+
+def load_rarity_csv_word_sets!
+  require "csv"
+  common = Set.new
+  rare = Set.new
+  forbidden = []
+  forbidden_seen = Set.new
+  CSV.foreach(RARITY_CSV_PATH, headers: true, encoding: "UTF-8") do |row|
+    word = row["word"].to_s.strip
+    next if word.empty?
+    kind = row["kind"].to_s.strip
+    if RARITY_CSV_COMMON_KINDS.include?(kind)
+      common << word
+    elsif RARITY_CSV_RARE_KINDS.include?(kind)
+      rare << word
+    elsif RARITY_CSV_FORBIDDEN_KINDS.include?(kind)
+      unless forbidden_seen.include?(word)
+        forbidden << word
+        forbidden_seen << word
+      end
+    end
   end
-  return $forbid_list
+  $rarity_csv_common_words = common.freeze
+  $rarity_csv_rare_words = rare.freeze
+  $rarity_csv_forbidden_words_array = forbidden.freeze
+  $rarity_csv_forbidden_words_set = forbidden_seen.freeze
+end
+
+#
+# forbid_list — facade over +rarity_csv_forbidden_words+. Kept under the same
+# name so legacy call sites (+explicitly_forbidden?+, +audit_word+,
+# +delete_explicitly_forbidden_keys_from_hash+, …) don't have to learn about
+# the rarity.csv plumbing.
+#
+
+def forbid_list
+  rarity_csv_forbidden_words
 end
 
 def explicitly_forbidden?(word)
-  return forbid_list.include?(word)
-end
-
-def load_forbid_list_as_array
-  path = File.join(CURATED_DIR, "forbid_list.txt")
-  lines = []
-  File.foreach(path, chomp: true, encoding: "UTF-8") { |line| lines << line }
-  lines
+  load_rarity_csv_word_sets! if $rarity_csv_forbidden_words_set.nil?
+  $rarity_csv_forbidden_words_set.include?(word)
 end
 
 #
