@@ -81,9 +81,12 @@ pluralization bug: nosocomephobiaes
 make achin' have lemma "aching"
 
 try again to strengthen lemma to semantic_base and see if it helps
+we should be able to go even hammer with semantic_base, e.g. sembase(conflagration) -> fire
 
 When we have explicit curated data with a clear relatedness decision, override the classifier's guess of the related words
 
 do something about ever / however / howsoever / whatever / whatsoever / whenever / wherever / whichever / whichsoever / whoever / whomever / whomsoever / whosoever
 
 on mobile, don't do columns
+
+make it actually follow up on the "I'll make a note" notes

@@ -1,0 +1,86 @@
+#!/usr/bin/env ruby
+# encoding: utf-8
+# frozen_string_literal: true
+
+# Merge curated/authoritative_pronunciations.txt into corpora/cmudict/cmudict-0.7c.txt:
+# drop every CMUdict line whose cluster key matches an authoritative word, append the
+# authoritative lines (after the same preprocess as dict-build), then re-sort all body
+# lines (see CmudictFileSort: ASCII on (n)-stripped root, then alt-pron index).
+# Header (;;; …) is kept at the top.
+
+require "set"
+
+repo = File.expand_path("..", __dir__)
+$LOAD_PATH.unshift File.join(repo, "lib")
+
+require_relative File.join(repo, "lib", "rhymecrime", "dict", "phonology")
+require_relative File.join(repo, "lib", "rhymecrime", "dict", "cmudict_file_sort")
+
+def cluster_key_from_preprocessed(preprocessed)
+  tokens = preprocessed.split
+  return nil if tokens.length < 2
+
+  word = tokens.shift.downcase.desanitize
+  word = word[0...-3] if word =~ /\([0-9]\)\Z/
+  word
+end
+
+def cluster_key_from_raw_line(line)
+  s = line.strip
+  return nil if s.empty? || s.start_with?(";;;")
+  return nil unless useful_cmudict_line?(s)
+
+  pl = preprocess_cmudict_line(s)
+  cluster_key_from_preprocessed(pl)
+end
+
+# CMUdict convention: two spaces between headword and phones.
+def format_cmudict_line(preprocessed)
+  if preprocessed =~ /\A(\S+)\s+(.+)\z/
+    "#{Regexp.last_match(1)}  #{Regexp.last_match(2)}"
+  else
+    preprocessed
+  end
+end
+
+auth_by_key = Hash.new { |h, k| h[k] = [] }
+auth_keys = Set.new
+
+File.foreach(AUTHORITATIVE_PRONUNCIATIONS_PATH, encoding: "UTF-8") do |line|
+  next unless useful_cmudict_line?(line)
+
+  pl = preprocess_cmudict_line(line.chomp)
+  key = cluster_key_from_preprocessed(pl)
+  abort "Bad authoritative line (no cluster key): #{line.inspect}" unless key
+
+  auth_keys.add(key)
+  auth_by_key[key] << format_cmudict_line(pl)
+end
+
+auth_lines_flat = auth_by_key.flat_map { |_, ls| ls }
+
+path = CMUDICT_FILENAME
+lines = CmudictFileSort.read_text(path).lines
+
+header = []
+i = 0
+while i < lines.length
+  s = lines[i].strip
+  if s.empty? || s.start_with?(";;;")
+    header << lines[i]
+    i += 1
+  else
+    break
+  end
+end
+
+body       = lines[i..]
+filtered   = body.reject { |line| (k = cluster_key_from_raw_line(line)) && auth_keys.include?(k) }
+merged     = filtered + auth_lines_flat.map { |l| "#{l}\n" }
+sorted     = merged.sort_by { |line| CmudictFileSort.body_line_sort_key(line) }
+new_text   = (header + sorted).join
+
+File.write(path, new_text, encoding: Encoding::UTF_8)
+
+warn "Updated #{path}: #{auth_keys.size} authoritative cluster(s), #{auth_lines_flat.size} replacement line(s), " \
+     "body was #{body.size} lines, now #{sorted.size}."

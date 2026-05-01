@@ -125,6 +125,14 @@ def apply_shared_arphabet_phoneme_string_normalizations(phoneme_space_string)
     line = gsub_unless_followed_by_r(line, old_r, old_plain, new_plain)
   end
 
+  # Globally conflate ZH with JH for rhyme bucketing. CMU / Wikt treat the
+  # voiceless postalveolar fricative (occasion, measure) and the voiced
+  # affricate's fricative release (cajun, lodge) under different ARPAbet
+  # symbols, but for imperfect rhymes users expect them in the same cohort
+  # (cajun / occasion). Normalizing here keeps CMU ingest, Wikt IPA→ARPAbet,
+  # and +word_dict+ exports aligned — no ZH tokens survive into rime keys.
+  line.gsub!(/\bZH\b/, "JH")
+
   line
 end
 
@@ -135,12 +143,6 @@ CONFLATE_IMPERFECT_RHYME_SUFFIX_RULES = [
   [%w[N D Z], %w[N Z]], # funds / tons
   [%w[N S], %w[N T S]], # fence / scents
   [%w[T CH], %w[CH]],
-  [%w[ZH], %w[JH]], # massage / lodge
-  [%w[ZH AH0 Z], %w[JH AH0 Z]], # massages / lodges
-  [%w[ZH D], %w[JH D]], # massaged / lodged
-  [%w[ZH IY0 NG], %w[JH IY0 NG]], # massaging / lodging
-  [%w[ZH AH0 R], %w[JH AH0 R]], # massager / lodger
-  [%w[ZH AH0 R Z], %w[JH AH0 R Z]], # massagers / lodgers
   [%w[AY1 AH0 R], %w[AY1 R]], # compress word-final disyllabic "TYE-er" into monosyllabic "TYRE"
   [%w[AY1 AH0 R Z], %w[AY1 R Z]], # same for tires
   [%w[AY1 AH0 R D], %w[AY1 R D]], # same for tired
@@ -253,7 +255,7 @@ def conflate_imperfect_rhyme_phoneme_string(phoneme_space_string)
 end
 
 # CMUDict sometimes lists an abbreviation's *expanded* form as an alternate pronunciation:
-# e.g. +TV(1) = T EH2 L AH0 V IH1 ZH AH0 N+ (the pronunciation of "television") or
+# e.g. +TV(1) = T EH2 L AH0 V IH1 JH AH0 N+ (the pronunciation of "television") or
 # +CORP(1) = K AO1 R P ER0 EY1 SH AH0 N+ (pronunciation of "corporation"). These bogus
 # alternates cause abbreviations to rhyme with words they don't actually sound like
 # (e.g. +tv+ sharing a rime with +vision+).

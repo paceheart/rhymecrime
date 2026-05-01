@@ -1,0 +1,76 @@
+#!/usr/bin/env ruby
+# encoding: utf-8
+# frozen_string_literal: true
+
+# Sample Kaikki +sounds.ipa+ entries whose ARPAbet conversion differs between the
+# pre- and post- "(ɹ) is required" behavior of +IpaToArpabet.convert+. The "old"
+# behavior is reproduced inline by stripping +(...)+ before calling the lib; the
+# "new" behavior is whatever the current lib does.
+
+require "json"
+require "set"
+require "zlib"
+
+repo = File.expand_path("..", __dir__)
+$LOAD_PATH.unshift File.join(repo, "lib")
+
+require_relative File.join(repo, "lib", "rhymecrime", "dict", "ipa_to_arpabet")
+require_relative File.join(repo, "lib", "rhymecrime", "dict", "constants")
+
+WIKTIONARY_DATA_PATH = File.expand_path("../corpora/wiktionary/kaikki-english-filtered.jsonl.gz", __dir__)
+SAMPLE_SIZE = (ENV["SAMPLE"] || "30").to_i
+SEED = (ENV["SEED"] || "1").to_i
+
+def convert_old(ipa)
+  return nil if ipa.nil?
+  pre = ipa.gsub(/\([^)]*\)/, '')
+  IpaToArpabet.convert(pre)&.join(" ")
+end
+
+def convert_new(ipa)
+  IpaToArpabet.convert(ipa)&.join(" ")
+end
+
+diffs = []
+totals = { rows: 0, with_optional_rhotic: 0, changed: 0 }
+
+Zlib::GzipReader.open(WIKTIONARY_DATA_PATH, encoding: "UTF-8") do |gz|
+  gz.each_line do |line|
+    obj = JSON.parse(line) rescue next
+    word = obj["word"].to_s.strip.downcase
+    pos  = obj["pos"].to_s
+    (obj["sounds"] || []).each do |s|
+      next unless s.is_a?(Hash) && s["ipa"]
+      ipa = s["ipa"]
+      totals[:rows] += 1
+      totals[:with_optional_rhotic] += 1 if ipa.match?(/\([ɹr]\)/)
+      old = convert_old(ipa)
+      new = convert_new(ipa)
+      next if old == new
+      totals[:changed] += 1
+      diffs << { word: word, pos: pos, ipa: ipa, tags: s["tags"] || [], old: old, new: new }
+    end
+  end
+end
+
+rng = Random.new(SEED)
+sample = diffs.sample(SAMPLE_SIZE, random: rng)
+
+puts "Kaikki sound rows scanned:        #{totals[:rows]}"
+puts "  with /\\([ɹr]\\)/ in IPA:        #{totals[:with_optional_rhotic]}"
+puts "  with old != new conversion:     #{totals[:changed]}"
+puts ""
+puts "Random sample (#{sample.size} of #{diffs.size}, seed=#{SEED}):"
+puts "-" * 100
+fmt = "%-22s  %-6s  %-30s  %-30s  %s"
+puts format(fmt, "word [pos]", "tags", "old ARPAbet", "new ARPAbet", "ipa")
+puts "-" * 100
+sample.sort_by { |r| r[:word] }.each do |r|
+  puts format(fmt,
+    "#{r[:word]} [#{r[:pos]}]",
+    r[:tags].first&.[](0, 6).to_s,
+    r[:old].to_s[0, 30],
+    r[:new].to_s[0, 30],
+    r[:ipa]
+  )
+end

@@ -1,0 +1,394 @@
+#!/usr/bin/env ruby
+# encoding: utf-8
+# frozen_string_literal: true
+
+# Compare every entry in +curated/authoritative_pronunciations.txt+ against
+# Kaikki/Wiktionary's pronunciation for the same headword. Both sides are
+# normalized through +normalize_flat_arphabet_pronunciation+ so the comparison
+# matches what +merge_wiktionary!+ ultimately sees in dict-build.
+#
+# STATUS (one per authoritative headword):
+#   match    - every authoritative pron has at least one Kaikki match
+#   partial  - some authoritative prons match Kaikki, others do not
+#   differs  - Kaikki has prons but none match any authoritative pron
+#   missing  - word absent from Kaikki entirely
+#   no_pron  - word in Kaikki but no IPA / no convertible IPA
+#
+# Output: aligned table to stdout, plus a short summary at the end.
+#
+# +--md PATH+ also writes a markdown worklist to +PATH+ for the rows that warrant
+# an upstream Wiktionary edit (status differs / partial / missing). Each entry
+# includes the direct Wiktionary URL, raw Kaikki IPA (with sound tags so the
+# editor knows GA / RP / etc.), the authoritative ARPAbet, and a proposed GA
+# IPA derived from the *raw* (pre-normalization) authoritative phones via
+# +ArpabetToIpa+. The proposed IPA is a starting point — flapping is preserved
+# (intervocalic +D+ stays +d+) so editors should restore phonemic +/t/+ for
+# words like +keto+ / +whiteout+ / +tutti-frutti+.
+
+require "json"
+require "optparse"
+require "set"
+require "zlib"
+
+repo = File.expand_path("..", __dir__)
+$LOAD_PATH.unshift File.join(repo, "lib")
+
+require_relative File.join(repo, "lib", "rhymecrime", "dict", "phonology")
+require_relative File.join(repo, "lib", "rhymecrime", "dict", "wiktionary")
+require_relative File.join(repo, "lib", "rhymecrime", "dict", "arpabet_to_ipa")
+
+options = { md: nil }
+OptionParser.new do |op|
+  op.banner = "Usage: bin/compare-authoritative-vs-kaikki [--md notes/wiktionary-edit-candidates.md]"
+  op.on("--md PATH", "Also emit markdown edit worklist to PATH") { |v| options[:md] = v }
+end.parse!
+
+def load_authoritative_pron_lines
+  by_word = Hash.new { |h, k| h[k] = [] }
+  File.foreach(AUTHORITATIVE_PRONUNCIATIONS_PATH, encoding: "UTF-8") do |line|
+    next unless useful_cmudict_line?(line)
+    raw_tokens = line.chomp.split
+    next if raw_tokens.length < 2
+    raw_word = raw_tokens.shift
+    word = raw_word.downcase.desanitize
+    word = word[0...-3] if word =~ /\([0-9]\)\Z/
+    raw_pron = Pronunciation.new(raw_tokens)
+    by_word[word] << {
+      raw: raw_pron,
+      normalized: normalize_flat_arphabet_pronunciation(raw_pron),
+    }
+  end
+  by_word
+end
+
+# Stream the Kaikki dump for every authoritative headword, with a
+# *trampoline* second pass: when a Kaikki record has no +sounds+ but its
+# +senses+ contain +alt_of+ links to a canonical entry (e.g. +mafioso+ →
+# +Mafioso+, +papier-mache+ → +papier-mâché+), follow the link and adopt the
+# canonical's pronunciations. We deliberately ignore +form_of+ (plurals, past
+# tenses, comparatives, etc.) since inflected forms have legitimately
+# different pronunciations from the lemma — a +don'ts+ Wiktionary entry
+# wouldn't share its IPA with +don't+. The returned record carries
+# +trampoline+ metadata so the markdown can point editors at the canonical
+# Wiktionary page rather than the alt-of stub.
+def stream_kaikki_records_for(words)
+  remaining = Set.new(words)
+  collected = {}
+
+  # Classification keyed by *exact* Kaikki word (Wiktionary case-distinguishes
+  # +Mafioso+ from +mafioso+; we want to read +mafioso+ as a pure stub even
+  # though its capitalized canonical lowercases to the same key). For each
+  # exact word we track: the lowercase auth-key it serves, whether any record
+  # has a real (non-alt-of) sense, and the alt-of targets contributed by
+  # records that *are* pure stubs.
+  word_classification = {}
+
+  Zlib::GzipReader.open(WIKTIONARY_DATA_PATH, encoding: "UTF-8") do |gz|
+    gz.each_line do |line|
+      obj = JSON.parse(line) rescue next
+      w = obj["word"].to_s.strip
+      key = w.downcase
+      next unless remaining.include?(key)
+      pos = obj["pos"].to_s
+      rec = collected[key] ||= { sounds: [], original_word: w, trampoline: nil }
+      (obj["sounds"] || []).each do |s|
+        next unless s.is_a?(Hash) && s["ipa"]
+        rec[:sounds] << { ipa: s["ipa"], tags: s["tags"] || [], pos: pos }
+      end
+      cls = word_classification[w] ||= { key: key, has_real: false, alt_targets: [] }
+      senses = obj["senses"] || []
+      pure_alt_of = !senses.empty? && senses.all? do |sense|
+        (sense["tags"] || []).include?("alt-of") &&
+          sense["alt_of"].is_a?(Array) && !sense["alt_of"].empty?
+      end
+      if pure_alt_of
+        senses.each do |sense|
+          sense["alt_of"].each do |target|
+            tw = (target.is_a?(Hash) ? target["word"] : nil).to_s.strip
+            next if tw.empty? || tw == w
+            cls[:alt_targets] << tw
+          end
+        end
+      else
+        cls[:has_real] = true
+      end
+    end
+  end
+
+  # Build the second-pass lookup. Skip any auth headword whose collected
+  # sounds are already non-empty. For trampoline candidacy we look at the
+  # set of *exact* Kaikki words that lowercase to this auth key: if at least
+  # one of them is a pure-stub spelling (no real records, has alt-of
+  # targets), use that stub's targets. This lets +mafioso+ (pure stub)
+  # trampoline to +Mafioso+ even though +Mafioso+ also exists as a real
+  # entry under the same lowercased key, while still blocking +cache+ (which
+  # has real noun + verb records alongside a misspelling stub) from
+  # trampolining to +cachet+.
+  pending = {}
+  by_key = word_classification.values.group_by { |cls| cls[:key] }
+  by_key.each do |key, classes|
+    next if collected[key] && !collected[key][:sounds].empty?
+    stub_classes = classes.select { |c| !c[:has_real] && !c[:alt_targets].empty? }
+    next if stub_classes.empty?
+    targets = stub_classes.flat_map { |c| c[:alt_targets] }.uniq
+    targets.each do |tw|
+      tkey = tw.downcase
+      (pending[tkey] ||= []) << { from_key: key, spec: { word: tw, relation: "alt-of" } }
+    end
+  end
+  return collected if pending.empty?
+
+  # Second pass: collect sounds for each target. Wiktionary case-distinguishes
+  # +Mafioso+ from +mafioso+, so we keep entries grouped by exact +word+ and
+  # prefer the exact-case match later. Also record whether each target was
+  # *seen* at all in the dump (with or without sounds), so we can still point
+  # editors at the canonical page when the canonical itself lacks IPA.
+  target_hits = Hash.new { |h, k| h[k] = [] }
+  target_seen = Hash.new { |h, k| h[k] = [] }
+  Zlib::GzipReader.open(WIKTIONARY_DATA_PATH, encoding: "UTF-8") do |gz|
+    gz.each_line do |line|
+      obj = JSON.parse(line) rescue next
+      w = obj["word"].to_s.strip
+      tkey = w.downcase
+      next unless pending.key?(tkey)
+      target_seen[tkey] << w unless target_seen[tkey].include?(w)
+      sounds = (obj["sounds"] || []).select { |s| s.is_a?(Hash) && s["ipa"] }
+      next if sounds.empty?
+      pos = obj["pos"].to_s
+      sounds.each do |s|
+        target_hits[tkey] << {
+          ipa: s["ipa"], tags: s["tags"] || [], pos: pos, target_word: w,
+        }
+      end
+    end
+  end
+
+  pending.each do |tkey, hits|
+    found = target_hits[tkey]
+    seen = target_seen[tkey]
+    hits.each do |h|
+      rec = collected[h[:from_key]]
+      next unless rec && rec[:sounds].empty?
+      spec = h[:spec]
+      target_word = if found.any?
+                      exact = found.select { |x| x[:target_word] == spec[:word] }
+                      use = exact.any? ? exact : found
+                      rec[:sounds].concat(use.map { |x| x.slice(:ipa, :tags, :pos) })
+                      use.first[:target_word]
+                    elsif seen.any?
+                      seen.include?(spec[:word]) ? spec[:word] : seen.first
+                    else
+                      next
+                    end
+      rec[:trampoline] = { target_word: target_word, relation: spec[:relation] }
+    end
+  end
+
+  collected
+end
+
+def kaikki_arpabet_prons_from_record(record)
+  return [] if record.nil? || record[:sounds].empty?
+  ipa_strings = pick_ga_sounds(record[:sounds].map { |s| { "ipa" => s[:ipa], "tags" => s[:tags] } })
+  prons = []
+  ipa_strings.each do |ipa|
+    arpabet = IpaToArpabet.convert(ipa)
+    next if arpabet.nil? || arpabet.empty?
+    pron = Pronunciation.new(arpabet)
+    next if pron.empty?
+    prons << normalize_flat_arphabet_pronunciation(pron)
+  end
+  prons.uniq { |p| p.phonemes }
+end
+
+def pron_strings(prons) = prons.map { |p| p.phonemes.reject { |ph| ph == "." }.join(" ") }
+
+# Treat secondary stress (+2+) as unstressed (+0+) when deciding whether two
+# pronunciations match. Wiktionary editors don't transcribe secondary stress
+# consistently, so an +AY2+ vs +AY0+ vs unmarked-but-after-primary difference
+# isn't worth filing an upstream edit for.
+def comparison_key(pron_str)
+  pron_str.gsub(/\b([A-Z]+)2\b/) { "#{Regexp.last_match(1)}0" }
+end
+
+def status_for(auth_strs, kaikki_strs, kaikki_record)
+  if kaikki_record.nil?
+    :missing
+  elsif kaikki_strs.empty?
+    :no_pron
+  else
+    auth_keys = auth_strs.map { |a| comparison_key(a) }
+    kaikki_keys = Set.new(kaikki_strs.map { |k| comparison_key(k) })
+    matches = auth_keys.count { |k| kaikki_keys.include?(k) }
+    if matches == auth_keys.length
+      :match
+    elsif matches.zero?
+      :differs
+    else
+      :partial
+    end
+  end
+end
+
+def wiktionary_url(word)
+  # +en.wiktionary.org+ uses MediaWiki page titles, where spaces map to
+  # underscores. Apostrophes, hyphens, and most diacritics survive in the URL
+  # without percent-encoding (browsers handle UTF-8 byte sequences).
+  "https://en.wiktionary.org/wiki/#{word.tr(' ', '_')}"
+end
+
+# Build the markdown lines for a single edit candidate. When the row was
+# resolved via alt-of / form-of trampolining, the section header links to the
+# *canonical* Wiktionary page (where the editor needs to make changes) and a
+# +Trampolined via …+ line tells them the original stub's name.
+def render_edit_entry(r, ipa_block)
+  out = []
+  if r[:trampoline]
+    target = r[:trampoline][:target_word]
+    out << "### `#{r[:word]}` — [#{r[:status]}](#{wiktionary_url(target)})"
+    out << ""
+    out << "Trampolined via #{r[:trampoline][:relation]} → `#{target}` (edit the canonical page)."
+  else
+    out << "### `#{r[:word]}` — [#{r[:status]}](#{wiktionary_url(r[:word])})"
+  end
+  out << ""
+  out << "Proposed GA IPA:"
+  out << ""
+  if r[:auth_proposed_ipa].empty?
+    out << "- _(unavailable)_"
+  else
+    r[:auth_proposed_ipa].each { |ipa| out << "- `#{ipa}`" }
+  end
+  out << ""
+  out << "Authoritative ARPAbet:"
+  out << ""
+  r[:auth].each { |p| out << "- `#{p}`" }
+  out << ""
+  out << "Kaikki ARPAbet (post-normalize):"
+  out << ""
+  if r[:kaikki_arpabet].empty?
+    out << "- _(none)_"
+  else
+    r[:kaikki_arpabet].each { |p| out << "- `#{p}`" }
+  end
+  out << ""
+  out << "Kaikki raw IPA:"
+  out << ""
+  out.concat(ipa_block.call(r[:kaikki_ipa]))
+  out << ""
+  out
+end
+
+auth = load_authoritative_pron_lines
+kaikki_records = stream_kaikki_records_for(auth.keys)
+
+rows = []
+auth.keys.sort.each do |word|
+  auth_entries = auth[word]
+  auth_norm_prons = auth_entries.map { |e| e[:normalized] }
+  auth_raw_prons = auth_entries.map { |e| e[:raw] }
+  raw_rec = kaikki_records[word]
+  trampoline = raw_rec && raw_rec[:trampoline]
+  rec = (raw_rec && !raw_rec[:sounds].empty?) ? raw_rec : nil
+  kaikki_prons = kaikki_arpabet_prons_from_record(rec)
+  rows << {
+    word: word,
+    status: status_for(pron_strings(auth_norm_prons), pron_strings(kaikki_prons), rec),
+    auth: pron_strings(auth_norm_prons),
+    auth_proposed_ipa: auth_raw_prons.map { |p| ArpabetToIpa.convert(p) }.reject(&:empty?).uniq,
+    kaikki_arpabet: pron_strings(kaikki_prons),
+    kaikki_ipa: rec.nil? ? [] : rec[:sounds],
+    trampoline: trampoline,
+  }
+end
+
+# Plain table to stdout.
+w_word = rows.map { |r| r[:word].length }.max
+w_status = rows.map { |r| r[:status].length }.max
+puts format("%-*s  %-*s  %s", w_word, "word", w_status, "status", "auth -> kaikki")
+puts "-" * 100
+rows.each do |r|
+  auth_s = r[:auth].join(" | ")
+  kaikki_s = r[:kaikki_arpabet].empty? ? "(none)" : r[:kaikki_arpabet].join(" | ")
+  trampoline_s = r[:trampoline] ? " (via #{r[:trampoline][:relation]} → #{r[:trampoline][:target_word]})" : ""
+  puts format("%-*s  %-*s  %s    ||    %s%s", w_word, r[:word], w_status, r[:status], auth_s, kaikki_s, trampoline_s)
+end
+
+puts "-" * 100
+counts = rows.group_by { |r| r[:status] }.transform_values(&:size)
+%i[match partial differs missing no_pron].each do |s|
+  puts "  #{s}: #{counts[s] || 0}"
+end
+puts "  total: #{rows.size}"
+
+# Markdown edit worklist (optional).
+if options[:md]
+  edit_rows = rows.select { |r| %i[differs partial no_pron].include?(r[:status]) }
+  add_rows  = rows.select { |r| r[:status] == :missing }
+
+  ipa_block = ->(record_sounds) {
+    return ["_(no Kaikki sounds)_"] if record_sounds.empty?
+    record_sounds.map do |s|
+      tag_str = s[:tags].empty? ? "" : " _(#{s[:tags].join(', ')})_"
+      pos_str = s[:pos].empty?  ? "" : " [#{s[:pos]}]"
+      "- `#{s[:ipa]}`#{tag_str}#{pos_str}"
+    end
+  }
+
+  md = []
+  md << "# Wiktionary edit candidates"
+  md << ""
+  md << "Generated by `bin/compare-authoritative-vs-kaikki --md`. Each section is one entry"
+  md << "in `curated/authoritative_pronunciations.txt` whose pronunciation does not match"
+  md << "Kaikki's filtered Wiktionary snapshot under `corpora/wiktionary/`. Status legend"
+  md << "matches the table the script prints to stdout."
+  md << ""
+  md << "Authoritative ARPAbet is the rhymecrime-canonical pronunciation. IPA from Kaikki is"
+  md << "shown raw, with the original `sounds.tags` (so you can see GA vs RP, accent labels,"
+  md << "etc.). The **proposed GA IPA** is back-converted from the *raw* (pre-normalization)"
+  md << "authoritative phones via `lib/rhymecrime/dict/arpabet_to_ipa.rb`. Treat it as a"
+  md << "starting point: paste, then adjust syllable boundaries, ties, or vowel quality as"
+  md << "you see fit. Two known caveats:"
+  md << ""
+  md << "- Flapping is preserved — intervocalic `D` from the authoritative file stays `d` in"
+  md << "  the IPA. Restore phonemic `/t/` for words like `keto`, `whiteout`, `tutti-frutti`,"
+  md << "  `protostar(1)`."
+  md << "- Affricates render as `tʃ` / `dʒ` without tie bars; add `͡` if your target entry"
+  md << "  uses `t͡ʃ` / `d͡ʒ`."
+  md << ""
+  md << "Comparison treats secondary stress (`2`) as unstressed (`0`); secondary-stress"
+  md << "marking conventions vary too much across Wiktionary editors to be worth chasing."
+  md << ""
+  md << "When a Kaikki entry is just an alt-of stub for a spelling or letter-case variant"
+  md << "(e.g. `mafioso` → `Mafioso`, `papier-mache` → `papier-mâché`), the comparison"
+  md << "trampolines to the canonical entry's pronunciations. Sections that did so are"
+  md << "marked with a *Trampolined via …* line, and the linked Wiktionary URL points at"
+  md << "the canonical page (where the IPA actually lives) rather than the stub. We do"
+  md << "*not* trampoline form-of relationships (plurals, past tenses, comparatives)"
+  md << "since inflected forms have different pronunciations from the lemma."
+  md << ""
+  md << "## Edit existing entries (#{edit_rows.size})"
+  md << ""
+  edit_rows.each do |r|
+    md.concat(render_edit_entry(r, ipa_block))
+  end
+
+  md << "## Add new entries (#{add_rows.size})"
+  md << ""
+  md << "These authoritative headwords are not in Kaikki's filtered snapshot at all. Adding"
+  md << "them upstream is a heavier lift (full Wiktionary entry + senses, not just IPA), so"
+  md << "they are split out from the in-place edit list."
+  md << ""
+  add_rows.each do |r|
+    ipa_str = r[:auth_proposed_ipa].empty? ? "_(no IPA)_" : r[:auth_proposed_ipa].map { |i| "`#{i}`" }.join(" / ")
+    if r[:trampoline]
+      target = r[:trampoline][:target_word]
+      md << "- `#{r[:word]}` → [`#{target}`](#{wiktionary_url(target)}) (alt-of canonical, also missing IPA): proposed #{ipa_str} — ARPAbet `#{r[:auth].join('`, `')}`"
+    else
+      md << "- [`#{r[:word]}`](#{wiktionary_url(r[:word])}): proposed #{ipa_str} — ARPAbet `#{r[:auth].join('`, `')}`"
+    end
+  end
+
+  File.write(options[:md], md.join("\n") + "\n", encoding: Encoding::UTF_8)
+  warn "Wrote #{edit_rows.size} edit candidates + #{add_rows.size} additions to #{options[:md]}"
+end

@@ -38,7 +38,16 @@ ARGF.each_line do |line|
   pos = obj["pos"]
   next if word.nil? || word.empty? || pos.nil? || pos.empty?
 
-  sounds = (obj["sounds"] || []).select { |s| s.is_a?(Hash) && s["ipa"] }
+  # Drop +nonstandard+-tagged transcriptions: Wiktionary editors flag stigmatized
+  # / hyper-local / reading-spelling renderings (+/məˈdam/+ for "madam",
+  # +/foʊlks/+ for "folks", +[ˈtɛt.nɪ.kl̩]+ for Southern-US "technical"). They
+  # add noise to rhyme buckets without giving us a broadly accepted reading we
+  # don't already have from a sibling +sounds+ row. ~0.12% of dump rows.
+  sounds = (obj["sounds"] || []).select do |s|
+    next false unless s.is_a?(Hash) && s["ipa"]
+    next false if (s["tags"] || []).include?("nonstandard")
+    true
+  end
   kept_sounds = sounds.map { |s| { "ipa" => s["ipa"], "tags" => s["tags"] || [] } }
 
   forms = (obj["forms"] || []).select { |f| f.is_a?(Hash) && f["form"] && f["tags"] }

@@ -1067,6 +1067,7 @@ mow,mower,related,morphological variants oughta be related but not words that ar
 mow,mowing,related,morphological variants oughta be related but not words that are merely orthographically similar
 mow,mows,related,morphological variants oughta be related but not words that are merely orthographically similar
 mumble,prayers,related,prereq: prayers/humble+mumble
+music,abbreviation,related,music prereq: abbreviation / notation
 music,accidental,related,
 music,algebra,related_ish,music is math
 music,arpeggio,related,
@@ -1119,6 +1120,7 @@ music,minuet,related,
 music,mix,related,
 music,mortgage,unrelated,
 music,movement,related,polysemy: symphony movement vs physical movement
+music,musician,related,music prereq: composition* / musician*
 music,natural,related_ish,natural note vs nature
 music,noise,related,music prereq: enjoys / noise
 music,notation,related,
@@ -1127,6 +1129,7 @@ music,oboe,related,prereq: music/oboe+piano
 music,orchestration,related,music prereq: orchestration / vibration
 music,overtone,related,
 music,penguin,unrelated,
+music,percussion,related,music prereq: percussion / repercussion
 music,pianissimo,related,
 music,piano,related,
 music,piece,related,
@@ -1143,10 +1146,12 @@ music,record,related,
 music,recorded,related,
 music,release,related,
 music,repeat,related,music prereq: beat / repeat
+music,repercussion,unrelated,music prereq: percussion / repercussion, but it's unrelated
 music,repertoire,related,
 music,rest,related,music prereq: rest / expressed
 music,rhombus,unrelated,
 music,rhythm,related,clearly related
+music,ritardando,related,music prereq: glissando / ritardando
 music,scale,related,polysemy: musical scale vs fish scale
 music,score,related,
 music,scores,related,
@@ -1545,8 +1550,10 @@ prayers,plea,related,
 prayers,priest,related,
 prayers,priests,related,prereq: prayers/feast+priest
 prayers,rancid,unrelated,
+prayers,recite,related,prayers prereq: recite* / rite*
 prayers,recites,related,prereq: prayers/recites+rites
 prayers,rhombus,unrelated,
+prayers,rite,related,prayers prereq: recite* / rite*
 prayers,sever,unrelated,
 rain,beam,unrelated,
 rain,brick,unrelated,
@@ -8030,6 +8037,7 @@ rainbow,cake,whatever,symmetry-breaking sweep 2026-04-26
 rainforest,over,unrelated,assumed unrelated due to symmetry
 raison,pirate,unrelated,assumed unrelated due to symmetry
 rake,cat,unrelated,assumed unrelated due to symmetry
+rake,evil,related,prereq: food+evil/cake+rake
 rambles,cat,unrelated,assumed unrelated due to symmetry
 ramparts,river,unrelated,assumed unrelated due to symmetry
 rancid,music,unrelated,assumed unrelated due to symmetry
@@ -9108,6 +9116,7 @@ military,gay,related_ish,symmetry-breaking sweep 2026-04-26
 music,fandango,related_ish,symmetry-breaking sweep 2026-04-26
 music,flow,related,music prereq: flow / bow
 pan,food,related_ish,symmetry-breaking sweep 2026-04-26
+pan,gay,related,prereq: gay+food/pan+flan
 pass,football,related_ish,symmetry-breaking sweep 2026-04-26
 pie,apple,related_ish,symmetry-breaking sweep 2026-04-26
 pirate,wave,related_ish,symmetry-breaking sweep 2026-04-26
@@ -9155,8 +9164,8 @@ safer,gay,unrelated,assumed unrelated due to symmetry
 shoes,clumsy,unrelated,assumed unrelated due to symmetry
 shower,gay,unrelated,assumed unrelated due to symmetry
 stand,gay,unrelated,assumed unrelated due to symmetry
-undeserved,evil,unrelated,assumed unrelated due to symmetry
-water,turbidity,unrelated,assumed unrelated due to symmetry
+undeserved,evil,related,prereq: food+evil/served+undeserved
+water,turbidity,related,water prereq: humidity / turbidity
 denial,crime,unrelated_ish,assumed unrelated due to symmetry
 dishonesty,crime,unrelated_ish,assumed unrelated due to symmetry
 excuse,clumsy,unrelated_ish,assumed unrelated due to symmetry
@@ -9328,6 +9337,7 @@ evidence,crime,related,symmetry-breaking sweep 2026-04-26
 evil,doom,related,symmetry-breaking sweep 2026-04-26
 exercise,train,related,symmetry-breaking sweep 2026-04-26
 exploration,backtrack,related,symmetry-breaking sweep 2026-04-26
+exploration,knapsack,related,exploration prereq: knapsack / backtrack
 exploration,pack,related,symmetry-breaking sweep 2026-04-26
 exploration,track,related,symmetry-breaking sweep 2026-04-26
 farm,food,related,symmetry-breaking sweep 2026-04-26
@@ -10776,3 +10786,316 @@ pirate,stuart,unrelated,feedback: 0 up / 1 down
 pirate,tidal,related,feedback: 1 up / 0 down
 pirate,unique,unrelated,feedback: 0 up / 1 down
 pirate,version,unrelated,feedback: 0 up / 1 down
+games,activity,related,feedback: 1 up / 0 down
+games,affair,unrelated,feedback: 0 up / 1 down
+games,ass,unrelated,feedback: 0 up / 1 down
+games,baccarat,related,feedback: 1 up / 0 down
+games,ball,related,feedback: 1 up / 0 down
+games,ballot,unrelated,feedback: 0 up / 1 down
+games,beating,related,feedback: 1 up / 0 down
+games,beginnings,unrelated,feedback: 0 up / 1 down
+games,bet,related,feedback: 1 up / 0 down
+games,big,unrelated,feedback: 0 up / 1 down
+games,bluff,related,feedback: 1 up / 0 down
+games,bout,related,feedback: 1 up / 0 down
+games,bowl,related,feedback: 1 up / 0 down
+games,card,related,feedback: 1 up / 0 down
+games,casino,related,feedback: 1 up / 0 down
+games,cheating,related,feedback: 1 up / 0 down
+games,chess,related,feedback: 1 up / 0 down
+games,comes,unrelated,feedback: 0 up / 1 down
+games,competing,related,feedback: 1 up / 0 down
+games,computer,related,feedback: 1 up / 0 down
+games,concede,related,feedback: 1 up / 0 down
+games,conceding,related,feedback: 1 up / 0 down
+games,console,related,feedback: 1 up / 0 down
+games,contests,related,feedback: 1 up / 0 down
+games,controller,related,feedback: 1 up / 0 down
+games,courting,unrelated,feedback: 0 up / 1 down
+games,defeating,related,feedback: 1 up / 0 down
+games,denouement,unrelated,feedback: 0 up / 1 down
+games,faction,unrelated,feedback: 0 up / 1 down
+games,fair,related,feedback: 1 up / 0 down
+games,festivity,related,feedback: 1 up / 0 down
+games,finesse,related,feedback: 1 up / 0 down
+games,fortissimo,unrelated,feedback: 0 up / 1 down
+games,foursquare,related,feedback: 1 up / 0 down
+games,geno,unrelated,feedback: 0 up / 1 down
+games,gin,related,feedback: 1 up / 0 down
+games,goal,related,feedback: 1 up / 0 down
+games,harp,unrelated,feedback: 0 up / 1 down
+games,innings,related,feedback: 1 up / 0 down
+games,jig,unrelated,feedback: 0 up / 1 down
+games,lacrosse,related,feedback: 1 up / 0 down
+games,level,related,feedback: 1 up / 0 down
+games,loss,related,feedback: 1 up / 0 down
+games,lost,related,feedback: 1 up / 0 down
+games,loster,unrelated,feedback: 0 up / 1 down
+games,lotto,related,feedback: 1 up / 0 down
+games,maths,unrelated,feedback: 0 up / 1 down
+games,merci,unrelated,feedback: 0 up / 1 down
+games,met,unrelated,feedback: 0 up / 1 down
+games,muff,unrelated,feedback: 0 up / 1 down
+games,odds,related,feedback: 1 up / 0 down
+games,pianissimo,unrelated,feedback: 0 up / 1 down
+games,pizzicato,unrelated,feedback: 0 up / 1 down
+games,playoff,related,feedback: 1 up / 0 down
+games,ploy,unrelated,feedback: 0 up / 1 down
+games,poll,unrelated,feedback: 0 up / 1 down
+games,recording,unrelated,feedback: 0 up / 1 down
+games,referee,related,feedback: 1 up / 0 down
+games,rival,related,feedback: 1 up / 0 down
+games,roulette,related,feedback: 1 up / 0 down
+games,round,related,feedback: 1 up / 0 down
+games,ruff,related,feedback: 1 up / 0 down
+games,score,related,feedback: 1 up / 0 down
+games,scores,related,feedback: 1 up / 0 down
+games,script,unrelated,feedback: 0 up / 1 down
+games,shooter,related,feedback: 1 up / 0 down
+games,sieges,unrelated,feedback: 0 up / 1 down
+games,solitaire,related,feedback: 1 up / 0 down
+games,spinner,related,feedback: 1 up / 0 down
+games,spores,unrelated,feedback: 0 up / 1 down
+games,sporting,related,feedback: 1 up / 0 down
+games,steam,related,feedback: 1 up / 0 down
+games,stores,related,feedback: 1 up / 0 down
+games,subtraction,unrelated,feedback: 0 up / 1 down
+games,survival,related,feedback: 1 up / 0 down
+games,team,related,feedback: 1 up / 0 down
+games,trump,related,feedback: 1 up / 0 down
+games,wads,unrelated,feedback: 0 up / 1 down
+games,whist,related,feedback: 1 up / 0 down
+games,win,related,feedback: 1 up / 0 down
+games,winner,related,feedback: 1 up / 0 down
+games,word,related,feedback: 1 up / 0 down
+cajun,abalone,unrelated,feedback: 0 up / 1 down
+cajun,arcadian,related,feedback: 1 up / 0 down
+cajun,baguette,related,feedback: 1 up / 0 down
+cajun,belle,related,feedback: 1 up / 0 down
+cajun,bleu,related,feedback: 1 up / 0 down
+cajun,bouillabaisse,related,feedback: 1 up / 0 down
+cajun,brahmin,unrelated,feedback: 0 up / 1 down
+cajun,broth,related,feedback: 1 up / 0 down
+cajun,calzone,unrelated,feedback: 0 up / 1 down
+cajun,cayenne,related,feedback: 1 up / 0 down
+cajun,creamy,related,feedback: 1 up / 0 down
+cajun,critter,related,feedback: 1 up / 0 down
+cajun,falafel,unrelated,feedback: 0 up / 1 down
+cajun,flavor,related,feedback: 1 up / 0 down
+cajun,fried,related,feedback: 1 up / 0 down
+cajun,fry,related,feedback: 1 up / 0 down
+cajun,geese,unrelated,feedback: 0 up / 1 down
+cajun,gumbo,related,feedback: 1 up / 0 down
+cajun,haitians,related,feedback: 1 up / 0 down
+cajun,italian,unrelated,feedback: 0 up / 1 down
+cajun,orleans,related,feedback: 1 up / 0 down
+cajun,raconteurs,related,feedback: 1 up / 0 down
+cajun,shillelaghs,unrelated,feedback: 0 up / 1 down
+cajun,smoky,related,feedback: 1 up / 0 down
+cajun,spice,related,feedback: 1 up / 0 down
+cajun,strudel,unrelated,feedback: 0 up / 1 down
+cajun,swamp,related,feedback: 1 up / 0 down
+cajun,tasty,related,feedback: 1 up / 0 down
+cajun,teriyaki,unrelated,feedback: 0 up / 1 down
+cajun,thais,unrelated,feedback: 0 up / 1 down
+cajun,tikka,unrelated,feedback: 0 up / 1 down
+cajun,vindaloo,unrelated,feedback: 0 up / 1 down
+cajun,voodoo,related,feedback: 1 up / 0 down
+cajun,waffle,unrelated,feedback: 0 up / 1 down
+computer,abbreviation,unrelated,feedback: 0 up / 1 down
+computer,accommodation,unrelated,feedback: 0 up / 1 down
+computer,accumulation,unrelated,feedback: 0 up / 1 down
+computer,acquaint,unrelated,feedback: 0 up / 1 down
+computer,adjudication,unrelated,feedback: 0 up / 1 down
+computer,alteration,unrelated,feedback: 0 up / 1 down
+computer,amortization,unrelated,feedback: 0 up / 1 down
+computer,amplification,unrelated,feedback: 0 up / 1 down
+computer,anesthesiologists,unrelated,feedback: 0 up / 1 down
+computer,animation,related,feedback: 1 up / 0 down
+computer,anticipation,unrelated,feedback: 0 up / 1 down
+computer,antiquarian,unrelated,feedback: 0 up / 1 down
+computer,antique,unrelated,feedback: 0 up / 1 down
+computer,apace,unrelated,feedback: 0 up / 1 down
+computer,approximation,unrelated,feedback: 0 up / 1 down
+computer,assign,unrelated,feedback: 0 up / 1 down
+computer,assignation,unrelated,feedback: 0 up / 1 down
+computer,auscultation,unrelated,feedback: 0 up / 1 down
+computer,automation,related,feedback: 1 up / 0 down
+computer,autonomic,related,feedback: 1 up / 0 down
+computer,backboard,unrelated,feedback: 0 up / 1 down
+computer,bedroom,unrelated,feedback: 0 up / 1 down
+computer,blackboard,unrelated,feedback: 0 up / 1 down
+computer,calculation,related,feedback: 1 up / 0 down
+computer,capitalization,unrelated,feedback: 0 up / 1 down
+computer,cartographic,unrelated,feedback: 0 up / 1 down
+computer,case,related,feedback: 1 up / 0 down
+computer,casino,unrelated,feedback: 0 up / 1 down
+computer,cell,unrelated,feedback: 0 up / 1 down
+computer,cheese,unrelated,feedback: 0 up / 1 down
+computer,chess,related,feedback: 1 up / 0 down
+computer,choreographer,unrelated,feedback: 0 up / 1 down
+computer,chores,unrelated,feedback: 0 up / 1 down
+computer,clerk,unrelated,feedback: 0 up / 1 down
+computer,clipper,unrelated,feedback: 0 up / 1 down
+computer,code,related,feedback: 1 up / 0 down
+computer,collage,unrelated,feedback: 0 up / 1 down
+computer,collation,unrelated,feedback: 0 up / 1 down
+computer,combination,unrelated,feedback: 0 up / 1 down
+computer,commutation,unrelated,feedback: 0 up / 1 down
+computer,compilation,related,feedback: 1 up / 0 down
+computer,compile,related,feedback: 1 up / 0 down
+computer,compilers,related,feedback: 1 up / 0 down
+computer,computation,related,feedback: 1 up / 0 down
+computer,concentration,unrelated,feedback: 0 up / 1 down
+computer,condensation,unrelated,feedback: 0 up / 1 down
+computer,consideration,unrelated,feedback: 0 up / 1 down
+computer,consolidation,unrelated,feedback: 0 up / 1 down
+computer,conversation,unrelated,feedback: 0 up / 1 down
+computer,cores,related,feedback: 1 up / 0 down
+computer,correlation,unrelated,feedback: 0 up / 1 down
+computer,cut,unrelated,feedback: 0 up / 1 down
+computer,data,related,feedback: 1 up / 0 down
+computer,deletion,related,feedback: 1 up / 0 down
+computer,dell,related,feedback: 1 up / 0 down
+computer,demonstration,unrelated,feedback: 0 up / 1 down
+computer,designation,unrelated,feedback: 0 up / 1 down
+computer,destination,unrelated,feedback: 0 up / 1 down
+computer,determination,unrelated,feedback: 0 up / 1 down
+computer,dialysis,unrelated,feedback: 0 up / 1 down
+computer,dissembling,unrelated,feedback: 0 up / 1 down
+computer,dissertation,unrelated,feedback: 0 up / 1 down
+computer,domination,unrelated,feedback: 0 up / 1 down
+computer,drawers,unrelated,feedback: 0 up / 1 down
+computer,dresser,unrelated,feedback: 0 up / 1 down
+computer,drum,unrelated,feedback: 0 up / 1 down
+computer,echolocation,unrelated,feedback: 0 up / 1 down
+computer,economic,unrelated,feedback: 0 up / 1 down
+computer,edification,unrelated,feedback: 0 up / 1 down
+computer,elaboration,unrelated,feedback: 0 up / 1 down
+computer,electrolytic,unrelated,feedback: 0 up / 1 down
+computer,elimination,unrelated,feedback: 0 up / 1 down
+computer,elocutions,unrelated,feedback: 0 up / 1 down
+computer,embarkation,unrelated,feedback: 0 up / 1 down
+computer,emulation,related,feedback: 1 up / 0 down
+computer,excel,related,feedback: 1 up / 0 down
+computer,excitation,unrelated,feedback: 0 up / 1 down
+computer,experimentation,unrelated,feedback: 0 up / 1 down
+computer,exploitation,unrelated,feedback: 0 up / 1 down
+computer,extrapolation,unrelated,feedback: 0 up / 1 down
+computer,falsification,unrelated,feedback: 0 up / 1 down
+computer,fibrillation,unrelated,feedback: 0 up / 1 down
+computer,file,related,feedback: 1 up / 0 down
+computer,filtration,unrelated,feedback: 0 up / 1 down
+computer,fixation,unrelated,feedback: 0 up / 1 down
+computer,floors,unrelated,feedback: 0 up / 1 down
+computer,floppy,related,feedback: 1 up / 0 down
+computer,fluctuation,unrelated,feedback: 0 up / 1 down
+computer,geek,related,feedback: 1 up / 0 down
+computer,generalization,unrelated,feedback: 0 up / 1 down
+computer,geographer,unrelated,feedback: 0 up / 1 down
+computer,geographic,unrelated,feedback: 0 up / 1 down
+computer,graduation,unrelated,feedback: 0 up / 1 down
+computer,guesser,unrelated,feedback: 0 up / 1 down
+computer,guitar,unrelated,feedback: 0 up / 1 down
+computer,hibernation,unrelated,feedback: 0 up / 1 down
+computer,identification,unrelated,feedback: 0 up / 1 down
+computer,implementation,related,feedback: 1 up / 0 down
+computer,information,related,feedback: 1 up / 0 down
+computer,ink,unrelated,feedback: 0 up / 1 down
+computer,installation,related,feedback: 1 up / 0 down
+computer,interpolation,unrelated,feedback: 0 up / 1 down
+computer,interrogation,unrelated,feedback: 0 up / 1 down
+computer,intimidation,unrelated,feedback: 0 up / 1 down
+computer,introduce,unrelated,feedback: 0 up / 1 down
+computer,investigation,unrelated,feedback: 0 up / 1 down
+computer,lab,related,feedback: 1 up / 0 down
+computer,load,related,feedback: 1 up / 0 down
+computer,location,unrelated,feedback: 0 up / 1 down
+computer,lubrication,unrelated,feedback: 0 up / 1 down
+computer,magnification,unrelated,feedback: 0 up / 1 down
+computer,masseuse,unrelated,feedback: 0 up / 1 down
+computer,masturbation,unrelated,feedback: 0 up / 1 down
+computer,maximization,unrelated,feedback: 0 up / 1 down
+computer,mechanization,related,feedback: 1 up / 0 down
+computer,miniaturization,related,feedback: 1 up / 0 down
+computer,misplace,unrelated,feedback: 0 up / 1 down
+computer,misspell,unrelated,feedback: 0 up / 1 down
+computer,modification,unrelated,feedback: 0 up / 1 down
+computer,modulation,unrelated,feedback: 0 up / 1 down
+computer,montage,unrelated,feedback: 0 up / 1 down
+computer,motel,unrelated,feedback: 0 up / 1 down
+computer,mousse,unrelated,feedback: 0 up / 1 down
+computer,oceanographer,unrelated,feedback: 0 up / 1 down
+computer,oceanographic,unrelated,feedback: 0 up / 1 down
+computer,orthopedist,unrelated,feedback: 0 up / 1 down
+computer,parasitic,unrelated,feedback: 0 up / 1 down
+computer,permutation,unrelated,feedback: 0 up / 1 down
+computer,perspiration,unrelated,feedback: 0 up / 1 down
+computer,pinning,unrelated,feedback: 0 up / 1 down
+computer,plants,unrelated,feedback: 0 up / 1 down
+computer,popularization,unrelated,feedback: 0 up / 1 down
+computer,portals,unrelated,feedback: 0 up / 1 down
+computer,portmanteau,unrelated,feedback: 0 up / 1 down
+computer,precipitation,unrelated,feedback: 0 up / 1 down
+computer,preference,unrelated,feedback: 0 up / 1 down
+computer,preparation,unrelated,feedback: 0 up / 1 down
+computer,prestidigitation,unrelated,feedback: 0 up / 1 down
+computer,propagation,unrelated,feedback: 0 up / 1 down
+computer,pseudoscientific,unrelated,feedback: 0 up / 1 down
+computer,psychokinesis,unrelated,feedback: 0 up / 1 down
+computer,pulsation,unrelated,feedback: 0 up / 1 down
+computer,punctuation,unrelated,feedback: 0 up / 1 down
+computer,qualification,unrelated,feedback: 0 up / 1 down
+computer,racer,unrelated,feedback: 0 up / 1 down
+computer,radiation,unrelated,feedback: 0 up / 1 down
+computer,realization,unrelated,feedback: 0 up / 1 down
+computer,recitation,unrelated,feedback: 0 up / 1 down
+computer,reconciliation,unrelated,feedback: 0 up / 1 down
+computer,remediation,unrelated,feedback: 0 up / 1 down
+computer,rental,unrelated,feedback: 0 up / 1 down
+computer,replication,unrelated,feedback: 0 up / 1 down
+computer,repossessed,unrelated,feedback: 0 up / 1 down
+computer,reproduce,unrelated,feedback: 0 up / 1 down
+computer,retarding,unrelated,feedback: 0 up / 1 down
+computer,retentive,unrelated,feedback: 0 up / 1 down
+computer,reverberation,unrelated,feedback: 0 up / 1 down
+computer,rpm,unrelated,feedback: 0 up / 1 down
+computer,scanner,related,feedback: 1 up / 0 down
+computer,scientific,related,feedback: 1 up / 0 down
+computer,secretarial,unrelated,feedback: 0 up / 1 down
+computer,settees,unrelated,feedback: 0 up / 1 down
+computer,shoe,unrelated,feedback: 0 up / 1 down
+computer,sim,related,feedback: 1 up / 0 down
+computer,slating,unrelated,feedback: 0 up / 1 down
+computer,smartass,unrelated,feedback: 0 up / 1 down
+computer,specific,unrelated,feedback: 0 up / 1 down
+computer,station,unrelated,feedback: 0 up / 1 down
+computer,stenographic,unrelated,feedback: 0 up / 1 down
+computer,summation,unrelated,feedback: 0 up / 1 down
+computer,superimpose,unrelated,feedback: 0 up / 1 down
+computer,surveyed,unrelated,feedback: 0 up / 1 down
+computer,tab,unrelated,feedback: 0 up / 1 down
+computer,tactical,unrelated,feedback: 0 up / 1 down
+computer,tambourine,unrelated,feedback: 0 up / 1 down
+computer,telekinesis,unrelated,feedback: 0 up / 1 down
+computer,teller,unrelated,feedback: 0 up / 1 down
+computer,theologians,unrelated,feedback: 0 up / 1 down
+computer,topographic,unrelated,feedback: 0 up / 1 down
+computer,trampoline,unrelated,feedback: 0 up / 1 down
+computer,transcendental,unrelated,feedback: 0 up / 1 down
+computer,transformation,unrelated,feedback: 0 up / 1 down
+computer,transportation,unrelated,feedback: 0 up / 1 down
+computer,tripod,unrelated,feedback: 0 up / 1 down
+computer,type,related,feedback: 1 up / 0 down
+computer,univerbation,unrelated,feedback: 0 up / 1 down
+computer,upgrade,related,feedback: 1 up / 0 down
+computer,urinalysis,unrelated,feedback: 0 up / 1 down
+computer,utilization,unrelated,feedback: 0 up / 1 down
+computer,vacation,unrelated,feedback: 0 up / 1 down
+computer,verification,unrelated,feedback: 0 up / 1 down
+computer,vibration,unrelated,feedback: 0 up / 1 down
+computer,wheel,unrelated,feedback: 0 up / 1 down
+computer,wrongdoers,unrelated,feedback: 0 up / 1 down
+operations,phenomenal,unrelated,feedback: 0 up / 1 down
+operations,support,related,feedback: 1 up / 0 down
+operations,transport,related,feedback: 1 up / 0 down

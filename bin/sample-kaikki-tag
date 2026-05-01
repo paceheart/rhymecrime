@@ -1,0 +1,64 @@
+#!/usr/bin/env ruby
+# encoding: utf-8
+# frozen_string_literal: true
+
+# Random sample of Kaikki +sounds+ entries whose +tags+ include a given tag.
+# Helps decide whether +bin/filter-kaikki+ / +pick_ga_sounds+ should drop a
+# class of transcription across the board.
+#
+# Usage:
+#   bin/sample-kaikki-tag nonstandard
+#   bin/sample-kaikki-tag uncommon
+#   SAMPLE=50 SEED=42 bin/sample-kaikki-tag rare
+#
+# Tag match is case-insensitive against the raw +sounds.tags+ values Kaikki ships.
+
+require "json"
+require "set"
+require "zlib"
+
+WIKTIONARY_DATA_PATH = File.expand_path("../corpora/wiktionary/kaikki-english-filtered.jsonl.gz", __dir__)
+SAMPLE_SIZE = (ENV["SAMPLE"] || "30").to_i
+SEED = (ENV["SEED"] || "1").to_i
+
+target_tag = ARGV.shift
+abort "Usage: bin/sample-kaikki-tag <tag>" if target_tag.nil? || target_tag.empty?
+target_tag_norm = target_tag.downcase
+
+rows = []
+total_rows = 0
+total_words = 0
+
+Zlib::GzipReader.open(WIKTIONARY_DATA_PATH, encoding: "UTF-8") do |gz|
+  gz.each_line do |line|
+    obj = JSON.parse(line) rescue next
+    word = obj["word"].to_s.strip.downcase
+    pos  = obj["pos"].to_s
+    word_hit = false
+    (obj["sounds"] || []).each do |s|
+      next unless s.is_a?(Hash) && s["ipa"]
+      total_rows += 1
+      tags = s["tags"] || []
+      next unless tags.any? { |t| t.to_s.downcase == target_tag_norm }
+      word_hit = true
+      rows << { word: word, pos: pos, ipa: s["ipa"], tags: tags }
+    end
+    total_words += 1 if word_hit
+  end
+end
+
+rng = Random.new(SEED)
+sample = rows.sample(SAMPLE_SIZE, random: rng)
+
+puts "Kaikki sound rows scanned:                  #{total_rows}"
+puts "  rows tagged +#{target_tag}+:              #{rows.size}"
+puts "  distinct words with such a row:           #{total_words}"
+puts ""
+puts "Random sample (#{sample.size} rows, seed=#{SEED}):"
+puts "-" * 100
+fmt = "%-26s  %-44s  %s"
+puts format(fmt, "word [pos]", "tags", "ipa")
+puts "-" * 100
+sample.sort_by { |r| r[:word] }.each do |r|
+  puts format(fmt, "#{r[:word]} [#{r[:pos]}]", r[:tags].join(", ")[0, 44], r[:ipa])
+end

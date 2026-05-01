@@ -513,6 +513,11 @@ def pick_ga_sounds(sounds)
     ipa = s["ipa"]
     next if ipa.nil? || ipa.empty?
     tags = s["tags"] || []
+    # Skip Wiktionary +nonstandard+-tagged rows: stigmatized / hyper-local /
+    # reading-spelling renderings that don't represent the broadly accepted
+    # pronunciation. Defensive: +bin/filter-kaikki+ also drops these on snapshot
+    # rebuild, but older snapshots may still contain them.
+    next if tags.include?("nonstandard")
 
     if tags.any? { |t| t.include?("General-American") || t.include?("US") || t.include?("GenAm") }
       ga << ipa

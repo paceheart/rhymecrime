@@ -1,0 +1,138 @@
+#!/usr/bin/env ruby
+# encoding: utf-8
+# frozen_string_literal: true
+
+# Print a random sample of Kaikki entries that would trampoline through their
+# +senses[].alt_of+ to a canonical entry with pronunciations. Helps gut-check
+# the trampoline filter used by +bin/compare-authoritative-vs-kaikki+: an
+# entry is treated as a *pure* alt-of stub only when every sense is tagged
+# +alt-of+ with a non-empty +alt_of+ target (so words like +highball+ — which
+# has real senses plus one clipping alt-of — don't get conflated).
+#
+# Usage: bin/sample-alt-of-trampolines [N=20] [--seed=...]
+
+require "json"
+require "optparse"
+require "set"
+require "zlib"
+
+repo = File.expand_path("..", __dir__)
+$LOAD_PATH.unshift File.join(repo, "lib")
+
+require_relative File.join(repo, "lib", "rhymecrime", "dict", "wiktionary")
+
+options = { n: 20, seed: nil }
+OptionParser.new do |op|
+  op.banner = "Usage: bin/sample-alt-of-trampolines [N] [--seed S]"
+  op.on("--seed S", Integer, "RNG seed (defaults to Random.new_seed)") { |v| options[:seed] = v }
+end.parse!
+options[:n] = ARGV.shift.to_i if ARGV.first =~ /\A\d+\z/
+
+def record_alt_of_targets(obj)
+  senses = obj["senses"] || []
+  return [] if senses.empty?
+  return [] unless senses.all? do |sense|
+    (sense["tags"] || []).include?("alt-of") &&
+      sense["alt_of"].is_a?(Array) && !sense["alt_of"].empty?
+  end
+  senses.flat_map { |sense| sense["alt_of"].map { |t| t.is_a?(Hash) ? t["word"].to_s.strip : nil } }.compact.reject(&:empty?)
+end
+
+# Pass 1: aggregate every record per word so we can ask whether the *whole
+# word* is a pure alt-of stub. A word like +cache+ has three Kaikki records
+# (noun + verb + a misspelling-of-+cachet+ stub) — the third record is alt-of
+# in isolation, but the word as a whole stands on its own with real senses
+# and pronunciations and must not trampoline.
+words = {}
+Zlib::GzipReader.open(WIKTIONARY_DATA_PATH, encoding: "UTF-8") do |gz|
+  gz.each_line do |line|
+    obj = JSON.parse(line) rescue next
+    src = obj["word"].to_s.strip
+    next if src.empty?
+    rec = words[src] ||= { has_sounds: false, has_real_record: false, alt_targets: [], poses: [] }
+    rec[:poses] << obj["pos"].to_s unless rec[:poses].include?(obj["pos"].to_s)
+    rec[:has_sounds] ||= !(obj["sounds"] || []).empty?
+    targets = record_alt_of_targets(obj)
+    if targets.empty?
+      rec[:has_real_record] = true
+    else
+      rec[:alt_targets].concat(targets)
+    end
+  end
+end
+
+# A word trampolines iff every one of its records was a pure alt-of stub
+# *and* none of those records carried sounds.
+stubs = []
+needed = Set.new
+words.each do |src, rec|
+  next if rec[:has_sounds] || rec[:has_real_record] || rec[:alt_targets].empty?
+  target = rec[:alt_targets].first
+  next if target == src
+  stubs << { source: src, source_pos: rec[:poses].first, target: target }
+  needed << target.downcase
+end
+
+# Pass 2: collect sounds for each target. Group by exact +word+ so we can
+# prefer an exact-case match (Wiktionary case-distinguishes +Mafioso+ vs
+# +mafioso+, +Mob+ vs +mob+, etc.).
+target_hits = Hash.new { |h, k| h[k] = [] }
+Zlib::GzipReader.open(WIKTIONARY_DATA_PATH, encoding: "UTF-8") do |gz|
+  gz.each_line do |line|
+    obj = JSON.parse(line) rescue next
+    w = obj["word"].to_s.strip
+    next unless needed.include?(w.downcase)
+    sounds = (obj["sounds"] || []).select { |s| s.is_a?(Hash) && s["ipa"] }
+    next if sounds.empty?
+    sounds.each do |s|
+      tags = s["tags"] || []
+      target_hits[w.downcase] << { ipa: s["ipa"], tags: tags, target_word: w }
+    end
+  end
+end
+
+# Keep only stubs whose canonical actually has IPA. Resolve to a single GA-ish
+# IPA per stub when possible (prefer +General-American+ / +US+ / +Canada+
+# tags; fall back to the first untagged variant; last resort: anything).
+def pick_one_ipa(hits, target)
+  exact = hits.select { |h| h[:target_word] == target }
+  pool = exact.any? ? exact : hits
+  ranked = pool.sort_by do |h|
+    tags = h[:tags]
+    if tags.include?("General-American") then 0
+    elsif tags.include?("US")             then 1
+    elsif tags.include?("Canada")         then 2
+    elsif tags.empty?                     then 3
+    else                                       4
+    end
+  end
+  ranked.first
+end
+
+trampolined = stubs.filter_map do |s|
+  hits = target_hits[s[:target].downcase]
+  next nil if hits.nil? || hits.empty?
+  ipa_hit = pick_one_ipa(hits, s[:target])
+  s.merge(target_word: ipa_hit[:target_word], ipa: ipa_hit[:ipa], ipa_tags: ipa_hit[:tags])
+end
+
+if trampolined.empty?
+  warn "No alt-of trampolines found in #{WIKTIONARY_DATA_PATH}"
+  exit 1
+end
+
+rng = options[:seed] ? Random.new(options[:seed]) : Random.new
+sample = trampolined.sample(options[:n], random: rng)
+
+w_src = sample.map { |s| s[:source].length }.max
+w_pos = sample.map { |s| s[:source_pos].length }.max
+w_tgt = sample.map { |s| s[:target_word].length }.max
+sample.each do |s|
+  tag_str = s[:ipa_tags].empty? ? "" : " (#{s[:ipa_tags].join(',')})"
+  puts format("%-*s  [%-*s]  -> %-*s   %s%s",
+              w_src, s[:source],
+              w_pos, s[:source_pos],
+              w_tgt, s[:target_word],
+              s[:ipa], tag_str)
+end
+warn "(#{trampolined.size} alt-of trampolines available; sampled #{sample.size})"

@@ -103,7 +103,7 @@ describe 'RHYMES' do
     ought_not_rhyme 'tea', 'bounty'
     ought_not_rhyme 'eyeball', 'mall'
     ought_not_rhyme 'eyeball', 'ball'
-    oughta_rhyme 'eyeball', 'highball', not_working_message: "wiktionary lacks a pronunciation for 'highball'"
+    oughta_rhyme 'eyeball', 'highball'
     ought_not_rhyme 'painting', 'ring'
   end
 
@@ -237,9 +237,9 @@ describe 'RHYMES' do
     # TODO: rezoned (and thus these specs) want a pron from re- + zoned: prepend e.g. R IH0 or R IY0
     # plus a syllable boundary before zoned's CMU string. General prefix morphology is overkill for this alone.
     oughta_rhyme 'owned', 'zoned'
-    oughta_rhyme 'unowned', 'zoned', not_working_message: true
-    oughta_rhyme 'owned', 'rezoned', not_working_message: true
-    oughta_rhyme 'unowned', 'rezoned', not_working_message: true
+    oughta_rhyme 'unowned', 'zoned', not_working_message: "TODO: unowned lacks pron"
+    oughta_rhyme 'owned', 'rezoned', not_working_message: "TODO: rezoned lacks pron"
+    oughta_rhyme 'unowned', 'rezoned', not_working_message: "TODO: unowned and rezoned lack prons"
     ought_not_rhyme 'atonal', 'tonal' # a-
     ought_not_rhyme 'flame', 'aflame' # a-
     ought_not_rhyme 'round', 'around' # a-
@@ -376,15 +376,15 @@ describe 'RHYMES' do
     oughta_rhyme 'traction', 'attraction' # arguable
     oughta_rhyme 'attribution', 'distribution' # arguable
     oughta_rhyme 'nest', 'finessed'
-    oughta_rhyme 'keto', 'mosquito', not_working_message: "bad wiktionary pron for keto"
+    oughta_rhyme 'keto', 'mosquito'
     oughta_rhyme_one_way 'record', 'cord'
     oughta_rhyme_one_way 'cord', 'record', not_working_message: 'splash damage: re- prefix filter (record is etymologically re+cord)'
     oughta_rhyme 'chord', 'record'
     # hemiola isn't in our lexicon at all; mandolin/violin have genuinely different rimes
     # (+AE_N_D_AH_L_AH_N+ vs +IH_N+ -- the stress lands in different places), so they
     # can't rhyme under the current primary-stress-rime model.
-    oughta_rhyme 'hemiola', 'viola', not_working_message: 'hemiola not in dict'
-    oughta_rhyme 'mandolin', 'violin', not_working_message: 'stress-mismatched; different rimes'
+    oughta_rhyme 'hemiola', 'viola'
+    oughta_rhyme 'mandolin', 'violin'
     oughta_rhyme 'exhortations', 'meditations' # arguable
     oughta_rhyme 'composition', 'musician'
     oughta_rhyme 'compositions', 'musicians'
@@ -410,6 +410,14 @@ describe 'RHYMES' do
     ought_not_rhyme 'point', 'counterpoint'
     ought_not_rhyme 'espionage', 'counterespionage'
     ought_not_rhyme 'indicated', 'contraindicated'
+    ought_not_rhyme 'ultimate', 'penultimate'
+    ought_not_rhyme 'penultimate', 'antepenultimate'
+    ought_not_rhyme 'chamber', 'antechamber'
+    ought_not_rhyme 'motion', 'locomotion'
+    ought_not_rhyme 'function', 'dysfunction'
+    ought_not_rhyme 'functional', 'dysfunctional'
+    # oughta_rhyme 'prudence', 'jurisprudence' ?
+    # magnetic, electromagnetic
   end
 
   context "spelling variants ought not count as rhymes" do
@@ -557,12 +565,12 @@ describe 'RHYMES' do
     oughta_rhyme 'ladle', 'fatal'
     oughta_rhyme 'beetle', 'needle'
     oughta_rhyme 'noodle', 'brutal'
-    oughta_rhyme 'coital', 'colloidal', not_working_message: "was tied to *us→*al promotion (removed)"
+    oughta_rhyme 'coital', 'colloidal'
     oughta_rhyme 'potato', 'tornado'
     oughta_rhyme 'transmittable', 'biddable'
     oughta_rhyme 'debatable', 'tradable'
     # Compound boundary may block flap (Withgott proper):
-    oughta_rhyme 'whiteout', 'hideout', not_working_message: "Wiktionary stress is wrong for whiteout"
+    oughta_rhyme 'whiteout', 'hideout'
     ought_not_rhyme 'cottage', 'bodice'
     oughta_rhyme 'tighten', 'whiten'
     ought_not_rhyme 'tighten', 'widen'
@@ -616,25 +624,25 @@ describe 'RHYMES' do
   context 'hyphens' do
     could_go_either_way 'flaws', 'in-laws' # probably stress mismatch
     could_go_either_way 'flaws', 'inlaws' # probably stress mismatch
-    ought_not_rhyme_one_way 'flaws', 'inlaws', not_working_message: "TODO: inlaws pronunciation should have stress on first syllable"
+    ought_not_rhyme_one_way 'flaws', 'inlaws'
     ought_not_rhyme 'inlaws', 'in-laws'
     ought_not_rhyme 'nonbuilding', 'non-building'
     ought_not_rhyme 'cul-de-sac', 'back' # stress mismatch
     oughta_rhyme 'avant-garde', 'hard'
     oughta_rhyme 'topsy-turvy', 'scurvy'
     ought_not_rhyme 'ping-pong', 'wrong' # stress mismatch
-    oughta_rhyme 'okey-dokey', 'hokey', not_working_message: "okey-dokey is missing from word_dict"
-    oughta_rhyme_one_way 'okeydokey', 'hokey', not_working_message: "okeydokey is missing from word_dict"
-    ought_not_rhyme_one_way 'hokey', 'okeydokey'
+    oughta_rhyme 'okey-dokey', 'hokey'
+    oughta_rhyme_one_way 'okeydokey', 'hokey'
+    ought_not_rhyme_one_way 'hokey', 'okeydokey' # okeydokey is dispreferred spelling of okey-dokey
     ought_not_rhyme 'flim-flam', 'slam' # stress mismatch
     oughta_rhyme 'papier-mache', 'way'
-    oughta_rhyme 'tutti-frutti', 'booty', not_working_message: "tutti-frutti is missing from word_dict"
+    oughta_rhyme 'tutti-frutti', 'booty'
     oughta_rhyme 'willy-nilly', 'silly'
     oughta_rhyme 'roly-poly', 'holy'
     ought_not_rhyme 'roly-poly', 'poly'
     oughta_rhyme 'hara-kiri', 'weary'
     oughta_rhyme 'queer', 'peer-to-peer'
-    oughta_rhyme 'so-so', 'mafioso', not_working_message: "so-so should have first syllable stressed instead of both"
+    oughta_rhyme 'so-so', 'mafioso'
     oughta_rhyme 'fib', 'ad-lib'
   end
   
@@ -651,7 +659,7 @@ describe 'RHYMES' do
     oughta_rhyme 'sized', 'surmised'
     oughta_rhyme 'wreck', 'shrek'
     oughta_rhyme 'melt', 'svelte'
-    oughta_rhyme 'pet', 'nyet', not_working_message: "nyet is missing from word_dict"
+    oughta_rhyme 'pet', 'nyet'
     oughta_rhyme 'doom', 'vroom'
     oughta_rhyme 'spider', 'schneider'
     oughta_rhyme 'car', 'tsar'
@@ -690,7 +698,7 @@ describe 'RHYMES' do
     oughta_rhyme "puffin", "muffin"
     oughta_rhyme "puffin'", "muffin"
     oughta_rhyme "huffin'", "muffin"
-    oughta_rhyme "poopin'", "scoopin'", not_working_message: "both rare"
+    oughta_rhyme "poopin'", "scoopin'"
     oughta_rhyme "sobbin'", "bobbin"
     oughta_rhyme "sobbin'", "bobbin'"
     ought_not_rhyme "bobbin'", "bobbin'"
@@ -707,12 +715,12 @@ describe 'RHYMES' do
     oughta_rhyme 'fennel', 'sentimental' # it's OK to elide the final T in 'sentimental'
     oughta_rhyme 'greediest', 'devious', not_working_message: true
     oughta_rhyme 'fence', 'wince', not_working_message: true
-    oughta_rhyme 'vintage', 'percentage', not_working_message: true
+    oughta_rhyme 'vintage', 'percentage'
     oughta_rhyme 'girl', 'world', not_working_message: true
     oughta_rhyme 'false', 'malts' # sure I guess? otherwise 'false' won't rhyme with anything at all
     oughta_rhyme 'else', 'melts' # sure I guess? otherwise 'else' won't rhyme with anything at all
     oughta_rhyme 'poor', 'core', not_working_message: "in some dialects, these rhyme"
-    oughta_rhyme 'cajun', 'occasion', not_working_message: true
+    oughta_rhyme 'cajun', 'occasion'
   end
   
   context 'rhymes too imperfect to live' do
@@ -741,7 +749,7 @@ describe 'RHYMES' do
     oughta_rhyme 'couples', 'throuples'
     oughta_rhyme 'url', 'hell'
     oughta_rhyme 'urls', 'smells'
-    ought_not_rhyme 'url', 'curl', not_working_message: "bad url pron"
+    ought_not_rhyme 'url', 'curl'
   end
 
   context '-er' do
@@ -784,6 +792,7 @@ describe 'RHYMES' do
     ought_not_rhyme 'plain', 'plane'
     ought_not_rhyme 'symbol', 'cymbal'
     ought_not_rhyme 'serial', 'cereal'
+    ought_not_rhyme 'aficionadoes', 'aficionados'
   end
 
   context 'non-binary rhymes' do
@@ -907,12 +916,12 @@ describe 'RHYMES' do
     oughta_rhyme 'humidity', 'turbidity'
     oughta_rhyme 'bay', 'spray'
     oughta_rhyme 'steam', 'stream'
-    oughta_rhyme 'eau', 'flow', not_working_message: "eau is missing from word_dict"
+    oughta_rhyme 'eau', 'flow'
     oughta_rhyme 'sweat', 'wet'
     oughta_rhyme 'cool', 'pool'
     oughta_rhyme 'drain', 'rain'
     oughta_rhyme 'blood', 'flood'
-    ought_not_rhyme 'marine', 'saline', not_working_message: "stress mismatch"
+    ought_not_rhyme 'marine', 'saline'
     oughta_rhyme 'dip', 'sip'
   end
 
@@ -1075,6 +1084,13 @@ describe 'RHYMES' do
     ought_not_rhyme 'prefer', 'reefer'
     ought_not_rhyme 'refer', 'reefer'
     ought_not_rhyme 'defer', 'reefer'
+    oughta_rhyme 'wino', 'rhino'
+    ought_not_rhyme 'rhino', 'neutrino'
+    ought_not_rhyme 'wino', 'neutrino'
+    ought_not_rhyme 'bundt', "isn't"
+    ought_not_rhyme 'mics', 'fix'
+    ought_not_rhyme 'mit', 'get'
+    ought_not_rhyme 'iterate', 'literate'
   end
 
   context 'ire' do

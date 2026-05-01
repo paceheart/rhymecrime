@@ -1,0 +1,145 @@
+#!/usr/bin/env bash
+#
+# Faster sibling of bin/deploy-data for the curated-CSV iteration loop. Skips
+# the hours-long full compute-relatedness scan by recomputing only the cues
+# whose +curated/related.csv+ rows actually changed since HEAD (auto-detected
+# via +git diff+, overridable with +--cues=W,W,W+). +bin/dict-build+ always
+# runs, since +curated/rarity.csv+ overrides are folded in there during the
+# rarity-classifier rescore (see +lib/rhymecrime/dict/rarity_curated_overrides.rb+).
+#
+# What runs:
+#   0. AWS pre-flight              — sts:GetCallerIdentity round-trip (fails
+#      (skipped with --skip-upload)  fast on unset/expired AWS_PROFILE before
+#                                    we burn ~30s on dict-build / compute-*).
+#   1. bin/dict-build              — applies curated/rarity.csv overrides to
+#                                    word_dict.txt via rarity_rescore_and_dump!
+#   2. bin/compute-relatedness     — applies curated/related.csv overrides
+#       --only=<changed cues>        (see lib/rhymecrime/relatedness/curated_overrides.rb)
+#                                    SKIPPED if no related.csv changes detected.
+#   3. bin/compute-set-related     — recomputes set_related# rows for the same
+#       --only=<changed cues>        cues so the runtime hot-path stays consistent.
+#                                    SKIPPED if compute-relatedness was skipped.
+#   4. bin/upload-to-dynamodb      — pushes related# / set_related# / score#
+#       --cues=<changed cues>        rows from generated/rhymecrime_local.sqlite3
+#                                    to DDB, restricted to the same cues
+#                                    +compute-relatedness+ recomputed (so the
+#                                    upload phase doesn't re-stream the entire
+#                                    ~1.5GB local store on every iteration).
+#                                    Falls back to a full upload when no cues
+#                                    were detected. Pass --skip-upload to omit.
+#
+# What's SKIPPED (vs. bin/build && bin/deploy-data):
+#   * train-rarity-classifier              (Stage 2 of bin/build)
+#   * retrain-relatedness                  (Stage 3 of bin/build — sense glosses,
+#                                           MPNet vectors, relatedness classifier)
+#   * full compute-relatedness scan        (~hours; only changed cues recomputed)
+#
+# Usage:
+#   ./bin/deploy-new-data                       # auto-detect changed cues
+#                                                via +git diff HEAD curated/related.csv+
+#   ./bin/deploy-new-data --cues=music,prayers  # explicit cue list (e.g. when
+#                                                changes are already committed
+#                                                beyond HEAD or you want to
+#                                                force-recompute a cue)
+#   ./bin/deploy-new-data --skip-upload         # local SQLite only; no DDB push
+#   AWS_PROFILE=paceheart ./bin/deploy-new-data # required for the upload step
+#
+# When NOT to use this:
+#   * After retraining either classifier (use bin/deploy-data — full compute is
+#     required because every cue's classifier output may have changed).
+#   * After widening word_dict's cue universe (new common headwords need a full
+#     compute-relatedness pass to populate their related# rows). Use
+#     +bin/compute-relatedness --incremental+ for that.
+
+set -euo pipefail
+
+REPO="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$REPO"
+
+explicit_cues=""
+skip_upload=0
+upload_args=()
+for arg in "$@"; do
+  case "$arg" in
+    --cues=*) explicit_cues="${arg#--cues=}" ;;
+    --skip-upload) skip_upload=1 ;;
+    *) upload_args+=("$arg") ;;
+  esac
+done
+
+# Up-front AWS pre-flight: cheap STS round-trip to surface unset/expired
+# +AWS_PROFILE+ before we burn ~30s on +dict-build+ + +compute-relatedness+ +
+# +compute-set-related+. Without this, an SSO token that expired overnight
+# would only fail at the +upload-to-dynamodb+ step at the *end* of the run,
+# wasting the entire compute pass. Skipped when +--skip-upload+ is set
+# (local-SQLite-only invocations don't need credentials at all). Reuses
+# +AwsPreflight.preflight!+ from +bin/_aws_preflight+ so the abort messaging
+# (suggested +aws sso login+, profile-list hint, etc.) stays in lock-step
+# with what +bin/upload-to-dynamodb+ would print on its own. The +-- "$@"+
+# tail forwards the user's original CLI flags into Ruby's +ARGV+ so the
+# +require_profile!+ abort can echo back a copy-pasteable re-run command.
+if [[ "$skip_upload" != "1" ]]; then
+  echo "==> aws preflight (sts:GetCallerIdentity — fail fast before dict-build/compute spend)"
+  bundle exec ruby -e '
+    require "./bin/_aws_preflight"
+    AwsPreflight.preflight!(
+      script_name: "deploy-new-data",
+      original_argv: ARGV,
+      region: ENV.fetch("AWS_REGION", "us-east-1"),
+    )
+  ' -- "$@"
+fi
+
+if [[ -n "$explicit_cues" ]]; then
+  changed_cues="$explicit_cues"
+  cue_source="explicit (--cues)"
+else
+  # Pull cues from added/removed lines in curated/related.csv since HEAD. The
+  # +awk+ filter skips diff headers ("+++" / "---") via the +[^+-]+ second-
+  # character anchor, then takes the first comma-separated field as the cue.
+  changed_cues=$(
+    git diff HEAD -- curated/related.csv 2>/dev/null \
+      | awk '/^[+-][^+-]/ { line=substr($0,2); split(line, parts, ","); if (parts[1] != "") print parts[1] }' \
+      | sort -u \
+      | paste -sd, -
+  ) || changed_cues=""
+  cue_source="auto-detected (git diff HEAD curated/related.csv)"
+fi
+
+echo "==> dict-build (applies curated/rarity.csv overrides via rarity-classifier rescore)"
+./bin/dict-build
+
+if [[ -n "$changed_cues" ]]; then
+  echo "==> compute-relatedness --only=$changed_cues  (cues: $cue_source)"
+  bundle exec ruby bin/compute-relatedness --only="$changed_cues"
+  echo "==> compute-set-related --only=$changed_cues"
+  bundle exec ruby bin/compute-set-related --only="$changed_cues"
+else
+  echo "==> compute-relatedness skipped (no curated/related.csv changes detected since HEAD; pass --cues=W,W to force)"
+  echo "==> compute-set-related skipped"
+fi
+
+if [[ "$skip_upload" == "1" ]]; then
+  echo "==> upload-to-dynamodb skipped (--skip-upload)"
+else
+  # Mirror the cue scope into the upload phase so we don't re-stream the
+  # ~1.5GB local SQLite store and re-PutItem ~hundreds of thousands of
+  # unchanged DDB rows on every iteration. +upload-to-dynamodb+ does the
+  # same +lemma()+ resolution as +compute-relatedness --only+, so passing
+  # the raw cue list through unchanged keeps the contract symmetric.
+  # +"${upload_args[@]+"${upload_args[@]}"}"+ expands to nothing when the
+  # array is unset or empty (the common case — no extra flags after our own).
+  # Plain +"${upload_args[@]}"+ trips +set -u+ on macOS bash 3.2, which treats
+  # an unset/empty array reference as an unbound variable; the +${arr[@]+...}+
+  # alt-value guard sidesteps that without disabling +set -u+.
+  if [[ -n "$changed_cues" ]]; then
+    echo "==> upload-to-dynamodb --cues=$changed_cues"
+    bundle exec ruby bin/upload-to-dynamodb --cues="$changed_cues" ${upload_args[@]+"${upload_args[@]}"}
+  else
+    echo "==> upload-to-dynamodb (full table; no cue filter — every related# / set_related# / score# row will be re-uploaded)"
+    bundle exec ruby bin/upload-to-dynamodb ${upload_args[@]+"${upload_args[@]}"}
+  fi
+fi
+
+echo
+echo "deploy-new-data done."

@@ -36,6 +36,17 @@
 #   --skip-related     Do not upload related rows (omit if the local store is missing)
 #   --related=PATH     Override path to the local SQLite store
 #                      (default: generated/rhymecrime_local.sqlite3)
+#   --cues=W[,W...]    Restrict the upload to rows whose lemma matches one of
+#                      the given cues (resolved through +lemma()+, same as
+#                      +bin/compute-relatedness --only+). Filters all three
+#                      streams (+related#+, +set_related#+, +score#+) so the
+#                      partial deploy stays internally consistent. Used by
+#                      +bin/deploy-new-data+ to skip the multi-tens-of-minutes
+#                      full-table re-upload when only a handful of curated
+#                      rows changed. Cues that don't resolve to any stored row
+#                      are silently dropped (the SQL +IN+ filter just returns
+#                      no match), which is the expected case for cues that
+#                      didn't actually have a row in the local store.
 #
 # +AWS_PROFILE+ is required, not optional: an unset profile lets the AWS SDK
 # fall through its default credential chain (env vars, instance metadata, the
@@ -57,6 +68,7 @@ require_relative "../lib/rhymecrime/dict/utils_rhyme"
 
 skip_related = false
 related_path = generated_dict_path(LOCAL_STORE_FILENAME)
+cues_filter = nil
 
 # Snapshot before +parse!+ mutates ARGV so the AWS_PROFILE abort below can
 # echo back the flags the user actually typed (otherwise +--skip-related+
@@ -66,7 +78,31 @@ original_argv = ARGV.dup
 OptionParser.new do |o|
   o.on("--skip-related", "Skip uploading related# items from the local store") { skip_related = true }
   o.on("--related=PATH", "Path to local SQLite store built by bin/compute-relatedness") { |p| related_path = File.expand_path(p) }
+  o.on("--cues=W[,W...]", Array,
+       "Restrict upload to rows for the given cues (lemma-resolved, same contract as compute-relatedness --only). " \
+       "Filters related#, set_related#, and score# in lock-step so the partial deploy stays consistent.") { |list| cues_filter = list }
 end.parse!
+
+# Resolve +--cues+ to lemma-prefixed +pk+ filter sets used by the SQL +IN+
+# clauses below. Lemma resolution mirrors +bin/compute-relatedness --only+ so
+# +bin/deploy-new-data+ can pass the same +--cues=+ value through unchanged
+# (e.g. the curator wrote +cats,fur,related+ → cue lemma +cat+ → pk
+# +related#cat+, and the upload phase needs to look under that key, not under
+# +related#cats+). Falls back to the surface form when +lemma()+ doesn't know
+# the word, which keeps non-dict cues uploadable rather than silently dropped.
+related_pk_filter = nil
+set_related_pk_filter = nil
+score_pk_filter = nil
+if cues_filter && !cues_filter.empty?
+  resolved_lemmas = cues_filter.map { |c| (lemma(c) || c).to_s.strip }.reject(&:empty?).uniq
+  related_pk_filter = resolved_lemmas.map { |l| "related##{l}" }
+  set_related_pk_filter = resolved_lemmas.map { |l| "set_related##{l}" }
+  # +related_scores+ rows are keyed by +related#<lemma>+ (the score# pk is
+  # synthesized from that on upload below), so the score filter reuses the
+  # +related_pk_filter+ set rather than introducing a separate +score#+ list.
+  score_pk_filter = related_pk_filter
+  puts "Cue filter: #{resolved_lemmas.size} lemmas (from #{cues_filter.size} requested): #{resolved_lemmas.first(10).inspect}#{resolved_lemmas.size > 10 ? '…' : ''}"
+end
 
 table = Rhymecrime::DataSource.table_name
 region = ENV.fetch("AWS_REGION", "us-east-1")
@@ -180,11 +216,20 @@ else
   # default in the runtime anyway.
   db = SQLite3::Database.new(related_path, readonly: true)
   begin
-    related_total = db.get_first_value("SELECT COUNT(*) FROM related").to_i
+    # Build the +WHERE pk IN (?, ?, ...)+ clause once per phase so the SQL
+    # bind list and the COUNT/SELECT pair stay in sync. Empty filter ⇒ no
+    # WHERE clause ⇒ full table scan (the original behavior).
+    related_where, related_binds =
+      if related_pk_filter
+        ["WHERE pk IN (#{(["?"] * related_pk_filter.size).join(',')})", related_pk_filter]
+      else
+        ["", []]
+      end
+    related_total = db.get_first_value("SELECT COUNT(*) FROM related #{related_where}", related_binds).to_i
     related_meter = ProgressMeter.new("related#", total: related_total)
     n_related = 0
     buf = []
-    db.execute("SELECT pk, words FROM related") do |pk, words_json|
+    db.execute("SELECT pk, words FROM related #{related_where}", related_binds) do |pk, words_json|
       words = JSON.parse(words_json)
       raise "row missing words: #{pk}" unless words.is_a?(Array)
 
@@ -216,11 +261,17 @@ else
     # relateds." DDB stores empty as an empty List, and
     # +DynamoRuntime#parse_tuples_attr+ returns +[]+ (computed hit, not the
     # "unknown cue" fallback).
-    set_related_total = db.get_first_value("SELECT COUNT(*) FROM set_related").to_i
+    set_related_where, set_related_binds =
+      if set_related_pk_filter
+        ["WHERE pk IN (#{(["?"] * set_related_pk_filter.size).join(',')})", set_related_pk_filter]
+      else
+        ["", []]
+      end
+    set_related_total = db.get_first_value("SELECT COUNT(*) FROM set_related #{set_related_where}", set_related_binds).to_i
     set_related_meter = ProgressMeter.new("set_related#", total: set_related_total)
     n_set_related = 0
     buf = []
-    db.execute("SELECT pk, tuples FROM set_related") do |pk, tuples_json|
+    db.execute("SELECT pk, tuples FROM set_related #{set_related_where}", set_related_binds) do |pk, tuples_json|
       tuples = JSON.parse(tuples_json)
       raise "row missing tuples: #{pk}" unless tuples.is_a?(Array)
 
@@ -246,11 +297,21 @@ else
     # the set_related hot path are already in DDB). Independent loop
     # (rather than a JOIN with +related+) so a row with words but no
     # scores doesn't waste a DDB write on a missing +scores+ payload.
-    score_total = db.get_first_value("SELECT COUNT(*) FROM related_scores").to_i
+    # +related_scores+ rows are keyed by +related#<lemma>+ in SQLite (the
+    # +score#<lemma>+ pk is synthesized below for DDB), so the cue filter
+    # reuses +related_pk_filter+ rather than introducing a separate
+    # +score#+ key list.
+    scores_where, scores_binds =
+      if score_pk_filter
+        ["WHERE pk IN (#{(["?"] * score_pk_filter.size).join(',')})", score_pk_filter]
+      else
+        ["", []]
+      end
+    score_total = db.get_first_value("SELECT COUNT(*) FROM related_scores #{scores_where}", scores_binds).to_i
     score_meter = ProgressMeter.new("score#", total: score_total)
     n_scores = 0
     buf = []
-    db.execute("SELECT pk, scores FROM related_scores") do |related_pk, scores_json|
+    db.execute("SELECT pk, scores FROM related_scores #{scores_where}", scores_binds) do |related_pk, scores_json|
       scores = JSON.parse(scores_json)
       next unless scores.is_a?(Array) && !scores.empty?
 

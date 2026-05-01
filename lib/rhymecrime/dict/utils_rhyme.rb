@@ -1520,7 +1520,7 @@ ALL_INITIAL_CONSONANT_CLUSTERS = [
   'TH R', # throw
   'TH W', # thwack
   'V Y', # view
-  'ZH W', # joie
+  'JH W', # joie (ʒw — merged with JH cluster inventory)
 ] # ARPABET format. source: John Algeo, https://www.tandfonline.com/doi/pdf/10.1080/00437956.1978.11435661 + original work
 
 # Onset clusters legal only at the true start of a word (forward order). Not consulted for medial
@@ -1696,8 +1696,7 @@ ALL_FINAL_CONSONANT_CLUSTERS = [
   'V D', # caved
   'V Z', # drives
   'Z D', # dozed
-  'ZH D', # camouflaged
-] # ARPABET format. source: John Algeo, https://www.tandfonline.com/doi/pdf/10.1080/00437956.1978.11435661 + original work
+] # ARPABET format. source: John Algeo, https://www.tandfonline.com/doi/pdf/10.1080/00437956.1978.11435661 + original work (+JH D+ covers camouflaged)
 
 # Words with weird initial/final consonant clusters that should be included anyway
 WHITELIST = [

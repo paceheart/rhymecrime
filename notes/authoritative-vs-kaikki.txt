@@ -1,0 +1,69 @@
+word           status   auth -> kaikki
+----------------------------------------------------------------------------------------------------
+a              match    EY1    ||    EY1 | AH1
+am             match    AE1 M    ||    AH1 M | AE1 M | EH1 M | EH1 AH0 M
+aquatic        match    AH0 K W AA1 D AH0 K    ||    AH0 K W AA1 D AH0 K | AH0 K W AE1 D AH0 K
+bacchanal      match    B AE1 K AH0 N AH0 L    ||    B AE1 K AH0 N AH0 L
+been           match    B IH1 N | B IY1 N    ||    B IH1 N | B IY1 N | B EH1 N
+biopic         differs  B AY2 OW0 P IH1 K    ||    B AY1 OW0 P AH0 K
+bocce          match    B AA1 CH IY0    ||    B AA1 CH IY0
+breeches       match    B R IY1 CH AH0 Z    ||    B R IY1 CH AH0 Z | B R IH1 CH AH0 Z
+businesswomen  missing  B IH1 Z N AH0 S W IH1 M AH0 N    ||    (none)
+cocksucker     missing  K AA1 K S AH2 K AH0 R    ||    (none)
+coital         missing  K OY1 D AH0 L    ||    (none)
+color          match    K AH1 L AH0 R    ||    K AH1 L AH0 R
+cosplay        match    K AA1 Z P L EY2    ||    K AA1 Z P L EY0 | K AA1 S P L EY0 | K OW2 S P L EY1
+dander         match    D AE1 N D AH0 R    ||    D AE1 N D AH0 R
+don't          match    D OW1 N T    ||    D OW1 N T | D OW1 N
+don'ts         missing  D OW1 N T S    ||    (none)
+eyeball        match    AY1 B AA2 L    ||    AY1 B AA0 L
+f'd            missing  EH1 F T    ||    (none)
+going          match    G OW1 IY0 NG    ||    G OW1 IY0 NG | G OY1 NG
+hara-kiri      match    HH AA2 R AH0 K IY1 R IY0    ||    HH AE2 R AH0 K IY1 R IY0 | HH AA2 R AH0 K IY1 R IY0 | HH AE2 R IY0 K AE1 R IY0 | HH EH2 R IY0 K EH1 R IY0
+hecking        match    HH EH1 K IY0 NG    ||    HH EH1 K IY0 NG | HH EH1 K AH0 N
+herder         match    HH AH1 R D AH0 R    ||    HH AH1 R D AH0 R
+highball       missing  HH AY1 B AA2 L    ||    (none)
+immure         differs  AH0 M Y UH1 R    ||    AH0 M Y UH1 AH0 R
+in             match    IH1 N    ||    AH1 N | IH1 N
+inlaw          match    IH1 N L AA2    ||    AH0 N L AA1 | IH1 N L AA0
+inlaws         missing  IH1 N L AA2 Z    ||    (none)
+into           partial  IH1 N T UW0 | AH0 N T UW1    ||    IH1 N T UW0
+keto           match    K IY1 D OW0    ||    K IY1 D OW0
+laugher        match    L AE1 F AH0 R    ||    L AE1 F AH0 R
+mafioso        missing  M AA2 F IY0 OW1 S OW2    ||    (none) (via alt-of → Mafioso)
+mandolin       differs  M AE2 N D AH0 L IH1 N    ||    M AE1 N D AH0 L AH0 N
+marseille      match    M AA0 R S EY1    ||    M AA0 R S EY1 | M AA0 R S EY1 L
+marseilles     match    M AA0 R S EY1    ||    M AA0 R S EY1
+midi           match    M IH1 D IY0    ||    M IH1 D IY0
+overbear       differs  OW1 V AH0 R B EH1 R    ||    AH0 UH0 V AH0 B EH1
+papier-mache   differs  P AE2 P AH0 R M AH0 SH EY1    ||    P EY2 P AH0 R M AH0 SH EY1 (via alt-of → papier-mâché)
+percentage     match    P AH0 R S EH1 N T AH0 JH    ||    P AH0 R S EH1 N T AH0 JH
+pigment        match    P IH1 G M AH0 N T    ||    P IH1 G M AH0 N T
+pigmented      missing  P IH1 G M AH0 N T AH0 D | P AH0 G M EH1 N T AH0 D    ||    (none)
+prefer         match    P R AH0 F AH1 R    ||    P R AH0 F AH1 R
+protostar      differs  P R OW1 D OW0 S T AA1 R | P R OW1 D OW0 S T AA1 R    ||    P R OW1 D AH0 T AY2 P | P R OW1 D OW0 T AY2 P
+pwned          differs  P OW1 N D    ||    AH1 UH0 N D | P AH1 UH0 N D | P AH0 AH1 UH0 N D | P AA1 N D | P IY0 AH1 UH0 N D | P W AH1 N D
+rather         match    R AE1 DH AH0 R    ||    R AE1 DH AH0 R | R AH1 DH AH0 R | R EH1 DH AH0 R | R AA1 DH AH0 R
+saline         match    S EY1 L IY0 N    ||    S EY1 L IY0 N
+satyr          match    S EY1 D AH0 R    ||    S EY1 D AH0 R | S AE1 D AH0 R
+sloth          match    S L AA1 TH    ||    S L AA1 TH
+snarf          match    S N AA1 R F    ||    S N AA1 R F
+snes           match    S N EH1 S    ||    S N EH1 S | S N EH1 Z | EH2 S EH0 N IY0 EH1 S
+so-so          differs  S OW1 S OW2    ||    S AH1 UH0 S AH2 UH0 | S AH2 UH0 S AH1 UH0
+swaggy         differs  S W AE1 G IY0    ||    S W AA1 G IY0
+tang           match    T AE1 NG    ||    T AE1 NG | T EY1 NG | T EH1 NG | T AA1 NG
+turfs          match    T AH1 R F S    ||    T AH1 R F S | T AH1 R V Z
+tutti-frutti   differs  T UW1 D IY0 F R UW1 D IY0    ||    T UW2 D IY0 F R UW1 D IY0
+upwind         match    AH0 P W IH1 N D    ||    AH0 P W IH1 N D | AH0 P W AY1 N D
+url            match    Y UW2 AA2 R EH1 L    ||    Y UW2 AA2 R EH1 L | AH1 R L
+whilst         match    W AY1 L S T    ||    W AY1 L S T | W IH1 L S T
+whiteout       differs  W AY1 D AW2 T    ||    W AY2 T AW1 T
+wino           differs  W AY1 N OW2    ||    W AY1 N AH0 UH0 | W IY1 N AH0 UH0
+xor            differs  EH0 K S AO1 R    ||    EH0 K S OW1 R | Z OW1 R | K S OW1 R | EH1 K S AO1 R | Z AO1 R
+----------------------------------------------------------------------------------------------------
+  match: 37
+  partial: 1
+  differs: 13
+  missing: 9
+  no_pron: 0
+  total: 60

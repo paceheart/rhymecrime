@@ -56,7 +56,7 @@ module IpaToArpabet
     ["θ",   "TH"],
     ["ð",   "DH"],
     ["ʃ",   "SH"],
-    ["ʒ",   "ZH"],
+    ["ʒ",   "JH"], # align with CMU ZH → JH global merge in +apply_shared_arphabet_phoneme_string_normalizations+
     ["ɹ",   "R"],
     ["ɡ",   "G"],  # IPA ɡ (U+0261)
     ["ɾ",   "D"],  # alveolar flap
@@ -117,7 +117,12 @@ module IpaToArpabet
     return nil if ipa_str.nil? || ipa_str.empty?
 
     cleaned = ipa_str.gsub(%r{[/\[\]]}, '')
-    # Remove content in parentheses (optional segments like "(ɹ)")
+    # Wiktionary uses +(ɹ)+ to mark a rhotic as optional so a single transcription
+    # can cover both rhotic and non-rhotic dialects. rhymecrime is rhotic, so
+    # promote optional rhotics to required before the generic optional-segment
+    # strip below; otherwise +/snɑː(ɹ)f/+ would lose its R.
+    cleaned = cleaned.gsub(/\(([ɹr])\)/, '\1')
+    # Remove remaining optional segments (e.g. "(ʊ)" in /ˈpɹəʊtə(ʊ)stɑː/).
     cleaned = cleaned.gsub(/\([^)]*\)/, '')
 
     tokens = []
