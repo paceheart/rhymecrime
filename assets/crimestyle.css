@@ -185,3 +185,36 @@ a:visited {
 .feedback-thumbs[data-feedback="down"] .thumb-up {
     opacity: 0.2;
 }
+
+/* Mobile / narrow-viewport layout for the main results grid.
+   +print_html_column+ in lib/rhymecrime/frontend.rb emits a single <tr> of
+   alternating cells: content columns carry a +label='<goal>'+ attribute, and
+   the spacer + vertical-divider cells in between carry no +label+. Below
+   700px there isn't enough room for 4-5 side-by-side columns to stay legible,
+   so we collapse the table to a vertical stack: unlabeled spacer/divider
+   cells are hidden (they only read as columnar whitespace), and every
+   labeled cell after the first gets a horizontal top border in place of the
+   vertical left border the divider would have drawn. */
+@media screen and (max-width: 700px) {
+    .crime_main table,
+    .crime_main tbody,
+    .crime_main tr {
+        display: block;
+    }
+
+    .crime_main td[label] {
+        display: block;
+        width: auto !important;
+        padding: 0;
+    }
+
+    .crime_main td:not([label]) {
+        display: none;
+    }
+
+    .crime_main td[label] ~ td[label] {
+        border-top: 2px solid;
+        margin-top: 12px;
+        padding-top: 12px;
+    }
+}

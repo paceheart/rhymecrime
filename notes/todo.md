@@ -13,7 +13,6 @@ To help me write better limericks quicklier.
 ** sitter / admit her
 ** piton / lightin'
 ** mansion / stanchion
-** snapshot -> trap's wrought
 ** bacon -> they can (bring back "CAN(1)  K AH0 N" but only when used as part of a phrase)
 
 maybe NLTK wup_similarity or https://stackoverflow.com/questions/14148986/how-do-you-write-a-program-to-find-if-certain-words-are-similar/14638272#14638272
