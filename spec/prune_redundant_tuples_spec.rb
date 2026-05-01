@@ -68,6 +68,26 @@ def allow_entire_rhyming_tuple(spec, not_working_reason = nil)
   end
 end
 
+# Assert the pruner condenses +input_spec+ (given as the lone input tuple) down to a single
+# tuple matching +expected_spec+ — typically a strict subset of +input_spec+ whose members are
+# the "non-redundant core" after every suffix-related member has been pruned away. Distinct
+# from +prune_rhyming_tuple+: that one pits two sibling tuples against each other and keeps the
+# winner intact; this one shows that a single tuple can itself be shrunk (members dropped in
+# place) when most of it is suffix-redundant with a few survivors. See +prune_rhyming_tuple+
+# for +not_working_reason+ semantics.
+def condense_rhyming_tuple(input_spec, expected_spec, not_working_reason = nil)
+  it "condense: #{input_spec}  ->  #{expected_spec}" do
+    skip_if_not_working(not_working_reason) if prune_rhyming_tuple_not_working?(not_working_reason)
+    input = parse_tuple_literal(input_spec)
+    expected = parse_tuple_literal(expected_spec)
+    result = prune_suffix_redundant_rhyming_tuples([input])
+    expect(result).to(
+      contain_exactly(expected),
+      "expected pruning to condense #{input.inspect} to #{expected.inspect}, got #{result.inspect}"
+    )
+  end
+end
+
 # Assert the pruner keeps both tuples (i.e. neither is redundant with the other). See
 # +prune_rhyming_tuple+ for +not_working_reason+ semantics.
 def dont_prune_rhyming_tuple(a_spec, b_spec, not_working_reason = nil)
@@ -177,5 +197,11 @@ describe 'prune_suffix_redundant_rhyming_tuples' do
   # -'in is a lil dodgy, so prefer -ing
   context "g-drop vs -ing — keep the -ing tuple" do
     prune_rhyming_tuple 'faking / making / taking', "fakin' / makin' / takin'"
+  end
+
+  context "condense uninteresting differences" do
+    prune_entire_rhyming_tuple 'ever / however / howsoever / sever / whatever / whatsoever / whenever / wherever / whichever / whichsoever / whoever / whomever / whomsoever / whosoever'
+    condense_rhyming_tuple 'ever / however / howsoever / sever / whatever / whatsoever / whenever / wherever / whichever / whichsoever / whoever / whomever / whomsoever / whosoever', 'ever / sever'
+    prune_entire_rhyming_tuple 'billionaire / millionaire / multimillionaire / trillionaire'
   end
 end

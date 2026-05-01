@@ -86,6 +86,4 @@ When we have explicit curated data with a clear relatedness decision, override t
 
 do something about ever / however / howsoever / whatever / whatsoever / whenever / wherever / whichever / whichsoever / whoever / whomever / whomsoever / whosoever
 
-on mobile, don't do columns
-
 make it actually follow up on the "I'll make a note" notes

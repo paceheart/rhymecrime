@@ -189,8 +189,19 @@ def semantically_promiscuous_words
   $semantically_promiscuous_words ||= load_curated_word_set(SEMANTICALLY_PROMISCUOUS_FILENAME)
 end
 
+# Direct membership in +semantically_promiscuous.txt+, OR the word's +lemma+
+# is in the list. The lemma fallback lets derived/inflected forms ("abouts",
+# "having", "puts") inherit promiscuity from their base ("about", "have",
+# "put") without us enumerating every inflection in the curated file.
+#
+# Safe to call before the lemma map exists on disk (dict-build seed loops in
+# +frequency.rb+ / +phonology.rb+): +lemma+ falls back to +lexicon_word_entry+
+# and ultimately to the word itself, so a missing map just collapses the
+# fallback into the direct check we already did.
 def semantically_promiscuous?(word)
-  semantically_promiscuous_words.include?(word)
+  return true if semantically_promiscuous_words.include?(word)
+  base = lemma(word)
+  base != word && semantically_promiscuous_words.include?(base)
 end
 
 #

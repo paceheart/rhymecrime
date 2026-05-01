@@ -416,8 +416,11 @@ describe 'RHYMES' do
     ought_not_rhyme 'motion', 'locomotion'
     ought_not_rhyme 'function', 'dysfunction'
     ought_not_rhyme 'functional', 'dysfunctional'
-    # oughta_rhyme 'prudence', 'jurisprudence' ?
-    # magnetic, electromagnetic
+    ought_not_rhyme 'discovered', 'undiscovered'
+    # I'm not sure about these:
+    # 'prudence', 'jurisprudence'
+    # 'magnetic', 'electromagnetic'
+    # 'explosion', 'implosion'
   end
 
   context "spelling variants ought not count as rhymes" do
