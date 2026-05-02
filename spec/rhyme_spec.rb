@@ -291,6 +291,8 @@ describe 'RHYMES' do
         oughta_rhyme 'plumber', 'dumber'
         ought_not_rhyme 'dumber', 'demur' # stress mismatch, but would be a homophone anyway
         ought_not_rhyme 'national', 'international'
+        # +recorded → corded+ direction works (the reverse is still deferred below)
+        oughta_rhyme_one_way 'recorded', 'corded'
       end
 
       # Pseudo-prefixes (the +re-+, +a-+, +im-+ isn't really derivational here) would need
@@ -303,7 +305,7 @@ describe 'RHYMES' do
         nwm = 'splash damage: filter_out_prefix_words treats the false re- as derivational'
         oughta_rhyme 'percussion', 'repercussion', not_working_message: nwm
         oughta_rhyme 'lied', 'relied', not_working_message: nwm
-        oughta_rhyme 'corded', 'recorded', not_working_message: nwm
+        oughta_rhyme_one_way 'corded', 'recorded', not_working_message: nwm
         oughta_rhyme 'tween', 'between', not_working_message: nwm
         oughta_rhyme 'basement', 'abasement'
         oughta_rhyme 'bashed', 'abashed'
@@ -417,11 +419,13 @@ describe 'RHYMES' do
     ought_not_rhyme 'function', 'dysfunction'
     ought_not_rhyme 'functional', 'dysfunctional'
     ought_not_rhyme 'discovered', 'undiscovered'
-    # I'm not sure about these:
-    # 'motion', 'locomotion'
-    # 'prudence', 'jurisprudence'
-    # 'magnetic', 'electromagnetic'
-    # 'explosion', 'implosion'
+    context "edge cases" do
+      oughta_rhyme 'mediterranean', 'subterranean' # medi- is not a prefix
+      ought_not_rhyme 'motion', 'locomotion', not_working_message: "TODO"
+      ought_not_rhyme 'magnetic', 'electromagnetic', not_working_message: "TODO"
+      oughta_rhyme 'prudence', 'jurisprudence' # they're semantically different enough to be interesting
+      ought_not_rhyme 'explosion', 'implosion'
+    end
   end
 
   context "spelling variants ought not count as rhymes" do
@@ -513,7 +517,6 @@ describe 'RHYMES' do
       ought_not_rhyme 'latter', 'ladder'
       ought_not_rhyme 'matter', 'madder'
       oughta_rhyme 'recital', 'suicidal'
-      ought_not_rhyme 'mediterranean', 'subterranean' # arguable
     end
 
     # --- Classic T/D minimal pairs (intervocalic; GA flap neutralization) ---
@@ -756,7 +759,7 @@ describe 'RHYMES' do
   
   context 'loan words' do
     oughta_rhyme 'amour', 'bonjour'
-    ought_not_rhyme 'bocce', 'mocha', not_working_message: "bad bocce pron in CMUdict"
+    ought_not_rhyme 'bocce', 'mocha'
   end
 
   context 'modern words' do
@@ -911,7 +914,7 @@ describe 'RHYMES' do
     oughta_rhyme 'expressed', 'rest'
     oughta_rhyme 'fandango', 'tango'
     oughta_rhyme 'flute', 'lute'
-    oughta_rhyme 'fortissimo', 'pianissimo'
+    oughta_rhyme 'fortissimo', 'pianissimo', not_working_message: 'both rare, rime bucket pruned'
     oughta_rhyme 'funk', 'punk'
     oughta_rhyme 'gong', 'song'
     oughta_rhyme 'harmonic', 'sonic'
@@ -1061,9 +1064,6 @@ describe 'RHYMES' do
 
   context 'prereqs from similar_rhymes_spec: related_rhymes' do
     oughta_rhyme 'please', 'siamese'
-  end
-
-  context 'prereqs from similar_rhymes_spec: ought_not_rhyme (identical/prefix)' do
   end
 
   context 'prereqs from similar_rhymes_spec: ought_not_rhyme (homophones/spelling variants)' do

@@ -168,6 +168,18 @@ describe "SPELLING VARIANTS" do
     prefer_spelling 'gigameter', 'gigametre'
   end
 
+  context 'hyphens' do
+    prefer_spelling 'backhand', 'back-hand'
+    prefer_spelling 'backhands', 'back-hands'
+    prefer_spelling 'backhanded', 'back-handed'
+    prefer_spelling 'backfill', 'back-fill'
+    prefer_spelling 'backfills', 'back-fills'
+    prefer_spelling 'backfilled', 'back-filled'
+    prefer_spelling 'backtrack', 'back-track'
+    prefer_spelling 'footfall', 'foot-fall'
+    prefer_spelling 'footfalls', 'foot-falls'
+  end
+
   context "manual list (curated/spelling.csv)" do
     each_spelling_csv_pair do |preferred, alt|
       prefer_spelling preferred, alt
