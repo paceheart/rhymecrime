@@ -176,6 +176,7 @@ describe "SPELLING VARIANTS" do
     prefer_spelling 'backfills', 'back-fills'
     prefer_spelling 'backfilled', 'back-filled'
     prefer_spelling 'backtrack', 'back-track'
+    prefer_spelling 'countryside', 'country-side'
     prefer_spelling 'footfall', 'foot-fall'
     prefer_spelling 'footfalls', 'foot-falls'
   end

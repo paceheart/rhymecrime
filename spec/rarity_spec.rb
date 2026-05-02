@@ -268,12 +268,13 @@ describe "RARITY" do
     oughta_be_forbidden 'gypsy'
     oughta_be_forbidden 'aosidhgjqoerigh'
     oughta_be_forbidden 'imagineeringes'
+    oughta_be_forbidden 'parasailingses'
     oughta_be_forbidden 'skyey'
     oughta_be_forbidden 'tooken'
     oughta_be_forbidden 'e-mai'
     oughta_be_forbidden 'iii'
     oughta_be_forbidden 'the' # stop word
-
+    
     oughta_be_rare 'blepharoplasty'
     oughta_be_rare 'wakefield'
     oughta_be_rare 'absquatulate'
@@ -289,6 +290,9 @@ describe "RARITY" do
     oughta_be_common 'mitten'
     oughta_be_common 'finesse'
     oughta_be_common 'finessed'
+    oughta_be_common 'enby'
+    oughta_be_common 'enbies'
+    oughta_be_common 'polycule'
   end
 
   context 'unicode' do

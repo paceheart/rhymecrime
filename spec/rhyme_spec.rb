@@ -137,6 +137,13 @@ describe 'RHYMES' do
   end
   
   context "you can't just add a prefix and call it a rhyme" do
+    ought_not_rhyme 'sex', 'same-sex'
+    ought_not_rhyme 'orient', 'reorient'
+    ought_not_rhyme 'orient', 'disorient'
+    ought_not_rhyme 'reorient', 'disorient'
+    ought_not_rhyme 'orienting', 'reorienting'
+    ought_not_rhyme 'orienting', 'disorienting'
+    ought_not_rhyme 'reorienting', 'disorienting'
     oughta_rhyme 'grape', 'ape' # gr- is not a prefix
     oughta_rhyme 'pot', 'spot' # s- is not a prefix
     oughta_rhyme 'under', 'plunder' # pl- is not a prefix
@@ -279,9 +286,16 @@ describe 'RHYMES' do
     ought_not_rhyme 'kind', 'unkind'
     ought_not_rhyme 'bisect', 'trisect'
     ought_not_rhyme 'bisect', 'intersect'
+    ought_not_rhyme 'bienneal', 'triennial'
+    ought_not_rhyme 'centennial', 'bicentennial'
+    oughta_rhyme 'centennial', 'biennial'
     ought_not_rhyme 'train', 'retrain'
     ought_not_rhyme 'derive', 'rederive'
     ought_not_rhyme 'distribute', 'redistribute'
+    ought_not_rhyme 'person', 'businessperson'
+    ought_not_rhyme 'person', 'layperson'
+    ought_not_rhyme 'businessperson', 'layperson'
+    ought_not_rhyme 'man', 'layman'
     context "unless they're not derivationally related" do
       # Nested so +before(:each)+ below does not skip these: hooks apply to the whole group.
       context "pairs that do not need pseudo-prefix deferral" do
@@ -419,7 +433,11 @@ describe 'RHYMES' do
     ought_not_rhyme 'function', 'dysfunction'
     ought_not_rhyme 'functional', 'dysfunctional'
     ought_not_rhyme 'discovered', 'undiscovered'
+    ought_not_rhyme 'men', 'councilmen' # ought to be stress mismatch regardless
+    ought_not_rhyme 'medical', 'biomedical'
+    ought_not_rhyme 'plastic', 'thermoplastic'
     context "edge cases" do
+      oughta_rhyme 'thesis', 'prosthesis'
       oughta_rhyme 'mediterranean', 'subterranean' # medi- is not a prefix
       ought_not_rhyme 'motion', 'locomotion', not_working_message: "TODO"
       ought_not_rhyme 'magnetic', 'electromagnetic', not_working_message: "TODO"
@@ -709,6 +727,8 @@ describe 'RHYMES' do
     oughta_rhyme "sobbin'", "bobbin"
     oughta_rhyme "sobbin'", "bobbin'"
     ought_not_rhyme "bobbin'", "bobbin'"
+    oughta_rhyme 'layman', "gamin'"
+    oughta_rhyme 'layman', "daemon"
   end
 
   context 'imperfect rhymes' do
@@ -1073,6 +1093,12 @@ describe 'RHYMES' do
   end
 
   context 'bad pronunciations' do
+    ought_not_rhyme 'prosthesis', 'transgresses'
+    oughta_rhyme 'causal', 'menopausal'
+    oughta_rhyme 'spousal', 'tousle'
+    ought_not_rhyme 'causal', 'spousal'
+    ought_not_rhyme 'different', 'vent'
+    ought_not_rhyme 'differently', 'gently'
     oughta_rhyme 'corded', 'ported'
     oughta_rhyme 'bordered', 'quartered'
     ought_not_rhyme 'corded', 'quartered'

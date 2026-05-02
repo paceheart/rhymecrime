@@ -320,3 +320,5 @@ yours
 yourself
 yourselves
 doth
+hath
+hast

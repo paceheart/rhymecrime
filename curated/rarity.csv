@@ -1864,6 +1864,9 @@ modern,thickest,common,1,""
 modern,compersion,common,1,""
 modern,bling,common,1,""
 modern,fursona,common,1,""
+modern,polycule,common,1,""
+modern,enby,common,1,""
+modern,enbies,common,1,""
 don't overgenerate inflected forms,aireder,forbidden,1,""
 don't overgenerate inflected forms,airedest,forbidden,1,""
 don't overgenerate inflected forms,airedder,forbidden,1,""
@@ -3993,3 +3996,5 @@ forbidden survey,proctoscopy,common_ish,1,
 forbidden survey,prognosticate,common,1,
 forbidden survey,prognosticative,common,1,
 forbidden survey,gigolo,common,1,
+forbidden survey,isp,rare,1,
+forbidden survey,italianate,rare,1,

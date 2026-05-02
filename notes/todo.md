@@ -63,21 +63,9 @@ Each of them is almost entirely redundant with the other two, but each tuple has
 our / scour
 our / scour / tower
 
-eliminate ♥
-
-deconflate forbid_list into slurs, which should not compute relatedness, and other ones which are fine to use as cues, a lot like rare
-
 review experiments/apostrophe-review.txt
 
-cetacean / confiscation / depredation / embarkation / navigation
-cetaceans / communications / confiscations / depredations / navigations
-why are we missing communication?
-
 wherever we use wordnet glosses, also use wiktionary glosses
-
-pluralization bug: nosocomephobiaes
-
-make achin' have lemma "aching"
 
 try again to strengthen lemma to semantic_base and see if it helps
 we should be able to go even hammer with semantic_base, e.g. sembase(conflagration) -> fire
@@ -88,5 +76,6 @@ do something about ever / however / howsoever / whatever / whatsoever / whenever
 
 make it actually follow up on the "I'll make a note" notes
 
-make http (without s) work
-make www work
+in single column, add a "jump to"
+
+explain what it does
