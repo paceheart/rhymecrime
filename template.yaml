@@ -41,16 +41,19 @@ Parameters:
   # +samconfig.toml+ +parameter_overrides+ once the apex's NS records have
   # been delegated to the +HostedZoneId+ Route 53 zone.
   #
-  # Apex only by design (per +HasCustomDomain+ + the +ApexAliasRecord+
-  # below). To also serve +www.<domain>+, add a second
-  # +AWS::ApiGatewayV2::ApiMapping+ + +AWS::Route53::RecordSet+ pair off the
-  # same +Certificate+ (extend +DomainValidationOptions+ + +SubjectAlternativeNames+
-  # too). Skipped today because the CC-BY-SA-data version of this app
-  # historically lived on a single hostname.
+  # Both the apex (+<domain>+) and the +www.<domain>+ subdomain are served by
+  # this stack: a single ACM cert with +www+ as a +SubjectAlternativeName+,
+  # both listed in the +CloudFrontDistribution+'s +Aliases+, and a +Www+-
+  # suffixed Route 53 alias record pointing at the same distribution. The
+  # Lambda doesn't need to know which hostname served the request — every
+  # request lands on the same +$default+ stage of the same +ServerlessHttpApi+,
+  # so +rhymecrime.com+ and +www.rhymecrime.com+ render identical content.
+  # (We don't enforce a canonical hostname via 301 today; if SEO ever cares,
+  # attach a CloudFront Function to the distribution that 301s +www+ → apex.)
   DomainName:
     Type: String
     Default: ""
-    Description: Apex domain (e.g. rhymecrime.com); leave empty to skip custom-domain wiring.
+    Description: Apex domain (e.g. rhymecrime.com); leave empty to skip custom-domain wiring. The +www.<DomainName>+ subdomain is also wired up automatically.
   # Route 53 public hosted zone ID for +DomainName+. Required if +DomainName+
   # is set: +AWS::CertificateManager::Certificate+ uses it to auto-create
   # the DNS-validation CNAME (and tear it down at delete time), and the
@@ -189,12 +192,13 @@ Resources:
             Path: /{proxy+}
             Method: GET
 
-  # ---------------- Custom domain (apex via Route 53 ALIAS) ----------------
-  # All four resources are gated on +HasCustomDomain+ so the stack still
-  # deploys cleanly with +DomainName=""+. Resource creation order is implicit
-  # via +!Ref+ / +!GetAtt+ dependencies: Certificate → ApiCustomDomain
-  # (needs +CertificateArn+) → ApiMapping (needs +DomainName+) and
-  # ApexAliasRecord (needs +RegionalDomainName+ from ApiCustomDomain).
+  # ---------------- Custom domain (apex + www via CloudFront) -------------
+  # All resources in this section are gated on +HasCustomDomain+ so the
+  # stack still deploys cleanly with +DomainName=""+. Resource creation
+  # order is implicit via +!Ref+ / +!GetAtt+ dependencies: Certificate →
+  # CloudFrontDistribution (needs +CertificateArn+ + +ServerlessHttpApi+
+  # for its origin) → ApexAliasRecord and WwwAliasRecord (both need
+  # +CloudFrontDistribution.DomainName+).
 
   # ACM certificate, DNS-validated through the same Route 53 zone we control.
   # +DomainValidationOptions.HostedZoneId+ tells ACM "create the validation
@@ -204,59 +208,114 @@ Resources:
   # +DomainName+ are no-ops on the cert — the same ARN is reused.
   #
   # Region: this resource lives in us-east-1 along with the rest of the
-  # stack, which is correct for HTTP API +REGIONAL+ endpoints (the cert
-  # must be in the same region as the API). Don't mistake this for the
-  # CloudFront / edge-optimized API Gateway pattern that requires the cert
-  # in us-east-1 specifically — that's a *different* invariant.
+  # stack, which is *also* required by CloudFront — viewer certs on a
+  # CloudFront distribution must be in us-east-1 regardless of where the
+  # origin lives. (Origin-side TLS to the +execute-api+ URL is a separate
+  # cert managed by AWS; we don't touch it.) If we ever move the rest of
+  # the stack to another region, this resource has to stay pinned here.
   Certificate:
     Type: AWS::CertificateManager::Certificate
     Condition: HasCustomDomain
     Properties:
       DomainName: !Ref DomainName
+      # Single cert covers both the apex and +www.<apex>+ so we don't pay for
+      # (or operate) two separate ACM certs. ACM-issued public certs allow up
+      # to ~10 SANs by default, well above our two-name need. Adding a SAN
+      # *does* trigger a re-issue on first deploy with this template — ACM
+      # issues a new cert ARN, +CloudFrontDistribution+ updates to point at
+      # it, and the old cert is left orphaned (delete it manually after the
+      # deploy if you want a clean ACM list). Subsequent deploys are no-ops
+      # on the cert as long as the +DomainName+ + +SubjectAlternativeNames+
+      # tuple doesn't change.
+      SubjectAlternativeNames:
+        - !Sub "www.${DomainName}"
       ValidationMethod: DNS
       DomainValidationOptions:
         - DomainName: !Ref DomainName
           HostedZoneId: !Ref HostedZoneId
+        # Each SAN needs its own +DomainValidationOptions+ entry pointing at
+        # the same hosted zone; without this ACM falls back to "email the
+        # WHOIS contact" for the +www+ name, which has no automated path and
+        # would block the deploy indefinitely.
+        - DomainName: !Sub "www.${DomainName}"
+          HostedZoneId: !Ref HostedZoneId
 
-  # API Gateway v2 (HTTP API) custom-domain endpoint. +REGIONAL+ is the only
-  # +EndpointType+ HTTP API supports — +EDGE+ is REST-API-only. +TLS_1_2+
-  # is the modern minimum (drops TLS 1.0 / 1.1 clients, which are <0.1% of
-  # web traffic in 2026 and not worth the protocol-downgrade attack surface).
-  ApiCustomDomain:
-    Type: AWS::ApiGatewayV2::DomainName
+  # CloudFront distribution fronting the HTTP API. The whole point of this
+  # resource is to give the apex a port-80 listener (API Gateway v2 endpoints
+  # are 443-only — there is no +EndpointType+ / +SecurityPolicy+ knob that
+  # adds HTTP, and there is no API-Gateway-native HTTP→HTTPS redirect),
+  # so +ViewerProtocolPolicy: redirect-to-https+ below is what makes
+  # +http://${DomainName}+ resolve at all. +allow-all+ would *serve* plain
+  # HTTP, which we explicitly do not want (HSTS, mixed-content rules, and
+  # search-engine canonicalization all assume HTTPS is the real origin).
+  #
+  # Origin is the API Gateway default URL — +${ServerlessHttpApi}.execute-api...+
+  # rather than +${DomainName}+ — because we removed the API Gateway custom-
+  # domain mapping (apex hostname can only be claimed by one AWS service at
+  # a time; CloudFront wins). +OriginPath: /$default+ injects SAM's auto-
+  # generated stage name; if we ever switch to an explicit
+  # +AWS::Serverless::HttpApi+ with a different +StageName+, this changes too.
+  #
+  # The two managed-policy GUIDs are stable AWS values:
+  # +CachingDisabled+ — every +GET /+ is parameterized by +?w=...+, +/health+
+  # is meant to be live, and +/feedback+ is POST. Zero CloudFront caching by
+  # default; the lambda already sets +Cache-Control: public, max-age=300+ on
+  # +/crimestyle.css+ etc., so the *browser* still caches static assets
+  # without CloudFront layering anything on top. To actually cache rhyme
+  # results we'd need a query-string-keyed policy + a TTL discussion;
+  # separate refactor.
+  # +AllViewerExceptHostHeader+ — forwards every viewer header to API Gateway
+  # *except* +Host+, which CloudFront rewrites to the execute-api hostname.
+  # Without this, API Gateway sees +Host: ${DomainName}+ and 404s (since we
+  # deleted the custom-domain mapping that owned that name).
+  #
+  # +PriceClass_100+ (US/CA/EU edge locations only) is the cheapest tier and
+  # matches our user geography; opting out of Asia/SA/AU edges is the right
+  # default for an English-language rhyming dictionary.
+  CloudFrontDistribution:
+    Type: AWS::CloudFront::Distribution
     Condition: HasCustomDomain
     Properties:
-      DomainName: !Ref DomainName
-      DomainNameConfigurations:
-        - CertificateArn: !Ref Certificate
-          EndpointType: REGIONAL
-          SecurityPolicy: TLS_1_2
-
-  # Maps the custom domain to the HTTP API's +$default+ stage. SAM auto-
-  # generates an HTTP API named +ServerlessHttpApi+ when the function has any
-  # +HttpApi+-typed event (which ours does, for +/+ + +/health+ + +/feedback+
-  # + +/{proxy+}+) — that implicit logical ID is what we +!Ref+ here.
-  # If we ever switch to an explicit +AWS::Serverless::HttpApi+ resource,
-  # update the +!Ref+ to its logical ID; it will NOT be +ServerlessHttpApi+
-  # anymore.
-  ApiMapping:
-    Type: AWS::ApiGatewayV2::ApiMapping
-    Condition: HasCustomDomain
-    Properties:
-      ApiId: !Ref ServerlessHttpApi
-      DomainName: !Ref ApiCustomDomain
-      Stage: $default
+      DistributionConfig:
+        Enabled: true
+        HttpVersion: http2
+        PriceClass: PriceClass_100
+        Aliases:
+          - !Ref DomainName
+          - !Sub "www.${DomainName}"
+        ViewerCertificate:
+          AcmCertificateArn: !Ref Certificate
+          SslSupportMethod: sni-only
+          MinimumProtocolVersion: TLSv1.2_2021
+        Origins:
+          - Id: ApiGatewayOrigin
+            DomainName: !Sub "${ServerlessHttpApi}.execute-api.${AWS::Region}.amazonaws.com"
+            OriginPath: /$default
+            CustomOriginConfig:
+              OriginProtocolPolicy: https-only
+              OriginSSLProtocols:
+                - TLSv1.2
+        DefaultCacheBehavior:
+          TargetOriginId: ApiGatewayOrigin
+          ViewerProtocolPolicy: redirect-to-https
+          AllowedMethods: [GET, HEAD, OPTIONS, PUT, POST, PATCH, DELETE]
+          CachedMethods: [GET, HEAD, OPTIONS]
+          Compress: true
+          CachePolicyId: 4135ea2d-6df8-44a3-9df3-4b5a84be39ad
+          OriginRequestPolicyId: b689b0a8-53d0-40ab-baf2-68738e2966ac
 
   # Route 53 A-ALIAS at the apex. Apex domains can't be CNAMEs (DNS spec —
   # the apex must always have an SOA / NS record set, and CNAME forbids
   # coexisting records at the same name), so we use Route 53's
   # AWS-proprietary "Alias" record, which is stored as A but resolves to
-  # the API Gateway's regional endpoint. The +HostedZoneId+ inside
-  # +AliasTarget+ is API-Gateway-side (different from our zone's
-  # +HostedZoneId+) — +!GetAtt ApiCustomDomain.RegionalHostedZoneId+
-  # returns the right one automatically.
+  # the CloudFront distribution. The +HostedZoneId+ inside +AliasTarget+
+  # is CloudFront-side: AWS hardcodes +Z2FDTNDATAQYW2+ for *every* CloudFront
+  # distribution globally — there's no per-distribution variant — so we can't
+  # use +!GetAtt+ here the way we used to with API Gateway's
+  # +RegionalHostedZoneId+. The constant is documented at
+  # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-properties-route53-aliastarget.html
   #
-  # +EvaluateTargetHealth: false+ because the API Gateway endpoint already
+  # +EvaluateTargetHealth: false+ because the CloudFront endpoint already
   # has its own health/SLA managed by AWS; Route 53 health-checks would
   # only add cost without adding signal.
   ApexAliasRecord:
@@ -267,8 +326,26 @@ Resources:
       Name: !Ref DomainName
       Type: A
       AliasTarget:
-        DNSName: !GetAtt ApiCustomDomain.RegionalDomainName
-        HostedZoneId: !GetAtt ApiCustomDomain.RegionalHostedZoneId
+        DNSName: !GetAtt CloudFrontDistribution.DomainName
+        HostedZoneId: Z2FDTNDATAQYW2
+        EvaluateTargetHealth: false
+
+  # -------------------- www subdomain (parallel to apex) ------------------
+  # +www+ isn't an apex, so we *could* use a plain CNAME here — but A-ALIAS
+  # to CloudFront avoids the extra DNS hop a CNAME would force the resolver
+  # through, costs the same (Route 53 alias queries are free against AWS
+  # targets), and keeps the record shape symmetric with +ApexAliasRecord+.
+  # Same +Z2FDTNDATAQYW2+ CloudFront-global hosted zone constant as the apex.
+  WwwAliasRecord:
+    Type: AWS::Route53::RecordSet
+    Condition: HasCustomDomain
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: !Sub "www.${DomainName}"
+      Type: A
+      AliasTarget:
+        DNSName: !GetAtt CloudFrontDistribution.DomainName
+        HostedZoneId: Z2FDTNDATAQYW2
         EvaluateTargetHealth: false
 
 Outputs:
@@ -277,8 +354,22 @@ Outputs:
     Value: !GetAtt ServerlessHttpApi.ApiEndpoint
   CustomDomainUrl:
     Condition: HasCustomDomain
-    Description: Public custom-domain URL (apex; HTTPS only)
+    Description: Public custom-domain URL (apex; HTTP redirects to HTTPS via CloudFront)
     Value: !Sub "https://${DomainName}"
+  WwwCustomDomainUrl:
+    Condition: HasCustomDomain
+    Description: Public custom-domain URL (www subdomain; HTTP redirects to HTTPS via CloudFront — same content as apex)
+    Value: !Sub "https://www.${DomainName}"
+  # Distribution ID is the only handle +aws cloudfront create-invalidation+
+  # accepts, so emit it as a stack output for the cache-purge runbook.
+  # (Path-based invalidations are free for the first 1000/month; we'd only
+  # need them after enabling actual edge caching, which today is off via
+  # +CachePolicyId: CachingDisabled+. Cheaper to surface the ID now than
+  # to dig it out of +aws cloudfront list-distributions+ later.)
+  CloudFrontDistributionId:
+    Condition: HasCustomDomain
+    Description: CloudFront distribution ID (for create-invalidation runbook)
+    Value: !Ref CloudFrontDistribution
   TableNameOut:
     Value: !Ref RhymecrimeTable
   FeedbackTableNameOut:

@@ -1417,9 +1417,16 @@ def load_variants
 end
 
 #
-# prefixes (crime.rb prefix_words; dict.rb syllabification). Order: longer before shorter where one
-# contains another (+inter+ before +in+). Overlaps +HYPHEN_COMPOUND_LEADING_PARTICLES+ only on +in+,
-# +out+, +up+ — those serve different rules; do not merge arrays without checking both call sites.
+# Single morphological prefixes used by +prefix_words+ (crime.rb) for the rhyme filter
+# and by +syllabify_with_common_prefix_split+ (phonology.rb) for the syllabifier's prefix
+# split. Order: longer before shorter where one contains another (+inter+ before +in+).
+# Overlaps +HYPHEN_COMPOUND_LEADING_PARTICLES+ only on +in+, +out+, +up+ — those serve
+# different rules; do not merge arrays without checking both call sites.
+#
+# Intentionally restricted to *single* prefixes. Compound shapes like +insub-+ in
+# +insubordinate+ are handled by recursive stripping in +recursive_prefix_ancestors+
+# (crime.rb), which iterates this list at each step. Don't add compound entries here as
+# a band-aid — that's the smell that motivated the recursive refactor.
 #
 
 COMMON_PREFIXES = [
@@ -1442,10 +1449,15 @@ COMMON_PREFIXES = [
   'contra',
   'de',
   'dis',
-  'disen',   # compound dis- + en- (disenchanted → chanted). Recursive prefix stripping
-             # would be more principled but regresses +served+/+undeserved+ (un+de+served),
-             # so enumerate attested compounds instead.
+  'disen',   # compound dis- + en- (disenchanted → chanted). Now redundant with the
+             # recursive stripping in +recursive_prefix_ancestors+ (which also reaches
+             # +chanted+ via dis- → +enchanted+ → en- → +chanted+); kept as a single-step
+             # fast path and to document the historic compound entry.
   'down',    # downwind, downhill, downstream
+  'dys',     # Greek negative: dysfunction, dysfunctional, dystopia, dyslexia, dysphoria.
+             # Splash damage: nothing observed — opaque words starting with +dys+ are
+             # virtually all derivational (+dys+ doesn't appear as a non-morphological
+             # word-initial trigraph in English).
   'east',
   'en',
   'endo',    # endothermic → thermic
@@ -1477,6 +1489,10 @@ COMMON_PREFIXES = [
   'omni',
   'out',
   'over',
+  'pen',     # Latin "almost" (penultimate, antepenultimate). Splash damage on words
+             # that merely start with +pen+ (penny, pencil, penal, pen, penance) — but
+             # those don't share rimes with +ultimate+ / +ult+, so the splash is bounded
+             # by the rime cohort.
   'post',
   'pre',
   'pseudo',  # pseudoscience/science etc.

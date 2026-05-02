@@ -27,11 +27,15 @@ require "rhymecrime/frontend"
 require "rhymecrime/feedback_store"
 
 # Static asset table. assets/header.html references these as root-relative
-# URLs (+/crimestyle.css+, etc.), so the Lambda has to answer for them too —
-# API Gateway HTTP API has no static-file shortcut and there's no CloudFront
-# in front of us. Reading at module load (rather than per-request) means a
-# warm container serves each asset out of memory; a missing file blows up
-# init loudly instead of silent-404'ing on every page render.
+# URLs (+/crimestyle.css+, etc.), so the Lambda has to answer for them too.
+# The CloudFront distribution in +template.yaml+ uses +CachingDisabled+, so
+# static assets ride the +Cache-Control: public, max-age=300+ header set by
+# +asset_response+ below — i.e. the *browser* caches; CloudFront just passes
+# through. Cleanest path to S3+OAC offload (which would let the lambda exit
+# the static-asset business entirely) is a separate stack-up; out of scope
+# here. Reading at module load (rather than per-request) means a warm
+# container serves each asset out of memory; a missing file blows up init
+# loudly instead of silent-404'ing on every page render.
 #
 # When you add a new +<link rel=stylesheet>+ or +<script src>+ in
 # +assets/header.html+ (or anywhere else served from /), mirror an entry

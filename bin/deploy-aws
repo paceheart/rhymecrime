@@ -38,12 +38,13 @@ echo "==> deployed. URLs:"
 # CLI uses whichever profile the shell happens to have active, which is
 # exactly the trap that landed our first deploy in the work account.
 #
-# Pulls both +HttpApiUrl+ (always present) and +CustomDomainUrl+ (only present
-# when +HasCustomDomain+ is on — see +template.yaml+ +Conditions+). +OutputKey+
-# +OutputValue+ in a single +query+ keeps the table compact whether one or
-# both are populated; missing outputs are silently skipped by JMESPath.
+# Pulls +HttpApiUrl+ (always present) plus +CustomDomainUrl+ /
+# +WwwCustomDomainUrl+ (only present when +HasCustomDomain+ is on — see
+# +template.yaml+ +Conditions+). +OutputKey+ +OutputValue+ in a single +query+
+# keeps the table compact whether one, two, or all three are populated;
+# missing outputs are silently skipped by JMESPath.
 aws cloudformation describe-stacks \
   --stack-name rhymecrime \
-  --query "Stacks[0].Outputs[?OutputKey=='HttpApiUrl' || OutputKey=='CustomDomainUrl'].[OutputKey,OutputValue]" \
+  --query "Stacks[0].Outputs[?OutputKey=='HttpApiUrl' || OutputKey=='CustomDomainUrl' || OutputKey=='WwwCustomDomainUrl'].[OutputKey,OutputValue]" \
   --output table \
   --profile paceheart

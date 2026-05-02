@@ -46,13 +46,13 @@ cd "$REPO"
 DEFAULT_DUMP_PATH="$REPO/generated/rarity_signals_dump.jsonl"
 DUMP_PATH="${RHYMECRIME_RARITY_DUMP_SIGNALS:-$DEFAULT_DUMP_PATH}"
 
-echo "==> Build Stage 1/4: dict-build (full: CN+NB exports + rarity signals dump)"
+echo "==> Build Stage 1/4 [3m]: dict-build (full: CN+NB exports + rarity signals dump)"
 echo "                    dump path: $DUMP_PATH"
 RHYMECRIME_DICT_BUILD_CONCEPTNET_NUMBERBATCH=1 \
 RHYMECRIME_RARITY_DUMP_SIGNALS="$DUMP_PATH" \
   ./bin/dict-build
 
-echo "==> Build Stage 2/4: training rarity classifier -> generated/rarity_classifier.json"
+echo "==> Build Stage 2/4 [7m]: training rarity classifier -> generated/rarity_classifier.json"
 ruby ./bin/train-rarity-classifier
 
 echo "==> Build Stage 3/4: retrain-relatedness (sense glosses + MPNet vectors + classifier)"

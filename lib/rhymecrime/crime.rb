@@ -228,39 +228,112 @@ def lexical_root_after_prefix(word, prefix)
   word[prefix.length..-1].sub(/\A-+/, "")
 end
 
+# Words in WORDS that share a +COMMON_PREFIXES+ derivation with FOCAL_WORD. A candidate is
+# filtered when it shares a recursive-prefix-strip ancestor with focal AND both phonologically
+# end with that ancestor's pronunciation (with consonants strict, unstressed vowels relaxed).
+#
+#   1. Ancestor sets (+recursive_prefix_ancestors+) walk +COMMON_PREFIXES+ at each step so
+#      compound shapes like +in+sub-+ in +insubordinate+ collapse to +ordinate+ without
+#      enumerating +insub-+ in the prefix list. Captures both the "candidate strips to
+#      focal" case (+insubordinate+ → +ordinate+) and the "shared root" case (+unable+ and
+#      +disable+ both → +able+) — the latter is what the old +focal_roots+ seeding
+#      handled. Depth-bounded; restricted to lexicon entries so non-word artifacts of
+#      over-stripping (+a-+ off +able+ → +ble+) don't poison the intersection.
+#
+#   2. Phonological-suffix alignment (+pron_suffix_aligned?+) requires each side's flat
+#      ARPAbet to end with the common ancestor's, consonants and primary-stressed vowels
+#      strict, unstressed vowels relaxed (+disenchanted+'s AH0 N tail matches +enchanted+'s
+#      EH0 N — morphological vowel reduction at the prefix-stem boundary). The pron gate
+#      is what makes the recursion safe: +un+de+served+ orthographically peels to +served+,
+#      but +undeserved+'s tail is +Z AH1 R V D+ vs +served+'s +S AH1 R V D+ — the de- →
+#      /d ɪ z/ shift before voiced-onset roots breaks the consonant frame, so the gate
+#      (and therefore the filter) declines.
+#
+# Opaque/etymologically-prefixed words that modern speakers don't perceive as derivational
+# (+record+ = re+cord, +ajar+ = a+jar, +abasement+ = a+basement) still suffix-align
+# phonologically and are accepted as splash damage. The S→Z onset shift in +deserve+ /
+# +serve+ used to be splash damage too; the pron gate now lets that pair through. See
+# +rhyme_spec.rb+ for the working/skipped split.
 def prefix_words(words, focal_word)
-  # All words in WORDS that would share the same root as FOCAL_WORD if you removed its prefix.
-  # For example, if WORDS contains "able" and "disable", the prefix_words are ["disable"].
-  # But if WORDS contained "unable" and "disable", there would be no prefix_words.
-  # Recursive (compound) stripping was tried but regresses +served+/+undeserved+ etc. where
-  # +un+de+served+ collapses to +served+ but the user considers the pair derivationally
-  # distinct. Genuine compounds like +chanted+/+disenchanted+ (dis- + en-) are handled via
-  # explicit compound entries in COMMON_PREFIXES (e.g. +disen+). Opaque/etymologically-
-  # prefixed words that modern speakers don't perceive as derivational (+record+ = re+cord,
-  # +deserve+ = de+serve, +ajar+ = a+jar) are accepted as splash damage; see the
-  # corresponding +not_working_message+ pending tests in rhyme_spec.
-  focal_roots = Array.new
-  focal_roots << focal_word
-  for prefix in COMMON_PREFIXES
-    root = lexical_root_after_prefix(focal_word, prefix)
-    focal_roots << root if root && words.include?(root)
-  end
-
-  result = Array.new
-  for word in words
-    if focal_roots.include?(word)
-      result << word
-    else
-      for prefix in COMMON_PREFIXES
-        root = lexical_root_after_prefix(word, prefix)
-        result << word if root && focal_roots.include?(root)
-      end
+  focal_ancestors = recursive_prefix_ancestors(focal_word)
+  result = words.select do |w|
+    next false if w == focal_word
+    candidate_ancestors = recursive_prefix_ancestors(w)
+    common = focal_ancestors & candidate_ancestors
+    next false if common.empty?
+    common.any? do |anc|
+      pron_suffix_aligned_or_equal?(focal_word, anc) &&
+        pron_suffix_aligned_or_equal?(w, anc)
     end
   end
-  if result
-    debug "Filtering out prefix words #{result} from #{words}"
+  debug "Filtering out prefix words #{result} from #{words}" unless result.empty?
+  result
+end
+
+# Set of forms reachable by recursively peeling +COMMON_PREFIXES+ from +word+, restricted to
+# lexicon entries (so non-word artifacts of over-stripping like +a-+ off +able+ → +ble+ don't
+# enter the intersection). Always includes +word+ itself. Depth-bounded — the deepest
+# legitimate English chain is ~3 (+dis+en+chanted+, +in+sub+ordinate+); ≤4 leaves headroom
+# for as-yet-unseen compounds without risk of pathological recursion on words like
+# +nonconcomitant+ where many prefixes happen to match the start.
+RECURSIVE_PREFIX_STRIP_MAX_DEPTH = 4
+def recursive_prefix_ancestors(word, depth = 0, set = nil)
+  set ||= Set.new
+  return set if depth >= RECURSIVE_PREFIX_STRIP_MAX_DEPTH
+  return set if set.include?(word)
+  set.add(word)
+  COMMON_PREFIXES.each do |prefix|
+    tail = lexical_root_after_prefix(word, prefix)
+    next unless tail && !tail.empty?
+    next unless word_dict_includes_headword?(tail)
+    recursive_prefix_ancestors(tail, depth + 1, set)
   end
-  return result
+  set
+end
+
+# +pron_suffix_aligned?+ but trivially true when +word+ equals +ancestor+ (so a word counts
+# as its own ancestor for the common-ancestor intersection).
+def pron_suffix_aligned_or_equal?(word, ancestor)
+  return true if word == ancestor
+  pron_suffix_aligned?(word, ancestor)
+end
+
+# True when any flat ARPAbet pronunciation of +longer+ ends with any of +shorter+'s, with
+# strict consonant/primary-stressed-vowel matching and unstressed-vowel relaxation. Falls
+# back to spelling-endswith if either word has no pronunciations (rare; preserves coverage
+# for hyphenated/missing-pron entries that +lexical_root_after_prefix+ already handles
+# orthographically).
+def pron_suffix_aligned?(longer, shorter)
+  longer_prons = pronunciations(longer)
+  shorter_prons = pronunciations(shorter)
+  if longer_prons.empty? || shorter_prons.empty?
+    return longer.to_s.downcase.end_with?(shorter.to_s.downcase)
+  end
+  shorter_prons.any? do |sp|
+    s_phones = sp.phonemes.reject(&:syllable_boundary?)
+    next false if s_phones.empty?
+    longer_prons.any? do |lp|
+      l_phones = lp.phonemes.reject(&:syllable_boundary?)
+      next false if l_phones.length <= s_phones.length
+      l_tail = l_phones[-s_phones.length..]
+      l_tail.zip(s_phones).all? { |a, b| phoneme_tail_match?(a, b) }
+    end
+  end
+end
+
+# Phoneme equivalence for +pron_suffix_aligned?+. Consonants must match by bare base.
+# Vowels match by bare base; if neither phoneme carries primary stress, any
+# vowel-vowel pair counts as a match (handles morphological vowel reduction at the
+# prefix-stem boundary, e.g. +enchanted+ EH0 N ↔ +disenchanted+'s AH0 N tail).
+def phoneme_tail_match?(a, b)
+  return true if a == b
+  return false if a.syllable_boundary? || b.syllable_boundary?
+  if a.vowel? && b.vowel?
+    return true if !a.include?("1") && !b.include?("1")
+    return Phoneme.bare_base(a) == Phoneme.bare_base(b)
+  end
+  return false if a.vowel? || b.vowel?
+  Phoneme.bare_base(a) == Phoneme.bare_base(b)
 end
 
 def find_rhyming_words(word, identical_ok=true)

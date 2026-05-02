@@ -395,10 +395,11 @@ describe 'RHYMES' do
     oughta_rhyme 'nation', 'abomination'
     ought_not_rhyme 'corn', 'acorn' # stress mismatch
     # S ER V vs. Z ER V (and plurals/participles), so these aren't actually identical rhymes
-    # phonetically -- but they share the +de-+/+un-+ shape, so +filter_out_prefix_words+
-    # filters them. Accepting as splash damage.
-    oughta_rhyme 'serve', 'deserve', not_working_message: 'splash damage: de- prefix filter'
-    oughta_rhyme 'served', 'deserved', not_working_message: 'splash damage: de- prefix filter'
+    # phonetically. They share the +de-+ shape orthographically and the spelling-only filter
+    # used to drop them as splash damage; +pron_suffix_aligned?+ now sees the S → Z onset
+    # shift and lets the pair through.
+    oughta_rhyme 'serve', 'deserve'
+    oughta_rhyme 'served', 'deserved'
     oughta_rhyme 'served', 'undeserved'
     ought_not_rhyme 'served', 'underserved'
     ought_not_rhyme 'millionaire', 'multimillionaire'
@@ -1051,6 +1052,9 @@ describe 'RHYMES' do
   end
 
   context 'bad pronunciations' do
+    oughta_rhyme 'corded', 'ported'
+    oughta_rhyme 'bordered', 'quartered'
+    ought_not_rhyme 'corded', 'quartered'
     oughta_rhyme 'britches', 'snitches' # fixed via an authoritative pronunciation
     ought_not_rhyme 'breeches', 'snitches' # fixed via an authoritative pronunciation
     oughta_rhyme 'breeches', 'beaches'

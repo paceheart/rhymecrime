@@ -399,6 +399,27 @@ end
 # still get rescored.
 RARITY_CLASSIFIER_RESCORE_MAX_FREQ = 90
 
+# Phase symbols that only fire when the donor base is in +common_words+ (i.e.
+# +rarity.csv+'s +common+ / +common_ish+ rows): +morph_inherit_listed+ comes
+# from +morph_inherit_listed+ in +frequency.rb+ and +morph_expand_listed+ from
+# +morph_expand_listed+ — both branches gate on +common_words.include?(base)+
+# before recording propagation. Encoding either as a categorical feature
+# (+freq_source_phase_index+) lets the classifier back-derive the curated
+# label from the lemma's CSV row, same shape of leak the +common_words_flag+ /
+# +rare_words_flag+ direct features used to introduce. We mask them to
+# +:unknown+ on the dump side only — the runtime rescore path in
+# +rarity_rescore_and_dump!+ keeps the precise phase symbol on +sig+ so
+# +dict_trace+ output and downstream consumers stay informative; we only mask
+# the parallel +dump_sig+ used to write the JSONL training rows. Train/test
+# asymmetry on these two phases is small in practice because both listed
+# branches push +entry[0]+ to the +99+ sentinel, which the runtime rescore
+# already short-circuits via +RARITY_CLASSIFIER_RESCORE_MAX_FREQ+ before the
+# classifier even sees the row.
+RARITY_DUMP_LEAKY_FREQ_SOURCE_PHASES = Set[
+  :morph_inherit_listed,
+  :morph_expand_listed,
+].freeze
+
 $rarity_usf_associations = nil
 def rarity_usf_associations_for_build
   return $rarity_usf_associations unless $rarity_usf_associations.nil?
@@ -534,6 +555,9 @@ def rarity_rescore_and_dump!(hash, **ctx_kwargs)
         # +entry[0]+ for its sentinel-skip and rescore decisions).
         dump_sig = sig.dup
         dump_sig.post_propagation_freq = dump_corpus_only_freq.call(word)
+        if RARITY_DUMP_LEAKY_FREQ_SOURCE_PHASES.include?(dump_sig.freq_source_phase)
+          dump_sig.freq_source_phase = :unknown
+        end
         write_dump_row.call(word, dump_sig, dump_sig.post_propagation_freq)
         dump_main += 1
       end
