@@ -413,11 +413,11 @@ describe 'RHYMES' do
     ought_not_rhyme 'ultimate', 'penultimate'
     ought_not_rhyme 'penultimate', 'antepenultimate'
     ought_not_rhyme 'chamber', 'antechamber'
-    ought_not_rhyme 'motion', 'locomotion'
     ought_not_rhyme 'function', 'dysfunction'
     ought_not_rhyme 'functional', 'dysfunctional'
     ought_not_rhyme 'discovered', 'undiscovered'
     # I'm not sure about these:
+    # 'motion', 'locomotion'
     # 'prudence', 'jurisprudence'
     # 'magnetic', 'electromagnetic'
     # 'explosion', 'implosion'

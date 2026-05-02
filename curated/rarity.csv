@@ -353,8 +353,6 @@ modern words (post-2009),twerk,common,1,"",""
 modern words (post-2009),twerks,common,1,"",""
 modern words (post-2009),twerked,common,1,"",""
 modern words (post-2009),twerking,common,1,"",""
-modern words (post-2009),url,common_ish,1,1,""
-modern words (post-2009),urls,common_ish,1,"",""
 modern words (post-2009),urled,forbidden,1,"",""
 modern words (post-2009),urling,forbidden,1,"",""
 modern words (post-2009),twink,common,1,"",""
@@ -738,7 +736,7 @@ hyphenated words / without existing final words,sans-culotte,rare_ish,1,"",""
 hyphenated words / without existing final words,sans-culottes,rare_ish,1,"",""
 hyphenated words / without existing final words,dinky-di,rare,1,"",""
 hyphenated words / without existing final words,topsy-turvy,common_ish,1,"",""
-hyphenated words / without existing final words,topsy-turvies,rare,1,"",""
+hyphenated words / without existing final words,topsy-turvies,forbidden_ish,1,"",""
 hyphenated words / without existing final words,topsy-turvys,forbidden,1,"",""
 hyphenated words / without existing final words,topsy-turvying,forbidden,1,"",""
 hyphenated words / without existing final words,topsy-turvier,rare_ish,1,"",""
@@ -746,12 +744,12 @@ hyphenated words / without existing final words,topsy-turviest,rare_ish,1,"",""
 hyphenated words / without existing final words,boogie-woogie,forbidden,1,"",""
 hyphenated words / without existing final words,hanky-panky,forbidden,1,"",""
 hyphenated words / without existing final words,heebie-jeebie,forbidden,1,"",""
-hyphenated words / without existing final words,heebie-jeebies,forbidden,1,"",""
+hyphenated words / without existing final words,heebie-jeebies,rare,1,"",""
 hyphenated words / without existing final words,hara-kiri,common,1,"",""
 hyphenated words / without existing final words,itsy-bitsy,common_ish,1,"",""
 hyphenated words / without existing final words,hurdy-gurdy,rare_ish,1,1,""
 hyphenated words / without existing final words,okey-dokey,common_ish,1,1,""
-hyphenated words / without existing final words,tutti-frutti,forbidden,1,"",""
+hyphenated words / without existing final words,tutti-frutti,rare,1,"",""
 hyphenated words / without existing final words,willy-nilly,common_ish,1,"",""
 hyphenated words / without existing final words,pell-mell,forbidden,1,"",""
 hyphenated words / without existing final words,flim-flam,forbidden,1,"",""
@@ -3844,7 +3842,6 @@ forbid_list.txt,fdr,forbidden,1,"",imported from forbid_list.txt
 forbid_list.txt,fe,forbidden,1,"",imported from forbid_list.txt
 forbid_list.txt,fnd,forbidden,1,"",imported from forbid_list.txt
 forbid_list.txt,foxhunting,forbidden,1,"",imported from forbid_list.txt
-forbid_list.txt,fum,forbidden,1,"",imported from forbid_list.txt
 forbid_list.txt,gasolene,forbidden,1,"",imported from forbid_list.txt
 forbid_list.txt,georg,forbidden,1,"",imported from forbid_list.txt
 forbid_list.txt,givee,forbidden,1,"",imported from forbid_list.txt
@@ -3967,3 +3964,7 @@ games,fum,rare,1,"",
 computer,depressores,forbidden,1,"",
 sufi,sufi,common,1,"",
 astronomy,gps,rare,1,"",
+solecisms,nucleus,common,1,""
+solecisms,nuclei,common,1,""
+solecisms,nucleuses,forbidden,1,""
+initialisms,mit,rare,1,""

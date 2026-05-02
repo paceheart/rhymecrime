@@ -160,6 +160,14 @@ describe "SPELLING VARIANTS" do
     prefer_spelling 'googling', 'googleing'
   end
 
+  context '-er / -re US/UK' do
+    prefer_spelling 'theater', 'theatre'
+    prefer_spelling 'meter', 'metre'
+    prefer_spelling 'micrometer', 'micrometre'
+    prefer_spelling 'megameter', 'megametre'
+    prefer_spelling 'gigameter', 'gigametre'
+  end
+
   context "manual list (curated/spelling.csv)" do
     each_spelling_csv_pair do |preferred, alt|
       prefer_spelling preferred, alt

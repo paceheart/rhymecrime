@@ -87,3 +87,6 @@ When we have explicit curated data with a clear relatedness decision, override t
 do something about ever / however / howsoever / whatever / whatsoever / whenever / wherever / whichever / whichsoever / whoever / whomever / whomsoever / whosoever
 
 make it actually follow up on the "I'll make a note" notes
+
+make http (without s) work
+make www work

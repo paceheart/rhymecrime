@@ -34,6 +34,11 @@
 
 require_relative 'test_utils'
 
+# Aggregate-pass thresholds for the curated/related.csv sweep.
+RELATED_MIN_EVALUATED_ROWS = 9000
+RELATED_PASS_RATE_FLOOR = 0.85
+RELATED_PASS_RATE_SUSPICIOUS = 0.99
+
 # --- Spot-check helpers (one rspec example per call; for hand-curated cases). ---
 
 def oughta_be_related(word1, word2, not_working_message: nil)
@@ -158,12 +163,19 @@ describe 'RELATED' do
   end
 
   context 'csv sweep (curated/related.csv)' do
-    it "it's over 9000!!!!! (the row count, that is)" do
-      expect(RELATED_EVALUATED).to be > 9000
+    it "it's over #{RELATED_MIN_EVALUATED_ROWS}!!!!! (the row count, that is)" do
+      expect(RELATED_EVALUATED).to be > RELATED_MIN_EVALUATED_ROWS
     end
-    it 'has >= 89% weighted pass rate' do
+    
+    it "has >= #{format('%g', RELATED_PASS_RATE_FLOOR * 100)}% weighted pass rate" do
       rate = RELATED_TOTAL_WEIGHT.positive? ? RELATED_WEIGHTED_CORRECT / RELATED_TOTAL_WEIGHT : 0.0
-      expect(rate).to be >= 0.85
+      expect(rate).to be >= RELATED_PASS_RATE_FLOOR
+    end
+    
+    # This is to verify that the classifier isn't training on the labels
+    it "has < #{format('%g', RELATED_PASS_RATE_SUSPICIOUS * 100)}% weighted pass rate" do
+      rate = RELATED_TOTAL_WEIGHT.positive? ? RELATED_WEIGHTED_CORRECT / RELATED_TOTAL_WEIGHT : 0.0
+      expect(rate).to be < RELATED_PASS_RATE_SUSPICIOUS
     end
   end
 end

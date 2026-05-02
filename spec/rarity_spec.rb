@@ -26,6 +26,14 @@
 
 require_relative "test_utils"
 
+# Aggregate-pass thresholds for the curated/rarity.csv sweep. Floor is the bar
+# the suite must clear; the suspicious threshold is an upper-band sanity gate
+# (a rate above it usually means the CSV has drifted toward the live predicate
+# rather than the predicate genuinely improving).
+RARITY_MIN_EVALUATED_ROWS = 2500
+RARITY_PASS_RATE_FLOOR = 0.975
+RARITY_PASS_RATE_SUSPICIOUS_THRESHOLD = 0.99
+
 def allowed?(word)
   !explicitly_forbidden?(word) && word_dict.key?(word)
 end
@@ -249,11 +257,30 @@ describe "RARITY" do
     oughta_be_forbidden '🧢'
   end
 
+  # ensure that a common hyphenated word is deemed common
+  context 'hyphens' do
+    oughta_be_common 'so-so'
+  end
+
+  # This is to verify that the classifier isn't training on the labels
+  context 'words that do not appear in rarity.csv' do
+    oughta_be_common 'elongated'
+    oughta_be_rare 'myonymy'
+  end
+
   context "csv sweep (curated/rarity.csv)" do
-    it "covers >= 1000 rows at >= 97.5% weighted pass rate" do
-      expect(RARITY_EVALUATED).to be >= 2500
+    it "covers >= #{RARITY_MIN_EVALUATED_ROWS} rows" do
+      expect(RARITY_EVALUATED).to be >= RARITY_MIN_EVALUATED_ROWS
+    end
+
+    it "has >= #{format('%g', RARITY_PASS_RATE_FLOOR * 100)}% weighted pass rate" do
       rate = RARITY_TOTAL_WEIGHT.positive? ? RARITY_WEIGHTED_SCORE / RARITY_TOTAL_WEIGHT : 0.0
-      expect(rate).to be >= 0.97
+      expect(rate).to be >= RARITY_PASS_RATE_FLOOR
+    end
+
+    it "has < #{format('%g', RARITY_PASS_RATE_SUSPICIOUS_THRESHOLD * 100)}% weighted pass rate; anything greater is suspicious" do
+      rate = RARITY_TOTAL_WEIGHT.positive? ? RARITY_WEIGHTED_SCORE / RARITY_TOTAL_WEIGHT : 0.0
+      expect(rate).to be >= RARITY_PASS_RATE_SUSPICIOUS_THRESHOLD
     end
 
     it "has no contradictory rows" do

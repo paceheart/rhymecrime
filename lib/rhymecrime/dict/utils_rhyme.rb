@@ -289,7 +289,27 @@ def forbid_list
   rarity_csv_forbidden_words
 end
 
+# Word consists entirely of non-ASCII bytes (e.g. emoji like '🍇', '🌮', '🧢').
+# UTF-8 ASCII chars occupy bytes < 0x80, so a word with no byte < 0x80 has zero
+# ASCII characters. Mixed-script borrowings like +café+ / +résumé+ are NOT
+# matched (they contain ASCII letters too) — only fully non-ASCII surfaces.
+# Empty strings are not considered non-ASCII-only (no characters at all).
+def non_ascii_only?(word)
+  return false if word.nil? || word.empty?
+  word.bytes.all? { |b| b >= 0x80 }
+end
+
+# +explicitly_forbidden?+ unifies two policy sources:
+#   1. +forbidden+/+forbidden_ish+ rows in +curated/rarity.csv+
+#      (the curated, hand-maintained block list)
+#   2. +non_ascii_only?+ — any word with zero ASCII characters
+#      (catches emoji and other purely-pictographic surfaces that leak in via
+#      Wiktionary/Kaikki; we don't want them as headwords or as rhyme outputs).
+# The build-time +forbidden_scrub+ pass in +frequency.rb+ iterates +word_dict+
+# keys against this predicate, so the policy-2 inputs are also pruned from the
+# generated dict on the next rebuild — no separate scrub needed.
 def explicitly_forbidden?(word)
+  return true if non_ascii_only?(word)
   load_rarity_csv_word_sets! if $rarity_csv_forbidden_words_set.nil?
   $rarity_csv_forbidden_words_set.include?(word)
 end
