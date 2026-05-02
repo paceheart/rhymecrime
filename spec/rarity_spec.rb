@@ -21,8 +21,7 @@
 #
 # Weights: +common+ / +rare+ / +forbidden+ rows weigh 3; +*_ish+ rows weigh 1
 # (so a strong row counts 3x an ish row toward the aggregate). Rows skipped:
-# +uncommon+, +*_no_rhymes+, +have_rhymes+, and CSV +skip+=1 (unless
-# +RHYMECRIME_RUN_SKIPPED=1+).
+# +uncommon+, +*_no_rhymes+, +have_rhymes+ (no rarity-family expectation).
 
 require_relative "test_utils"
 
@@ -152,6 +151,50 @@ def find_contradictory_rarity_rows
     .sort_by { |word, _| word }
 end
 
+# Group rarity.csv rows by +word+ and return only those words that appear in
+# more than one row. Returns +[[word, [{kind:, line:, context:}, ...]], ...]+
+# sorted by word. Stricter than +find_contradictory_rarity_rows+: this also
+# catches same-family multi-rows (e.g. a word listed both +common+ and
+# +common_ish+, or two +forbidden+ rows under different contexts), which are
+# bookkeeping noise rather than informative redundancy.
+def find_redundant_rarity_rows
+  rows = load_rarity_csv_rows
+  by_word = Hash.new { |h, k| h[k] = [] }
+  rows.each_with_index do |row, i|
+    by_word[row["word"].to_s] << {
+      kind: row["kind"].to_s.strip,
+      line: i + 2,
+      context: row["context"].to_s,
+    }
+  end
+  by_word
+    .select { |_, occurrences| occurrences.size > 1 }
+    .sort_by { |word, _| word }
+end
+
+# Words that appear in BOTH +curated/rarity.csv+ and the curated word-set file
+# +curated/<filename>+. Returns +[[word, [{kind:, line:, context:}, ...]], ...]+
+# sorted by word. Used to flag overlap with +unrhymable_stop_words.txt+ /
+# +semantically_promiscuous.txt+: those files have the final say at build /
+# runtime, so any rarity.csv row for the same word is unreachable noise (and,
+# in the +common+ case, mints a stillborn pron-less +BuildEntry+ in the
+# common-list pass before +unrhymable_scrub+ tombstones it).
+def find_rarity_rows_overlapping_curated_set(filename)
+  members = load_curated_word_set(filename)
+  rows = load_rarity_csv_rows
+  by_word = Hash.new { |h, k| h[k] = [] }
+  rows.each_with_index do |row, i|
+    word = row["word"].to_s
+    next unless members.include?(word)
+    by_word[word] << {
+      kind: row["kind"].to_s.strip,
+      line: i + 2,
+      context: row["context"].to_s,
+    }
+  end
+  by_word.sort_by { |word, _| word }
+end
+
 # Symmetric mismatch scoring — no FN/FP discount. Returns 1.0 on exact match,
 # else a partial-credit base in [0.0, 0.9] depending on how far apart the two
 # categories are on the rare/common/forbidden spectrum.
@@ -189,9 +232,6 @@ def evaluate_rarity_csv
     kind = row["kind"].to_s
     expected = expected_category_for_kind(kind)
     next if expected.nil?
-
-    skip = row["skip"].to_s.strip == "1"
-    next if skip && !rhymecrime_run_skipped_examples?
 
     word = row["word"].to_s
     context = row["context"].to_s
@@ -294,6 +334,49 @@ describe "RARITY" do
       expect(contradictions).to be_empty,
         "found #{contradictions.size} contradictory word(s) in curated/rarity.csv " \
         "(same word listed with disagreeing rarity families; see CONTRADICTION lines above)"
+    end
+
+    it "has no redundant rows" do
+      redundancies = find_redundant_rarity_rows
+      redundancies.each do |word, occurrences|
+        details = occurrences
+          .map { |o| "line #{o[:line]} (#{o[:context]}): #{o[:kind]}" }
+          .join("; ")
+        puts "REDUNDANT #{word.inspect}: #{details}"
+      end
+      expect(redundancies).to be_empty,
+        "found #{redundancies.size} redundant word(s) in curated/rarity.csv " \
+        "(same word listed in more than one row; see REDUNDANT lines above)"
+    end
+
+    it "has no rows for words also in unrhymable_stop_words.txt" do
+      overlaps = find_rarity_rows_overlapping_curated_set(UNRHYMABLE_STOP_WORDS_FILENAME)
+      overlaps.each do |word, occurrences|
+        details = occurrences
+          .map { |o| "line #{o[:line]} (#{o[:context]}): #{o[:kind]}" }
+          .join("; ")
+        puts "UNRHYMABLE_OVERLAP #{word.inspect}: #{details}"
+      end
+      expect(overlaps).to be_empty,
+        "found #{overlaps.size} word(s) listed in both curated/rarity.csv and " \
+        "curated/#{UNRHYMABLE_STOP_WORDS_FILENAME} (the stop-word list has the " \
+        "final say at build time, so the rarity.csv row is unreachable; see " \
+        "UNRHYMABLE_OVERLAP lines above)"
+    end
+
+    it "has no rows for words also in semantically_promiscuous.txt" do
+      overlaps = find_rarity_rows_overlapping_curated_set(SEMANTICALLY_PROMISCUOUS_FILENAME)
+      overlaps.each do |word, occurrences|
+        details = occurrences
+          .map { |o| "line #{o[:line]} (#{o[:context]}): #{o[:kind]}" }
+          .join("; ")
+        puts "PROMISCUOUS_OVERLAP #{word.inspect}: #{details}"
+      end
+      expect(overlaps).to be_empty,
+        "found #{overlaps.size} word(s) listed in both curated/rarity.csv and " \
+        "curated/#{SEMANTICALLY_PROMISCUOUS_FILENAME} (promiscuous membership " \
+        "trumps rarity-family labels at build time; see PROMISCUOUS_OVERLAP " \
+        "lines above)"
     end
   end
 end

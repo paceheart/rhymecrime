@@ -128,29 +128,28 @@ end
 def apply_rarity_csv_row(row)
   validate_rarity_csv_row!(row)
   word = row["word"]
-  skip = row["skip"].to_s.strip == "1" ? true : nil
   important = row["important"].to_s.strip != "0"
   case row["kind"].strip
   when "common"
-    oughta_be_common word, important: important, not_working_message: skip
+    oughta_be_common word, important: important
   when "common_ish"
-    oughta_be_common_ish word, not_working_message: skip
+    oughta_be_common_ish word
   when "rare"
-    oughta_be_rare word, important: important, not_working_message: skip
+    oughta_be_rare word, important: important
   when "rare_ish"
-    oughta_be_rare_ish word, not_working_message: skip
+    oughta_be_rare_ish word
   when "uncommon"
-    oughta_be_uncommon word, not_working_message: skip
+    oughta_be_uncommon word
   when "forbidden"
-    oughta_be_forbidden word, not_working_message: skip
+    oughta_be_forbidden word
   when "forbidden_ish"
-    oughta_be_forbidden_ish word, not_working_message: skip
+    oughta_be_forbidden_ish word
   when "common_no_rhymes"
-    oughta_be_common_but_has_no_rhymes word, not_working_message: skip
+    oughta_be_common_but_has_no_rhymes word
   when "rare_no_rhymes"
-    oughta_be_rare_but_has_no_rhymes word, not_working_message: skip
+    oughta_be_rare_but_has_no_rhymes word
   when "have_rhymes"
-    oughta_have_rhymes word, not_working_message: skip
+    oughta_have_rhymes word
   else
     raise "rarity.csv: unhandled kind #{row['kind'].inspect}"
   end

@@ -148,7 +148,7 @@ in `corpus_variants.rb` (US/UK -ize/-ise, -oes/-os plurals, …).
 
 ### `rarity.csv`
 
-Labeled rarity outcomes: `(context, word, kind, important, skip, notes)`
+Labeled rarity outcomes: `(context, word, kind, important, notes)`
 where `kind ∈ {common, common_ish, rare, rare_ish, uncommon, forbidden,
 forbidden_ish, common_no_rhymes, rare_no_rhymes, have_rhymes}`. The eval
 harness in `spec/rarity_spec.rb` consumes this file directly (sweeps every
@@ -161,7 +161,7 @@ used to live in `common_words.txt` / `rare_words.txt` / `forbid_list.txt`:
 `rarity_csv_common_words`, `rarity_csv_rare_words`, and
 `rarity_csv_forbidden_words` (in `lib/rhymecrime/dict/utils_rhyme.rb`)
 project the matching `kind` rows into Sets. So a row like
-`stop words,a,common,1,"",""` is consulted by both the spec sweep AND
+`stop words,a,common,1,""` is consulted by both the spec sweep AND
 `add_frequency_info` in `lib/rhymecrime/dict/frequency.rb`. Rows imported
 from the retired `*.txt` files carry an `imported from <file>` marker in
 the `notes` column and use the source filename as their `context`; future
