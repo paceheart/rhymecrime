@@ -719,12 +719,33 @@ describe 'RHYMES' do
     oughta_rhyme 'fennel', 'sentimental' # it's OK to elide the final T in 'sentimental'
     oughta_rhyme 'greediest', 'devious', not_working_message: true
     oughta_rhyme 'fence', 'wince', not_working_message: true
-    oughta_rhyme 'vintage', 'percentage'
     oughta_rhyme 'girl', 'world', not_working_message: true
     oughta_rhyme 'false', 'malts' # sure I guess? otherwise 'false' won't rhyme with anything at all
     oughta_rhyme 'else', 'melts' # sure I guess? otherwise 'else' won't rhyme with anything at all
     oughta_rhyme 'poor', 'core', not_working_message: "in some dialects, these rhyme"
     oughta_rhyme 'cajun', 'occasion'
+    context 'pin/pen' do # I'm torn on this one
+      ought_not_rhyme 'pin', 'pen'
+      ought_not_rhyme 'vintage', 'percentage' # pin/pend
+      ought_not_rhyme 'difference', 'preference'
+      ought_not_rhyme 'kilogram', 'telegram'
+      ought_not_rhyme 'incriminate', 'disseminate' # this sounds fine to me
+      ought_not_rhyme 'ambivalent', 'benevolent'
+      ought_not_rhyme 'winter', 'center'
+      ought_not_rhyme 'interests', 'centrists'
+      ought_not_rhyme 'deliverance', 'reverence'
+      ought_not_rhyme 'vindictive', 'effective'
+      ought_not_rhyme 'enlistment', 'investment'
+      ought_not_rhyme 'abolitionist', 'impressionist'
+      ought_not_rhyme 'magnificent', 'beneficent'
+      ought_not_rhyme 'dissident', 'precedent'
+      ought_not_rhyme 'filament', 'element'
+      ought_not_rhyme 'curricular', 'molecular'
+      ought_not_rhyme 'antiquity', 'inequity'
+      ought_not_rhyme 'predictable', 'collectible'
+      ought_not_rhyme 'fiction', 'section'
+      ought_not_rhyme 'artistic', 'domestic'
+    end
   end
   
   context 'rhymes too imperfect to live' do
