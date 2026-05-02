@@ -2682,6 +2682,14 @@ rhyme spec regressions,okey-dokey,common_ish,1,1,""
 rhyme spec regressions,nyet,rare_ish,1,1,""
 rhyme spec regressions,heinz,common_ish,1,1,""
 rhyme spec regressions,mitten,common,1,"",""
+rhyme spec regressions,biddy,common,1,"",""
+rhyme spec regressions,titty,common,1,"",""
+rhyme spec regressions,pita,common,1,"",""
+rhyme spec regressions,farted,common,1,"",""
+rhyme spec regressions,huffin',common,1,"",""
+rhyme spec regressions,puffin',common,1,"",""
+rhyme spec regressions,sobbin',common,1,"",""
+rhyme spec regressions,bobbin',common,1,"",""
 similar_rhymes spec regressions,jonah,common,1,"",spec/similar_rhymes_spec.rb set_related: 'pirate' -> 'fursona' / 'jonah'
 similar_rhymes spec regressions,orchestration,common,1,"",spec/similar_rhymes_spec.rb set_related: 'music' -> 'orchestration' / 'vibration'
 similar_rhymes spec regressions,arpeggio,common,1,"",spec/similar_rhymes_spec.rb set_related: 'music' -> 'show' / 'arpeggio'

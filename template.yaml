@@ -252,9 +252,14 @@ Resources:
   # Origin is the API Gateway default URL — +${ServerlessHttpApi}.execute-api...+
   # rather than +${DomainName}+ — because we removed the API Gateway custom-
   # domain mapping (apex hostname can only be claimed by one AWS service at
-  # a time; CloudFront wins). +OriginPath: /$default+ injects SAM's auto-
-  # generated stage name; if we ever switch to an explicit
-  # +AWS::Serverless::HttpApi+ with a different +StageName+, this changes too.
+  # a time; CloudFront wins). No +OriginPath+ here on purpose: HTTP API's
+  # auto-generated +$default+ stage routes are exposed at the *root* of the
+  # execute-api URL (+/health+ resolves to +https://${id}.execute-api.../health+,
+  # NOT +.../​$default/health+) — adding +OriginPath: /$default+ makes
+  # CloudFront prepend +/$default+ to every request and API Gateway 404s
+  # the lot. If we ever switch to an explicit +AWS::Serverless::HttpApi+
+  # with a non-default named +StageName+ (e.g. +prod+), set
+  # +OriginPath: /prod+ at that point.
   #
   # The two managed-policy GUIDs are stable AWS values:
   # +CachingDisabled+ — every +GET /+ is parameterized by +?w=...+, +/health+
@@ -290,7 +295,6 @@ Resources:
         Origins:
           - Id: ApiGatewayOrigin
             DomainName: !Sub "${ServerlessHttpApi}.execute-api.${AWS::Region}.amazonaws.com"
-            OriginPath: /$default
             CustomOriginConfig:
               OriginProtocolPolicy: https-only
               OriginSSLProtocols:

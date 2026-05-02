@@ -45,7 +45,7 @@ get "/health" do
   content_type "text/plain"
   if Rhymecrime::DataSource.dynamodb?
     begin
-      Rhymecrime::DynamoRuntime.client.describe_table(table_name: Rhymecrime::DataSource.table_name)
+      Rhymecrime::DynamoRuntime.instance.client.describe_table(table_name: Rhymecrime::DataSource.table_name)
       "ok dynamodb"
     rescue StandardError => e
       halt 503, "dynamodb: #{e.message}"

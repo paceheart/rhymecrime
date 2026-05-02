@@ -85,7 +85,7 @@ def handler(event:, context:)
     { statusCode: 200, headers: { "Content-Type" => "text/html; charset=utf-8" }, body: body }
   when ["GET", "/health"]
     begin
-      Rhymecrime::DynamoRuntime.client.describe_table(table_name: Rhymecrime::DataSource.table_name)
+      Rhymecrime::DynamoRuntime.instance.client.describe_table(table_name: Rhymecrime::DataSource.table_name)
       { statusCode: 200, headers: { "Content-Type" => "text/plain" }, body: "ok" }
     rescue StandardError => e
       { statusCode: 503, headers: { "Content-Type" => "text/plain" }, body: e.message.to_s }
