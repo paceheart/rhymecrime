@@ -31,6 +31,50 @@ All three accessors live in `lib/rhymecrime/dict/utils_rhyme.rb`. See the
 `rarity.csv` section below for column layout, all valid `kind` values, and
 how the spec/eval harness consumes the same file.
 
+### Runtime policy
+
+How the three rarity categories interact with the rhyme and relatedness
+pipelines:
+
+  * **`common` / `common_ish` — valid both ways.** Get `freq = 99` floored
+    in `add_frequency_info` (`lib/rhymecrime/dict/frequency.rb`), keep
+    their pronunciations and rime cohort, and are eligible to appear in
+    every output (rhymes, related lists, rhyming tuples, rhyming pairs).
+    Also act as relatedness cues — *unless* the headword is in
+    `semantically_promiscuous.txt`, in which case `compute_column_for_goal`
+    in `lib/rhymecrime/frontend.rb` short-circuits the `related` /
+    `set_related` / `related_rhymes` / `pair_related` columns with the
+    "X is semantically promiscuous; can't compute related words" message.
+    The plain rhymes column has no relatedness cue and is unaffected:
+    *perhaps* still rhymes with *lapse*.
+
+  * **`rare` / `rare_ish` — valid inputs, suppressed in outputs.** Survive
+    the `forbidden_scrub` pass with `freq = 0` and intact prons, so
+    `find_rhyming_words` happily processes them as input. The compute cue
+    universe in `bin/compute-relatedness` is `cue_word?`
+    (`lib/rhymecrime/dict/rime.rb`), which requires `freq > RARE_FREQ_MAX`,
+    so rare words have no precomputed `related#<lemma>` row: in DDB-
+    authoritative mode they yield the "Oops, I don't know what words are
+    related to ..." bad-input branch in `rhymecrime` (and a feedback-store
+    note via `record_uncomputed_cue!`); local dev lazy-loads the live
+    compute pipeline as a fallback. As outputs, rare candidates are
+    filtered out of related lists / rhyming tuples / rhyming pairs (every
+    pipeline that produces those goes through `common_only: true` either
+    at compute time or at the runtime store filter). The lone exception is
+    the rhymes column, where `filter_out_rare_words` peels rare rhymes
+    into the *"For the desperate:"* dregs block instead of dropping them
+    outright.
+
+  * **`forbidden` / `forbidden_ish` — invalid both ways.** Deleted from
+    `word_dict` (and therefore every rime cohort) by `forbidden_scrub` in
+    `lib/rhymecrime/dict/frequency.rb`. `find_rhyming_words`, `has_rhyming_
+    word?`, `really_find_rhyming_tuples`, `find_rhyming_pairs`,
+    `find_related_words`, and `related?` all guard on `explicitly_
+    forbidden?` and return `[]` for forbidden inputs; the `set_related`
+    goal renders the curt "I don't like that word." message. Because the
+    headword is gone after build, no downstream pipeline can produce a
+    forbidden word as an output either.
+
 ### `unrhymable_stop_words.txt`
 
 Function words and apostrophe-heavy contractions that are valid English but
