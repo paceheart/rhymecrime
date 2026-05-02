@@ -497,11 +497,15 @@ end
 #     even though it's a named entity) collides with +bingeing+ from +binge+; +routing+ from
 #     +rout+ (verb meaning to defeat) collides with +routeing+ from +route+; +tinging+ from
 #     +ting+ collides with +tingeing+ from +tinge+. We skip when +corrected[0...-3]+ is itself
-#     a headword. We deliberately do _not_ apply this guard to vowel+e/y+e/w+e bases: those
-#     rarely have a meaningful bare-stem verb collision, and when they do (+to+ as a rare verb
-#     used in idioms like "toing and froing" colliding with the more common +toe+-derived
-#     +toeing+) the spec deems it desirable to normalize the rarer surface to the more
-#     conventional spelling.
+#     a _pronounced_ headword. The pronunciation gate filters out SUBTLEX-presence artifacts
+#     that land in +word_dict+ as bare-frequency entries with no prons — e.g. +hav+ (a
+#     Norse-origin loanword fragment / abbreviation, not a verb), which would otherwise spuriously
+#     block +haveing → having+. Real verbs that motivate this guard (+sing+, +bing+, +rout+,
+#     +ting+) all have CMU prons, so the gate continues to fire for them. We deliberately do
+#     _not_ apply this guard to vowel+e/y+e/w+e bases: those rarely have a meaningful
+#     bare-stem verb collision, and when they do (+to+ as a rare verb used in idioms like
+#     "toing and froing" colliding with the more common +toe+-derived +toeing+) the spec
+#     deems it desirable to normalize the rarer surface to the more conventional spelling.
 #   * +-ie+ y-mutation collision (always applied): +dying+ is the +-ing+ form of both
 #     +dye+ (via silent-+e+ drop) and +die+ (via +-ie+ → +-ying+ y-mutation). We skip when
 #     +corrected[0...-3]+ ends in +y+ and the +-ie+-replaced form +(corrected[0...-4] + "ie")+
@@ -528,7 +532,9 @@ def silent_e_drop_corpus_pairs(word_dict)
     consonant_e = !"aeiouyw".include?(pre_e)
     if consonant_e
       bare_stem = corrected[0...-3]
-      next if word_dict.key?(bare_stem)
+      bare_stem_entry = word_dict[bare_stem]
+      bare_stem_prons = bare_stem_entry && bare_stem_entry[1]
+      next if bare_stem_prons.is_a?(Array) && !bare_stem_prons.empty?
       preferred, alt = corrected, w
     elsif base_with_e.length <= 4
       preferred, alt = w, corrected

@@ -824,9 +824,39 @@ def add_frequency_info(cmudict, subtlex_hash, subtlex_total_hash, wordfreq_hash,
   #
   # Promote Kaikki-linked inflections stuck at 1..RARE_FREQ_MAX (compute_frequency rare ceiling), not only
   # freq==0 — otherwise *blogs* / *blogging* stay rare while *blog* is common.
+  #
+  # The body is structured in three phases:
+  #
+  #   1. *Correctness gates* — bail with no metadata recording. These reject the
+  #      relationship as not a real Kaikki form-of: surface absent from +hash+,
+  #      curator-flagged rare, irregular Kaikki paradigm without corroboration,
+  #      forbidden suffix shape (consonant+ys plural, blocked verb forms, …),
+  #      or donor that doesn't anchor (rare base / stop-word base).
+  #
+  #   2. *Donor-metadata recording* — once correctness gates pass, the lineage
+  #      is real. +record_freq_propagation!+ fires unconditionally so the
+  #      classifier's +received_donor_from_common_base_flag+ feature reflects
+  #      the lineage even when the *frequency* update below is skipped.
+  #
+  #   3. *Frequency-inheritance gates* — "don't decrease" guards: skip the
+  #      +hash[inflected][0]+ overwrite when the inflection's existing freq is
+  #      already at or above what we'd inherit, or when the surface is already
+  #      independently common in wordfreq. The metadata from phase 2 stays.
+  #
+  # Phase 2 is decoupled from phase 3 specifically because surfaces like
+  # +barbecuing+ (freq=8 from SUBTLEX presence, low Zipf, no donor anchor)
+  # used to bail at phase 3's +infl_freq > RARE_FREQ_MAX+ guard before any
+  # metadata was recorded — entering the rarity classifier as
+  # +donor_anchored=false+ despite being a Kaikki form-of of a common base
+  # (+barbecue+). The classifier then verdicted them +:forbidden+ and the
+  # rebuild deleted them. Recording metadata under +:morph_inherit_kaikki+
+  # before phase-3 gates closes that gap.
   inherited = 0
+  metadata_only = 0
   $inflection_base_words.each do |inflected, base|
     tr = dict_trace_morph?(base, inflected)
+
+    # === Phase 1: correctness gates (bail with no metadata) ===
     unless hash.key?(inflected)
       dict_trace_puts(inflected, "morph_inherit_kaikki ← #{base}: skip (not in hash)") if tr
       next
@@ -835,14 +865,11 @@ def add_frequency_info(cmudict, subtlex_hash, subtlex_total_hash, wordfreq_hash,
       dict_trace_puts(inflected, "morph_inherit_kaikki ← #{base}: skip (in rarity.csv: rare)") if tr
       next
     end
-    infl_freq = hash[inflected][0]
-    if infl_freq > RARE_FREQ_MAX
-      dict_trace_puts(inflected, "morph_inherit_kaikki ← #{base}: skip (freq #{infl_freq} already > #{RARE_FREQ_MAX})") if tr
-      next
-    end
     # Respect the specialized-lex demotion applied by +compute_frequency+ (+gens+ syn=1
     # noun.group, +anthers+ syn=1 noun.plant). Without this guard, Kaikki morph inheritance
     # re-promotes +gens+ off its base +gen+ (freq≥common), undoing the Option 2 clamp.
+    # Treated as a correctness gate so the classifier doesn't get a +received_donor+ flag
+    # that would let it relearn the demoted lemma's commonness through the lineage.
     if wn_encyclopedic_single_synset_demoted?(inflected, subtlex_hash, wordfreq_hash)
       dict_trace_puts(inflected, "morph_inherit_kaikki ← #{base}: skip (WN single-synset specialized-lex demotion)") if tr
       next
@@ -859,16 +886,6 @@ def add_frequency_info(cmudict, subtlex_hash, subtlex_total_hash, wordfreq_hash,
     end
     if base_freq <= RARE_FREQ_MAX
       dict_trace_puts(inflected, "morph_inherit_kaikki ← #{base}: skip (base_freq=#{base_freq} ≤ #{RARE_FREQ_MAX})") if tr
-      next
-    end
-    if infl_freq >= base_freq
-      dict_trace_puts(inflected, "morph_inherit_kaikki ← #{base}: skip (infl_freq=#{infl_freq} ≥ base_freq=#{base_freq})") if tr
-      next
-    end
-    wf_inf = wordfreq_hash[inflected]
-    # High Zipf can still be freq≤RARE after OOV SUBTLEX clamps (*blogging*); only skip when already common.
-    if wf_inf && wf_inf >= WORDFREQ_COMMON_ZIPF && infl_freq > RARE_FREQ_MAX
-      dict_trace_puts(inflected, "morph_inherit_kaikki ← #{base}: skip (Zipf #{wf_inf} ≥ #{WORDFREQ_COMMON_ZIPF} and infl already common)") if tr
       next
     end
     inflection_suffix_kind = Inflect.send(:match_suffix_kind, base, inflected)
@@ -958,12 +975,36 @@ def add_frequency_info(cmudict, subtlex_hash, subtlex_total_hash, wordfreq_hash,
       dict_trace_puts(inflected, "morph_inherit_kaikki ← #{base}: skip (base not in common_words/WN/neol, Zipf #{base_zipf} < COMMON, surface not in wordfreq/WN/CMU/neol)") if tr
       next
     end
-    hash[inflected][0] = base_freq
+
+    # === Phase 2: lineage is real → record donor metadata ===
     record_freq_propagation!(inflected, phase: :morph_inherit_kaikki, donor: base, donor_anchored: base_has_corpus_anchor)
+
+    # === Phase 3: "don't decrease" gates — skip the freq overwrite, keep the metadata ===
+    infl_freq = hash[inflected][0]
+    if infl_freq > RARE_FREQ_MAX
+      dict_trace_puts(inflected, "morph_inherit_kaikki ← #{base}: metadata only (freq #{infl_freq} already > #{RARE_FREQ_MAX}); donor_anchored=#{base_has_corpus_anchor}") if tr
+      metadata_only += 1
+      next
+    end
+    if infl_freq >= base_freq
+      dict_trace_puts(inflected, "morph_inherit_kaikki ← #{base}: metadata only (infl_freq=#{infl_freq} ≥ base_freq=#{base_freq}); donor_anchored=#{base_has_corpus_anchor}") if tr
+      metadata_only += 1
+      next
+    end
+    wf_inf = wordfreq_hash[inflected]
+    # High Zipf can still be freq≤RARE after OOV SUBTLEX clamps (*blogging*); only skip when already common.
+    if wf_inf && wf_inf >= WORDFREQ_COMMON_ZIPF && infl_freq > RARE_FREQ_MAX
+      dict_trace_puts(inflected, "morph_inherit_kaikki ← #{base}: metadata only (Zipf #{wf_inf} ≥ #{WORDFREQ_COMMON_ZIPF} and infl already common); donor_anchored=#{base_has_corpus_anchor}") if tr
+      metadata_only += 1
+      next
+    end
+
+    hash[inflected][0] = base_freq
     dict_trace_puts(inflected, "morph_inherit_kaikki ← #{base}: inherited freq=#{base_freq} suffix=#{inflection_suffix_kind} corpus_anchored=#{base_has_corpus_anchor} (real_anchor=#{base_has_real_anchor})") if tr
     inherited += 1
   end
   puts "#{inherited} inflected forms inherited frequency from base words" if inherited > 0
+  puts "#{metadata_only} inflected forms received donor metadata only (freq already attested)" if metadata_only > 0
 
   # List-pivot Inflect inheritance: suffix inheritance from rarity.csv common rows (Inflect
   # spelling patterns). Kaikki morph inheritance lifts Kaikki-linked inflections through
@@ -1496,6 +1537,13 @@ def build_word_dict(cmudict, rdict, subtlex_hash, subtlex_total_hash, wordfreq_h
   insert_r_before_final_sibilant_for_s_pronunciations!(word_dict, label: "word_dict")
   merge_word_dict_pronunciations_into_rdict!(rdict, word_dict)
   emit_spelling_variants_auto!(word_dict, wordfreq_hash, kaikki_variant_map, varcon_variant_map)
+  # +emit_spelling_variants_auto!+ has now populated the variant table that
+  # +preferred_form_in_build_lexicon+ consults; copy prons from dispreferred
+  # surfaces (+upend+) to their pron-less preferred siblings (+up-end+) before
+  # the rime-bucket stripper runs, then re-merge so the newly-pronounced
+  # preferred forms make it into +rdict+.
+  inherit_prons_from_dispreferred_to_preferred!(word_dict)
+  merge_word_dict_pronunciations_into_rdict!(rdict, word_dict)
   strip_dispreferred_headwords_from_rdict!(rdict, word_dict)
   delete_rare_only_rime_buckets!(rdict, word_dict)
   delete_common_identical_only_rime_buckets!(rdict, word_dict)

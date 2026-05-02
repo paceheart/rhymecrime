@@ -339,19 +339,27 @@ end
 def find_rhyming_words(word, identical_ok=true)
   # merges multiple pronunciations of WORD
   # use our compiled rime dictionary
+  #
+  # +explicitly_forbidden?+ status is checked per spelling-variant form rather
+  # than gated on the input surface. This lets a query for a forbidden surface
+  # whose preferred form is allowed (e.g. +okeydokey+ → +okey-dokey+) still
+  # return rhymes via the allowed canonical form. Forbidden forms have already
+  # been deleted from +word_dict+ at build time, so they contribute zero prons
+  # in practice; the explicit per-form skip is a belt-and-braces guard against
+  # any forbidden form accidentally retaining prons (e.g. via the
+  # +authoritative_pronunciations.txt+ override path).
   rhyming_words = Array.new
-  unless(explicitly_forbidden?(word))
-    for form in all_forms(word) # to increase the likelihood of a hit, try all spelling variants
-      debug "Finding rhyming words for #{form} #{debug_info(form)}:"
-      for pron in pronunciations(form)
-        for rhyme in find_rhyming_words_for_pronunciation(pron, identical_ok)
-          rhyming_words.push(rhyme)
-        end
+  for form in all_forms(word) # to increase the likelihood of a hit, try all spelling variants
+    next if explicitly_forbidden?(form)
+    debug "Finding rhyming words for #{form} #{debug_info(form)}:"
+    for pron in pronunciations(form)
+      for rhyme in find_rhyming_words_for_pronunciation(pron, identical_ok)
+        rhyming_words.push(rhyme)
       end
-      rhyming_words.delete(word)
-      if(rhyming_words)
-        rhyming_words = rhyming_words.uniq
-      end
+    end
+    rhyming_words.delete(word)
+    if(rhyming_words)
+      rhyming_words = rhyming_words.uniq
     end
   end
   return rhyming_words || [ ]

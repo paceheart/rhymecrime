@@ -52,6 +52,12 @@
 #   --ddb-out=PATH          DDB scan output (default: generated/feedback-from-ddb.csv)
 #   --table=NAME            Override feedback table name
 #   --region=REGION         AWS region (default: us-east-1 or +AWS_REGION+)
+#   --no-geo                Skip the +ip-api.com+ geo lookup that annotates
+#                           each per-pair click in the summary with
+#                           +City, Region, Country+. Useful offline or when
+#                           outbound HTTP to +ip-api.com+ is blocked. The
+#                           lookup also degrades silently on failure, so the
+#                           flag is mostly a politeness toggle.
 #   -y, --yes               Skip the interactive confirmation prompt
 #   -n, --dry-run           Print proposed rows; do not append to +RELATED_CSV+
 #   -h, --help
@@ -82,6 +88,7 @@ export_only = false
 ddb_out = DEFAULT_DDB_OUT
 ddb_table = nil
 ddb_region = ENV.fetch("AWS_REGION", "us-east-1")
+geo_lookup = true
 
 original_argv = ARGV.dup
 
@@ -93,6 +100,7 @@ OptionParser.new do |o|
   o.on("--ddb-out=PATH", "DDB scan output (default: #{DEFAULT_DDB_OUT.sub(ROOT + '/', '')})") { |p| ddb_out = File.expand_path(p) }
   o.on("--table=NAME", "Override DDB feedback table name") { |n| ddb_table = n }
   o.on("--region=REGION", "AWS region (default: us-east-1 or AWS_REGION)") { |r| ddb_region = r }
+  o.on("--no-geo", "Skip ip-api.com geo lookup in the per-pair summary") { geo_lookup = false }
   o.on("-y", "--yes", "Skip the interactive confirmation prompt and append immediately") { auto_yes = true }
   o.on("-n", "--dry-run", "Print proposed rows and exit without prompting or appending") { dry_run = true }
   o.on("-h", "--help") { puts o; exit 0 }
@@ -172,23 +180,120 @@ module FeedbackDynamoExport
     end
   end
 
-  def print_ddb_summary(rows)
+  def print_ddb_summary(rows, geo_lookup: true)
     verdict_counts = Hash.new(0)
-    per_pair = Hash.new { |h, k| h[k] = { up: 0, down: 0, undo: 0 } }
+    per_pair = Hash.new { |h, k| h[k] = { up: 0, down: 0, undo: 0, events: [] } }
     rows.each do |r|
       v = r[:verdict].to_sym
       verdict_counts[v] += 1
-      per_pair[[r[:cue], r[:related]]][v] += 1 if %i[up down undo].include?(v)
+      next unless %i[up down undo].include?(v)
+      bucket = per_pair[[r[:cue], r[:related]]]
+      bucket[v] += 1
+      bucket[:events] << r
     end
 
     puts
     puts "==> verdict totals: #{verdict_counts.map { |k, v| "#{k}=#{v}" }.join(" ")}"
-    unless per_pair.empty?
-      puts "==> per-pair clicks (alphabetical):"
-      per_pair.sort.each do |(cue, rel), c|
-        puts "    #{cue} → #{rel}: up=#{c[:up]} down=#{c[:down]}#{c[:undo].positive? ? " undo=#{c[:undo]}" : ""}"
+    return if per_pair.empty?
+
+    unique_ips = per_pair.each_value.flat_map { |b| b[:events].map { |e| e[:ip] } }
+                         .map(&:to_s).reject(&:empty?).uniq
+    geo = geo_lookup ? IpGeoLookup.lookup(unique_ips) : {}
+
+    puts "==> per-pair clicks (alphabetical):"
+    # Treat (ip, ua) as sticky headers across the *entire* per-pair listing,
+    # not just within a single pair. Iterating alphabetically by (cue, rel)
+    # tends to keep one user's votes adjacent (they typically thumb a slate
+    # of related words for the same cue in one sitting), so suppressing
+    # repeated headers across pair boundaries collapses the common "same
+    # person voted on N pairs" case into a single ip/ua block followed by
+    # bare timestamps. First event always prints both since +prev_*+ start
+    # +nil+ and no real value matches.
+    prev_ip = nil
+    prev_ua = nil
+    per_pair.sort.each do |(cue, rel), c|
+      puts "    #{cue} → #{rel}: up=#{c[:up]} down=#{c[:down]}#{c[:undo].positive? ? " undo=#{c[:undo]}" : ""}"
+      c[:events].sort_by { |e| e[:timestamp].to_s }.each do |e|
+        ip = e[:ip].to_s
+        ua = e[:user_agent].to_s
+        if ip != prev_ip
+          loc =
+            if ip.empty?
+              "(no ip)"
+            elsif (g = geo[ip]) && !g.empty?
+              "#{ip} (#{g})"
+            else
+              ip
+            end
+          puts "      ip: #{loc}"
+        end
+        if ua != prev_ua
+          puts "      ua: #{ua.empty? ? '(no ua)' : ua}"
+        end
+        puts "        #{e[:timestamp]} #{e[:verdict]}"
+        prev_ip = ip
+        prev_ua = ua
       end
     end
+  end
+end
+
+# Geolocate IPs via +ip-api.com+'s free batch endpoint: no API key, HTTP only,
+# 45 req/min, up to 100 IPs per request. Each response object echoes the
+# +query+ field so we can match results back to the input IPs. Failures (no
+# network, rate-limited, blocked egress) degrade to "just print the bare IP" —
+# the geo annotation is observability sugar, not part of the contract. Pass
+# +--no-geo+ to skip the lookup entirely.
+module IpGeoLookup
+  module_function
+
+  BATCH_URL = "http://ip-api.com/batch"
+  FIELDS = "status,country,regionName,city,query"
+  CHUNK_SIZE = 100
+
+  def lookup(ips)
+    ips = Array(ips).map(&:to_s).reject(&:empty?).uniq
+    return {} if ips.empty?
+
+    require "net/http"
+    require "uri"
+    require "json"
+
+    uri = URI(BATCH_URL)
+    out = {}
+    ips.each_slice(CHUNK_SIZE) do |chunk|
+      payload = chunk.map { |ip| { "query" => ip, "fields" => FIELDS } }
+      entries = post_json(uri, payload)
+      next unless entries
+      Array(entries).each do |entry|
+        ip = entry["query"].to_s
+        next if ip.empty?
+        out[ip] =
+          if entry["status"] == "success"
+            [entry["city"], entry["regionName"], entry["country"]]
+              .map(&:to_s).reject(&:empty?).join(", ")
+          else
+            ""
+          end
+      end
+    end
+    out
+  rescue StandardError => e
+    warn "  ip-geo lookup failed: #{e.class}: #{e.message}"
+    {}
+  end
+
+  def post_json(uri, payload)
+    Net::HTTP.start(uri.hostname, uri.port, open_timeout: 5, read_timeout: 10) do |http|
+      req = Net::HTTP::Post.new(uri.request_uri, "Content-Type" => "application/json")
+      req.body = JSON.dump(payload)
+      resp = http.request(req)
+      return nil unless resp.is_a?(Net::HTTPSuccess)
+      JSON.parse(resp.body)
+    end
+  rescue StandardError => e
+    warn "  ip-geo batch request failed: #{e.class}: #{e.message}"
+    nil
   end
 end
 
@@ -214,7 +319,7 @@ if from_dynamodb
   rows = FeedbackDynamoExport.scan_to_rows(client, table_name)
   FeedbackDynamoExport.write_feedback_csv(ddb_out, rows, header)
   puts "==> wrote #{rows.size} rows to #{ddb_out}"
-  FeedbackDynamoExport.print_ddb_summary(rows)
+  FeedbackDynamoExport.print_ddb_summary(rows, geo_lookup: geo_lookup)
 
   if export_only
     puts

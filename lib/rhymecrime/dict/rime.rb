@@ -46,6 +46,50 @@ def merge_word_dict_pronunciations_into_rdict!(rdict, word_dict)
   rdict
 end
 
+# When the preferred form of a hyphen / spelling variant has no prons but its
+# dispreferred sibling does, copy the prons from the dispreferred form into the
+# preferred form's +word_dict+ entry. The typical case is the hyphen-preferred
+# canonicalization (+up-end+ from +upend+, +hand-held+ from +handheld+,
+# +on-screen+ from +onscreen+, +best-seller+ from +bestseller+, …): CMU and
+# Kaikki list only the unhyphenated surface, so the hyphenated entry gets a
+# +word_dict+ row from spelling-variant resolution but never receives a
+# pronunciation from any source.
+#
+# Without this inheritance, +strip_dispreferred_headwords_from_rdict!+ removes
+# the dispreferred surface from its rime bucket, but the preferred form was
+# never added (the prior +merge_word_dict_pronunciations_into_rdict!+ pass
+# skips empty-pron entries) — the bucket loses both surfaces, so a query like
+# +find_rhyming_words('pend')+ misses +up-end+/+upend+ entirely. Copying the
+# prons fixes both runtime +pronunciations(preferred)+ lookup and the rdict
+# membership (after a follow-up +merge_word_dict_pronunciations_into_rdict!+).
+#
+# Run after +emit_spelling_variants_auto!+ so the latest auto-emitted variant
+# pairs are visible to +preferred_form_in_build_lexicon+, and before
+# +strip_dispreferred_headwords_from_rdict!+ so the rime-bucket stripper sees
+# the preferred form populated.
+def inherit_prons_from_dispreferred_to_preferred!(word_dict, log: true)
+  inherited = 0
+  word_dict.each do |word, entry|
+    prons = entry.is_a?(Array) ? entry[1] : nil
+    next unless prons.is_a?(Array) && !prons.empty?
+    pref = preferred_form_in_build_lexicon(word, word_dict)
+    next if pref == word
+    pref_entry = word_dict[pref]
+    next unless pref_entry
+    pref_prons = pref_entry[1]
+    next unless pref_prons.is_a?(Array) && pref_prons.empty?
+    pref_entry[1] = prons.dup
+    inherited += 1
+    if dict_trace_word?(pref) || dict_trace_word?(word)
+      dict_trace_puts(pref, "inherit_prons_from_dispreferred_to_preferred: #{pref} ← #{word} (#{prons.map(&:to_s).inspect})")
+    end
+  end
+  if log && inherited > 0
+    puts "#{inherited} preferred-form headwords inherited prons from dispreferred siblings"
+  end
+  inherited
+end
+
 # Drop alternate spellings / US–UK / hyphen dispreferred surfaces so +rime_dict+ lists only
 # +preferred_form_in_build_lexicon+ headwords (matches runtime +preferred_form+ policy).
 def strip_dispreferred_headwords_from_rdict!(rdict, word_dict, log: true)
