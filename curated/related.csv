@@ -9830,7 +9830,6 @@ pirate,sail,related,feedback: 1 up / 0 down
 pirate,steal,related,feedback: 1 up / 0 down
 pirate,attitude,related,pirate prereq: attitude / latitude
 pirate,buggery,related,recoup pirate awesomeness
-pirate,commandeer,related,recoup pirate awesomeness
 pirate,commandeering,related,recoup pirate awesomeness
 pirate,crude,related,pirate prereq: crude / pursued
 pirate,crypto,related,pirate prereq: crypto / tiptoe
@@ -9857,7 +9856,6 @@ pirate,plotting,related,pirate prereq: marauding / plotting
 pirate,profanity,related_ish,recoup pirate awesomeness
 pirate,profiteer,related,recoup pirate awesomeness
 pirate,profiteering,related,recoup pirate awesomeness
-pirate,pursue,related,recoup pirate awesomeness
 pirate,pursued,related,pirate prereq: crude / pursued
 pirate,rowboat,related_ish,recoup pirate awesomeness
 pirate,seagull,related_ish,recoup pirate awesomeness
@@ -9874,9 +9872,7 @@ pirate,submarine,related_ish,recoup pirate awesomeness
 pirate,submarines,related_ish,recoup pirate awesomeness
 pirate,sunken,related,recoup pirate awesomeness
 pirate,swagger,related,recoup pirate awesomeness
-pirate,tattoo,related,recoup pirate awesomeness
 pirate,tattoos,related,recoup pirate awesomeness
-pirate,thieve,related,recoup pirate awesomeness
 pirate,thieves,related,recoup pirate awesomeness
 pirate,thuggery,related_ish,recoup pirate awesomeness
 pirate,tiptoe,related,pirate prereq: crypto / tiptoe
