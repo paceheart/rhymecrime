@@ -8,6 +8,7 @@ require_relative "lexical"
 require_relative "morphology"
 require_relative "phonology"
 require_relative "rime"
+require_relative "build_entry"
 require_relative "rarity_signals"
 require_relative "rarity_classifier"
 
@@ -244,12 +245,14 @@ def strip_gdrop_bare_homographs!(hash, cmudict_orig)
     next unless ap.match?(/\A[a-z]+in['\u2019]\z/)
 
     bare = ap.sub(/['\u2019]\z/, "")
-    next unless hash.key?(bare)
+    bare_entry = hash[bare]
+    next unless bare_entry
 
     strip = !cmudict_orig.include?(bare) || (bare == "makin" && cmudict_orig.include?("makin'"))
     next unless strip
+    next if bare_entry.is_a?(BuildEntry) && bare_entry.tombstoned?
 
-    hash.delete(bare)
+    bare_entry.mark_tombstoned!(phase: :gdrop_strip, reason: :shadowed_by_apostrophe_form, detail: { paired: ap })
     removed += 1
     if dict_trace_word?(bare) || dict_trace_word?(ap)
       focus = [bare, ap].find { |x| dict_trace_word?(x) }
@@ -261,93 +264,164 @@ def strip_gdrop_bare_homographs!(hash, cmudict_orig)
 end
 
 def filter_word_dict_disconnected!(word_dict, rdict, subtlex_hash, wordfreq_hash, pos_map, forms_map, original_cmudict_headwords = nil, wiktionary_words = nil)
-  dict_set = word_dict.keys.to_set
+  # Fresh pruning window for every disconnect call. The outer
+  # +with_pruning_active+ block flips +rdict.pruning_active?+ on; naive reads
+  # of +rdict[rime]+ / +rdict.each+ / ... from inside the block raise unless
+  # the reader wraps its own reads in +rdict.with_reads_during_prune+. Four
+  # authorized readers live inside this window today:
+  #
+  #   1. +headword_has_nonidentical_rhyme_partner?+ (surface wraps its body).
+  #   2. +prune_rdict_to_headwords!+ (wraps its body).
+  #   3. +delete_rare_only_rime_buckets!+ (wraps its body).
+  #   4. +delete_common_identical_only_rime_buckets!+ (wraps its body).
+  #
+  # Inner per-round word_dict deletions are deferred: each disconnect-dropped
+  # row gets +mark_tombstoned!+ with the rescue-diagnostic detail,
+  # and +live_word_dict_keys+ projects the pending-deleted-excluded keyset
+  # that the three rdict pruners use as the "allowed" cohort. The
+  # termination criterion is "no new tombstoned marks this round";
+  # marks from earlier scrubs / classifier rescore don't count (they
+  # wouldn't increment the round counter either under the old "no new
+  # hash.delete this round" rule).
+  do_filter_word_dict_disconnected!(word_dict, rdict, subtlex_hash, wordfreq_hash, pos_map, forms_map, original_cmudict_headwords, wiktionary_words)
+end
+
+def do_filter_word_dict_disconnected!(word_dict, rdict, subtlex_hash, wordfreq_hash, pos_map, forms_map, original_cmudict_headwords, wiktionary_words)
+  dict_set = live_word_dict_keys(word_dict).to_set
   nb = nil
   cn = nil
   kaikki_form_rescue_set = kaikki_form_oov_rescue_headwords(forms_map, wordfreq_hash, WORDFREQ_RARE_ZIPF, wiktionary_words)
   rounds = 0
   total_removed = 0
-  loop do
-    rounds += 1
-    removed = 0
-    word_dict.keys.each do |w|
-      freq, prons = word_dict[w]
-      next if freq > 0
-      has_rhyme = headword_has_nonidentical_rhyme_partner?(w, prons, rdict, word_dict)
-      if dict_trace_word?(w) && freq == 0
-        prons.each do |pron|
-          next if pron.rime.empty?
-          cohort = rdict[pron.rime]
-          if cohort.nil? || cohort.empty?
-            dict_trace_puts(w, "disconnect: rime=#{pron.rime} has no rdict bucket (dropped as singleton/rare-only cohort earlier) — explains has_rhyme=false vs filter_cmudict message")
-          else
-            w_pf = preferred_form_in_build_lexicon(w, word_dict)
-            others = cohort.reject { |x| x == w_pf }
-            dict_trace_puts(w, "disconnect: rime=#{pron.rime} bucket=#{cohort.size} others=#{others.take(10).inspect}#{' …' if others.size > 10}")
-          end
-        end
-      end
-      in_wordfreq_tsv = wordfreq_hash.key?(w)
-      # Kaikki-documented non-lemma paradigm forms (+polys+ form_of +poly+, +gollies+ form_of +golly+)
-      # with weak corpus evidence are Wiktionary-paradigm-only junk: Zipf < RARE (tiny document
-      # tail), SUBTLEX FREQcount 1-2 (caption noise). The default "any wordfreq row / any SUBTLEX
-      # trickle" rescue keeps them as freq=0 rows which later surface as +:rare+ in +rarity_spec+
-      # rather than the expected +:forbidden+. Require a stronger signal — Zipf ≥ RARE, SUBTLEX
-      # dialogue above trickle, WN entry, or explicit NB/CN presence — for Kaikki paradigm surfaces.
-      # Non-paradigm freq=0 words fall through the normal rescue paths below.
-      kaikki_paradigm = morph_kaikki_lists_surface_as_inflected_nonlemma?(w)
-      keep = if kaikki_paradigm
-               zipf_w = wordfreq_hash[w] || 0
-               sub_w = subtlex_hash[w] || 0
-               strong_wordfreq = zipf_w >= WORDFREQ_RARE_ZIPF
-               strong_subtlex = sub_w >= MORPH_CORPUS_SUBTLEX_MIN
-               wnw = wn_has_entry?(w)
-               # Base-of-inflection anchor: when Kaikki's +form_of+ lemma has a POS-appropriate
-               # WordNet entry (noun for *-s* plural, verb for *-ing* / *-ed*), the Wiktionary
-               # paradigm form is a legitimate rare inflection of an attested lexeme and should
-               # survive as freq=0 (rarity_spec +:rare+). POS-aware, not "any WN POS", because
-               # Kaikki aggressively documents deverbal participles for WN noun-only lemmas
-               # (+opinion+→+opinioning+, +kitchen+→+kitchening+, +attorney+→+attorneying+,
-               # +conversation+→+conversationing+) that English does not actually verbify.
-               # Without this anchor the filter drops +agoraphobias+ / +foxed+ / +sacristies+
-               # for the same weak-corpus reason we drop +polys+ / +gollies+ / +gettered+ (whose
-               # bases are _not_ in WordNet at all). Junk bases never acquire a WN entry because
-               # WN's lexicographic gate is stricter than Wiktionary's.
-               base_wn = kaikki_paradigm_base_has_pos_appropriate_wn?(w)
-               r = strong_wordfreq || strong_subtlex || wnw || base_wn
-               dict_trace_puts(w, "disconnect round=#{rounds}: freq=0 Kaikki-paradigm form of #{$inflection_base_words[w]}: zipf=#{zipf_w} sub=#{sub_w} wn=#{wnw} base_wn=#{base_wn} keep=#{r}") if dict_trace_word?(w)
-               r
-             elsif in_wordfreq_tsv
-               if dict_trace_word?(w)
-                 nb ||= numberbatch_headwords_intersecting(dict_set)
-                 cn ||= conceptnet_headwords_intersecting(dict_set)
-                 nbw = nb.include?(w)
-                 cnw = cn.include?(w)
-                 wnw = wn_has_entry?(w)
-                 dict_trace_puts(w, "disconnect round=#{rounds}: freq=0 wordfreq_row=yes nb=#{nbw} cn=#{cnw} wn=#{wnw} has_rhyme=#{has_rhyme} keep=true (TSV attested; not dropped here)")
-               end
-               true
-             else
-               f2b = kaikki_form_rescue_set.include?(w)
-               s4 = subtlex_freqlow_positive?(w, subtlex_hash)
-               wnw = wn_has_entry?(w)
-               surf_r = cmudict_surface_rhyme_rescue?(w, prons, has_rhyme, original_cmudict_headwords)
-               r = f2b || s4 || wnw || surf_r
-               if dict_trace_word?(w)
-                 dict_trace_puts(w, "disconnect round=#{rounds}: freq=0 wordfreq_row=no oov_2b=#{f2b} oov_subtlex=#{s4} wn=#{wnw} cmudict_surface_rhyme=#{surf_r} has_rhyme=#{has_rhyme} keep=#{r} remove=#{!r}")
-               end
-               r
-             end
-      next if keep
-      dict_trace_puts(w, "filter_disconnected round=#{rounds}: DELETE (freq=0, no rescue)") if dict_trace_word?(w)
-      word_dict.delete(w)
-      removed += 1
+
+  with_pruning = lambda do |rd, &blk|
+    if rd.respond_to?(:with_pruning_active)
+      rd.with_pruning_active { blk.call }
+    else
+      blk.call
     end
-    total_removed += removed
-    prune_rdict_to_headwords!(rdict, word_dict.keys)
-    delete_rare_only_rime_buckets!(rdict, word_dict)
-    delete_common_identical_only_rime_buckets!(rdict, word_dict)
-    break if removed == 0 || rounds >= 12
+  end
+
+  with_pruning.call(rdict) do
+    loop do
+      rounds += 1
+      new_marks = 0
+      word_dict.keys.each do |w|
+        entry = word_dict[w]
+        next if entry.nil?
+        next if word_dict_entry_tombstoned?(entry)
+        freq = entry[0]
+        prons = entry[1]
+        next if freq > 0
+        has_rhyme = headword_has_nonidentical_rhyme_partner?(w, prons, rdict, word_dict)
+        if dict_trace_word?(w) && freq == 0
+          # Inside-the-window rdict reads for trace-word diagnostics; scope
+          # the opt-in to exactly this diagnostic region so the guard
+          # continues to catch unscoped reads elsewhere in the loop.
+          rdict.with_reads_during_prune do
+            prons.each do |pron|
+              next if pron.rime.empty?
+              cohort = rdict[pron.rime]
+              if cohort.nil? || cohort.empty?
+                dict_trace_puts(w, "disconnect: rime=#{pron.rime} has no rdict bucket (dropped as singleton/rare-only cohort earlier) — explains has_rhyme=false vs filter_cmudict message")
+              else
+                w_pf = preferred_form_in_build_lexicon(w, word_dict)
+                others = cohort.reject { |x| x == w_pf }
+                dict_trace_puts(w, "disconnect: rime=#{pron.rime} bucket=#{cohort.size} others=#{others.take(10).inspect}#{' …' if others.size > 10}")
+              end
+            end
+          end if rdict.respond_to?(:with_reads_during_prune)
+        end
+        in_wordfreq_tsv = wordfreq_hash.key?(w)
+        # Kaikki-documented non-lemma paradigm forms (+polys+ form_of +poly+, +gollies+ form_of +golly+)
+        # with weak corpus evidence are Wiktionary-paradigm-only junk: Zipf < RARE (tiny document
+        # tail), SUBTLEX FREQcount 1-2 (caption noise). The default "any wordfreq row / any SUBTLEX
+        # trickle" rescue keeps them as freq=0 rows which later surface as +:rare+ in +rarity_spec+
+        # rather than the expected +:forbidden+. Require a stronger signal — Zipf ≥ RARE, SUBTLEX
+        # dialogue above trickle, WN entry, or explicit NB/CN presence — for Kaikki paradigm surfaces.
+        # Non-paradigm freq=0 words fall through the normal rescue paths below.
+        kaikki_paradigm = morph_kaikki_lists_surface_as_inflected_nonlemma?(w)
+        rescue_detail = {
+          round: rounds,
+          has_rhyme: has_rhyme,
+          in_wordfreq_tsv: in_wordfreq_tsv,
+          kaikki_paradigm: kaikki_paradigm,
+        }
+        keep = if kaikki_paradigm
+                 zipf_w = wordfreq_hash[w] || 0
+                 sub_w = subtlex_hash[w] || 0
+                 strong_wordfreq = zipf_w >= WORDFREQ_RARE_ZIPF
+                 strong_subtlex = sub_w >= MORPH_CORPUS_SUBTLEX_MIN
+                 wnw = wn_has_entry?(w)
+                 # Base-of-inflection anchor: when Kaikki's +form_of+ lemma has a POS-appropriate
+                 # WordNet entry (noun for *-s* plural, verb for *-ing* / *-ed*), the Wiktionary
+                 # paradigm form is a legitimate rare inflection of an attested lexeme and should
+                 # survive as freq=0 (rarity_spec +:rare+). POS-aware, not "any WN POS", because
+                 # Kaikki aggressively documents deverbal participles for WN noun-only lemmas
+                 # (+opinion+→+opinioning+, +kitchen+→+kitchening+, +attorney+→+attorneying+,
+                 # +conversation+→+conversationing+) that English does not actually verbify.
+                 # Without this anchor the filter drops +agoraphobias+ / +foxed+ / +sacristies+
+                 # for the same weak-corpus reason we drop +polys+ / +gollies+ / +gettered+ (whose
+                 # bases are _not_ in WordNet at all). Junk bases never acquire a WN entry because
+                 # WN's lexicographic gate is stricter than Wiktionary's.
+                 base_wn = kaikki_paradigm_base_has_pos_appropriate_wn?(w)
+                 r = strong_wordfreq || strong_subtlex || wnw || base_wn
+                 rescue_detail[:branch] = :kaikki_paradigm
+                 rescue_detail[:zipf] = zipf_w
+                 rescue_detail[:subtlex] = sub_w
+                 rescue_detail[:wn] = wnw
+                 rescue_detail[:base_wn] = base_wn
+                 dict_trace_puts(w, "disconnect round=#{rounds}: freq=0 Kaikki-paradigm form of #{$inflection_base_words[w]}: zipf=#{zipf_w} sub=#{sub_w} wn=#{wnw} base_wn=#{base_wn} keep=#{r}") if dict_trace_word?(w)
+                 r
+               elsif in_wordfreq_tsv
+                 if dict_trace_word?(w)
+                   nb ||= numberbatch_headwords_intersecting(dict_set)
+                   cn ||= conceptnet_headwords_intersecting(dict_set)
+                   nbw = nb.include?(w)
+                   cnw = cn.include?(w)
+                   wnw = wn_has_entry?(w)
+                   dict_trace_puts(w, "disconnect round=#{rounds}: freq=0 wordfreq_row=yes nb=#{nbw} cn=#{cnw} wn=#{wnw} has_rhyme=#{has_rhyme} keep=true (TSV attested; not dropped here)")
+                 end
+                 rescue_detail[:branch] = :wordfreq_tsv
+                 true
+               else
+                 f2b = kaikki_form_rescue_set.include?(w)
+                 s4 = subtlex_freqlow_positive?(w, subtlex_hash)
+                 wnw = wn_has_entry?(w)
+                 surf_r = cmudict_surface_rhyme_rescue?(w, prons, has_rhyme, original_cmudict_headwords)
+                 r = f2b || s4 || wnw || surf_r
+                 rescue_detail[:branch] = :oov
+                 rescue_detail[:oov_kaikki_form_rescue] = f2b
+                 rescue_detail[:oov_subtlex_positive] = s4
+                 rescue_detail[:wn] = wnw
+                 rescue_detail[:cmudict_surface_rhyme] = surf_r
+                 if dict_trace_word?(w)
+                   dict_trace_puts(w, "disconnect round=#{rounds}: freq=0 wordfreq_row=no oov_2b=#{f2b} oov_subtlex=#{s4} wn=#{wnw} cmudict_surface_rhyme=#{surf_r} has_rhyme=#{has_rhyme} keep=#{r} remove=#{!r}")
+                 end
+                 r
+               end
+        next if keep
+        dict_trace_puts(w, "filter_disconnected round=#{rounds}: DELETE (freq=0, no rescue)") if dict_trace_word?(w)
+        if entry.respond_to?(:mark_tombstoned!)
+          entry.mark_tombstoned!(phase: :disconnect, reason: :no_rescue, detail: rescue_detail)
+        else
+          word_dict.delete(w)
+        end
+        new_marks += 1
+      end
+      total_removed += new_marks
+      live_keys = live_word_dict_keys(word_dict)
+      dict_set = live_keys.to_set
+      prune_rdict_to_headwords!(rdict, live_keys)
+      delete_rare_only_rime_buckets!(rdict, word_dict)
+      delete_common_identical_only_rime_buckets!(rdict, word_dict)
+      # Terminate on "no new tombstoned marks this round" — the
+      # parity-preserving analog of the old "no new hash.delete this round".
+      # Earlier-phase scrub / classifier marks don't factor in here; those
+      # wouldn't have incremented the old +removed+ counter either because
+      # they were physically gone from +word_dict+ before the loop started.
+      break if new_marks == 0 || rounds >= 12
+    end
   end
   if total_removed > 0
     puts "#{total_removed} headwords removed (freq==0 disconnect filter)"
@@ -374,8 +448,57 @@ def kaikki_paradigm_base_has_pos_appropriate_wn?(word)
   end
 end
 
+# +compute_frequency+ is a thin wrapper around +compute_frequency_structured+
+# that extracts the scalar +final_freq+ for callers that just want the number.
+# New callers that want the structured view (applied clamps, pre-clamp signals,
+# raw inputs, Kaikki-paradigm flag) should call +compute_frequency_structured+
+# directly and attach the resulting FreqComputation to the BuildEntry via
+# +entry.freq_computation=+. See build_entry.rb for the struct shape.
 def compute_frequency(word, subtlex_hash, wordfreq_hash, subtlex_total_hash: nil, kaikki_capitalized_only: nil, pos_map: nil)
-  return 0 if morph_spurious_plural_s_on_invariant_noun?(word)
+  compute_frequency_structured(word, subtlex_hash, wordfreq_hash,
+                                subtlex_total_hash: subtlex_total_hash,
+                                kaikki_capitalized_only: kaikki_capitalized_only,
+                                pos_map: pos_map).final_freq
+end
+
+# Structured form of +compute_frequency+: runs the same cascade but records
+# every clamp / boost / early-return reason in an +applied_clamps+ array and
+# captures pre-clamp +subtlex_freq+ / +wordfreq_boost+ in the returned
+# FreqComputation so downstream consumers (the classifier, debug dumps,
+# trace-word logging) can see _why_ a word ended up at its final freq — not
+# just the integer. The final_freq is guaranteed equal to the legacy
+# +compute_frequency+ output for the same inputs (regression-gate invariant).
+def compute_frequency_structured(word, subtlex_hash, wordfreq_hash, subtlex_total_hash: nil, kaikki_capitalized_only: nil, pos_map: nil)
+  applied_clamps = []
+  subtlex_total = if subtlex_total_hash
+    Array(subtlex_total_hash[word]).sum { |(_, cnt)| cnt.to_i }
+  else
+    0
+  end
+  kaikki_paradigm = morph_kaikki_lists_surface_as_inflected_nonlemma?(word)
+
+  build_comp = lambda do |final_freq, subtlex_freq_pre: 0, wordfreq_boost_pre: 0, wn_in: false, wn_all_proper_val: false, syn_count: 0|
+    FreqComputation.new(
+      word: word,
+      subtlex_raw: subtlex_hash[word] || 0,
+      subtlex_total: subtlex_total,
+      zipf: wordfreq_hash[word] || 0,
+      cap_ratio: nil,
+      wn_in: wn_in,
+      wn_synset_count: syn_count,
+      wn_all_proper: wn_all_proper_val,
+      kaikki_paradigm: kaikki_paradigm,
+      subtlex_freq_pre: subtlex_freq_pre,
+      wordfreq_boost_pre: wordfreq_boost_pre,
+      applied_clamps: applied_clamps,
+      final_freq: final_freq,
+    )
+  end
+
+  if morph_spurious_plural_s_on_invariant_noun?(word)
+    applied_clamps << ClampRecord.new(reason: :spurious_plural_s, pre: nil, post: 0)
+    return build_comp.call(0)
+  end
 
   _, wn_all_proper = wn_frequency(word)
   in_wordnet = wn_has_entry?(word)
@@ -405,10 +528,11 @@ def compute_frequency(word, subtlex_hash, wordfreq_hash, subtlex_total_hash: nil
   # +hocus+, +getter+) have no matching WN entry so this clause does not apply to them.
   if !in_wordnet && zipf < WORDFREQ_RARE_ZIPF &&
       sub_raw < SUBTLEX_OVERRIDE_PROPER_MIN &&
-      morph_kaikki_lists_surface_as_inflected_nonlemma?(word) &&
+      kaikki_paradigm &&
       !kaikki_paradigm_base_has_pos_appropriate_wn?(word)
     dict_trace_puts(word, "compute_frequency: Kaikki form_of paradigm with weak signal (sub=#{sub_raw} zipf=#{zipf}) => 0") if dict_trace_word?(word)
-    return 0
+    applied_clamps << ClampRecord.new(reason: :kaikki_form_of_weak_signal, pre: nil, post: 0)
+    return build_comp.call(0, wn_in: in_wordnet, wn_all_proper_val: wn_all_proper, syn_count: syn_n)
   end
 
   # Short-base Kaikki paradigm plurals (+or+→+ors+, +o+→+os+, +pos+→+poss+, +bo+→+bos+): 1-3
@@ -420,13 +544,14 @@ def compute_frequency(word, subtlex_hash, wordfreq_hash, subtlex_total_hash: nil
   # tweet slang for +possible+, not a real plural of WN +pos+. Does not apply to +-es+/+-ing+/
   # +-ed+ which have verb paradigms with different noise profiles.
   if !in_wordnet && zipf < WORDFREQ_COMMON_ZIPF &&
-      morph_kaikki_lists_surface_as_inflected_nonlemma?(word) &&
+      kaikki_paradigm &&
       word.end_with?("s")
     base = $inflection_base_words[word]
     if base && base.length <= 3 && base != word &&
         (word == "#{base}s" || word == "#{base}es")
       dict_trace_puts(word, "compute_frequency: Kaikki short-base (#{base}) plural with sub-COMMON Zipf (#{zipf}) => 0") if dict_trace_word?(word)
-      return 0
+      applied_clamps << ClampRecord.new(reason: :kaikki_short_base_plural, pre: nil, post: 0)
+      return build_comp.call(0, wn_in: in_wordnet, wn_all_proper_val: wn_all_proper, syn_count: syn_n)
     end
   end
 
@@ -434,12 +559,20 @@ def compute_frequency(word, subtlex_hash, wordfreq_hash, subtlex_total_hash: nil
   # Multiple synsets → keep 0 (al, ba). Single synset → only trust subtitles below a ceiling
   # so bi can score as dialogue while ni stays 0 despite fragment counts.
   if wn_all_proper && two_letter_alpha?(word)
-    return 0 if syn_n >= 2
-    return 0 if syn_n == 1 && sub_raw >= SUBTLEX_SINGLE_PROPER_OVERRIDE_MAX
+    if syn_n >= 2
+      applied_clamps << ClampRecord.new(reason: :two_letter_all_proper_multi_synset, pre: nil, post: 0)
+      return build_comp.call(0, wn_in: in_wordnet, wn_all_proper_val: wn_all_proper, syn_count: syn_n)
+    end
+    if syn_n == 1 && sub_raw >= SUBTLEX_SINGLE_PROPER_OVERRIDE_MAX
+      applied_clamps << ClampRecord.new(reason: :two_letter_all_proper_syn1_high_sub, pre: nil, post: 0)
+      return build_comp.call(0, wn_in: in_wordnet, wn_all_proper_val: wn_all_proper, syn_count: syn_n)
+    end
     if syn_n == 1 && sub_raw >= SUBTLEX_SINGLE_PROPER_OVERRIDE_MIN && sub_raw < SUBTLEX_SINGLE_PROPER_OVERRIDE_MAX
+      applied_clamps << ClampRecord.new(reason: :two_letter_single_proper_override, pre: true, post: false)
       wn_all_proper = false
     elsif syn_n == 1
-      return 0
+      applied_clamps << ClampRecord.new(reason: :two_letter_all_proper_syn1_low_sub, pre: nil, post: 0)
+      return build_comp.call(0, wn_in: in_wordnet, wn_all_proper_val: wn_all_proper, syn_count: syn_n)
     end
   end
 
@@ -453,7 +586,10 @@ def compute_frequency(word, subtlex_hash, wordfreq_hash, subtlex_total_hash: nil
   # wordfreq. All-proper with zero SUBTLEX is encyclopedic-only (high Zipf reflects Wikipedia, not usage).
   # Extend to all-proper + case_proper: tiny FREQlow trickle (Cabot 1/85, Kant, Lawton) is still
   # encyclopedic even though the lowercase count is non-zero.
-  return 0 if wn_all_proper && (sub_raw.zero? || case_proper)
+  if wn_all_proper && (sub_raw.zero? || case_proper)
+    applied_clamps << ClampRecord.new(reason: :wn_all_proper_encyclopedic, pre: nil, post: 0)
+    return build_comp.call(0, wn_in: in_wordnet, wn_all_proper_val: wn_all_proper, syn_count: syn_n)
+  end
 
   # All-proper + single-synset + trickle SUBTLEX FREQlow (< 5) in +noun.animal+ / +noun.plant+
   # captures Latin scientific binomials (+pseudomonas+ bacterial genus, lexed +noun.animal+)
@@ -463,7 +599,8 @@ def compute_frequency(word, subtlex_hash, wordfreq_hash, subtlex_total_hash: nil
   if wn_all_proper && syn_n == 1 && sub_raw > 0 && sub_raw < 5
     lexnames = wn_noun_synsets_unified(word).map { |s| wn_synset_noun_lexname(s) }.compact
     if lexnames.any? { |ln| WN_ALL_PROPER_BIOLOGY_LEXNAMES.include?(ln) }
-      return 0
+      applied_clamps << ClampRecord.new(reason: :wn_all_proper_biology_binomial, pre: nil, post: 0)
+      return build_comp.call(0, wn_in: in_wordnet, wn_all_proper_val: wn_all_proper, syn_count: syn_n)
     end
   end
 
@@ -473,7 +610,10 @@ def compute_frequency(word, subtlex_hash, wordfreq_hash, subtlex_total_hash: nil
   case_proper_oov = likely_proper_noun_by_case?(word, subtlex_hash, subtlex_total_hash,
                                                  kaikki_capitalized_only,
                                                  max_low: SUBTLEX_OVERRIDE_PROPER_MIN)
-  return 0 if case_proper_oov && !in_wordnet
+  if case_proper_oov && !in_wordnet
+    applied_clamps << ClampRecord.new(reason: :case_proper_oov_not_in_wn, pre: nil, post: 0)
+    return build_comp.call(0, wn_in: in_wordnet, wn_all_proper_val: wn_all_proper, syn_count: syn_n)
+  end
 
   # e.g. atm: WordNet lemma + high Zipf but almost no lowercase subtitle hits — encyclopedic initialism.
   weak_lexical_anchor = short_initialism_shape?(word) && in_wordnet && sub_raw < SUBTLEX_OVERRIDE_PROPER_MIN && zipf >= WORDFREQ_COMMON_ZIPF
@@ -481,6 +621,7 @@ def compute_frequency(word, subtlex_hash, wordfreq_hash, subtlex_total_hash: nil
   lexically_anchored = in_wordnet && !weak_lexical_anchor
 
   subtlex_freq = subtlex_frequency(word, subtlex_hash)
+  subtlex_freq_pre = subtlex_freq
   # Low wordfreq Zipf with strong SUBTLEX is often a real headword in subtitles but rare in wordfreq's web mix.
   # Applies to OOV (no WordNet anchor) AND to WN-anchored obscure English where dialogue trickle
   # inflates SUBTLEX_PRESENCE_BONUS past rare (paregoric 1.26, pellagra 1.85, cohosh 1.56,
@@ -489,6 +630,7 @@ def compute_frequency(word, subtlex_hash, wordfreq_hash, subtlex_total_hash: nil
   # entomb/moralize/skulduggery (≈10 _ish/common rows) is outweighed by the 25+ common→forbidden
   # corrections this unlocks.
   if zipf > 0 && zipf < WORDFREQ_RARE_ZIPF && subtlex_freq > RARE_FREQ_MAX
+    applied_clamps << ClampRecord.new(reason: :subtlex_clamp_low_zipf, pre: subtlex_freq, post: RARE_FREQ_MAX)
     subtlex_freq = RARE_FREQ_MAX
   end
 
@@ -498,6 +640,7 @@ def compute_frequency(word, subtlex_hash, wordfreq_hash, subtlex_total_hash: nil
   # anchor is NOT all-proper — pentagon / chicago / easter (all-proper=true elsewhere excluded;
   # pentagon all-proper=false but zipf≥COMMON keeps wordfreq_boost 5, masking the clamp).
   if (case_proper || (case_proper_oov && in_wordnet && !wn_all_proper)) && subtlex_freq > RARE_FREQ_MAX
+    applied_clamps << ClampRecord.new(reason: :subtlex_clamp_case_proper_homograph, pre: subtlex_freq, post: RARE_FREQ_MAX)
     subtlex_freq = RARE_FREQ_MAX
   end
 
@@ -510,26 +653,39 @@ def compute_frequency(word, subtlex_hash, wordfreq_hash, subtlex_total_hash: nil
     # caption-fragment shapes (+bom+, +hee+, +ing+, +hor+, +oe+) whose SUBTLEX trickle is noise.
     intj_anchor = pos_map && Array(pos_map[word]).include?("intj")
     unless short_initialism_shape?(word) && intj_anchor
-      subtlex_freq = [subtlex_freq, RARE_FREQ_MAX].min
+      pre = subtlex_freq
+      new = [subtlex_freq, RARE_FREQ_MAX].min
+      applied_clamps << ClampRecord.new(reason: :subtlex_clamp_anchorless_high_zipf, pre: pre, post: new) if pre != new
+      subtlex_freq = new
     end
   end
 
   block_short_initialism_wordfreq = acronym_shape_wordfreq_only?(word) && subtlex_freq == 0 && !in_wordnet
   wordfreq_boost = (zipf >= WORDFREQ_COMMON_ZIPF && !block_short_initialism_wordfreq) ? 5 : 0
+  wordfreq_boost_pre = wordfreq_boost
 
   # Zipf-only boost with no anchor and zero SUBTLEX FREQlow: usually Wikipedia names (graeme, platt).
   if !lexically_anchored && sub_raw == 0
+    if wordfreq_boost != 0
+      applied_clamps << ClampRecord.new(reason: :wordfreq_boost_zero_anchorless_zero_sub, pre: wordfreq_boost, post: 0)
+    end
     wordfreq_boost = 0
   end
 
   # Case-based proper-noun signal: wordfreq Zipf is Wikipedia-heavy for names — do not let it lift
   # an otherwise-capitalized word into common.
   if case_proper
+    if wordfreq_boost != 0
+      applied_clamps << ClampRecord.new(reason: :wordfreq_boost_zero_case_proper, pre: wordfreq_boost, post: 0)
+    end
     wordfreq_boost = 0
   end
 
   # Short initialism-shaped strings with high Zipf but no anchor: treat Zipf as noisy.
   if !lexically_anchored && short_initialism_shape?(word) && zipf >= WORDFREQ_COMMON_ZIPF
+    if wordfreq_boost != 0
+      applied_clamps << ClampRecord.new(reason: :wordfreq_boost_zero_short_initialism, pre: wordfreq_boost, post: 0)
+    end
     wordfreq_boost = 0
   end
 
@@ -549,9 +705,17 @@ def compute_frequency(word, subtlex_hash, wordfreq_hash, subtlex_total_hash: nil
   if !in_wordnet && sub_raw.positive? && sub_raw < SUBTLEX_OVERRIDE_PROPER_MIN &&
       !(kaikki_common_noun_oov && zipf >= WORDFREQ_COMMON_ZIPF && zipf < WORDFREQ_OOV_STRONG_MODERN_ZIPF)
     strong_modern = zipf >= WORDFREQ_OOV_STRONG_MODERN_ZIPF
-    wordfreq_boost = 0 unless strong_modern && zipf >= WORDFREQ_COMMON_ZIPF
+    unless strong_modern && zipf >= WORDFREQ_COMMON_ZIPF
+      if wordfreq_boost != 0
+        applied_clamps << ClampRecord.new(reason: :wordfreq_boost_zero_oov_trickle, pre: wordfreq_boost, post: 0)
+      end
+      wordfreq_boost = 0
+    end
     if (zipf >= WORDFREQ_COMMON_ZIPF || zipf.zero?) && !strong_modern && !wn_oov_subtlex_cap_skip_via_inflection_anchor?(word)
-      subtlex_freq = [subtlex_freq, RARE_FREQ_MAX].min
+      pre = subtlex_freq
+      new = [subtlex_freq, RARE_FREQ_MAX].min
+      applied_clamps << ClampRecord.new(reason: :subtlex_clamp_oov_trickle, pre: pre, post: new) if pre != new
+      subtlex_freq = new
     end
   end
 
@@ -561,8 +725,14 @@ def compute_frequency(word, subtlex_hash, wordfreq_hash, subtlex_total_hash: nil
   # +yours+) are stop words that bypass compute_frequency entirely, so clamping here is safe.
   if !in_wordnet && pos_map && (tags = pos_map[word]) && !tags.empty? &&
       tags.all? { |t| OOV_FUNCTION_WORD_POS_TAGS.include?(t) }
-    subtlex_freq = [subtlex_freq, RARE_FREQ_MAX].min
-    wordfreq_boost = [wordfreq_boost, RARE_FREQ_MAX].min
+    pre_s = subtlex_freq
+    new_s = [subtlex_freq, RARE_FREQ_MAX].min
+    applied_clamps << ClampRecord.new(reason: :subtlex_clamp_oov_function_word_only, pre: pre_s, post: new_s) if pre_s != new_s
+    subtlex_freq = new_s
+    pre_w = wordfreq_boost
+    new_w = [wordfreq_boost, RARE_FREQ_MAX].min
+    applied_clamps << ClampRecord.new(reason: :wordfreq_boost_clamp_oov_function_word_only, pre: pre_w, post: new_w) if pre_w != new_w
+    wordfreq_boost = new_w
   end
 
   # 2–3 char OOV tokens with mid Zipf (in [2.0, COMMON)) and trickle SUBTLEX FREQlow (< 5)
@@ -572,8 +742,14 @@ def compute_frequency(word, subtlex_hash, wordfreq_hash, subtlex_total_hash: nil
   # ≥ 12, so they don't fall into the low-sub cell.
   if !in_wordnet && word.length <= 3 && word.match?(/\A[a-z]+\z/) &&
       sub_raw > 0 && sub_raw < 5 && zipf > 0 && zipf < WORDFREQ_COMMON_ZIPF
-    subtlex_freq = [subtlex_freq, RARE_FREQ_MAX].min
-    wordfreq_boost = [wordfreq_boost, RARE_FREQ_MAX].min
+    pre_s = subtlex_freq
+    new_s = [subtlex_freq, RARE_FREQ_MAX].min
+    applied_clamps << ClampRecord.new(reason: :subtlex_clamp_short_oov_trickle, pre: pre_s, post: new_s) if pre_s != new_s
+    subtlex_freq = new_s
+    pre_w = wordfreq_boost
+    new_w = [wordfreq_boost, RARE_FREQ_MAX].min
+    applied_clamps << ClampRecord.new(reason: :wordfreq_boost_clamp_short_oov_trickle, pre: pre_w, post: new_w) if pre_w != new_w
+    wordfreq_boost = new_w
   end
 
   # Obscure single-synset WN nouns in highly specialized lex categories (+noun.plant+ Latin
@@ -587,8 +763,14 @@ def compute_frequency(word, subtlex_hash, wordfreq_hash, subtlex_total_hash: nil
   if in_wordnet && syn_n == 1 && zipf > 0 && zipf < WORDFREQ_COMMON_ZIPF + 0.5 && sub_raw < 5
     lexnames = wn_noun_synsets_unified(word).map { |s| wn_synset_noun_lexname(s) }.compact
     if lexnames.any? { |ln| WN_ENCYCLOPEDIC_SINGLE_SYNSET_LEXNAMES.include?(ln) }
-      subtlex_freq = [subtlex_freq, RARE_FREQ_MAX].min
-      wordfreq_boost = [wordfreq_boost, RARE_FREQ_MAX].min
+      pre_s = subtlex_freq
+      new_s = [subtlex_freq, RARE_FREQ_MAX].min
+      applied_clamps << ClampRecord.new(reason: :subtlex_clamp_wn_encyclopedic_lex, pre: pre_s, post: new_s) if pre_s != new_s
+      subtlex_freq = new_s
+      pre_w = wordfreq_boost
+      new_w = [wordfreq_boost, RARE_FREQ_MAX].min
+      applied_clamps << ClampRecord.new(reason: :wordfreq_boost_clamp_wn_encyclopedic_lex, pre: pre_w, post: new_w) if pre_w != new_w
+      wordfreq_boost = new_w
     end
   end
 
@@ -607,11 +789,19 @@ def compute_frequency(word, subtlex_hash, wordfreq_hash, subtlex_total_hash: nil
   # Zipf 1.74, sub 4) and *entomb*/*arachnophobia* stay at the cautious floor.
   if in_wordnet && lexically_anchored && !wn_all_proper && syn_n >= 2 && freq <= RARE_FREQ_MAX &&
       (zipf >= WORDFREQ_RARE_ZIPF || (syn_n >= 3 && sub_raw > 0))
+    applied_clamps << ClampRecord.new(reason: :wn_multi_synset_floor, pre: freq, post: RARE_FREQ_MAX + 1)
     freq = RARE_FREQ_MAX + 1
   end
 
   dict_trace_puts(word, "compute_frequency: subtlex=#{subtlex_freq} zipf=#{zipf} in_wn=#{in_wordnet} lexical_anchor=#{lexically_anchored} wordfreq_boost=#{wordfreq_boost} (needs zipf≥#{WORDFREQ_COMMON_ZIPF} for boost) block_short_init=#{block_short_initialism_wordfreq} all_proper=#{wn_all_proper} => #{freq}") if dict_trace_word?(word)
-  return freq
+  build_comp.call(
+    freq,
+    subtlex_freq_pre: subtlex_freq_pre,
+    wordfreq_boost_pre: wordfreq_boost_pre,
+    wn_in: in_wordnet,
+    wn_all_proper_val: wn_all_proper,
+    syn_count: syn_n,
+  )
 end
 
 # List-pivot Inflect inheritance: try to lift +word+ to donor freq via +listed+
@@ -674,11 +864,21 @@ def morph_inherit_listed_once!(word, listed, forward, hash, rare_words, common_w
     dict_trace_puts(word, "morph_inherit_listed ← base=#{base} (listed=#{listed}): skip (surface not in wordfreq/SUBTLEX/WN/CMU/USF/CN/NB/neol)") if tr
     return false
   end
-  entry[0] = donor
   # +donor_anchored+ uses the corpus-only predicate (no +common_words+ clause)
   # so the +received_donor_from_common_base_flag+ feature can't read the
   # curated label off its own input. See +donor_has_corpus_anchor?+ in dict.rb.
-  record_freq_propagation!(word, phase: :morph_inherit_listed, donor: base, donor_anchored: donor_has_corpus_anchor?(base, wordfreq_hash, neol_words))
+  entry.append_freq_tag!(
+    phase: :morph_inherit_listed,
+    post_freq: donor,
+    donor: base,
+    donor_anchored: donor_has_corpus_anchor?(base, wordfreq_hash, neol_words),
+    gate_outcomes: {
+      listed: listed,
+      infl: infl,
+      suffix_kind: inflection_suffix_kind,
+      forward: forward,
+    },
+  )
   dict_trace_puts(word, "morph_inherit_listed: set freq=#{donor} via listed=#{listed} base=#{base} infl=#{infl} suffix=#{inflection_suffix_kind}") if tr
   true
 end
@@ -695,19 +895,30 @@ def add_frequency_info(cmudict, subtlex_hash, subtlex_total_hash, wordfreq_hash,
   ref_nb = ref_nb_path ? numberbatch_corpus_token_set(ref_nb_path) : nil
   ref_usf = usf_corpus_word_set
   for word, prons in cmudict
+    seed_phase = :cmudict_seed
+    seed_gates = nil
+    comp = nil
     if(semantically_promiscuous?(word))
       freq = 999999
+      seed_gates = { branch: :promiscuous_sentinel }
     elsif(common_words.include?(word))
       freq = 99
+      seed_gates = { branch: :common_list_sentinel }
     elsif(rare_words.include?(word))
       freq = 0
+      seed_gates = { branch: :rare_list_zero }
     else
-      freq = compute_frequency(word, subtlex_hash, wordfreq_hash, subtlex_total_hash: subtlex_total_hash, kaikki_capitalized_only: kaikki_capitalized_only, pos_map: pos_map)
+      comp = compute_frequency_structured(word, subtlex_hash, wordfreq_hash, subtlex_total_hash: subtlex_total_hash, kaikki_capitalized_only: kaikki_capitalized_only, pos_map: pos_map)
+      freq = comp.final_freq
+      seed_gates = { branch: :compute_frequency, applied_clamps: comp.applied_clamps.size }
     end
     if(freq > 0)
       count += 1
     end
-    hash[word] = [freq, prons]
+    entry = BuildEntry.new(word: word, prons: prons)
+    entry.freq_computation = comp if comp
+    entry.append_freq_tag!(phase: seed_phase, post_freq: freq, pre_freq: 0, gate_outcomes: seed_gates)
+    hash[word] = entry
     dict_trace_puts(word, "cmudict_seed: freq=#{freq}") if dict_trace_word?(word)
   end
   puts "#{count} of those entries have frequency data (from cmudict/wiktionary words)"
@@ -717,17 +928,27 @@ def add_frequency_info(cmudict, subtlex_hash, subtlex_total_hash, wordfreq_hash,
   subtlex_hash.each_key do |word|
     next if hash.key?(word)
     next unless word.match?(/\A[a-z]([a-z'\-]*[a-z])?\z/)
+    seed_gates = nil
+    comp = nil
     if(semantically_promiscuous?(word))
       freq = 999999
+      seed_gates = { branch: :promiscuous_sentinel }
     elsif(common_words.include?(word))
       freq = 99
+      seed_gates = { branch: :common_list_sentinel }
     elsif(rare_words.include?(word))
       freq = 0
+      seed_gates = { branch: :rare_list_zero }
     else
-      freq = compute_frequency(word, subtlex_hash, wordfreq_hash, subtlex_total_hash: subtlex_total_hash, kaikki_capitalized_only: kaikki_capitalized_only, pos_map: pos_map)
+      comp = compute_frequency_structured(word, subtlex_hash, wordfreq_hash, subtlex_total_hash: subtlex_total_hash, kaikki_capitalized_only: kaikki_capitalized_only, pos_map: pos_map)
+      freq = comp.final_freq
+      seed_gates = { branch: :compute_frequency, applied_clamps: comp.applied_clamps.size }
     end
     if freq > 0
-      hash[word] = [freq, []]
+      entry = BuildEntry.new(word: word, prons: [])
+      entry.freq_computation = comp if comp
+      entry.append_freq_tag!(phase: :subtlex, post_freq: freq, pre_freq: 0, gate_outcomes: seed_gates)
+      hash[word] = entry
       extra += 1
     end
   end
@@ -744,10 +965,12 @@ def add_frequency_info(cmudict, subtlex_hash, subtlex_total_hash, wordfreq_hash,
   common_words.each do |word|
     if hash.key?(word)
       next if hash[word][0] > RARE_FREQ_MAX
-      hash[word][0] = 99
+      hash[word].append_freq_tag!(phase: :common_list, post_freq: 99, gate_outcomes: { branch: :bumped })
       common_bumped += 1
     else
-      hash[word] = [99, []]
+      entry = BuildEntry.new(word: word, prons: [])
+      entry.append_freq_tag!(phase: :common_list, post_freq: 99, pre_freq: 0, gate_outcomes: { branch: :added })
+      hash[word] = entry
       puts "  Added #{word} to the dictionary with frequency 99"
       common_extra += 1
     end
@@ -764,9 +987,11 @@ def add_frequency_info(cmudict, subtlex_hash, subtlex_total_hash, wordfreq_hash,
   neol_words.each do |word|
     if hash.key?(word)
       next if hash[word][0] > RARE_FREQ_MAX
-      hash[word][0] = 98
+      hash[word].append_freq_tag!(phase: :neol, post_freq: 98, gate_outcomes: { branch: :bumped })
     else
-      hash[word] = [98, []]
+      entry = BuildEntry.new(word: word, prons: [])
+      entry.append_freq_tag!(phase: :neol, post_freq: 98, pre_freq: 0, gate_outcomes: { branch: :added })
+      hash[word] = entry
     end
     neol_promoted += 1
   end
@@ -805,7 +1030,7 @@ def add_frequency_info(cmudict, subtlex_hash, subtlex_total_hash, wordfreq_hash,
     # or SUBTLEX mostly-capitalized (carling) should not receive the existence floor — their
     # Wiktionary presence is encyclopedic, not evidence of common-noun usage.
     next if likely_proper_noun_by_case?(word, subtlex_hash, subtlex_total_hash, kaikki_capitalized_only)
-    entry[0] = 5
+    entry.append_freq_tag!(phase: :wiktionary_floor, post_freq: 5, gate_outcomes: { zipf: zipf })
     floor_applied += 1
   end
   puts "#{floor_applied} words received Wiktionary existence floor" if floor_applied > 0
@@ -976,30 +1201,41 @@ def add_frequency_info(cmudict, subtlex_hash, subtlex_total_hash, wordfreq_hash,
       next
     end
 
-    # === Phase 2: lineage is real → record donor metadata ===
-    record_freq_propagation!(inflected, phase: :morph_inherit_kaikki, donor: base, donor_anchored: base_has_corpus_anchor)
-
-    # === Phase 3: "don't decrease" gates — skip the freq overwrite, keep the metadata ===
+    # === Phase 2+3 fused: decide metadata_only vs full inherit, then append a single FreqTag ===
+    # The tag carries the donor lineage unconditionally; +metadata_only+ encodes
+    # whether phase 3 took the freq-overwrite path or the "don't decrease" skip
+    # path. See the Kaikki-morph header comment for why the split matters.
     infl_freq = hash[inflected][0]
+    wf_inf = wordfreq_hash[inflected]
+    kaikki_gate_outcomes = {
+      suffix_kind: inflection_suffix_kind,
+      base_has_corpus_anchor: base_has_corpus_anchor,
+      base_has_real_anchor: base_has_real_anchor,
+      surf_ok: surf_ok,
+      base_zipf: base_zipf,
+      infl_zipf: wf_inf,
+    }
     if infl_freq > RARE_FREQ_MAX
       dict_trace_puts(inflected, "morph_inherit_kaikki ← #{base}: metadata only (freq #{infl_freq} already > #{RARE_FREQ_MAX}); donor_anchored=#{base_has_corpus_anchor}") if tr
+      hash[inflected].append_freq_tag!(phase: :morph_inherit_kaikki, post_freq: infl_freq, donor: base, donor_anchored: base_has_corpus_anchor, gate_outcomes: kaikki_gate_outcomes.merge(skip_reason: :infl_freq_already_common), metadata_only: true)
       metadata_only += 1
       next
     end
     if infl_freq >= base_freq
       dict_trace_puts(inflected, "morph_inherit_kaikki ← #{base}: metadata only (infl_freq=#{infl_freq} ≥ base_freq=#{base_freq}); donor_anchored=#{base_has_corpus_anchor}") if tr
+      hash[inflected].append_freq_tag!(phase: :morph_inherit_kaikki, post_freq: infl_freq, donor: base, donor_anchored: base_has_corpus_anchor, gate_outcomes: kaikki_gate_outcomes.merge(skip_reason: :dont_decrease), metadata_only: true)
       metadata_only += 1
       next
     end
-    wf_inf = wordfreq_hash[inflected]
     # High Zipf can still be freq≤RARE after OOV SUBTLEX clamps (*blogging*); only skip when already common.
     if wf_inf && wf_inf >= WORDFREQ_COMMON_ZIPF && infl_freq > RARE_FREQ_MAX
       dict_trace_puts(inflected, "morph_inherit_kaikki ← #{base}: metadata only (Zipf #{wf_inf} ≥ #{WORDFREQ_COMMON_ZIPF} and infl already common); donor_anchored=#{base_has_corpus_anchor}") if tr
+      hash[inflected].append_freq_tag!(phase: :morph_inherit_kaikki, post_freq: infl_freq, donor: base, donor_anchored: base_has_corpus_anchor, gate_outcomes: kaikki_gate_outcomes.merge(skip_reason: :infl_already_common_via_zipf), metadata_only: true)
       metadata_only += 1
       next
     end
 
-    hash[inflected][0] = base_freq
+    hash[inflected].append_freq_tag!(phase: :morph_inherit_kaikki, post_freq: base_freq, donor: base, donor_anchored: base_has_corpus_anchor, gate_outcomes: kaikki_gate_outcomes)
     dict_trace_puts(inflected, "morph_inherit_kaikki ← #{base}: inherited freq=#{base_freq} suffix=#{inflection_suffix_kind} corpus_anchored=#{base_has_corpus_anchor} (real_anchor=#{base_has_real_anchor})") if tr
     inherited += 1
   end
@@ -1144,23 +1380,42 @@ def add_frequency_info(cmudict, subtlex_hash, subtlex_total_hash, wordfreq_hash,
           next
         end
         # Common-list Inflect expansion scans only rarity.csv (common) bases; list headwords are authoritative (no reference-corpus gate).
+        listed_gate_outcomes = {
+          suffix_kind: inflection_suffix_kind,
+          wf_form: wf,
+          existing_row: hash.key?(w),
+        }
         if hash.key?(w)
           if hash[w][0] > RARE_FREQ_MAX
             dict_trace_puts(w, "morph_expand_listed ← #{base}: skip (existing freq #{hash[w][0]} > #{RARE_FREQ_MAX})") if tr
             next
           end
-          hash[w][0] = donor
+          # +donor_anchored+ corpus-only — see comment in +morph_inherit_listed+.
+          hash[w].append_freq_tag!(
+            phase: :morph_expand_listed,
+            post_freq: donor,
+            donor: base,
+            donor_anchored: donor_has_corpus_anchor?(base, wordfreq_hash, neol_words),
+            gate_outcomes: listed_gate_outcomes,
+          )
           if hash[w][1].empty?
             promo = morph_derived_prons_for_promotion(base_prons, base, w)
             hash[w][1] = promo unless promo.empty?
           end
           dict_trace_puts(w, "morph_expand_listed ← #{base}: set freq=#{donor} suffix=#{inflection_suffix_kind} (existing row)") if tr
         else
-          hash[w] = [donor, morph_derived_prons_for_promotion(base_prons, base, w)]
+          new_entry = BuildEntry.new(word: w, prons: morph_derived_prons_for_promotion(base_prons, base, w))
+          new_entry.append_freq_tag!(
+            phase: :morph_expand_listed,
+            post_freq: donor,
+            pre_freq: 0,
+            donor: base,
+            donor_anchored: donor_has_corpus_anchor?(base, wordfreq_hash, neol_words),
+            gate_outcomes: listed_gate_outcomes,
+          )
+          hash[w] = new_entry
           dict_trace_puts(w, "morph_expand_listed ← #{base}: new row freq=#{donor} suffix=#{inflection_suffix_kind}") if tr
         end
-        # +donor_anchored+ corpus-only — see comment in +morph_inherit_listed+.
-        record_freq_propagation!(w, phase: :morph_expand_listed, donor: base, donor_anchored: donor_has_corpus_anchor?(base, wordfreq_hash, neol_words))
         round += 1
         morph_inherited += 1
       end
@@ -1346,23 +1601,65 @@ def add_frequency_info(cmudict, subtlex_hash, subtlex_total_hash, wordfreq_hash,
             dict_trace_puts(w, "morph_expand_subtlex ← #{base}: skip (:s branch, corpus gates)") if tr
             next
           end
+          subtlex_gate_outcomes = {
+            suffix_kind: inflection_suffix_kind,
+            wf_form: wf,
+            base_zipf: base_zipf,
+            surf_attested: surf_attested,
+            corpus_ok: corpus_ok,
+            lexical_plural_ok: lexical_plural_ok,
+            base_has_corpus_anchor: base_has_corpus_anchor,
+            base_has_real_anchor: base_has_real_anchor,
+            branch: :plural_s,
+          }
           if hash.key?(w)
-            hash[w][0] = donor
+            hash[w].append_freq_tag!(
+              phase: :morph_expand_subtlex,
+              post_freq: donor,
+              donor: base,
+              donor_anchored: base_has_corpus_anchor,
+              gate_outcomes: subtlex_gate_outcomes.merge(existing_row: true),
+            )
             if hash[w][1].empty?
               promo = morph_derived_prons_for_promotion(base_prons, base, w)
               hash[w][1] = promo unless promo.empty?
             end
           else
-            hash[w] = [donor, morph_derived_prons_for_promotion(base_prons, base, w)]
+            new_entry = BuildEntry.new(word: w, prons: morph_derived_prons_for_promotion(base_prons, base, w))
+            new_entry.append_freq_tag!(
+              phase: :morph_expand_subtlex,
+              post_freq: donor,
+              pre_freq: 0,
+              donor: base,
+              donor_anchored: base_has_corpus_anchor,
+              gate_outcomes: subtlex_gate_outcomes.merge(existing_row: false),
+            )
+            hash[w] = new_entry
           end
           dict_trace_puts(w, "morph_expand_subtlex ← #{base}: set freq=#{donor} (:s plural path)") if tr
         elsif corpus_ok
+          subtlex_gate_outcomes = {
+            suffix_kind: inflection_suffix_kind,
+            wf_form: wf,
+            base_zipf: base_zipf,
+            surf_attested: surf_attested,
+            corpus_ok: corpus_ok,
+            base_has_corpus_anchor: base_has_corpus_anchor,
+            base_has_real_anchor: base_has_real_anchor,
+            branch: :corpus,
+          }
           if hash.key?(w)
             if hash[w][0] > RARE_FREQ_MAX
               dict_trace_puts(w, "morph_expand_subtlex ← #{base}: skip (corpus path, existing freq high)") if tr
               next
             end
-            hash[w][0] = donor
+            hash[w].append_freq_tag!(
+              phase: :morph_expand_subtlex,
+              post_freq: donor,
+              donor: base,
+              donor_anchored: base_has_corpus_anchor,
+              gate_outcomes: subtlex_gate_outcomes.merge(existing_row: true),
+            )
             if hash[w][1].empty?
               promo = morph_derived_prons_for_promotion(base_prons, base, w)
               hash[w][1] = promo unless promo.empty?
@@ -1373,14 +1670,22 @@ def add_frequency_info(cmudict, subtlex_hash, subtlex_total_hash, wordfreq_hash,
               dict_trace_puts(w, "morph_expand_subtlex ← #{base}: skip (new row, not attested in any reference corpus)") if tr
               next
             end
-            hash[w] = [donor, morph_derived_prons_for_promotion(base_prons, base, w)]
+            new_entry = BuildEntry.new(word: w, prons: morph_derived_prons_for_promotion(base_prons, base, w))
+            new_entry.append_freq_tag!(
+              phase: :morph_expand_subtlex,
+              post_freq: donor,
+              pre_freq: 0,
+              donor: base,
+              donor_anchored: base_has_corpus_anchor,
+              gate_outcomes: subtlex_gate_outcomes.merge(existing_row: false),
+            )
+            hash[w] = new_entry
             dict_trace_puts(w, "morph_expand_subtlex ← #{base}: new row freq=#{donor} suffix=#{inflection_suffix_kind}") if tr
           end
         else
           dict_trace_puts(w, "morph_expand_subtlex ← #{base}: skip (not :s and !corpus_ok)") if tr
           next
         end
-        record_freq_propagation!(w, phase: :morph_expand_subtlex, donor: base, donor_anchored: base_has_corpus_anchor)
         round += 1
         morph_corpus += 1
       end
@@ -1401,12 +1706,19 @@ def add_frequency_info(cmudict, subtlex_hash, subtlex_total_hash, wordfreq_hash,
     next unless word.end_with?("in'") || word.end_with?("in\u2019")
     entry = hash[word]
     next unless entry && entry[0] == 0
+    next if entry.is_a?(BuildEntry) && entry.tombstoned?
     base = word.sub(/in['\u2019]\z/, "ing")
     base_entry = hash[base]
     next unless base_entry && base_entry[0] > 0
-    hash[word][0] = [base_entry[0], RARE_FREQ_MAX].min
+    capped = [base_entry[0], RARE_FREQ_MAX].min
     # +donor_anchored+ corpus-only — see comment in +morph_inherit_listed+.
-    record_freq_propagation!(word, phase: :gdrop, donor: base, donor_anchored: donor_has_corpus_anchor?(base, wordfreq_hash, neol_words))
+    entry.append_freq_tag!(
+      phase: :gdrop,
+      post_freq: capped,
+      donor: base,
+      donor_anchored: donor_has_corpus_anchor?(base, wordfreq_hash, neol_words),
+      gate_outcomes: { base_freq: base_entry[0], rare_cap: RARE_FREQ_MAX },
+    )
     gdrop_inherited += 1
   end
   puts "#{gdrop_inherited} -in' g-drop surfaces inherited frequency from -ing base (rare-capped)" if gdrop_inherited > 0
@@ -1421,6 +1733,9 @@ def add_frequency_info(cmudict, subtlex_hash, subtlex_total_hash, wordfreq_hash,
   # possessives (+it's+, +let's+, +john's+) have freq-positive stems and are preserved.
   possessive_scrub = 0
   hash.keys.each do |word|
+    entry = hash[word]
+    next unless entry
+    next if entry.is_a?(BuildEntry) && entry.tombstoned?
     next unless word.end_with?("'s") || word.end_with?("\u2019s")
     stem = word.sub(/['\u2019]s\z/, "")
     next if stem.empty?
@@ -1428,7 +1743,7 @@ def add_frequency_info(cmudict, subtlex_hash, subtlex_total_hash, wordfreq_hash,
     stem_freq = stem_entry ? stem_entry[0] : 0
     next if stem_freq > 0
     dict_trace_puts(word, "possessive_scrub: DELETE (stem='#{stem}' freq=#{stem_freq})") if dict_trace_word?(word)
-    hash.delete(word)
+    entry.mark_tombstoned!(phase: :possessive_scrub, reason: :stem_freq_zero, detail: { stem: stem, stem_freq: stem_freq, stem_present: !stem_entry.nil? })
     possessive_scrub += 1
   end
   puts "#{possessive_scrub} bare possessive headwords dropped (X's with freq==0 or missing stem X)" if possessive_scrub > 0
@@ -1448,9 +1763,10 @@ def add_frequency_info(cmudict, subtlex_hash, subtlex_total_hash, wordfreq_hash,
   hash.keys.each do |word|
     entry = hash[word]
     next unless entry && entry[0] == 0
+    next if entry.is_a?(BuildEntry) && entry.tombstoned?
     next unless morph_spurious_plural_s_on_invariant_noun?(word)
     dict_trace_puts(word, "invariant_plural_scrub: DELETE") if dict_trace_word?(word)
-    hash.delete(word)
+    entry.mark_tombstoned!(phase: :invariant_plural_scrub, reason: :spurious_invariant_plural)
     invariant_plural_scrub += 1
   end
   puts "#{invariant_plural_scrub} spurious invariant/irregular plural headwords dropped" if invariant_plural_scrub > 0
@@ -1461,11 +1777,12 @@ def add_frequency_info(cmudict, subtlex_hash, subtlex_total_hash, wordfreq_hash,
     next unless word.include?("-")
     entry = hash[word]
     next unless entry && entry[0] == 0
+    next if entry.is_a?(BuildEntry) && entry.tombstoned?
     lexnames = wn_noun_synsets_unified(word.tr("-", "_")).map { |s| wn_synset_noun_lexname(s) }.compact.uniq
     next if lexnames.empty?
     next unless lexnames.all? { |l| proper_lexfiles.include?(l) }
     dict_trace_puts(word, "hyphenated_proper_scrub: DELETE") if dict_trace_word?(word)
-    hash.delete(word)
+    entry.mark_tombstoned!(phase: :hyphenated_proper_scrub, reason: :proper_noun_only_lexfiles, detail: { lexnames: lexnames })
     hyphenated_proper_scrub += 1
   end
   puts "#{hyphenated_proper_scrub} hyphenated zero-frequency headwords dropped (WN proper-noun lexfiles only)" if hyphenated_proper_scrub > 0
@@ -1474,12 +1791,16 @@ def add_frequency_info(cmudict, subtlex_hash, subtlex_total_hash, wordfreq_hash,
   forbidden_scrub_non_ascii = 0
   hash.keys.each do |word|
     next unless explicitly_forbidden?(word)
+    entry = hash[word]
+    next unless entry
+    next if entry.is_a?(BuildEntry) && entry.tombstoned?
     is_non_ascii = non_ascii_only?(word)
     if dict_trace_word?(word)
       reason = is_non_ascii ? "non_ascii_only" : "in forbid_list"
       dict_trace_puts(word, "forbidden_scrub: DELETE (#{reason})")
     end
-    hash.delete(word)
+    reason = is_non_ascii ? :non_ascii_only : :in_forbid_list
+    entry.mark_tombstoned!(phase: :forbidden_scrub, reason: reason)
     forbidden_scrub += 1
     forbidden_scrub_non_ascii += 1 if is_non_ascii
   end
@@ -1491,8 +1812,11 @@ def add_frequency_info(cmudict, subtlex_hash, subtlex_total_hash, wordfreq_hash,
   unrhymable_scrub = 0
   hash.keys.each do |word|
     next unless unrhymable_stop_word?(word)
+    entry = hash[word]
+    next unless entry
+    next if entry.is_a?(BuildEntry) && entry.tombstoned?
     dict_trace_puts(word, "unrhymable_scrub: DELETE (in unrhymable_stop_words)") if dict_trace_word?(word)
-    hash.delete(word)
+    entry.mark_tombstoned!(phase: :unrhymable_scrub, reason: :in_unrhymable_stop_words)
     unrhymable_scrub += 1
   end
   puts "#{unrhymable_scrub} unrhymable stop words removed after frequency phases" if unrhymable_scrub > 0
@@ -1548,5 +1872,12 @@ def build_word_dict(cmudict, rdict, subtlex_hash, subtlex_total_hash, wordfreq_h
   delete_rare_only_rime_buckets!(rdict, word_dict)
   delete_common_identical_only_rime_buckets!(rdict, word_dict)
   filter_word_dict_disconnected!(word_dict, rdict, subtlex_hash, wordfreq_hash, pos_map, forms_map, original_cmudict_headwords, wiktionary_words)
+  # Terminal reducer: project every surviving +BuildEntry+ back to the
+  # legacy +[freq, prons, lemma]+ shape that +save_word_dict+,
+  # +save_word_dict_msgpack!+, and the rest of +rebuild_rhymecrime_dictionaries+
+  # expect. Drops +tombstoned+ rows (scrubs, classifier, disconnect) in
+  # one consolidated pass so every downstream consumer sees exactly the
+  # pre-refactor wire contract.
+  finalize_build_entries!(word_dict)
   word_dict
 end

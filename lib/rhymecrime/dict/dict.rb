@@ -590,6 +590,13 @@ def append_r_to_orthographic_r_pronunciations!(pron_hash, label:)
   fixed_prons = 0
   pron_hash.each do |word, entry|
     next unless word.end_with?("r")
+    # Input shape is either +cmudict+ (+entry+ is +[pron1, pron2, ...]+,
+    # an Array of +Pronunciation+) or +word_dict+ (+entry+ is
+    # +[freq, prons, lemma]+ or a +BuildEntry+; +prons+ at +entry[1]+).
+    # The first-slot-is-Pronunciation probe distinguishes; BuildEntry never
+    # looks like a bare pron list because +BuildEntry#first+ returns +freq+
+    # (an Integer), so the +else+ branch picks it up correctly via +entry[1]+.
+    next if defined?(BuildEntry) && entry.is_a?(BuildEntry) && entry.tombstoned?
     prons = entry.is_a?(Array) && entry.first.is_a?(Pronunciation) ? entry : entry[1]
     next if prons.nil? || prons.empty?
     word_changed = false
@@ -624,17 +631,30 @@ end
 # positive: the actual stem is +cord+, not +cor+); +stem_c_pron_aligns?+ in
 # +insert_r_before_final_d_for_red_pronunciations!+ is the per-pronunciation backstop
 # that rejects those by checking the inflected pron actually decomposes as +stem-pron + D+.
+# Predicate used below to treat tombstoned +BuildEntry+ rows as absent
+# from +pron_hash+. Matches pre-refactor behavior where scrubbed / classifier-
+# forbidden rows were physically deleted from +word_dict+ before the R-insertion
+# passes ran, so their orthographic shapes couldn't accidentally anchor the
+# stem-lookup gate.
+def pron_hash_has_live_key?(pron_hash, key)
+  return false unless pron_hash.key?(key)
+  entry = pron_hash[key]
+  return true if entry.nil?
+  return false if defined?(BuildEntry) && entry.is_a?(BuildEntry) && entry.tombstoned?
+  true
+end
+
 def red_inflection_r_stem(word, pron_hash)
   return nil unless word.length >= 5
   return nil unless word.end_with?("d")
   if word.end_with?("ed")
     stem_a = word[0..-3]
-    return [stem_a, :stem_a] if stem_a.length >= 3 && stem_a.end_with?("r") && pron_hash.key?(stem_a)
+    return [stem_a, :stem_a] if stem_a.length >= 3 && stem_a.end_with?("r") && pron_hash_has_live_key?(pron_hash, stem_a)
     stem_c = word[0..-4]
-    return [stem_c, :stem_c] if stem_c.length >= 3 && stem_c.end_with?("r") && pron_hash.key?(stem_c)
+    return [stem_c, :stem_c] if stem_c.length >= 3 && stem_c.end_with?("r") && pron_hash_has_live_key?(pron_hash, stem_c)
   end
   stem_b = word[0..-2]
-  return [stem_b, :stem_b] if stem_b.length >= 3 && stem_b.end_with?("re") && pron_hash.key?(stem_b)
+  return [stem_b, :stem_b] if stem_b.length >= 3 && stem_b.end_with?("re") && pron_hash_has_live_key?(pron_hash, stem_b)
   nil
 end
 
@@ -650,7 +670,7 @@ def s_plural_r_stem(word, pron_hash)
   return nil if word.end_with?("ss") # mass nouns / adjectives, not -s plurals
   stem = word[0..-2]
   return nil if stem.length < 3
-  return stem if (stem.end_with?("r") || stem.end_with?("re")) && pron_hash.key?(stem)
+  return stem if (stem.end_with?("r") || stem.end_with?("re")) && pron_hash_has_live_key?(pron_hash, stem)
   nil
 end
 
@@ -730,6 +750,7 @@ def insert_r_before_final_d_for_red_pronunciations!(pron_hash, label:)
   fixed_words = 0
   fixed_prons = 0
   pron_hash.each do |word, entry|
+    next if defined?(BuildEntry) && entry.is_a?(BuildEntry) && entry.tombstoned?
     rule_result = red_inflection_r_stem(word, pron_hash)
     next if rule_result.nil?
     stem, rule = rule_result
@@ -776,6 +797,7 @@ def insert_r_before_final_sibilant_for_s_pronunciations!(pron_hash, label:)
   fixed_words = 0
   fixed_prons = 0
   pron_hash.each do |word, entry|
+    next if defined?(BuildEntry) && entry.is_a?(BuildEntry) && entry.tombstoned?
     next if s_plural_r_stem(word, pron_hash).nil?
     prons = entry.is_a?(Array) && entry.first.is_a?(Pronunciation) ? entry : entry[1]
     next if prons.nil? || prons.empty?

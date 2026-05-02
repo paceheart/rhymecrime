@@ -460,6 +460,35 @@ def rarity_conceptnet_adjacency_for_build
   [$rarity_cn_adjacency, $rarity_cn_adjacency_loaded]
 end
 
+# Mark a word for tombstoned (BuildEntry) or delete it outright
+# (legacy +[freq, prons]+ array). Used by +rarity_rescore_and_dump!+ so the
+# classifier's +:forbidden+ verdicts become deferred tags that
+# +finalize_build_entries!+ drops in one terminal pass, alongside a recorded
+# classifier score for the audit log.
+def classifier_mark_or_delete!(hash, word, entry, phase:, reason:, detail: nil)
+  if entry.is_a?(BuildEntry)
+    return if entry.tombstoned?
+    entry.mark_tombstoned!(phase: phase, reason: reason, detail: detail)
+  else
+    hash.delete(word)
+  end
+end
+
+# Set a new freq on the entry from a classifier decision. Appends a
+# FreqTag (+phase: :classifier+) so provenance stays attached; for legacy
+# +[freq, prons]+ entries falls back to the direct +entry[0] = freq+ write.
+def classifier_set_freq!(entry, new_freq:, verdict:, reason:)
+  if entry.is_a?(BuildEntry)
+    entry.append_freq_tag!(
+      phase: :classifier,
+      post_freq: new_freq,
+      gate_outcomes: { verdict: verdict, reason: reason },
+    )
+  else
+    entry[0] = new_freq
+  end
+end
+
 def rarity_rescore_and_dump!(hash, **ctx_kwargs)
   dump_path = ENV["RHYMECRIME_RARITY_DUMP_SIGNALS"]
   dump_enabled = !dump_path.nil? && !dump_path.empty?
@@ -538,13 +567,32 @@ def rarity_rescore_and_dump!(hash, **ctx_kwargs)
     hash.keys.each do |word|
       entry = hash[word]
       next unless entry
+      # Scrubs earlier in +add_frequency_info+ now mark rows with
+      # +mark_tombstoned!+ instead of +hash.delete+; skip those so the
+      # classifier doesn't rescore them (their verdict is already sealed by
+      # the scrub and would just be overwritten by +finalize_build_entries!+).
+      next if entry.is_a?(BuildEntry) && entry.tombstoned?
 
-      sig = extract_rarity_signals(word, ctx)
+      # Prefer the accumulated signals carried on the BuildEntry (the pipeline
+      # now builds them incrementally rather than re-deriving from raw corpora
+      # at the last minute). Fall back to +extract_rarity_signals+ for the
+      # initial migration window where the accumulator isn't populated yet
+      # — functional parity: both code paths read from the same corpora.
+      sig = (entry.is_a?(BuildEntry) && entry.rarity_signals) || extract_rarity_signals(word, ctx)
       sig.post_propagation_freq = entry[0]
-      meta = $freq_propagation_metadata && $freq_propagation_metadata[word]
-      if meta
-        sig.freq_source_phase = meta[:phase] || :unknown
-        sig.received_donor_from_common_base_flag = !!meta[:donor_anchored]
+      # Prefer the BuildEntry's own freq-tag history (single source of truth)
+      # over the legacy global side-table; the two agree under parity-preserving
+      # semantics but the per-entry view will continue to carry information
+      # through future migrations where the global is retired.
+      if entry.is_a?(BuildEntry) && !entry.freq_tags.empty?
+        sig.freq_source_phase = entry.latest_freq_source_phase
+        sig.received_donor_from_common_base_flag = entry.any_donor_anchored?
+      else
+        meta = $freq_propagation_metadata && $freq_propagation_metadata[word]
+        if meta
+          sig.freq_source_phase = meta[:phase] || :unknown
+          sig.received_donor_from_common_base_flag = !!meta[:donor_anchored]
+        end
       end
 
       dict_trace_puts(word, "rarity_classifier_rescore: enter freq=#{entry[0]} src=#{sig.freq_source_phase} donor_anchored=#{sig.received_donor_from_common_base_flag}") if dict_trace_word?(word)
@@ -575,12 +623,12 @@ def rarity_rescore_and_dump!(hash, **ctx_kwargs)
         new_freq = CURATED_RARITY_OVERRIDE_FREQ[verdict]
         if verdict == :forbidden
           dict_trace_puts(word, "rarity_classifier_rescore: DELETE (curated override :forbidden, was freq=#{entry[0]})") if dict_trace_word?(word)
-          hash.delete(word)
+          classifier_mark_or_delete!(hash, word, entry, phase: :classifier, reason: :curated_override_forbidden, detail: { was_freq: entry[0], verdict: verdict })
           deleted += 1
           override_deleted += 1
         elsif entry[0] != new_freq
           dict_trace_puts(word, "rarity_classifier_rescore: curated override #{entry[0]} -> #{new_freq} (cat=#{verdict})") if dict_trace_word?(word)
-          entry[0] = new_freq
+          classifier_set_freq!(entry, new_freq: new_freq, verdict: verdict, reason: :curated_override)
           rescored += 1
           override_rescored += 1
         else
@@ -604,11 +652,11 @@ def rarity_rescore_and_dump!(hash, **ctx_kwargs)
       new_cat, new_freq = result
       if new_cat == :forbidden
         dict_trace_puts(word, "rarity_classifier_rescore: DELETE (classified :forbidden, was freq=#{entry[0]})") if dict_trace_word?(word)
-        hash.delete(word)
+        classifier_mark_or_delete!(hash, word, entry, phase: :classifier, reason: :forbidden_verdict, detail: { was_freq: entry[0], classifier_score: new_freq })
         deleted += 1
       elsif entry[0] != new_freq
         dict_trace_puts(word, "rarity_classifier_rescore: rescored #{entry[0]} -> #{new_freq} (cat=#{new_cat})") if dict_trace_word?(word)
-        entry[0] = new_freq
+        classifier_set_freq!(entry, new_freq: new_freq, verdict: new_cat, reason: :classifier_rescore)
         rescored += 1
       else
         dict_trace_puts(word, "rarity_classifier_rescore: kept freq=#{entry[0]} (cat=#{new_cat})") if dict_trace_word?(word)
@@ -625,10 +673,14 @@ def rarity_rescore_and_dump!(hash, **ctx_kwargs)
     # forces the model to learn the actual forbidden ↔ corpus-feature
     # relationship.
     if dump_file
-      already_dumped = hash # +hash.key?+ — safer than a separate Set against the
-                            # unlikely race of a forbidden word also surviving the scrub.
+      # Scrubs defer deletion via +mark_tombstoned!+, so +hash.key?(word)+
+      # is no longer the right "already dumped" test: a +forbidden_scrub+ entry
+      # is still in +hash+ but already in the dump loop above. Honor that by
+      # treating pending-deleted entries as "already dumped" here too — the
+      # dump row we wrote up top carries the real rescore signals.
       rarity_csv_forbidden_words.each do |word|
-        next if already_dumped.key?(word)
+        entry = hash[word]
+        next if entry && !(entry.is_a?(BuildEntry) && entry.tombstoned?)
         sig = extract_rarity_signals(word, ctx)
         sig.post_propagation_freq = dump_corpus_only_freq.call(word)
         write_dump_row.call(word, sig, sig.post_propagation_freq)

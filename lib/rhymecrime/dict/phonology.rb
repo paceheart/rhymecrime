@@ -33,11 +33,23 @@ def delete_unrhymable_stop_words_from_hash(hash)
 end
 
 # Incomplete / artifact headwords (e.g. truncated compounds); not useful as lookup keys.
+# Called twice: early on raw +cmudict+ (values are pron arrays — hash.delete
+# removes the row outright) and late on +word_dict+ mid-build, where values
+# are +BuildEntry+ instances and deletion is deferred to the terminal reducer.
+# The +BuildEntry+ branch calls +mark_tombstoned!+ so the entry stays
+# in the map (skipped by subsequent phases via +tombstoned?+) until
+# +finalize_build_entries!+ drops it.
 def delete_headwords_with_edge_hyphen!(hash)
   n = 0
   hash.keys.each do |w|
     next unless w.start_with?("-") || w.end_with?("-")
-    hash.delete(w)
+    entry = hash[w]
+    if defined?(BuildEntry) && entry.is_a?(BuildEntry)
+      next if entry.tombstoned?
+      entry.mark_tombstoned!(phase: :edge_hyphen_scrub, reason: :leading_or_trailing_hyphen)
+    else
+      hash.delete(w)
+    end
     n += 1
   end
   n

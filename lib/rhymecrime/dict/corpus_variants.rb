@@ -188,11 +188,12 @@ def diacritic_corpus_pairs(word_dict)
   pairs = []
   seen = Set.new
   word_dict.each_key do |w|
+    next if word_dict_entry_tombstoned?(word_dict[w])
     next if w.bytes.all? { |b| b <= 127 }
     folded = ascii_fold_word(w)
     next if folded.nil? || folded.empty? || folded == w
     next unless seen.add?([folded, w])
-    if word_dict.key?(folded) && !headwords_diacritic_compatible?(folded, w, word_dict)
+    if word_dict_live?(word_dict, folded) && !headwords_diacritic_compatible?(folded, w, word_dict)
       next
     end
     pairs << [folded, w]
@@ -307,10 +308,12 @@ end
 def apostrophe_stripped_corpus_pairs(word_dict)
   pairs = []
   word_dict.each_key do |w|
+    next if word_dict_entry_tombstoned?(word_dict[w])
     next unless w.include?("'")
     stripped = w.delete("'")
     next if stripped == w || stripped.empty?
-    next if word_dict.key?(stripped)
+    stripped_entry = word_dict[stripped]
+    next if stripped_entry && !word_dict_entry_tombstoned?(stripped_entry)
     pairs << [w, stripped]
   end
   pairs
@@ -325,6 +328,7 @@ def o_plural_corpus_pairs(word_dict, wordfreq_hash)
   seen = Set.new
   pairs = []
   word_dict.each_key do |w|
+    next if word_dict_entry_tombstoned?(word_dict[w])
     candidate = o_plural_candidate_pair(w)
     next unless candidate
     oes, os = candidate
@@ -332,6 +336,7 @@ def o_plural_corpus_pairs(word_dict, wordfreq_hash)
     oes_entry = word_dict[oes]
     os_entry = word_dict[os]
     next unless oes_entry && os_entry
+    next if word_dict_entry_tombstoned?(oes_entry) || word_dict_entry_tombstoned?(os_entry)
     # Both forms must be plural of the same lexical stem. The shape match already implies
     # both derive from +oes[0...-2]+ (the +-es+ in +-oes+ is the inflectional suffix; the
     # singular keeps the +-o+: +tomatoes+ → +tomato+, +ghettoes+ → +ghetto+); we
@@ -354,7 +359,7 @@ def o_plural_corpus_pairs(word_dict, wordfreq_hash)
     # pseudo-base is itself a word_dict headword for unrelated reasons (auxiliary verb,
     # interjection, monosyllable).
     next if base.length < 4
-    next unless word_dict.key?(base)
+    next unless word_dict_live?(word_dict, base)
     winner = pick_corpus_winner_by_zipf(oes, os, wordfreq_hash, deterministic_fallback: os)
     preferred, alt = (winner == oes) ? [oes, os] : [os, oes]
     pairs << [preferred, alt]
@@ -445,6 +450,7 @@ def consonant_doubling_corpus_pairs(word_dict)
   pairs = []
   seen = Set.new
   word_dict.each_key do |w|
+    next if word_dict_entry_tombstoned?(word_dict[w])
     DOUBLING_INFLECTION_SUFFIXES.each do |sfx|
       next unless w.end_with?(sfx)
       next if w.length <= sfx.length + 3
@@ -453,11 +459,13 @@ def consonant_doubling_corpus_pairs(word_dict)
       next if last_two.nil? || last_two.length != 2 || last_two[0] != last_two[1]
       next unless DOUBLABLE_CONSONANTS.include?(last_two[0])
       base = stem[0...-1]
-      next unless word_dict.key?(base)
-      next if word_dict.key?(base + "e")
+      base_entry = word_dict[base]
+      next unless base_entry && !word_dict_entry_tombstoned?(base_entry)
+      next if word_dict.key?(base + "e") && !word_dict_entry_tombstoned?(word_dict[base + "e"])
       single_inflected = base + sfx
       next if single_inflected == w
-      next unless word_dict.key?(single_inflected)
+      single_entry = word_dict[single_inflected]
+      next unless single_entry && !word_dict_entry_tombstoned?(single_entry)
       next unless base_has_unstressed_final_syllable?(base, word_dict)
       next unless seen.add?([single_inflected, w])
       pairs << [single_inflected, w]
@@ -514,26 +522,30 @@ def silent_e_drop_corpus_pairs(word_dict)
   pairs = []
   seen = Set.new
   word_dict.each_key do |w|
+    next if word_dict_entry_tombstoned?(word_dict[w])
     next unless w.end_with?("eing")
     next if w.length < 6
     base_with_e = w[0...-3]
-    next unless word_dict.key?(base_with_e)
+    base_with_e_entry = word_dict[base_with_e]
+    next unless base_with_e_entry && !word_dict_entry_tombstoned?(base_with_e_entry)
     next if base_with_e.length < 3
     pre_e = base_with_e[-2]
     next if pre_e.nil?
     corrected = w[0...-4] + "ing"
-    next unless word_dict.key?(corrected)
+    corrected_entry = word_dict[corrected]
+    next unless corrected_entry && !word_dict_entry_tombstoned?(corrected_entry)
 
     if corrected.end_with?("ying")
       ie_alt = corrected[0...-4] + "ie"
-      next if word_dict.key?(ie_alt) && ie_alt != base_with_e
+      ie_alt_entry = word_dict[ie_alt]
+      next if ie_alt_entry && !word_dict_entry_tombstoned?(ie_alt_entry) && ie_alt != base_with_e
     end
 
     consonant_e = !"aeiouyw".include?(pre_e)
     if consonant_e
       bare_stem = corrected[0...-3]
       bare_stem_entry = word_dict[bare_stem]
-      bare_stem_prons = bare_stem_entry && bare_stem_entry[1]
+      bare_stem_prons = bare_stem_entry && !word_dict_entry_tombstoned?(bare_stem_entry) && bare_stem_entry[1]
       next if bare_stem_prons.is_a?(Array) && !bare_stem_prons.empty?
       preferred, alt = corrected, w
     elsif base_with_e.length <= 4
@@ -580,14 +592,17 @@ def eys_ies_corpus_pairs(word_dict, wordfreq_hash)
   pairs = []
   seen = Set.new
   word_dict.each_key do |w|
+    next if word_dict_entry_tombstoned?(word_dict[w])
     next unless w.end_with?("ies")
     next if w.length < 6
     stem = w[0...-3]
     ey_form = stem + "eys"
-    next unless word_dict.key?(ey_form)
+    ey_form_entry = word_dict[ey_form]
+    next unless ey_form_entry && !word_dict_entry_tombstoned?(ey_form_entry)
     next unless seen.add?([ey_form, w])
     base_ey = stem + "ey"
-    next unless word_dict.key?(base_ey)
+    base_ey_entry = word_dict[base_ey]
+    next unless base_ey_entry && !word_dict_entry_tombstoned?(base_ey_entry)
     next unless headwords_share_full_pron?(ey_form, w, word_dict)
     base_y = stem + "y"
     winner_base = pick_corpus_winner_by_zipf(base_ey, base_y, wordfreq_hash, deterministic_fallback: base_ey)
@@ -628,11 +643,13 @@ def varcon_variant_pairs(word_dict, varcon_variant_map, wordfreq_hash = nil)
   # surface (within a word_dict-keyed pair). Used by the cluster-canonical post-pass below.
   canonical_score = {}
   varcon_variant_map.each do |word, rows|
-    next unless word_dict.key?(word)
+    word_entry = word_dict[word]
+    next unless word_entry && !word_dict_entry_tombstoned?(word_entry)
     rows.each do |r|
       target = r[:target]
       next if target.nil? || target == word
-      next unless word_dict.key?(target)
+      target_entry = word_dict[target]
+      next unless target_entry && !word_dict_entry_tombstoned?(target_entry)
       key = [word, target].sort
       by_pair[key] << { variant: word, target: target,
                         self_strength: r[:self_strength], target_strength: r[:target_strength] }
@@ -727,11 +744,13 @@ def wiktionary_variant_pairs(word_dict, wordfreq_hash, kaikki_variant_map)
   # Collapse directional evidence onto unordered pairs: +by_pair[[x, y].sort] = [{variant:, target:, source:, tags:}, ...]+
   by_pair = Hash.new { |h, k| h[k] = [] }
   kaikki_variant_map.each do |variant_word, evidences|
-    next unless word_dict.key?(variant_word)
+    variant_entry = word_dict[variant_word]
+    next unless variant_entry && !word_dict_entry_tombstoned?(variant_entry)
     evidences.each do |e|
       target = e[:target]
       next if target.nil? || target == variant_word
-      next unless word_dict.key?(target)
+      target_entry = word_dict[target]
+      next unless target_entry && !word_dict_entry_tombstoned?(target_entry)
       source = e[:source]
       key = [variant_word, target].sort
       by_pair[key] << { variant: variant_word, target: target, source: source, tags: e[:tags] || [] }
@@ -798,7 +817,7 @@ def propagate_variant_inflections(preferred, alt, word_dict, headwords_with_dire
     # we don't invent it here (avoids +maneuver/manoeuver → maneuvered/manoeuvered+, where
     # the alt base is itself a rare nonstandard spelling whose inflected forms are vanishingly
     # rare in wild English usage).
-    next unless word_dict.key?(pa) && word_dict.key?(aa)
+    next unless word_dict_live?(word_dict, pa) && word_dict_live?(word_dict, aa)
     # +hed → head+ is the right canonical mapping for +hed+; don't overwrite it with a
     # chain-propagated +hed → heed+ just because +(he, hee)+ happens to be a Wiktionary
     # pair that extends regularly by +-d+.
@@ -821,7 +840,7 @@ def propagate_variant_inflections(preferred, alt, word_dict, headwords_with_dire
       # Require both inflected forms to be attested headwords for the same reason the main
       # suffix loop does: otherwise +blowsy/blousy+ (from Wiktionary's +blowsy → blousy+) would
       # propagate to +blowsier/blousier+ even though +blousier+ isn't in cmudict or wordfreq.
-      next unless word_dict.key?(pa) && word_dict.key?(aa)
+      next unless word_dict_live?(word_dict, pa) && word_dict_live?(word_dict, aa)
       next if headwords_with_direct_pair.include?(pa) || headwords_with_direct_pair.include?(aa)
       next unless headwords_pron_compatible?(pa, aa, word_dict)
       out_pairs << [pa, aa]

@@ -360,7 +360,19 @@ US_UK_IZE_SUFFIXES = [
 US_UK_IZE_ZONLY_EXCEPTIONS = %w[size seize capsize prize maize].freeze
 
 def word_dict_includes_headword?(w)
-  defined?($word_dict) && $word_dict.is_a?(Hash) && !$word_dict.empty? && $word_dict.key?(w)
+  return false unless defined?($word_dict) && $word_dict.is_a?(Hash) && !$word_dict.empty?
+  entry = $word_dict[w]
+  return false if entry.nil?
+  # During +build_word_dict+ (the defer-rarity-losses window between scrubs
+  # and +finalize_build_entries!+), entries marked for tombstoned are
+  # still physically in +$word_dict+ but are logically absent. Preferred-form
+  # / spelling-variant / US-UK mapping callers must treat them as
+  # non-existent so they don't anoint a half-scrubbed row as the preferred
+  # surface of a live sibling (e.g. "flors" from +flour→flor+ where +flors+
+  # only exists because SUBTLEX happened to list it and a later scrub had
+  # already marked it for deletion).
+  return false if defined?(BuildEntry) && entry.is_a?(BuildEntry) && entry.tombstoned?
+  true
 end
 
 # Like +word_dict_includes_headword?+ but also requires that the entry carries at least one
@@ -372,6 +384,9 @@ def word_dict_includes_pronounced_headword?(w)
   return false unless defined?($word_dict) && $word_dict.is_a?(Hash) && !$word_dict.empty?
   entry = $word_dict[w]
   return false unless entry
+  # Same rationale as +word_dict_includes_headword?+: tombstoned
+  # entries are logically absent during the build-time window.
+  return false if defined?(BuildEntry) && entry.is_a?(BuildEntry) && entry.tombstoned?
   prons = entry[1]
   prons.is_a?(Array) && !prons.empty?
 end
