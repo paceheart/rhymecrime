@@ -56,11 +56,24 @@ $inflection_base_words = {}
 # cross-build leakage).
 #
 # Shape: +{ surface => { phase: Symbol, donor: String, donor_anchored: Boolean } }+.
-# +phase+ ∈ +RARITY_FREQ_SOURCE_PHASES+. +donor_anchored+ records whether the donor base
-# carried independent corpus / lexical evidence at inheritance time (+common_words+,
-# WordNet entry, neol membership, or Zipf ≥ +WORDFREQ_COMMON_ZIPF+) — same notion used
-# by Kaikki morph inheritance's +base_has_real_anchor+ gate. The classifier reads it as
-# +received_donor_from_common_base_flag+.
+# +phase+ ∈ +RARITY_FREQ_SOURCE_PHASES+.
+#
+# +donor_anchored+ records whether the donor base carried independent CORPUS /
+# LEXICAL evidence (WordNet entry, neol membership, or Zipf ≥
+# +WORDFREQ_COMMON_ZIPF+). Membership in +common_words+ (i.e. +rarity.csv+'s
+# +common+/+common_ish+ rows) is INTENTIONALLY NOT one of the anchor predicates
+# here, even though it IS one in the inheritance-gate predicates of
+# +morph_inherit_kaikki+ / +morph_expand_subtlex+ (where it controls whether
+# inheritance happens at all). Reason: the rarity-classifier feature
+# +received_donor_from_common_base_flag+ is read off this Boolean. If
+# +common_words.include?(base)+ flowed into +donor_anchored+, every inflected
+# form of every +common+ row in +rarity.csv+ would set the flag, and the
+# trainer would relearn the curated label through the lemma — exactly the kind
+# of leak that was hiding behind the 99.7% CV with +common_words_flag+ /
+# +rare_words_flag+ as direct features. See +donor_has_corpus_anchor?+ below
+# for the canonical predicate; gate sites combine it with
+# +common_words.include?(base)+ for the broader "should we inherit at all"
+# decision.
 $freq_propagation_metadata = {}
 
 def record_freq_propagation!(surface, phase:, donor:, donor_anchored:)
@@ -70,6 +83,17 @@ def record_freq_propagation!(surface, phase:, donor:, donor_anchored:)
     donor: donor,
     donor_anchored: !!donor_anchored,
   }
+end
+
+# Canonical leak-free anchor predicate for +donor_anchored+ (and by extension
+# the rarity-classifier feature +received_donor_from_common_base_flag+). Pure
+# corpus / lexical evidence — deliberately excludes +common_words+ membership.
+# See the long comment on +$freq_propagation_metadata+ above.
+def donor_has_corpus_anchor?(base, wordfreq_hash, neol_words)
+  return true if wn_has_entry?(base)
+  return true if neol_words && neol_words.include?(base)
+  zipf = (wordfreq_hash && wordfreq_hash[base]) || 0
+  zipf >= WORDFREQ_COMMON_ZIPF
 end
 
 # Lazy path -> frozen Hash of 8-digit synset offset string -> full data-file line (+wn_synset_line_for_offset+).
@@ -108,6 +132,18 @@ def wn_accept_inflection_lemma_pair?(word, base)
     wn_derivationally_related_to_base?(word, base)
 end
 
+# Sentinel-region cutoff for +independent_ing_adj_surface?+'s freq-differential
+# gate. Real corpus frequencies in +word_dict+ top out below ~25 (log2 of the
+# SUBTLEX corpus size); anything above this is a curated structural sentinel
+# (+999999+ semantically promiscuous, +99+ +rarity.csv+ common, +98+ neol). The
+# differential heuristic was designed to compare CORPUS frequencies — a
+# surface sitting at the curated-common sentinel is not real evidence that the
+# adjective use dominates over the verb base. Mirrors the same separator used
+# by +RARITY_CLASSIFIER_RESCORE_MAX_FREQ+ in +rarity_classifier.rb+, kept as a
+# local constant to avoid cross-file coupling between the lemma builder and
+# the rarity rescore path.
+LEMMA_HEURISTIC_MAX_REAL_SURFACE_FREQ = 90
+
 # Suppress collapsing +-ing+ adjectives that have gained independent semantic
 # weight onto their verbal base. WN often lists them as adj-only senses, but
 # the morphology-aware fallback in +compute_lemma_map+ would still happily map
@@ -115,6 +151,8 @@ end
 #   * surface ends in +-ing+,
 #   * surface has a WN entry,
 #   * none of the surface's WN POSes is +"v"+ (so adjectival sense is dominant),
+#   * surface freq is in the corpus-realistic range (not a curated sentinel —
+#     see +LEMMA_HEURISTIC_MAX_REAL_SURFACE_FREQ+ for why),
 #   * a candidate +-ing+ base exists in word_dict and passes the WN gate,
 #   * surface is at least 5 freq buckets below the candidate base — i.e. the
 #     adjective use is the dominant living surface (wide enough margin that
@@ -129,6 +167,11 @@ def independent_ing_adj_surface?(word, word_dict)
   surface_entry = word_dict[word]
   return false unless surface_entry
   surface_freq = surface_entry[0]
+  # +making+ (WN POSes = ["n"], +rarity.csv+ +common+ → freq=99) used to
+  # qualify here because +99 - make_freq+ trivially exceeded the +>=5+
+  # differential, suppressing +making → make+ in the lemma map. The real
+  # heuristic only makes sense when both sides are corpus-derived.
+  return false if surface_freq > LEMMA_HEURISTIC_MAX_REAL_SURFACE_FREQ
   candidate_bases = Inflect.raw_candidate_bases_for_inflected(word).to_a
   ka_base = $inflection_base_words[word]
   candidate_bases << ka_base if ka_base && !candidate_bases.include?(ka_base)
@@ -452,6 +495,28 @@ def compute_lemma_map(word_dict)
         lemma_map[word] = chosen if chosen != word
       end
     end
+
+    # Lemma-side g-drop pass — mirror of the freq-side +gdrop+ pass in
+    # +frequency.rb+ that gives +failin'+ / +makin'+ / +poopin'+ their
+    # +-ing+-base frequency. Without this, +lemma("makin'") = "makin'"+ and
+    # +lemma("poopin'") = "poopin'"+ because Sources A/B don't recognize the
+    # apostrophe variant: Kaikki has no +makin' → make+ entry, and Inflect's
+    # suffix table doesn't know +-in'+ as an inflectional ending. The dialect
+    # surface should resolve to the same lemma as its standard +-ing+ form
+    # (+poopin' → poop+, not +poopin' → pooping+) so it inherits the verb's
+    # rarity / relatedness behavior at runtime.
+    gdrop_lemmas = 0
+    word_dict.each_key do |word|
+      next unless word.end_with?("in'") || word.end_with?("in\u2019")
+      next if lemma_map.key?(word)
+      ing_form = word.sub(/in['\u2019]\z/, "ing")
+      next unless word_dict.key?(ing_form)
+      ing_lemma = lemma_map[ing_form] || ing_form
+      next if ing_lemma == word
+      lemma_map[word] = ing_lemma
+      gdrop_lemmas += 1
+    end
+    puts "#{gdrop_lemmas} -in' g-drop surfaces inherited lemma from -ing form" if gdrop_lemmas > 0
   ensure
     $wn_synset_line_index_by_path = nil
   end

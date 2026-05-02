@@ -52,6 +52,14 @@ require_relative "constants"
 
 # Keep in lock-step with +bin/train-rarity-classifier+. The JSON records its own
 # feature-name list so mismatches are detected at load.
+#
+# +common_words_flag+ and +rare_words_flag+ are intentionally NOT in this list
+# even though +RaritySignals+ still computes them: they're sourced from the same
+# +curated/rarity.csv+ rows the trainer turns into labels, so feeding them as
+# features made the classifier a label-leak lookup table (5-fold CV at 99.7%
+# with GBT and logreg posting byte-identical fold scores). The flags remain on
+# +RaritySignals+ for any non-classifier consumers; the trainer just doesn't
+# get to see them.
 LEARNED_RARITY_FEATURE_NAMES = %w[
   bias
   wordfreq_zipf
@@ -64,8 +72,6 @@ LEARNED_RARITY_FEATURE_NAMES = %w[
   numberbatch_flag
   usf_flag
   neol_flag
-  common_words_flag
-  rare_words_flag
   semantically_promiscuous_flag
   wiktionary_words_flag
   wn_entry_flag
@@ -119,8 +125,6 @@ def learned_rarity_feature_vector(sig)
     _rf(sig.numberbatch_flag),
     _rf(sig.usf_flag),
     _rf(sig.neol_flag),
-    _rf(sig.common_words_flag),
-    _rf(sig.rare_words_flag),
     _rf(sig.semantically_promiscuous_flag),
     _rf(sig.wiktionary_words_flag),
     _rf(sig.wn_entry_flag),
@@ -468,11 +472,45 @@ def rarity_rescore_and_dump!(hash, **ctx_kwargs)
   override_applied = 0
   override_rescored = 0
   override_deleted = 0
+  dump_main = 0
+  dump_forbidden = 0
 
+  # +dump_file+ has to be declared BEFORE the +write_dump_row+ lambda below or
+  # Ruby parses the +dump_file+ inside the closure body as a method call on
+  # +main+ (local-variable scoping is fixed at parse time, so a later
+  # assignment doesn't promote the name to a captured local). +nil+ here is
+  # just a placeholder; the actual handle is assigned a few lines down when
+  # +dump_enabled+ is true.
   dump_file = nil
   if dump_enabled
     FileUtils.mkdir_p(File.dirname(dump_path))
     dump_file = File.open(dump_path, "w", encoding: "UTF-8")
+  end
+
+  # The dump path replaces the seeded/propagated +entry[0]+ with a corpus-only
+  # +compute_frequency+ result so +post_propagation_freq+ can't read the
+  # curated-list label off its own input. Without this, +common_words+ rows
+  # land at the +freq=99+ sentinel set in +add_frequency_info+'s seed loop and
+  # +rare_words+ rows at +freq=0+ — both downstream of the very same CSV that
+  # the trainer turns into labels. Runtime rescore still uses the live
+  # +entry[0]+; only the JSONL dump shifts to corpus-only.
+  kaikki_cap_only = ctx_kwargs[:kaikki_capitalized_only]
+  dump_corpus_only_freq = lambda do |word|
+    compute_frequency(
+      word, ctx.subtlex_hash, ctx.wordfreq_hash,
+      subtlex_total_hash: ctx.subtlex_total_hash,
+      kaikki_capitalized_only: kaikki_cap_only,
+      pos_map: ctx.pos_map,
+    )
+  end
+
+  write_dump_row = lambda do |word, sig, freq_for_log|
+    features = learned_rarity_feature_vector(sig)
+    dump_file.puts JSON.generate(
+      "word" => word,
+      "features" => features,
+      "freq" => freq_for_log,
+    )
   end
 
   begin
@@ -491,12 +529,13 @@ def rarity_rescore_and_dump!(hash, **ctx_kwargs)
       dict_trace_puts(word, "rarity_classifier_rescore: enter freq=#{entry[0]} src=#{sig.freq_source_phase} donor_anchored=#{sig.received_donor_from_common_base_flag}") if dict_trace_word?(word)
 
       if dump_file
-        features = learned_rarity_feature_vector(sig)
-        dump_file.puts JSON.generate(
-          "word" => word,
-          "features" => features,
-          "freq" => entry[0],
-        )
+        # Build a parallel dump-only signals struct so we don't disturb the
+        # rescore path's view of the same word (which still wants the seeded
+        # +entry[0]+ for its sentinel-skip and rescore decisions).
+        dump_sig = sig.dup
+        dump_sig.post_propagation_freq = dump_corpus_only_freq.call(word)
+        write_dump_row.call(word, dump_sig, dump_sig.post_propagation_freq)
+        dump_main += 1
       end
 
       next if clf.nil?
@@ -551,6 +590,27 @@ def rarity_rescore_and_dump!(hash, **ctx_kwargs)
         dict_trace_puts(word, "rarity_classifier_rescore: kept freq=#{entry[0]} (cat=#{new_cat})") if dict_trace_word?(word)
       end
     end
+
+    # Forbidden-list pass (dump only). +explicitly_forbidden+ words have already
+    # been removed from +word_dict+ by the +forbidden_scrub+ in
+    # +add_frequency_info+ before we get here, so the main loop never sees
+    # them. Without an explicit dump for these rows, the trainer hits its
+    # "missing from dump → all-zero features" branch, which fingerprints
+    # forbidden labels as "every feature is exactly 0" — a perfect predictor
+    # the trainer trivially learns. Dumping them with real corpus signals
+    # forces the model to learn the actual forbidden ↔ corpus-feature
+    # relationship.
+    if dump_file
+      already_dumped = hash # +hash.key?+ — safer than a separate Set against the
+                            # unlikely race of a forbidden word also surviving the scrub.
+      rarity_csv_forbidden_words.each do |word|
+        next if already_dumped.key?(word)
+        sig = extract_rarity_signals(word, ctx)
+        sig.post_propagation_freq = dump_corpus_only_freq.call(word)
+        write_dump_row.call(word, sig, sig.post_propagation_freq)
+        dump_forbidden += 1
+      end
+    end
   ensure
     dump_file&.close
   end
@@ -562,6 +622,6 @@ def rarity_rescore_and_dump!(hash, **ctx_kwargs)
     end
   end
   if dump_enabled
-    puts "rarity signals dumped to #{dump_path}"
+    puts "rarity signals dumped to #{dump_path} (#{dump_main} live word_dict rows + #{dump_forbidden} curated-forbidden rows; freqs are corpus-only via compute_frequency)"
   end
 end

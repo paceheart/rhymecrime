@@ -46,7 +46,37 @@ def load_subtlex()
     subtlex_total_hash[word_lower] += freq_total
   end
   puts "Loaded #{subtlex_hash.length} words from SUBTLEX-US"
+  install_hyphen_collapse_fallback_default_proc!(subtlex_hash, 0)
+  install_hyphen_collapse_fallback_default_proc!(subtlex_total_hash, 0)
   return subtlex_hash, subtlex_total_hash
+end
+
+# SUBTLEX-US and wordfreq both strip hyphens during tokenization, so *so-so* /
+# *mafioso* / *ha-ha* / *good-bye* never appear under their hyphenated spelling;
+# every occurrence is silently rolled into the dehyphenated key (*soso*,
+# *hahaha*, *goodbye*). Verified empirically against our corpus snapshots: both
+# files have zero hyphenated headwords. Without a bridge every hyphenated CMU /
+# authoritative surface reads as freq=0, and bucket pruning kills pairs like
+# +so-so+/+mafioso+ (+OW_S_OW+): one common anchor + a rare partner trips
+# +rime_bucket_one_common_preferred_with_any_rare?+ even though the "rare"
+# partner is really a perfectly ordinary English word whose corpus evidence is
+# hiding under the dehyphenated spelling.
+#
+# Install a +default_proc+ that transparently falls back from +foo-bar+ reads to
+# +foobar+'s value. Reads only: +key?+, +fetch+ with no default, and iteration
+# stay literal so "is this token in the TSV?" checks (+in_wordfreq_tsv+,
+# +wordfreq_hash.key?+) still reflect the raw corpus contents.
+def install_hyphen_collapse_fallback_default_proc!(hash, missing_value)
+  hash.default_proc = proc do |h, k|
+    if k.is_a?(String) && k.include?("-")
+      dh = k.delete("-")
+      next missing_value if dh == k || dh.empty?
+      h.key?(dh) ? h[dh] : missing_value
+    else
+      missing_value
+    end
+  end
+  hash
 end
 
 # Fraction of SUBTLEX occurrences that are capitalized (proxy for proper-noun-ness).
@@ -114,6 +144,7 @@ def load_wordfreq()
   wordfreq_hash = Hash.new
   unless File.exist?(WORDFREQ_FILENAME)
     puts "Warning: #{WORDFREQ_FILENAME} not found, skipping wordfreq"
+    install_hyphen_collapse_fallback_default_proc!(wordfreq_hash, nil)
     return wordfreq_hash
   end
   File.foreach(WORDFREQ_FILENAME, encoding: 'UTF-8') do |line|
@@ -122,6 +153,7 @@ def load_wordfreq()
     wordfreq_hash[word] = zipf_str.to_f
   end
   puts "Loaded #{wordfreq_hash.length} words from wordfreq"
+  install_hyphen_collapse_fallback_default_proc!(wordfreq_hash, nil)
   wordfreq_hash
 end
 # Kaikki +wordfreq+ OOV rescue (idea 2b): forms in +forms_map+ whose +base+ has wordfreq Zipf ≥ +zipf_floor+.
@@ -643,7 +675,10 @@ def morph_inherit_listed_once!(word, listed, forward, hash, rare_words, common_w
     return false
   end
   entry[0] = donor
-  record_freq_propagation!(word, phase: :morph_inherit_listed, donor: base, donor_anchored: true)
+  # +donor_anchored+ uses the corpus-only predicate (no +common_words+ clause)
+  # so the +received_donor_from_common_base_flag+ feature can't read the
+  # curated label off its own input. See +donor_has_corpus_anchor?+ in dict.rb.
+  record_freq_propagation!(word, phase: :morph_inherit_listed, donor: base, donor_anchored: donor_has_corpus_anchor?(base, wordfreq_hash, neol_words))
   dict_trace_puts(word, "morph_inherit_listed: set freq=#{donor} via listed=#{listed} base=#{base} infl=#{infl} suffix=#{inflection_suffix_kind}") if tr
   true
 end
@@ -902,17 +937,30 @@ def add_frequency_info(cmudict, subtlex_hash, subtlex_total_hash, wordfreq_hash,
       wn_has_entry?(inflected) ||
       cmudict_orig.include?(inflected) ||
       neol_words.include?(inflected)
-    base_has_real_anchor = common_words.include?(base) ||
-      wn_has_entry?(base) ||
+    # +base_has_corpus_anchor+ is the inheritance-gate's anchor predicate
+    # MINUS the +common_words.include?(base)+ clause: real corpus / lexical
+    # evidence only (WordNet entry, neol membership, or Zipf ≥
+    # +WORDFREQ_COMMON_ZIPF+). +base_has_real_anchor+ adds curated commons
+    # back in for the gate so curated-list-only words still license their
+    # Kaikki-linked inflections (the curators' authoritative call). Only the
+    # corpus-anchor flavor flows into +donor_anchored+ metadata, because
+    # otherwise the rarity-classifier feature
+    # +received_donor_from_common_base_flag+ leaks the curated-list label
+    # via inflection — every inflected form of a +common+ row in
+    # +curated/rarity.csv+ ends up with the flag set, which is
+    # indistinguishable from "this word's lemma is labeled common in
+    # rarity.csv" — exactly the leak we just spent items 1–3 plugging.
+    base_has_corpus_anchor = wn_has_entry?(base) ||
       neol_words.include?(base) ||
       base_zipf >= WORDFREQ_COMMON_ZIPF
+    base_has_real_anchor = base_has_corpus_anchor || common_words.include?(base)
     if base_freq > RARE_FREQ_MAX && !base_has_real_anchor && !surf_ok
       dict_trace_puts(inflected, "morph_inherit_kaikki ← #{base}: skip (base not in common_words/WN/neol, Zipf #{base_zipf} < COMMON, surface not in wordfreq/WN/CMU/neol)") if tr
       next
     end
     hash[inflected][0] = base_freq
-    record_freq_propagation!(inflected, phase: :morph_inherit_kaikki, donor: base, donor_anchored: base_has_real_anchor)
-    dict_trace_puts(inflected, "morph_inherit_kaikki ← #{base}: inherited freq=#{base_freq} suffix=#{inflection_suffix_kind} anchored=#{base_has_real_anchor}") if tr
+    record_freq_propagation!(inflected, phase: :morph_inherit_kaikki, donor: base, donor_anchored: base_has_corpus_anchor)
+    dict_trace_puts(inflected, "morph_inherit_kaikki ← #{base}: inherited freq=#{base_freq} suffix=#{inflection_suffix_kind} corpus_anchored=#{base_has_corpus_anchor} (real_anchor=#{base_has_real_anchor})") if tr
     inherited += 1
   end
   puts "#{inherited} inflected forms inherited frequency from base words" if inherited > 0
@@ -1070,7 +1118,8 @@ def add_frequency_info(cmudict, subtlex_hash, subtlex_total_hash, wordfreq_hash,
           hash[w] = [donor, morph_derived_prons_for_promotion(base_prons, base, w)]
           dict_trace_puts(w, "morph_expand_listed ← #{base}: new row freq=#{donor} suffix=#{inflection_suffix_kind}") if tr
         end
-        record_freq_propagation!(w, phase: :morph_expand_listed, donor: base, donor_anchored: true)
+        # +donor_anchored+ corpus-only — see comment in +morph_inherit_listed+.
+        record_freq_propagation!(w, phase: :morph_expand_listed, donor: base, donor_anchored: donor_has_corpus_anchor?(base, wordfreq_hash, neol_words))
         round += 1
         morph_inherited += 1
       end
@@ -1208,10 +1257,14 @@ def add_frequency_info(cmudict, subtlex_hash, subtlex_total_hash, wordfreq_hash,
         # wordfreq volume to self-attest. The junk cases (poly, golly, hocus, bravado-as-verb,
         # taser, rizz, finna, getter, fox-as-verb-beyond-WN, ferris-as-plural) all fail every
         # clause of this anchor: no common_words / WN / neol entry, and Zipf < COMMON.
-        base_has_real_anchor = common_words.include?(base) ||
-          wn_has_entry?(base) ||
+        # Mirror the +morph_inherit_kaikki+ split: corpus-only anchor for the
+        # metadata flag (no leakage into +received_donor_from_common_base_flag+),
+        # broad anchor (with curated commons) for the inheritance gate. See the
+        # long comment on the same split in +morph_inherit_kaikki+ above.
+        base_has_corpus_anchor = wn_has_entry?(base) ||
           neol_words.include?(base) ||
           base_zipf >= WORDFREQ_COMMON_ZIPF
+        base_has_real_anchor = base_has_corpus_anchor || common_words.include?(base)
         if donor > RARE_FREQ_MAX && !base_has_real_anchor && !surf_attested
           dict_trace_puts(w, "morph_expand_subtlex ← #{base}: skip (base not in common_words/WN/neol, Zipf #{base_zipf} < COMMON, surface not in wordfreq/WN/CMU/neol)") if tr
           next
@@ -1286,7 +1339,7 @@ def add_frequency_info(cmudict, subtlex_hash, subtlex_total_hash, wordfreq_hash,
           dict_trace_puts(w, "morph_expand_subtlex ← #{base}: skip (not :s and !corpus_ok)") if tr
           next
         end
-        record_freq_propagation!(w, phase: :morph_expand_subtlex, donor: base, donor_anchored: base_has_real_anchor)
+        record_freq_propagation!(w, phase: :morph_expand_subtlex, donor: base, donor_anchored: base_has_corpus_anchor)
         round += 1
         morph_corpus += 1
       end
@@ -1311,7 +1364,8 @@ def add_frequency_info(cmudict, subtlex_hash, subtlex_total_hash, wordfreq_hash,
     base_entry = hash[base]
     next unless base_entry && base_entry[0] > 0
     hash[word][0] = [base_entry[0], RARE_FREQ_MAX].min
-    record_freq_propagation!(word, phase: :gdrop, donor: base, donor_anchored: true)
+    # +donor_anchored+ corpus-only — see comment in +morph_inherit_listed+.
+    record_freq_propagation!(word, phase: :gdrop, donor: base, donor_anchored: donor_has_corpus_anchor?(base, wordfreq_hash, neol_words))
     gdrop_inherited += 1
   end
   puts "#{gdrop_inherited} -in' g-drop surfaces inherited frequency from -ing base (rare-capped)" if gdrop_inherited > 0
@@ -1376,13 +1430,22 @@ def add_frequency_info(cmudict, subtlex_hash, subtlex_total_hash, wordfreq_hash,
   puts "#{hyphenated_proper_scrub} hyphenated zero-frequency headwords dropped (WN proper-noun lexfiles only)" if hyphenated_proper_scrub > 0
 
   forbidden_scrub = 0
+  forbidden_scrub_non_ascii = 0
   hash.keys.each do |word|
     next unless explicitly_forbidden?(word)
-    dict_trace_puts(word, "forbidden_scrub: DELETE (in forbid_list)") if dict_trace_word?(word)
+    is_non_ascii = non_ascii_only?(word)
+    if dict_trace_word?(word)
+      reason = is_non_ascii ? "non_ascii_only" : "in forbid_list"
+      dict_trace_puts(word, "forbidden_scrub: DELETE (#{reason})")
+    end
     hash.delete(word)
     forbidden_scrub += 1
+    forbidden_scrub_non_ascii += 1 if is_non_ascii
   end
-  puts "#{forbidden_scrub} explicitly forbidden surface forms removed after frequency phases" if forbidden_scrub > 0
+  if forbidden_scrub > 0
+    detail = forbidden_scrub_non_ascii > 0 ? " (#{forbidden_scrub_non_ascii} non-ASCII-only)" : ""
+    puts "#{forbidden_scrub} explicitly forbidden surface forms removed after frequency phases#{detail}"
+  end
 
   unrhymable_scrub = 0
   hash.keys.each do |word|
@@ -1414,6 +1477,11 @@ def add_frequency_info(cmudict, subtlex_hash, subtlex_total_hash, wordfreq_hash,
     ref_cn: ref_cn,
     ref_nb: ref_nb,
     ref_usf: ref_usf,
+    # Forwarded so the dump path can call +compute_frequency+ with the same
+    # +kaikki_capitalized_only+ guard the seed loop uses; keeps the dump's
+    # corpus-only freq aligned with what the non-curated fall-through branch
+    # of the seed loop would have produced.
+    kaikki_capitalized_only: kaikki_capitalized_only,
   )
 
   puts "#{count + extra + common_extra + floor_applied + inherited + cw_inherited + morph_inherited + morph_corpus} total entries with frequency data"
