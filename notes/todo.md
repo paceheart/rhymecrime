@@ -79,3 +79,7 @@ make it actually follow up on the "I'll make a note" notes
 in single column, add a "jump to"
 
 explain what it does
+
+Why is this not 100%?
+curated/rarity.csv: 99.85% weighted (3913 evaluated, 3854 exact, 59 partial/zero, weighted score 11310.1000 / weight 11327)
+

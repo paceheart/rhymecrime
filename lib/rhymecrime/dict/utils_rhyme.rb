@@ -686,17 +686,77 @@ PARTICLE_HYPHEN_PREF_RE = Regexp.new(
   Regexp::IGNORECASE
 ).freeze
 
-# e.g. okey-dokey / low-key over okeydokey / lowkey when both are in the same hyphen fold.
+# Hyphenated forms whose two halves exhibit a phonological echo characteristic of a
+# reduplication (boo-boo, zig-zag, flip-flop, hodge-podge, super-duper) are preferred
+# in their hyphenated spelling over the solid alternative. We require a *positive*
+# reduplication signal — identical halves, ablaut (vowels-only differences), or a
+# rhyming pair (shared trailing rime + consonant onsets) — rather than the earlier
+# rule of "anything two-real-words-glued-with-a-hyphen", which over-fired on the
+# very common N+N closed-compound case (back-hand → backhand, foot-fall → footfall,
+# pine-cone → pinecone, air-port → airport, bath-room → bathroom, ...). Curated
+# exceptions where the hyphenated form should win despite no echo (low-key, wi-fi,
+# fine-tune, ...) belong in +curated/spelling.csv+, which is consulted before this.
 REDUP_STYLE_SINGLE_HYPHEN_RE = /\A[[:alpha:]]{2,}-[[:alpha:]]{2,}\z/.freeze
 # Second-segment matches here → prefer solid spelling (handout not hand-out). Omits +on+ (no common *-on tail).
 HYPHEN_COMPOUND_TRAILING_PARTICLES_SOLID_PREF =
   (HYPHEN_COMPOUND_LEADING_PARTICLES - %w[on]).freeze
 
+REDUP_VOWEL_RE = /[aeiouy]/.freeze
+REDUP_CONSONANT_ONSET_RE = /\A[bcdfghjklmnpqrstvwxyz]*\z/.freeze
+
 def hyphen_redup_prefers_hyphenated_form?(f)
   return false unless REDUP_STYLE_SINGLE_HYPHEN_RE.match?(f)
   left, right = f.split("-", 2)
-  return false if COMMON_PREFIXES.include?(left.downcase)
-  !HYPHEN_COMPOUND_TRAILING_PARTICLES_SOLID_PREF.include?(right.downcase)
+  left = left.downcase
+  right = right.downcase
+  return false if COMMON_PREFIXES.include?(left)
+  return false if HYPHEN_COMPOUND_TRAILING_PARTICLES_SOLID_PREF.include?(right)
+  hyphen_redup_halves_echo?(left, right)
+end
+
+# True when +left+ and +right+ exhibit one of the three phonological echoes of a
+# reduplication: identical halves (boo-boo, ha-ha), ablaut (same length, identical
+# consonant skeleton, only vowels differ — zig-zag, flip-flop, criss-cross,
+# wishy-washy), or a rhyming pair (same length, shared rightmost segment ≥ 2 chars
+# containing a vowel, and any leading non-shared chars on either half are all
+# consonants — hodge-podge, hub-bub, pee-wee, super-duper, mumbo-jumbo, walkie-talkie).
+# Returns false on plain N+N compounds whose halves happen to share a final consonant
+# or differ in length (back-hand, foot-fall, back-track, pine-cone, low-key, wi-fi).
+def hyphen_redup_halves_echo?(left, right)
+  return true if left == right
+  return false unless left.length == right.length
+  hyphen_redup_ablaut?(left, right) || hyphen_redup_rhyme?(left, right)
+end
+
+def hyphen_redup_ablaut?(left, right)
+  diffs = 0
+  i = 0
+  n = left.length
+  while i < n
+    lc = left[i]
+    rc = right[i]
+    if lc != rc
+      return false unless REDUP_VOWEL_RE.match?(lc) && REDUP_VOWEL_RE.match?(rc)
+      diffs += 1
+    end
+    i += 1
+  end
+  diffs >= 1
+end
+
+def hyphen_redup_rhyme?(left, right)
+  shared = 0
+  i = left.length - 1
+  while i >= 0 && left[i] == right[i]
+    shared += 1
+    i -= 1
+  end
+  return false if shared < 2
+  return false if shared == left.length # identical halves; handled by caller
+  return false unless REDUP_VOWEL_RE.match?(left[-shared..])
+  left_onset = left[0...(left.length - shared)]
+  right_onset = right[0...(right.length - shared)]
+  REDUP_CONSONANT_ONSET_RE.match?(left_onset) && REDUP_CONSONANT_ONSET_RE.match?(right_onset)
 end
 
 def ingest_word_into_hyphen_fold_buckets!(buckets, w)
