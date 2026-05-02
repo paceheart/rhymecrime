@@ -47,7 +47,7 @@
 # When NOT to use this:
 #   * After retraining either classifier (use bin/deploy-data — full compute is
 #     required because every cue's classifier output may have changed).
-#   * After widening word_dict's cue universe (new common headwords need a full
+#   * After widening word_dict's cueniverse (new common headwords need a full
 #     compute-relatedness pass to populate their related# rows). Use
 #     +bin/compute-relatedness --incremental+ for that.
 

@@ -16,7 +16,7 @@
 # Inputs:
 #   * +generated/rhymecrime_local.sqlite3+ populated by
 #     +bin/compute-relatedness+ (the +related+ table — we read its rows
-#     to get the cue universe and the post-filter related-words list per
+#     to get the cueniverse and the post-filter related-words list per
 #     cue).
 #   * +word_dict+ / +rdict+ (the in-process Ruby dict — shipped via the
 #     msgpacks under +generated/+).
@@ -45,7 +45,7 @@
 #   1. Inverted-index bucket loop. The naive per-cue loop walks every
 #      related word's pronunciations and intersects each rime cohort with
 #      the cue's relateds set. That's O(cues × |relateds(cue)| × prons ×
-#      cohort) ≈ 6h across the full ~28K cue universe. Instead we build
+#      cohort) ≈ 6h across the full ~28K cueniverse. Instead we build
 #      a once-global +cues_by_word+ inverted index (word → Set<cue>) and
 #      walk +rdict+ exactly once: for each rime cohort, for each pair of
 #      cohort members, intersect their cue sets and push the pair into
@@ -315,7 +315,7 @@ prune_elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC) - prune_started
 puts "Prune complete in #{format_duration(prune_elapsed)} — #{n} cues, #{n - empty_cues} non-empty (#{total_tuples} tuples total), memo=#{$rhyming_tuple_redundant_memo.size}."
 
 # Free the memo before the write phase so SQLite's page cache has room
-# to breathe. Bigger cue universes have driven the memo into the multi-
+# to breathe. Bigger cueniverses have driven the memo into the multi-
 # GB range; we don't need it anymore.
 $rhyming_tuple_redundant_memo = nil
 

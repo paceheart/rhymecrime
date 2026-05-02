@@ -321,7 +321,7 @@ n = lemmas.size
 threads = [threads, n].min if n.positive?
 threads = 1 if threads < 1
 
-# Cue universe is +cue_word?+: in +word_dict+, freq > +RARE_FREQ_MAX+,
+# cueniverse is +cue_word?+: in +word_dict+, freq > +RARE_FREQ_MAX+,
 # preferred surface == self. The filter does *not* check rhyme partners or
 # even pronunciations — rhymeless lemmas (+music+ / +concerto+ / +algebra+ /
 # +quarterback+) are kept on purpose because the runtime can legitimately

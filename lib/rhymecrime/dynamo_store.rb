@@ -28,7 +28,7 @@ module Rhymecrime
     include Singleton
 
     # FIFO upper bound for the in-process +set_related#+ cache. Sized to
-    # cover the full cue universe (~28K headwords computed by
+    # cover the full cueniverse (~28K headwords computed by
     # +bin/compute-set-related+) so a long-lived warm Lambda container
     # eventually serves every cached cue from RAM.
     DDB_SET_RELATED_CACHE_CAP = (ENV["RHYMECRIME_DDB_SET_RELATED_CACHE_CAP"] || "30000").to_i

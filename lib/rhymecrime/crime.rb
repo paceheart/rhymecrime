@@ -932,7 +932,7 @@ end
 # That's exactly what this memo exploits: in the en-masse compute, the
 # same tuple-pair recurs across many cues' tuple sets (animal / transport /
 # emotion clusters share heavily) — collapsing the redundant calls drops
-# the prune phase from ~8h to ~10min across the full ~28K cue universe.
+# the prune phase from ~8h to ~10min across the full ~28K cueniverse.
 $rhyming_tuple_redundant_memo = nil
 
 def rhyming_tuple_redundant_with?(ear, tup)
@@ -1599,7 +1599,7 @@ def find_rhyming_tuples(input_rel1, common_only = false)
   return really_find_rhyming_tuples(input_rel1, common_only) if $disable_cross_tuple_redundancy_pruning
 
   # Computed-store path: +bin/compute-set-related+ stashes the fully
-  # post-pruned tuple list for every cue lemma in the cue universe. The Lambda
+  # post-pruned tuple list for every cue lemma in the cueniverse. The Lambda
   # runtime (+DataSource.dynamodb?+ → +store_authoritative?+) treats a missing
   # row as "this cue isn't in our common-word set" and returns +nil+ here so
   # the goal-dispatch branch in +rhymecrime+ can render the friendly

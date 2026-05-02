@@ -316,7 +316,7 @@ module Rhymecrime
     # facade can dispatch transparently.
     #
     # +nil+ vs +[]+ matters: an empty array is a valid "this cue survived
-    # the cue universe filter but has no rhyming friends" answer that the
+    # the cueniverse filter but has no rhyming friends" answer that the
     # caller will render normally, while +nil+ signals "we never
     # computed this cue" and routes to the friendly-message branch in
     # +crime.rb+'s goal dispatch.

@@ -48,7 +48,7 @@ module Rhymecrime
     # +uncomputed+: not a user-driven click. Logged by the runtime when a
     # +set_related+ request lands on a cue that has no computed
     # +set_related#<lemma>+ row in the authoritative store (i.e. it's
-    # outside the cue universe +bin/compute-set-related+ covered).
+    # outside the cueniverse +bin/compute-set-related+ covered).
     # See +record_uncomputed_cue!+ below; the +"[uncomputed]"+ marker
     # sentinel goes in the +related+ column so importers can grep
     # +pk = "feedback#<cue>#[uncomputed]"+ to surface the long tail of
