@@ -611,23 +611,30 @@ def append_r_to_orthographic_r_pronunciations!(pron_hash, label:)
 end
 
 # Identify the +-r+/+-re+-final stem of an +-ed+/+-d+ inflection by trying three peelings in order
-# and accepting the first one whose stem is a known headword in +pron_hash+. Returns the stem string
-# or +nil+. The headword-presence gate is what blocks the false-positive cohort that pure
-# orthographic +"ends in red"+ matching falls into: +bred+ / +cred+ / +shred+ / +fred+ / +dred+ /
-# +red+ / +infrared+ / +interbred+ / +purebred+ / +thoroughbred+ / +unbred+ / +antired+ / +wilfred+ /
-# +winfred+ — none of their candidate stems (+br+, +cr+, +shr+, +infrar+, +wilfr+, …) appear in
-# the lexicon, so we never mistake them for past tenses of an +-r+-stem verb.
+# and accepting the first one whose stem is a known headword in +pron_hash+. Returns
+# +[stem, rule]+ where +rule+ is one of +:stem_a+ (peel +-ed+, e.g. +jabbered+ → +jabber+),
+# +:stem_b+ (peel +-d+, e.g. +abjured+ → +abjure+), or +:stem_c+ (peel +-Xed+ for an
+# orthographic doubled-consonant past tense, e.g. +barred+ → +bar+); +nil+ if none match.
+# The headword-presence gate is what blocks the false-positive cohort that pure
+# orthographic +"ends in red"+ matching falls into: +bred+ / +cred+ / +shred+ / +fred+ /
+# +dred+ / +red+ / +infrared+ / +interbred+ / +purebred+ / +thoroughbred+ / +unbred+ /
+# +antired+ / +wilfred+ / +winfred+ — none of their candidate stems (+br+, +cr+, +shr+,
+# +infrar+, +wilfr+, …) appear in the lexicon, so we never mistake them for past tenses
+# of an +-r+-stem verb. The +:stem_c+ peel still admits +cor+ from +corded+ (false
+# positive: the actual stem is +cord+, not +cor+); +stem_c_pron_aligns?+ in
+# +insert_r_before_final_d_for_red_pronunciations!+ is the per-pronunciation backstop
+# that rejects those by checking the inflected pron actually decomposes as +stem-pron + D+.
 def red_inflection_r_stem(word, pron_hash)
   return nil unless word.length >= 5
   return nil unless word.end_with?("d")
   if word.end_with?("ed")
     stem_a = word[0..-3]
-    return stem_a if stem_a.length >= 3 && stem_a.end_with?("r") && pron_hash.key?(stem_a)
+    return [stem_a, :stem_a] if stem_a.length >= 3 && stem_a.end_with?("r") && pron_hash.key?(stem_a)
     stem_c = word[0..-4]
-    return stem_c if stem_c.length >= 3 && stem_c.end_with?("r") && pron_hash.key?(stem_c)
+    return [stem_c, :stem_c] if stem_c.length >= 3 && stem_c.end_with?("r") && pron_hash.key?(stem_c)
   end
   stem_b = word[0..-2]
-  return stem_b if stem_b.length >= 3 && stem_b.end_with?("re") && pron_hash.key?(stem_b)
+  return [stem_b, :stem_b] if stem_b.length >= 3 && stem_b.end_with?("re") && pron_hash.key?(stem_b)
   nil
 end
 
@@ -682,6 +689,32 @@ def r_insertion_index_before_final(phs, final)
   last_idx
 end
 
+# Per-pronunciation backstop for +red_inflection_r_stem+'s +:stem_c+ peel: confirm the inflected
+# pron actually decomposes as +stem-pron + D+, optionally with the stem's final +R+ dropped (the
+# BrE rhotic-drop case the rule exists to repair). Differentiates legitimate doubled-consonant
+# past tenses like +barred+ (+B AA1 R+ + +D+ ✓) from +corded+, where the +-Xed+ peel happens to
+# yield an +-r+-final string (+cor+) that is also a lexicon entry but is not the actual stem
+# (the real stem is +cord+ +K AO1 R D+). +corded+'s pron is +K AO1 R . D AH0 D+, whose tail
+# after +K AO1 R+ is +D AH0 D+ — three phonemes, not a valid +-ed+ suffix shape. Without this
+# gate the rule incorrectly inserts an R into +corded+'s pron and makes it rhyme with
+# +quartered+. Only applied to the +:stem_c+ branch; +:stem_a+ relies on the +-r+-final stem
+# matching by orthography + presence (+jabber+ → +jabbered+) and would reject the BrE-drop
+# inflected pron the rule exists to fix if it required the stem's R to be present.
+def stem_c_pron_aligns?(inflected_pron, stem_prons)
+  return false if stem_prons.nil? || stem_prons.empty?
+  inf_phs = inflected_pron.phonemes.reject(&:syllable_boundary?)
+  stem_prons.any? do |sp|
+    next false if sp.nil? || sp.empty?
+    sp_phs = sp.phonemes.reject(&:syllable_boundary?)
+    last = sp_phs.last
+    next false unless RHOTIC_FINAL_PHONEMES.include?(last)
+    next true if inf_phs == sp_phs + ["D"]
+    # BrE rhotic-drop applies only to literal +R+; +ERn+ is itself vowel+rhotic, not droppable.
+    next true if last == "R" && inf_phs == sp_phs[0..-2] + ["D"]
+    false
+  end
+end
+
 # When a headword is the +-ed+/+-d+ inflection of a known +-r+/+-re+-final stem (+jabber+ → +jabbered+,
 # +abjure+ → +abjured+, +debar+ → +debarred+) but a pronunciation lacks the rhotic right before the
 # final +D+, splice +R+ in. The mismatch comes from the same BrE / non-rhotic Wiktionary import that
@@ -690,17 +723,29 @@ end
 #
 # Mutates +pron_hash+ entries +(cmudict: word => [Pronunciation], word_dict: word => [freq, prons, …])+.
 # Independent of the +-r+-final pass: stem identification keys off orthography + presence in the hash,
-# not off any pron's phoneme content.
+# not off any pron's phoneme content. The +:stem_c+ branch additionally requires per-pronunciation
+# alignment (+stem_c_pron_aligns?+) since the orthographic peel admits same-prefix lookalikes
+# like +cor+ from +corded+ where the actual stem is +cord+, not +cor+.
 def insert_r_before_final_d_for_red_pronunciations!(pron_hash, label:)
   fixed_words = 0
   fixed_prons = 0
   pron_hash.each do |word, entry|
-    next if red_inflection_r_stem(word, pron_hash).nil?
+    rule_result = red_inflection_r_stem(word, pron_hash)
+    next if rule_result.nil?
+    stem, rule = rule_result
     prons = entry.is_a?(Array) && entry.first.is_a?(Pronunciation) ? entry : entry[1]
     next if prons.nil? || prons.empty?
+    if rule == :stem_c
+      stem_entry = pron_hash[stem]
+      stem_prons = stem_entry.is_a?(Array) && stem_entry.first.is_a?(Pronunciation) ? stem_entry : stem_entry[1]
+    end
     word_changed = false
     prons.each_with_index do |pron, idx|
       next if pron.nil? || pron.empty?
+      if rule == :stem_c && !stem_c_pron_aligns?(pron, stem_prons)
+        dict_trace_puts(word, "insert_r_before_d: skip (stem_c=#{stem} pron does not align with #{pron})") if dict_trace_word?(word)
+        next
+      end
       ins = r_insertion_index_before_final(pron.phonemes, "D")
       next if ins.nil?
       new_phs = pron.phonemes.dup
