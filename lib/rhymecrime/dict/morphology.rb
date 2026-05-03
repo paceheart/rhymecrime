@@ -395,6 +395,27 @@ def morph_kaikki_lists_surface_as_inflected_nonlemma?(surface)
   lex && lex != surface
 end
 
+# True when +base+ is itself a plural surface form of an anchored singular: ends in +s+
+# and a candidate singular (Inflect's plural-strip — drop +-s+, drop +-es+, +-ies+ → +-y+,
+# silent-e restoration) is in +hash+, +neol_words+, +common_words+, or has wordfreq-attested
+# real-word use. Used by the Inflect-expansion passes to suppress spurious double plurals
+# (*parasailingses* from neol-listed *parasailings* whose singular *parasailing* is also in
+# neol). Targets the case where the lemma never makes it into Kaikki's
+# +$inflection_base_words+ but the morphology is still transparent — Kaikki-attested
+# inflected surfaces are already caught upstream by
+# +morph_kaikki_lists_surface_as_inflected_nonlemma?+.
+def morph_base_is_already_plural_form?(base, hash, neol_words, common_words, wordfreq_hash)
+  return false if base.nil? || base.bytesize <= 2
+  return false unless base.end_with?("s")
+  Inflect.raw_candidate_bases_for_inflected(base).any? do |singular|
+    next false if singular == base
+    hash.key?(singular) ||
+      (neol_words && neol_words.include?(singular)) ||
+      (common_words && common_words.include?(singular)) ||
+      (wordfreq_hash && (wordfreq_hash[singular] || 0).to_f >= WORDFREQ_COMMON_ZIPF)
+  end
+end
+
 # Syllabified pronunciation for +inflected_word+ from +base_word+'s first CMU pron, or nil.
 # Same final-cluster whitelist gate as merge_inflected_forms! (common-list / SUBTLEX-anchored Inflect expansion).
 def morph_derived_syllabified_pronunciation(base_pron, base_word, inflected_word)
