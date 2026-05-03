@@ -1518,6 +1518,9 @@ COMMON_PREFIXES = [
   'auto',
   'be',      # beside, below, become (splash damage on between/tween etc.)
   'bi',
+  'bio',     # Greek combining form (biology, biomedical, biotech). Splash damage: nothing
+             # observed — opaque +bio-+ words (biopsy/psy, biceps/ceps) don't share rimes
+             # with their over-stripped tails.
   'co',
   'com',
   'con',
@@ -1548,6 +1551,13 @@ COMMON_PREFIXES = [
   'in',
   'inter',
   'intra',
+  'lay',     # Compound modifier (+layperson+, +layman+, +laymen+). Treating it as a single-
+             # prefix lets +recursive_prefix_ancestors+ peel it in step with +business+, +council+,
+             # etc., which are caught by the (length-gated) compound-modifier branch. Splash
+             # damage: +layout+ / +out+, +layered+ / opaque tails — both rejected downstream by
+             # the primary-stress-preservation gate in +phoneme_tail_match?+ (the +-out+ in
+             # +layout+ is +AW2+, not +AW1+) so the filter only fires when the resulting
+             # compound element actually keeps primary stress (+layperson+'s +per+).
   'macro',
   'micro',
   'mid',
