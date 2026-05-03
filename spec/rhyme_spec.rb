@@ -727,8 +727,11 @@ describe 'RHYMES' do
     oughta_rhyme "sobbin'", "bobbin"
     oughta_rhyme "sobbin'", "bobbin'"
     ought_not_rhyme "bobbin'", "bobbin'"
+    oughta_rhyme 'layman', "shaman"
     oughta_rhyme 'layman', "gamin'"
-    oughta_rhyme 'layman', "daemon"
+    oughta_rhyme 'layman', "daemon", not_working_message: "daemon is marked as a spelling variant of demon"
+    ought_not_rhyme 'shaman', "shamin'" # homophone
+    oughta_rhyme 'shaman', 'common'
   end
 
   context 'imperfect rhymes' do
@@ -749,7 +752,7 @@ describe 'RHYMES' do
     oughta_rhyme 'cajun', 'occasion'
     context 'pin/pen' do # I'm torn on this one
       ought_not_rhyme 'pin', 'pen'
-      ought_not_rhyme 'vintage', 'percentage' # pin/pend
+      ought_not_rhyme 'vintage', 'percentage'
       ought_not_rhyme 'difference', 'preference'
       ought_not_rhyme 'kilogram', 'telegram'
       ought_not_rhyme 'incriminate', 'disseminate' # this sounds fine to me
@@ -1093,6 +1096,10 @@ describe 'RHYMES' do
   end
 
   context 'bad pronunciations' do
+    oughta_rhyme 'confuse', 'muse'
+    oughta_rhyme 'redoes', 'buzz'
+    ought_not_rhyme 'confuse', 'redoes'
+    ought_not_rhyme 'debutantes', 'renaissance' # stress mismatch
     ought_not_rhyme 'prosthesis', 'transgresses'
     oughta_rhyme 'causal', 'menopausal'
     oughta_rhyme 'spousal', 'tousle'

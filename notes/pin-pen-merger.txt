@@ -1,0 +1,26 @@
+benedicta says:
+
+yes
+'vintage', 'percentage'
+'difference', 'preference'
+'kilogram', 'telegram'
+'incriminate', 'disseminate'
+'ambivalent', 'benevolent'
+'winter', 'center'
+'interests', 'centrists'
+'deliverance', 'reverence'
+'enlistment', 'investment'
+'abolitionist', 'impressionist'
+'magnificent', 'beneficent'
+'dissident', 'precedent'
+'filament', 'element'
+'curricular', 'molecular'
+
+almost
+'vindictive', 'effective'
+'antiquity', 'inequity'
+'predictable', 'collectible'
+
+no
+'fiction', 'section'
+'artistic', 'domestic'
