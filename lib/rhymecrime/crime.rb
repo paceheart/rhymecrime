@@ -270,25 +270,183 @@ def prefix_words(words, focal_word)
   result
 end
 
-# Set of forms reachable by recursively peeling +COMMON_PREFIXES+ from +word+, restricted to
-# lexicon entries (so non-word artifacts of over-stripping like +a-+ off +able+ → +ble+ don't
-# enter the intersection). Always includes +word+ itself. Depth-bounded — the deepest
+# Set of forms reachable by recursively peeling +COMMON_PREFIXES+ — and now also leading
+# dict-headword compound modifiers (+business+ + +person+) and hyphenated leading words
+# (+same+-+sex+) — from +word+. Always includes +word+ itself. Depth-bounded: the deepest
 # legitimate English chain is ~3 (+dis+en+chanted+, +in+sub+ordinate+); ≤4 leaves headroom
 # for as-yet-unseen compounds without risk of pathological recursion on words like
 # +nonconcomitant+ where many prefixes happen to match the start.
+#
+# Three peel families:
+#
+#   * Single-prefix (+COMMON_PREFIXES+): +re-orient+ → +orient+. Recurses only when the
+#     stripped tail is a dict headword OR a morphologically-valid surface of one
+#     (+re-orienting+ → +orienting+ where +orienting+ isn't its own dict entry but is the
+#     +-ing+ form of dict-attested +orient+). Non-dict morphologically-valid forms are
+#     added to the set but not recursed from — keeps the over-stripping artifact (+a-+ off
+#     +able+ → +ble+) out of the recursion while letting two prefixed siblings converge
+#     on a shared inflected root.
+#
+#   * Compound-modifier (+businessperson+ → +person+): +word+ = +HEAD+ + +REST+ where both
+#     +HEAD+ and +REST+ are dict headwords (each ≥ 3 chars). Peels +HEAD+ off and recurses
+#     on +REST+. The pron-suffix-alignment gate downstream is what makes this safe for
+#     sibling compounds with secondary-stressed shared elements (+eyeball+/+highball+ both
+#     peel to +ball+ but +eyeball+'s +AA2+ tail doesn't align with +ball+'s primary
+#     +AO1+ — different bare bases AND, post-strengthening, different stress —
+#     so the filter declines).
+#
+#   * Hyphenated leading word (+same-sex+ → +sex+): when +word+ contains a hyphen and each
+#     leading hyphen-segment is a dict headword, peel the leading segments and recurse on
+#     the remainder. Covers +same-sex+, +self-organizing+ (when it's in dict), etc.
+#
+# Phonological-suffix alignment (+pron_suffix_aligned?+) is the safety net for all three
+# branches: requires each side's flat ARPAbet to end with the common ancestor's, with
+# consonants strict, vowel bare-bases strict, and primary stress preserved (the shorter
+# side's primary-stressed vowel must still carry primary stress at the same position in
+# the longer side). Without the primary-stress preservation, sibling compounds where the
+# shared element loses primary stress (+handout+'s +AW2+ tail vs +out+'s primary +AW1+)
+# would over-filter. With it, only true compound-rhymes-of-the-same-element pairs
+# (+businessperson+/+layperson+ where both keep primary on +per+) get caught.
 RECURSIVE_PREFIX_STRIP_MAX_DEPTH = 4
+
+# Min char length for the HEAD in a compound-modifier peel. 4 excludes 3-char heads
+# whose dict-membership is mostly opaque/etymological coincidences (+app+lied,
+# +ant+agonize, +pig+ment, +hum+ble, +app+end) where the orthographic split has no
+# real morphological status. Real 3-char compound modifiers used by the failing
+# spec set (+bio+, +lay+) are routed through +COMMON_PREFIXES+ instead. Real
+# productive modifiers (+business+, +council+, +thermo+, +same+) are 4+ chars.
+COMPOUND_MODIFIER_HEAD_MIN_LENGTH = 4
+
+# Min char length for the REST (the tail recursed on) in a compound-modifier peel. 3 keeps
+# +-men+, +-sex+, +-out+ working as compound elements while excluding 1-2-char remainders
+# that don't have their own pronunciation cohort.
+COMPOUND_MODIFIER_REST_MIN_LENGTH = 3
+
 def recursive_prefix_ancestors(word, depth = 0, set = nil)
   set ||= Set.new
   return set if depth >= RECURSIVE_PREFIX_STRIP_MAX_DEPTH
   return set if set.include?(word)
   set.add(word)
+
   COMMON_PREFIXES.each do |prefix|
     tail = lexical_root_after_prefix(word, prefix)
     next unless tail && !tail.empty?
-    next unless word_dict_includes_headword?(tail)
-    recursive_prefix_ancestors(tail, depth + 1, set)
+    next if set.include?(tail)
+    if word_dict_includes_headword?(tail)
+      recursive_prefix_ancestors(tail, depth + 1, set)
+    elsif morphologically_valid_non_dict_form?(tail)
+      set.add(tail)
+    end
   end
+
+  compound_modifier_remainders(word).each do |rest|
+    next if set.include?(rest)
+    recursive_prefix_ancestors(rest, depth + 1, set)
+  end
+
+  hyphen_compound_remainders(word).each do |rest|
+    next if set.include?(rest)
+    if word_dict_includes_headword?(rest)
+      recursive_prefix_ancestors(rest, depth + 1, set)
+    elsif morphologically_valid_non_dict_form?(rest)
+      set.add(rest)
+    end
+  end
+
   set
+end
+
+# True when +form+ is a non-dict surface that an +Inflect.raw_candidate_bases_for_inflected+
+# strip relates to a dict headword (+orienting+ → +orient+, +tensions+ → +tension+). Lets
+# +recursive_prefix_ancestors+ accept the stripped tail when two prefixed siblings
+# (+re-orienting+, +dis-orienting+) converge on a real-but-not-stored inflected form.
+# Excludes opaque non-derivational tails (+pre+fer → +fer+: no Inflect base in dict) so
+# real-rhyme pairs (+prefer+/+defer+) aren't false-paired.
+def morphologically_valid_non_dict_form?(form)
+  return false if form.nil? || form.length < 3
+  return false if word_dict_includes_headword?(form)
+  Inflect.raw_candidate_bases_for_inflected(form).any? { |b| word_dict_includes_headword?(b) }
+end
+
+# Compound-modifier peels: +word+ = +HEAD+ + +REST+ where +HEAD+ is a non-rare dict
+# headword of length ≥ +COMPOUND_MODIFIER_HEAD_MIN_LENGTH+ whose pronunciation aligns
+# phonologically with +word+'s prefix, and +REST+ is a dict headword of length
+# ≥ +COMPOUND_MODIFIER_REST_MIN_LENGTH+. Returns the +REST+ candidates. Skips
+# hyphenated input — those go through +hyphen_compound_remainders+.
+#
+# The rare-headword exclusion drops opaque-Latin compounds whose split words happen to
+# be in dict only because they're corner-case headwords (+juris+ in +jurisprudence+:
+# freq=2, rare). The pron-prefix-alignment gate (with the same primary-stress
+# preservation as +phoneme_tail_match?+) drops splits whose orthographic match isn't
+# matched at the phonological level (+complied+'s first 4 chars +comp+ would split
+# orthographically but +comp+'s pron +K AA1 M P+ doesn't align with +complied+'s
+# +K AH0 M P+ — different vowel base). Both gates together leave the rule firing only
+# on transparent productive compounds (+business+person+, +council+men+,
+# +thermo+plastic+).
+def compound_modifier_remainders(word)
+  return [] if word.nil? || word.empty? || word.include?("-")
+  result = []
+  head_min = COMPOUND_MODIFIER_HEAD_MIN_LENGTH
+  rest_min = COMPOUND_MODIFIER_REST_MIN_LENGTH
+  return result if word.length < (head_min + rest_min)
+  (head_min..(word.length - rest_min)).each do |split|
+    head = word[0...split]
+    rest = word[split..-1]
+    next unless word_dict_includes_headword?(head)
+    next unless word_dict_includes_headword?(rest)
+    next if rare?(head)
+    next unless pron_prefix_aligned_or_equal?(word, head)
+    result << rest
+  end
+  result
+end
+
+# +pron_prefix_aligned?+ but trivially true when +word+ equals +head+ (so a word counts
+# as its own prefix for the same-word degenerate case).
+def pron_prefix_aligned_or_equal?(word, head)
+  return true if word == head
+  pron_prefix_aligned?(word, head)
+end
+
+# Mirror of +pron_suffix_aligned?+ for the leading edge: any flat ARPAbet pronunciation
+# of +longer+ starts with any of +shorter+'s, with the same +phoneme_tail_match?+
+# semantics (consonants strict, vowels by bare base, primary-stress preservation
+# from shorter to longer). Falls back to spelling-startswith when either word lacks
+# pronunciations (covers headwords like +thermo+ that are dict-only with no prons but
+# still gate +thermoplastic+'s compound peel orthographically).
+def pron_prefix_aligned?(longer, shorter)
+  longer_prons = pronunciations(longer)
+  shorter_prons = pronunciations(shorter)
+  if longer_prons.empty? || shorter_prons.empty?
+    return longer.to_s.downcase.start_with?(shorter.to_s.downcase)
+  end
+  shorter_prons.any? do |sp|
+    s_phones = sp.phonemes.reject(&:syllable_boundary?)
+    next false if s_phones.empty?
+    longer_prons.any? do |lp|
+      l_phones = lp.phonemes.reject(&:syllable_boundary?)
+      next false if l_phones.length <= s_phones.length
+      l_head = l_phones[0...s_phones.length]
+      l_head.zip(s_phones).all? { |a, b| phoneme_tail_match?(a, b) }
+    end
+  end
+end
+
+# Hyphenated-leading-word peels: +same-sex+ → +sex+, +okey-dokey+ → +dokey+ (when each
+# leading segment is a dict headword). Returns the trailing remainder candidates.
+def hyphen_compound_remainders(word)
+  return [] if word.nil? || !word.include?("-")
+  parts = word.split("-")
+  return [] if parts.size < 2
+  result = []
+  (1...parts.size).each do |i|
+    head_parts = parts[0...i]
+    next unless head_parts.all? { |hp| !hp.empty? && word_dict_includes_headword?(hp) }
+    rest = parts[i..-1].join("-")
+    next if rest.empty?
+    result << rest
+  end
+  result
 end
 
 # +pron_suffix_aligned?+ but trivially true when +word+ equals +ancestor+ (so a word counts
@@ -321,19 +479,34 @@ def pron_suffix_aligned?(longer, shorter)
   end
 end
 
-# Phoneme equivalence for +pron_suffix_aligned?+. Consonants must match by bare base.
-# Vowels match by bare base; if neither phoneme carries primary stress, any
-# vowel-vowel pair counts as a match (handles morphological vowel reduction at the
-# prefix-stem boundary, e.g. +enchanted+ EH0 N ↔ +disenchanted+'s AH0 N tail).
+# Phoneme equivalence for +pron_suffix_aligned?+. +a+ is the longer-side phone,
+# +b+ is the shorter-side (ancestor's) phone; +pron_suffix_aligned?+ feeds them
+# in that order via +l_tail.zip(s_phones)+.
+#
+# Consonants: must match by bare base.
+# Vowels: bare bases must match; if neither phoneme carries primary stress, any
+# vowel-vowel pair counts as a match (handles morphological vowel reduction at
+# the prefix-stem boundary, e.g. +enchanted+ EH0 N ↔ +disenchanted+'s AH0 N
+# tail). Additionally, when the SHORTER side carries primary stress, the LONGER
+# side must carry primary stress at the same position. This blocks
+# secondary-stressed compound elements from aligning with the bare element's
+# primary (+handout+'s +AW2+ tail vs +out+'s +AW1+ — perceptually a different
+# rhyme contour from a true compound-rhyme like +businessperson+/+person+
+# where both keep primary on +per+). Pre-strengthening, the bare-base check
+# alone passed AW2/AW1 and over-filtered sibling compounds whose shared
+# element kept secondary stress (+handout+/+standout+).
 def phoneme_tail_match?(a, b)
   return true if a == b
   return false if a.syllable_boundary? || b.syllable_boundary?
   if a.vowel? && b.vowel?
     return true if !a.include?("1") && !b.include?("1")
-    return Phoneme.bare_base(a) == Phoneme.bare_base(b)
+    return false unless Phoneme.bare_base(a) == Phoneme.bare_base(b)
+    return false if b.include?("1") && !a.include?("1")
+    true
+  else
+    return false if a.vowel? || b.vowel?
+    Phoneme.bare_base(a) == Phoneme.bare_base(b)
   end
-  return false if a.vowel? || b.vowel?
-  Phoneme.bare_base(a) == Phoneme.bare_base(b)
 end
 
 def find_rhyming_words(word, identical_ok=true)
