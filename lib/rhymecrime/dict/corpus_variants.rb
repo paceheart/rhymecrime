@@ -107,6 +107,12 @@ HEADER
 #   8. Inflection propagation over Wiktionary base pairs — e.g. +cipher/cypher → ciphered/cyphered+.
 #   9. Apostrophe-stripped misspellings (+there'll/therell+, +whackin'/whackin+) — last so any
 #      higher-precedence detector that already picked a direction for an apostrophe pair wins.
+#  10. US/UK canonical-direction correction (post-dedup) — flips emitted pairs on a recognized
+#      US/UK morphology axis (+-er/-re+, +-or/-our+, +-ize/-ise+, +-l/-ll+) to canonical [US, UK]
+#      when an upstream emitter picked the wrong direction on a low-frequency cluster (e.g. flips
+#      +megametre/megameter+ to +megameter/megametre+ so it matches the canonical +meter/metre+
+#      axis, even when VarCon's +Cv+/+C+ tagging on the +megameter+ cluster disagrees with
+#      +meter+'s +A B+/+B C+ pattern). Pure re-direction; doesn't add new pairs.
 def emit_spelling_variants_auto!(word_dict, wordfreq_hash, kaikki_variant_map = nil, varcon_variant_map = nil)
   previous_word_dict = $word_dict
   previous_variants = $variants
@@ -121,6 +127,7 @@ def emit_spelling_variants_auto!(word_dict, wordfreq_hash, kaikki_variant_map = 
   pairs.concat(wiktionary_variant_pairs(word_dict, wordfreq_hash, kaikki_variant_map)) if kaikki_variant_map && !kaikki_variant_map.empty?
   pairs.concat(apostrophe_stripped_corpus_pairs(word_dict))
   pairs = dedupe_variant_pairs(pairs)
+  apply_compound_inheritance!(pairs)
   ensure_generated_dict_dir!
   path = generated_dict_path(SPELLING_VARIANTS_AUTO_FILENAME)
   File.open(path, "w", encoding: "UTF-8") do |f|
@@ -1074,4 +1081,47 @@ def dedupe_variant_pairs(pairs)
     out << [preferred, alt]
   end
   out.sort
+end
+
+# Direction-correction post-pass: when a corpus emitter (typically VarCon or
+# Wiktionary) emits a pair on a recognized US/UK regional-spelling axis but
+# in the wrong direction, flip it to canonical. +us_uk_morphology_pair+ is
+# the authority for these axes (+-er/-re+, +-or/-our+, +-ize/-ise+,
+# +-l/-ll+); it always returns [US, UK] when both halves are pronounced
+# headwords on the axis, regardless of the input's surface form. So if a
+# pair +(P, A)+ in our auto set has a canonical answer that disagrees with
+# its current direction, the corpus emitter's per-cluster signal got muddied
+# (typically by a low-level VarCon entry: +A Cv: megameter / B C: megametre+
+# scores megametre lower despite the +meter/metre+ cluster at +A B / B C+
+# scoring meter lower) and the canonical axis answer is the load-bearing
+# truth.
+#
+# Why scope to +us_uk_morphology_pair+'s axes specifically: most other
+# variant pairs in the auto set are length-dependent (+silent_e_drop+:
+# +cueing+ keeps +e+ for short stems but +barbecuing+ drops it for long
+# ones) or lexical exceptions (+hos/hoes+ is a slang plural that doesn't
+# generalize to +echoes/echos+ being the standard +-oes+ plural). Inheriting
+# direction across those axes via shared suffix would over-fire. The US/UK
+# regional axes encoded in +us_uk_morphology_pair+ are precisely the ones
+# whose direction IS suffix-uniform (+colour+ → +color+ regardless of stem),
+# so they're the safe scope.
+#
+# Pure direction-flip; doesn't add new pairs. Pairs not on a US/UK axis are
+# left alone.
+def apply_compound_inheritance!(pairs)
+  fixed = 0
+  pairs.each_with_index do |(p, a), i|
+    canonical = us_uk_morphology_pair(p) || us_uk_morphology_pair(a)
+    next unless canonical
+    canonical_us, canonical_uk = canonical
+    # Already canonical (US first)?
+    next if canonical_us == p && canonical_uk == a
+    # Reversed vs canonical → flip.
+    if canonical_us == a && canonical_uk == p
+      pairs[i] = [canonical_us, canonical_uk]
+      fixed += 1
+    end
+  end
+  puts "Compound-inheritance redirect: flipped #{fixed} US/UK pair#{fixed == 1 ? '' : 's'} to canonical direction" if fixed > 0
+  pairs
 end

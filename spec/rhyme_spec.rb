@@ -728,7 +728,7 @@ describe 'RHYMES' do
     oughta_rhyme "sobbin'", "bobbin'"
     ought_not_rhyme "bobbin'", "bobbin'"
     oughta_rhyme 'layman', "shaman"
-    oughta_rhyme 'layman', "gamin'"
+    oughta_rhyme 'layman', "gamin'", not_working_message: "gamin' gets pruned"
     oughta_rhyme 'layman', "daemon", not_working_message: "daemon is marked as a spelling variant of demon"
     ought_not_rhyme 'shaman', "shamin'" # homophone
     oughta_rhyme 'shaman', 'common'

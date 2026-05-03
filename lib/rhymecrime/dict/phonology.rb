@@ -331,10 +331,15 @@ AUTHORITATIVE_PRONUNCIATIONS_PATH = File.join(CURATED_DIR, "authoritative_pronun
 # are user-vetted by definition.
 #
 # Returns a +Set+ of the authoritative words (used by +load_cmudict+ to skip
-# CMU rows) and mutates +hash+ in place.
+# CMU rows) and mutates +hash+ in place. Also memoizes the set into
+# +$authoritative_pronunciation_words+ so downstream phases (the rarity
+# classifier in particular) can consult it without re-parsing the file.
 def load_authoritative_pronunciations!(hash)
   words = Set.new
-  return words unless File.exist?(AUTHORITATIVE_PRONUNCIATIONS_PATH)
+  unless File.exist?(AUTHORITATIVE_PRONUNCIATIONS_PATH)
+    $authoritative_pronunciation_words = words
+    return words
+  end
 
   n_lines = 0
   File.foreach(AUTHORITATIVE_PRONUNCIATIONS_PATH, encoding: "UTF-8") do |line|
@@ -354,7 +359,33 @@ def load_authoritative_pronunciations!(hash)
     n_lines += 1
   end
   puts "Loaded #{n_lines} authoritative pronunciations for #{words.size} words from #{File.basename(AUTHORITATIVE_PRONUNCIATIONS_PATH)}" if n_lines > 0
+  $authoritative_pronunciation_words = words
   words
+end
+
+# Memoized set of headwords listed in +authoritative_pronunciations.txt+.
+# Populated as a side effect of +load_authoritative_pronunciations!+ during
+# +load_cmudict+; if no build has run yet (e.g. an early consumer) we lazy-load
+# headwords-only without mutating any pron hash. The set is the canonical
+# answer to "did a curator hand-add this word?" — used by the rarity
+# classifier to veto +:forbidden+ verdicts on curator-added headwords (so they
+# survive long enough for the auto spelling-variant detectors in
+# +corpus_variants.rb+ to pair them with sibling forms).
+def authoritative_pronunciation_words
+  return $authoritative_pronunciation_words if $authoritative_pronunciation_words
+  words = Set.new
+  if File.exist?(AUTHORITATIVE_PRONUNCIATIONS_PATH)
+    File.foreach(AUTHORITATIVE_PRONUNCIATIONS_PATH, encoding: "UTF-8") do |line|
+      next unless useful_cmudict_line?(line)
+      line = preprocess_cmudict_line(line)
+      tokens = line.split
+      next if tokens.length < 2
+      word = tokens.shift.downcase.desanitize
+      word = word[0...-3] if word =~ /\([0-9]\)\Z/
+      words.add(word)
+    end
+  end
+  $authoritative_pronunciation_words = words
 end
 
 def load_cmudict()

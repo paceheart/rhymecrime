@@ -650,6 +650,23 @@ def rarity_rescore_and_dump!(hash, **ctx_kwargs)
       end
 
       new_cat, new_freq = result
+
+      # Auth-pron protection: a hand-curated entry in
+      # +authoritative_pronunciations.txt+ is explicit curator intent that the
+      # word should be reachable. Veto a +:forbidden+ verdict by clamping to
+      # +:rare+ so the headword survives the rescore. The auto spelling-variant
+      # detectors in +corpus_variants.rb+ (e.g. +silent_e_drop_corpus_pairs+
+      # for +rueing/ruing+ via the +rue+ base, +us_uk_er_re_pair+ for
+      # +megameter/megametre+) gate on +word_dict_includes_pronounced_headword?+
+      # for both halves of a pair, so silently deleting the auth-pron half
+      # would prevent the pair from being detected at all. Only +:forbidden+
+      # gets vetoed — +:rare+ / +:common+ classifier verdicts are honored.
+      if new_cat == :forbidden && authoritative_pronunciation_words.include?(word)
+        dict_trace_puts(word, "rarity_classifier_rescore: VETO :forbidden -> :rare (auth pron, was freq=#{entry[0]})") if dict_trace_word?(word)
+        new_cat = :rare
+        new_freq = CURATED_RARITY_OVERRIDE_FREQ[:rare]
+      end
+
       if new_cat == :forbidden
         dict_trace_puts(word, "rarity_classifier_rescore: DELETE (classified :forbidden, was freq=#{entry[0]})") if dict_trace_word?(word)
         classifier_mark_or_delete!(hash, word, entry, phase: :classifier, reason: :forbidden_verdict, detail: { was_freq: entry[0], classifier_score: new_freq })
