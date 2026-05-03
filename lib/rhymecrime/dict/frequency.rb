@@ -1361,6 +1361,10 @@ def add_frequency_info(cmudict, subtlex_hash, subtlex_total_hash, wordfreq_hash,
           dict_trace_puts(w, "morph_expand_listed ← #{base}: skip (plural :s not allowed)") if tr
           next
         end
+        if inflection_suffix_kind == :s && morph_base_is_already_plural_form?(base, hash, neol_words, common_words, wordfreq_hash)
+          dict_trace_puts(w, "morph_expand_listed ← #{base}: skip (:s on already-plural base)") if tr
+          next
+        end
         if (inflection_suffix_kind == :ed || inflection_suffix_kind == :ing) && base.end_with?("ing")
           dict_trace_puts(w, "morph_expand_listed ← #{base}: skip (#{inflection_suffix_kind} on -ing base)") if tr
           next
@@ -1510,6 +1514,10 @@ def add_frequency_info(cmudict, subtlex_hash, subtlex_total_hash, wordfreq_hash,
         wf = wordfreq_hash[w] || 0
         if inflection_suffix_kind == :s && !morph_base_allows_plural_s?(base, pos_map, forms_map, w, wordfreq_hash: wordfreq_hash, subtlex_hash: subtlex_hash)
           dict_trace_puts(w, "morph_expand_subtlex ← #{base}: skip (plural :s not allowed)") if tr
+          next
+        end
+        if inflection_suffix_kind == :s && morph_base_is_already_plural_form?(base, hash, neol_words, common_words, wordfreq_hash)
+          dict_trace_puts(w, "morph_expand_subtlex ← #{base}: skip (:s on already-plural base)") if tr
           next
         end
         if (inflection_suffix_kind == :ed || inflection_suffix_kind == :ing) && base.end_with?("ing")
