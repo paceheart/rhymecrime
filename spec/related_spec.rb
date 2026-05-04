@@ -189,8 +189,8 @@ describe 'RELATED' do
         oughta_be_related 'pirate', 'tor', not_working_reason: "predictor gap: similarity=0; 'tor' (rocky peak) is too rare for the embeddings"
       end
       context 'set_related: pirate -> crude / pursued' do
-        oughta_be_related 'pirate', 'crude', not_working_reason: "predictor gap: similarity=0; 'crude' (raidable cargo) is a thematic stretch the embeddings miss"
-        oughta_be_related 'pirate', 'pursued', not_working_reason: "predictor gap: similarity=0; 'pursued' (chased by authorities) is a thematic stretch the embeddings miss"
+        oughta_be_related 'pirate', 'crude'
+        oughta_be_related 'pirate', 'pursued'
       end
       context 'set_related: music -> enjoys / noise' do
         oughta_be_related 'music', 'enjoys'
@@ -241,7 +241,7 @@ describe 'RELATED' do
       end
       context 'set_related: prayers -> recite* / rite*' do
         oughta_be_related 'prayers', 'recite'
-        oughta_be_related 'prayers', 'rite', not_working_reason: "predictor gap: similarity=0; 'rite' (religious ritual) embeddings miss the prayers connection"
+        oughta_be_related 'prayers', 'rite'
       end
       context 'set_related: magic -> chants / trance' do
         oughta_be_related 'magic', 'chants'
@@ -273,7 +273,7 @@ describe 'RELATED' do
       end
       context 'set_related: cat -> arboreal / territorial' do
         oughta_be_related 'cat', 'arboreal'
-        oughta_be_related 'cat', 'territorial', not_working_reason: "predictor gap: similarity=0; cats are textbook territorial but the embeddings miss it"
+        oughta_be_related 'cat', 'territorial'
       end
       context 'pair_related: food / evil -> mushroom / doom' do
         oughta_be_related 'food', 'mushroom'

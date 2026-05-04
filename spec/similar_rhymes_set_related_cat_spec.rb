@@ -18,7 +18,7 @@ describe 'SET_RELATED' do
     set_related_oughta_contain 'cat', 'fur', 'purr'
     set_related_oughta_contain 'cat', 'neighbor', 'saber'
     set_related_oughta_contain 'cat', 'meow', 'now'
-    set_related_oughta_contain 'cat', 'arboreal', 'territorial', not_working_reason: "predictor gap: similarity=0 for cat/territorial (see related_spec prereq)"
+    set_related_oughta_contain 'cat', 'arboreal', 'territorial'
     set_related_oughta_contain 'cat', 'beagle', 'seagull'
     set_related_oughta_contain 'cat', 'bird', 'purred'
   end

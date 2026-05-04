@@ -55,7 +55,7 @@ describe 'SET_RELATED' do
     set_related_oughta_contain 'prayers', 'addressed', 'blessed', not_working_reason: "predictor gap: similarity=0 for prayers/addressed (see related_spec prereq)"
     set_related_oughta_contain 'prayers', 'blessed', 'request'
     set_related_oughta_contain 'prayers', 'appeal', 'kneel'
-    set_related_oughta_contain_base_form 'prayers', 'recite', 'rite', not_working_reason: "predictor gap: similarity=0 for prayers/rite (see related_spec prereq)"
+    set_related_oughta_contain_base_form 'prayers', 'recite', 'rite', not_working_reason: "predictor now relates prayers/rite (related_spec prereq passes), but set_related doesn't surface this tuple"
     set_related_oughta_contain 'prayers', 'exhortations', 'meditations'
     set_related_oughta_contain 'prayers', 'humble', 'mumble'
     set_related_oughta_contain 'prayers', 'jew', 'pew'

@@ -35,7 +35,7 @@ describe 'SET_RELATED' do
     set_related_oughta_contain 'pirate', 'seagull', 'illegal'
     set_related_oughta_contain 'pirate', 'shore', 'tor', not_working_reason: "predictor gap: similarity=0; 'tor' (rocky peak) is too rare for the embeddings (see related_spec prereq)"
     set_related_oughta_contain 'pirate', 'attitude', 'latitude'
-    set_related_oughta_contain 'pirate', 'crude', 'pursued', not_working_reason: "predictor gap: similarity=0 for both pirate/crude and pirate/pursued (see related_spec prereq)"
+    set_related_oughta_contain 'pirate', 'crude', 'pursued', not_working_reason: "predictor now relates pirate/crude and pirate/pursued (related_spec prereqs pass), but set_related doesn't surface this tuple"
     set_related_oughta_contain 'pirate', 'buggery', 'thuggery'
     set_related_oughta_contain 'pirate', 'crews', 'tattoos'
     set_related_oughta_contain 'pirate', 'commandeering', 'profiteering'
