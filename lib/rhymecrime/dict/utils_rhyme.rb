@@ -93,9 +93,9 @@ MODEL_SENSE_VECTORS_FILENAME = "model_sense_vectors.msgpack"
 RARE_FREQ_MAX = 4
 
 # Rime dict build: when false (default), drop buckets where every pair of common headwords (freq>RARE_FREQ_MAX)
-# rhymes only in the identical sense for this rime. Set INCLUDE_IDENTICAL_RHYMES=1 to keep those buckets.
-INCLUDE_IDENTICAL_RHYMES = begin
-  v = ENV["INCLUDE_IDENTICAL_RHYMES"]
+# rhymes only as rich rhymes for this rime. Set INCLUDE_RICH_RHYMES=1 to keep those buckets.
+INCLUDE_RICH_RHYMES = begin
+  v = ENV["INCLUDE_RICH_RHYMES"]
   v && !v.empty? && %w[1 true yes on].include?(v.downcase)
 end
 
@@ -308,19 +308,60 @@ def non_ascii_only?(word)
   word.bytes.all? { |b| b >= 0x80 }
 end
 
-# +explicitly_forbidden?+ unifies two policy sources:
+# +explicitly_forbidden?+ unifies three policy sources:
 #   1. +forbidden+/+forbidden_ish+ rows in +curated/rarity.csv+
 #      (the curated, hand-maintained block list)
 #   2. +non_ascii_only?+ — any word with zero ASCII characters
 #      (catches emoji and other purely-pictographic surfaces that leak in via
 #      Wiktionary/Kaikki; we don't want them as headwords or as rhyme outputs).
+#   3. +paradigm_noise_inflection?+ — Wiktionary/Kaikki paradigm-table
+#      inflections of curated stop-word / +semantically_promiscuous+ lemmas
+#      (+gots+, +nots+, +theyed+, +abouts+, ...) that have no corpus
+#      attestation. Mirrors the build-time +stopword_inflection_scrub+ in
+#      +frequency.rb+ so the runtime classifier is correct even when the live
+#      +word_dict+ on disk was generated before the scrub landed (or before
+#      a particular paradigm-noise surface was added to the seed list).
 # The build-time +forbidden_scrub+ pass in +frequency.rb+ iterates +word_dict+
-# keys against this predicate, so the policy-2 inputs are also pruned from the
-# generated dict on the next rebuild — no separate scrub needed.
+# keys against this predicate, so the policy-2 / policy-3 inputs are also
+# pruned from the generated dict on the next rebuild — no separate scrub needed.
 def explicitly_forbidden?(word)
   return true if non_ascii_only?(word)
   load_rarity_csv_word_sets! if $rarity_csv_forbidden_words_set.nil?
-  $rarity_csv_forbidden_words_set.include?(word)
+  return true if $rarity_csv_forbidden_words_set.include?(word)
+  paradigm_noise_inflection?(word)
+end
+
+# True when +word+ looks like a Wiktionary/Kaikki paradigm-table inflection
+# of a curated stop-word / +semantically_promiscuous+ lemma (+theyed+ <-
+# +they+, +gots+ <- +got+, +nots+ <- +not+, +abouts+ <- +about+, +heyed+
+# <- +hey+) with no independent corpus attestation — those surfaces are
+# theoretical inflections that real English never uses.
+#
+# Mirrors +stopword_inflection_scrub+ in +frequency.rb+ — same gates, so the
+# build-time scrub and the runtime predicate agree on which surfaces are
+# forbidden. Critically, this excludes self-listed promiscuous words
+# (+is+, +does+, +its+, +than+, +else+) — those are legitimate stop-word
+# surfaces that the build-time pipeline keeps in +word_dict+ so they remain
+# valid as cue inputs to +find_rhyming_words+, just promiscuous enough to
+# not be returned as rhymes for arbitrary cues. Forbidding them outright
+# would break the +RHYMES tricky+ / +RHYMES apostrophes+ /
+# +RHYMES bad pronunciations+ specs in +spec/rhyme_spec.rb+.
+#
+# Returning +true+ forwards through +explicitly_forbidden?+ to +allowed?+ /
+# +rarity_category+, dropping the surface from rhyme and +set_related+
+# output without requiring a dict rebuild.
+def paradigm_noise_inflection?(word)
+  return false if word.nil? || word.empty?
+  return false if semantically_promiscuous_words.include?(word)
+  return false if unrhymable_stop_word?(word)
+  return false if wn_has_entry?(word)
+  rarity_csv_common_words # load
+  rarity_csv_rare_words # load
+  return false if $rarity_csv_common_words&.include?(word)
+  return false if $rarity_csv_rare_words&.include?(word)
+  base = lemma(word)
+  return false if base == word
+  semantically_promiscuous_words.include?(base) || unrhymable_stop_word?(base)
 end
 
 #

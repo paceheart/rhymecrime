@@ -293,7 +293,7 @@ words_by_cue.each_key do |cue|
 
   rime_buckets = buckets[cue]
   raw_tuples = rime_buckets.values.map { |words| words.sort.uniq }
-  raw_tuples.reject! { |t| t.size < 2 || all_identical_rhymes?(t) }
+  raw_tuples.reject! { |t| t.size < 2 || all_rich_rhymes?(t) }
   raw_tuples.uniq!
 
   pruned =

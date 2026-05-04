@@ -802,6 +802,7 @@ explicitly forbidden,fag,common,1,this is fine I guess
 explicitly forbidden,spic,forbidden,1,""
 explicitly forbidden,spics,forbidden,1,""
 explicitly forbidden,spice,common,1,naive prefix matching is too broad
+wiktionary paradigm noise,alles,forbidden,1,"German for ""all"" — leaks in via Wiktionary paradigm tables, lemma resolves to itself so the stop-word-inflection scrub can't catch it"
 principled instead of pinpoint,bluejeans,uncommon,1,""
 principled instead of pinpoint,fedex,uncommon,1,""
 principled instead of pinpoint,flyby,common,1,""

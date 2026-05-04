@@ -351,7 +351,7 @@ threads = 1 if threads < 1
 # even pronunciations — rhymeless lemmas (+music+ / +concerto+ / +algebra+ /
 # +quarterback+) are kept on purpose because the runtime can legitimately
 # ask +thematically_related?+ about any common headword. +pirate+ for
-# example has +prons=[]+ and +headword_has_nonidentical_rhyme_partner?=false+
+# example has +prons=[]+ and +headword_has_non_rich_rhyme_partner?=false+
 # yet still surfaces as a cue here (its +set_related+ row is rich because
 # pirate's *related* words rhyme with each other — +[handsome, ransom]+,
 # +[acquire, crier, entire, squire]+ — even though pirate itself has no

@@ -132,7 +132,7 @@ RIME_DICT_HEADER = "# RhymeCrime's rime dictionary
 #
 # Singleton rimes are excluded. Buckets where every word is rare (frequency <= RARE_FREQ_MAX) are excluded.
 # Buckets with exactly one common *preferred* headword (see preferred_form / spelling_variants) and other partners are excluded.
-# Unless INCLUDE_IDENTICAL_RHYMES is set, buckets where every pair of common headwords rhymes only identically are excluded.
+# Unless INCLUDE_RICH_RHYMES is set, buckets where every pair of common headwords rhymes only as rich rhymes are excluded.
 #"
 
 WORD_DICT_HEADER = "# RhymeCrime's word info dictionary

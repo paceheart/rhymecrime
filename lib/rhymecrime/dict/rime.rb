@@ -67,7 +67,7 @@ end
 # Tombstoned entries are intentionally INCLUDED in rdict here (and kept
 # by +strip_dispreferred_headwords_from_rdict!+ below) so that downstream
 # bucket-level decisions (+rime_bucket_one_common_preferred_with_any_rare?+,
-# +rime_bucket_all_common_pairs_identical_only?+) see the same bucket
+# +all_common_headwords_rich_rhyme_for_rime?+) see the same bucket
 # membership they saw in the pre-refactor build, where scrubbed / classifier-
 # forbidden rows lingered in rdict as stale cmudict references until the
 # disconnect filter's +prune_rdict_to_headwords!+ pass at the end. Since
@@ -238,8 +238,8 @@ def rime_bucket_common_headwords(words, word_dict)
   words.select { |w| word_dict_frequency_for_rime_bucket(word_dict, w) > RARE_FREQ_MAX }
 end
 
-# True if +a+ and +b+ have some pairing of pronunciations for +rime+ that counts as a non-identical rhyme.
-def rime_common_pair_nonidentical_for_rime?(a, b, rime, word_dict)
+# True if +a+ and +b+ have some pairing of pronunciations for +rime+ that counts as a non-rich rhyme.
+def non_rich_rime_pair_exists_for_rime?(a, b, rime, word_dict)
   ea = word_dict[a]
   eb = word_dict[b]
   return false if ea.nil? || eb.nil?
@@ -250,31 +250,31 @@ def rime_common_pair_nonidentical_for_rime?(a, b, rime, word_dict)
 
   pr_a.each do |pa|
     next unless pa.rime == rime
-    return true unless headword_identical_rhyme?(b, pa.rich_rime_array, rime, word_dict)
+    return true unless headword_rich_rhyme?(b, pa.rich_rime_array, rime, word_dict)
   end
   pr_b.each do |pb|
     next unless pb.rime == rime
-    return true unless headword_identical_rhyme?(a, pb.rich_rime_array, rime, word_dict)
+    return true unless headword_rich_rhyme?(a, pb.rich_rime_array, rime, word_dict)
   end
   false
 end
 
-# True when there are ≥2 common headwords and every unordered pair rhymes only identically for this +rime+.
-def rime_bucket_all_common_pairs_identical_only?(rime, words, word_dict)
+# True when there are ≥2 common headwords and every unordered pair is a rich rhyme for this +rime+.
+def all_common_headwords_rich_rhyme_for_rime?(rime, words, word_dict)
   common = rime_bucket_common_headwords(words, word_dict)
   return false if common.size < 2
 
   common.combination(2) do |a, b|
-    return false if rime_common_pair_nonidentical_for_rime?(a, b, rime, word_dict)
+    return false if non_rich_rime_pair_exists_for_rime?(a, b, rime, word_dict)
   end
   true
 end
 
-# After rare/mixed pruning: drop buckets where all common–common rhyme links are identical (+homophone_ok=false+
-# would find no partner within the common subset). Skipped when +INCLUDE_IDENTICAL_RHYMES+ is true.
+# After rare/mixed pruning: drop buckets where all common–common rhyme links are rich rhymes (+homophone_ok=false+
+# would find no partner within the common subset). Skipped when +INCLUDE_RICH_RHYMES+ is true.
 # Same rdict-reads-during-prune wrap as +delete_rare_only_rime_buckets!+.
-def delete_common_identical_only_rime_buckets!(rdict, word_dict, log: true)
-  return 0 if INCLUDE_IDENTICAL_RHYMES
+def delete_common_rich_only_rime_buckets!(rdict, word_dict, log: true)
+  return 0 if INCLUDE_RICH_RHYMES
 
   rime_dict_with_reads_during_prune(rdict) do
     removed = 0
@@ -282,14 +282,14 @@ def delete_common_identical_only_rime_buckets!(rdict, word_dict, log: true)
     before_n = rdict.length
     rdict.delete_if do |rime, words|
       next false if words.nil? || words.empty?
-      next false unless rime_bucket_all_common_pairs_identical_only?(rime, words, word_dict)
+      next false unless all_common_headwords_rich_rhyme_for_rime?(rime, words, word_dict)
 
       removed += 1
-      rime_dict_trace_partner_loss!(rdict, rime, words, nil, reason: :common_identical_only, round: round_id)
+      rime_dict_trace_partner_loss!(rdict, rime, words, nil, reason: :common_rich_only, round: round_id)
       true
     end
     if log && removed > 0
-      puts "#{rdict.length} out of #{before_n} rime buckets remain after removing common-identical-only buckets (INCLUDE_IDENTICAL_RHYMES is off)"
+      puts "#{rdict.length} out of #{before_n} rime buckets remain after removing common-rich-only buckets (INCLUDE_RICH_RHYMES is off)"
     end
     removed
   end
@@ -319,7 +319,7 @@ end
 
 # Parallels +homophone_rhyme?+ in crime.rb (with rich-rime-only matching, not full-phoneme): true when every +target_rime+ pronunciation of +rhyme_word+ matches +target_rich_rime_array+,
 # or when there is no such pronunciation (vacuous; candidate is filtered out for homophone_ok=false).
-def headword_identical_rhyme?(rhyme_word, target_rich_rime_array, target_rime, word_dict)
+def headword_rich_rhyme?(rhyme_word, target_rich_rime_array, target_rime, word_dict)
   entry = word_dict[rhyme_word]
   prons = entry ? entry[1] : nil
   return true if prons.nil? || prons.empty?
@@ -330,11 +330,11 @@ def headword_identical_rhyme?(rhyme_word, target_rich_rime_array, target_rime, w
   true
 end
 
-# True if +word+ has at least one rime-bucket partner treated as a non-identical rhyme (+find_rhyming_words(..., false)+).
+# True if +word+ has at least one rime-bucket partner treated as a non-rich rhyme (+find_rhyming_words(..., false)+).
 # Wraps its rdict reads in +with_reads_during_prune+ so it's an authorized
 # reader inside the disconnect-filter pruning window. Outside the window the
 # wrapper is inert.
-def headword_has_nonidentical_rhyme_partner?(word, prons, rdict, word_dict)
+def headword_has_non_rich_rhyme_partner?(word, prons, rdict, word_dict)
   return false if prons.nil? || prons.empty?
 
   rime_dict_with_reads_during_prune(rdict) do
@@ -350,7 +350,7 @@ def headword_has_nonidentical_rhyme_partner?(word, prons, rdict, word_dict)
       seen[key] = true
       (rdict[rime] || []).each do |other|
         next if preferred_form_in_build_lexicon(other, word_dict) == word_pf
-        next if headword_identical_rhyme?(other, rich_rime_array, rime, word_dict)
+        next if headword_rich_rhyme?(other, rich_rime_array, rime, word_dict)
         return true
       end
     end
@@ -380,12 +380,12 @@ end
 #
 # Strict superset of +cue_word?+: every relatedness target is a valid cue, but
 # some cues (rhymeless lemmas) are not targets. The extra criterion is a
-# non-identical rhyme partner in +rdict+ — without one the word would never
+# non-rich rhyme partner in +rdict+ — without one the word would never
 # surface in the UI even if it were included in a list.
 def relatedness_target_word?(word, word_dict, rdict)
   return false unless cue_word?(word, word_dict)
   prons = word_dict[word]&.dig(1)
-  headword_has_nonidentical_rhyme_partner?(word, prons, rdict, word_dict)
+  headword_has_non_rich_rhyme_partner?(word, prons, rdict, word_dict)
 end
 
 # Drop rime-bucket members not in +allowed+; remove singleton buckets (same invariant as +merge_word_dict_pronunciations_into_rdict!+).

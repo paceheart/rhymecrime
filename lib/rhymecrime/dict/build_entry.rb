@@ -40,7 +40,7 @@
 # methods consult a per-instance pruning-active flag so a naive +rdict[rime]+
 # from a future contributor can't silently read the half-pruned rdict
 # during +filter_word_dict_disconnected!+'s fixed-point loop. Authorized
-# readers (the three rdict pruners and +headword_has_nonidentical_rhyme_partner?+)
+# readers (the three rdict pruners and +headword_has_non_rich_rhyme_partner?+)
 # wrap their bodies in +rdict.with_reads_during_prune { ... }+; the
 # disconnect loop itself runs inside +rdict.with_pruning_active { ... }+.
 #
@@ -302,7 +302,7 @@ class RimeDict < Hash
   end
 
   # Scope block for an authorized reader inside the pruning window (the
-  # three pruners and +headword_has_nonidentical_rhyme_partner?+). Stackable
+  # three pruners and +headword_has_non_rich_rhyme_partner?+). Stackable
   # (nested opt-ins are fine — the counter increments / decrements).
   def with_reads_during_prune
     @reads_during_prune_depth += 1

@@ -270,10 +270,10 @@ def filter_word_dict_disconnected!(word_dict, rdict, subtlex_hash, wordfreq_hash
   # the reader wraps its own reads in +rdict.with_reads_during_prune+. Four
   # authorized readers live inside this window today:
   #
-  #   1. +headword_has_nonidentical_rhyme_partner?+ (surface wraps its body).
+  #   1. +headword_has_non_rich_rhyme_partner?+ (surface wraps its body).
   #   2. +prune_rdict_to_headwords!+ (wraps its body).
   #   3. +delete_rare_only_rime_buckets!+ (wraps its body).
-  #   4. +delete_common_identical_only_rime_buckets!+ (wraps its body).
+  #   4. +delete_common_rich_only_rime_buckets!+ (wraps its body).
   #
   # Inner per-round word_dict deletions are deferred: each disconnect-dropped
   # row gets +mark_tombstoned!+ with the rescue-diagnostic detail,
@@ -313,7 +313,7 @@ def do_filter_word_dict_disconnected!(word_dict, rdict, subtlex_hash, wordfreq_h
         freq = entry[0]
         prons = entry[1]
         next if freq > 0
-        has_rhyme = headword_has_nonidentical_rhyme_partner?(w, prons, rdict, word_dict)
+        has_rhyme = headword_has_non_rich_rhyme_partner?(w, prons, rdict, word_dict)
         if dict_trace_word?(w) && freq == 0
           # Inside-the-window rdict reads for trace-word diagnostics; scope
           # the opt-in to exactly this diagnostic region so the guard
@@ -414,7 +414,7 @@ def do_filter_word_dict_disconnected!(word_dict, rdict, subtlex_hash, wordfreq_h
       dict_set = live_keys.to_set
       prune_rdict_to_headwords!(rdict, live_keys)
       delete_rare_only_rime_buckets!(rdict, word_dict)
-      delete_common_identical_only_rime_buckets!(rdict, word_dict)
+      delete_common_rich_only_rime_buckets!(rdict, word_dict)
       # Terminate on "no new tombstoned marks this round" — the
       # parity-preserving analog of the old "no new hash.delete this round".
       # Earlier-phase scrub / classifier marks don't factor in here; those
@@ -1921,7 +1921,7 @@ def build_word_dict(cmudict, rdict, subtlex_hash, subtlex_total_hash, wordfreq_h
   merge_word_dict_pronunciations_into_rdict!(rdict, word_dict)
   strip_dispreferred_headwords_from_rdict!(rdict, word_dict)
   delete_rare_only_rime_buckets!(rdict, word_dict)
-  delete_common_identical_only_rime_buckets!(rdict, word_dict)
+  delete_common_rich_only_rime_buckets!(rdict, word_dict)
   filter_word_dict_disconnected!(word_dict, rdict, subtlex_hash, wordfreq_hash, pos_map, forms_map, original_cmudict_headwords, wiktionary_words)
   # Terminal reducer: project every surviving +BuildEntry+ back to the
   # legacy +[freq, prons, lemma]+ shape that +save_word_dict+,

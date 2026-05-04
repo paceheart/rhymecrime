@@ -631,10 +631,11 @@ def homophone_rhyme?(rhyme, target_pron)
   #
   # Morphological prefix cases (+loading+/+unloading+, +end+/+upend+, +able+/+disable+)
   # are intentionally _not_ caught here -- they're handled by +filter_out_prefix_words+
-  # downstream. Coincidental identical rhyme syllables with different onsets
-  # (+leave+/+believe+, +plied+/+applied+, +bone+/+trombone+) _pass_ this filter and
-  # are allowed to rhyme. We accept splash damage (e.g. +percussion+/+repercussion+
-  # getting caught by +filter_out_prefix_words+) in exchange for a simpler rule.
+  # downstream. Coincidental rich-rime collisions where the words differ before the
+  # stressed syllable (+leave+/+believe+, +plied+/+applied+, +bone+/+trombone+) _pass_
+  # this filter and are allowed to rhyme. We accept splash damage (e.g.
+  # +percussion+/+repercussion+ getting caught by +filter_out_prefix_words+) in exchange
+  # for a simpler rule.
   target_rime = target_pron.rime
   for pron in pronunciations(rhyme)
     next unless pron.rime == target_rime
@@ -644,7 +645,7 @@ def homophone_rhyme?(rhyme, target_pron)
   return false
 end
 
-def all_identical_rhymes?(words)
+def all_rich_rhymes?(words)
   syllable_signatures = Hash.new
   for word in words do
     for pron in pronunciations(word)
@@ -652,7 +653,7 @@ def all_identical_rhymes?(words)
     end
   end
   if syllable_signatures.length == 1
-    debug "Filtered out identical rhymes #{words}"
+    debug "Filtered out rich rhymes #{words}"
     return true
   else
     return false
@@ -1302,7 +1303,7 @@ end
 # the kept tuples.
 # Within a single rhyming tuple, drop members that are morphological +COMMON_PREFIXES+
 # derivations of another member already present in the tuple, when the two share an
-# identical rhyme-syllable fingerprint (the criterion +all_identical_rhymes?+ already
+# matching rich rime (the criterion +all_rich_rhymes?+ already
 # uses to identify phonologically-redundant members). Example:
 # +[healthy, stealthy, unhealthy]+ -> +[healthy, stealthy]+ because +unhealthy+ = +un+
 # + +healthy+ and both share the +HH EH L TH IY+ rich rime. Does not touch independent
@@ -1756,7 +1757,7 @@ end
 # tuples that differ only by parallel +Inflect+ suffixes (+[deck, wreck]+ vs
 # +[decked, wrecked]+, +[crew, tattoo]+ vs +[crews, tattoos]+) all survive.
 # Within-tuple derivation condensation (+condense_tuple_derived_forms+, which
-# collapses +[legal, illegal]+-style identical-rhyme prefix derivations) still
+# collapses +[legal, illegal]+-style rich-rhyme prefix derivations) still
 # runs — only the *across-tuple* derivational dedup is bypassed. Used by
 # +spec/similar_rhymes_spec.rb+ so per-pair assertions like
 # +set_related_oughta_contain 'pirate', 'deck', 'wreck'+ aren't masked by an
@@ -2184,7 +2185,7 @@ def really_find_rhyming_tuples(input_rel1, common_only = false)
   tuples = []
   related_rhymes.each do |_rime, relrhymes|
     relrhymes.sort!.uniq!
-    tuples.push(relrhymes.sort) if relrhymes.length > 1 && !all_identical_rhymes?(relrhymes)
+    tuples.push(relrhymes.sort) if relrhymes.length > 1 && !all_rich_rhymes?(relrhymes)
   end
   # Alternate pronunciations can yield different +rime+ keys (e.g. OW_L_IY_AH_N vs OW_L_Y_AH_N) with the
   # same sorted word set — dedupe before suffix pruning so output is not repeated line-for-line.
@@ -2213,7 +2214,7 @@ def really_find_rhyming_pairs(input_rel1, input_rel2, common_only = false)
   # Compute the set of all words thematically related to INPUT_REL1, call it RELATEDS1.
   # Compute the set of all words thematically related to INPUT_REL2, call it RELATEDS2.
   # For each word REL1 in RELATEDS1,
-  #   Get all non-identical rhymes RHYME of REL1.
+  #   Get all non-homophone rhymes RHYME of REL1.
   #   If RHYME rhymes with REL1 and is related to INPUT_REL2, we win! "REL1 / RHYME" is a pair.
   return [] if explicitly_forbidden?(input_rel1) || explicitly_forbidden?(input_rel2)
 
@@ -2233,7 +2234,7 @@ def really_find_rhyming_pairs(input_rel1, input_rel2, common_only = false)
   relateds1.each do |rel1|
     # rel1 is a word related to input_rel1. We're looking for rhyming pairs [rel1 rel2].
     debug "rhymes for #{rel1} (#{debug_info(rel1)}):<br>"
-    find_rhyming_words(rel1, false).each do |rhyme| # check all non-identical rhymes of REL1, call each one 'RHYME'
+    find_rhyming_words(rel1, false).each do |rhyme| # check all non-homophone rhymes of REL1, call each one 'RHYME'
       if relateds2.include?(rhyme) # is RHYME related to INPUT_REL2? If so, we win!
         related_rhymes[rel1].push(rhyme)
         debug " " + rhyme + " " + debug_info(rhyme)

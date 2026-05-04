@@ -163,7 +163,7 @@ describe 'prune_suffix_redundant_rhyming_tuples' do
     prune_entire_rhyming_tuple 'desperados / desperadoes'
   end
 
-  context 'prune identical rhymes' do
+  context 'prune rich rhymes' do
     prune_entire_rhyming_tuple 'legitimate / illegitimate'
   end
 

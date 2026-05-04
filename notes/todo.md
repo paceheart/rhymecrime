@@ -29,7 +29,7 @@ maybe NLTK wup_similarity or https://stackoverflow.com/questions/14148986/how-do
 
 ## user requests
 
-* show identical rhymes in "for the brazen" instead of eliminating them entirely
+* show rich rhymes in "for the brazen" instead of eliminating them entirely
 
 ## could-do list
 
