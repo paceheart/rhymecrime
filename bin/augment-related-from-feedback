@@ -180,7 +180,7 @@ module FeedbackDynamoExport
     end
   end
 
-  def print_ddb_summary(rows, geo_lookup: true)
+  def print_ddb_summary(rows, geo_lookup: true, existing: Set.new)
     verdict_counts = Hash.new(0)
     per_pair = Hash.new { |h, k| h[k] = { up: 0, down: 0, undo: 0, events: [] } }
     rows.each do |r|
@@ -194,6 +194,18 @@ module FeedbackDynamoExport
 
     puts
     puts "==> verdict totals: #{verdict_counts.map { |k, v| "#{k}=#{v}" }.join(" ")}"
+    return if per_pair.empty?
+
+    # Suppress pairs already curated in related.csv — they're noise here since
+    # they can't produce new rows downstream anyway.
+    skipped_existing = 0
+    per_pair.delete_if do |(cue, rel), _|
+      if existing.include?([cue, rel])
+        skipped_existing += 1
+        true
+      end
+    end
+    puts "    (suppressed #{skipped_existing} pair#{skipped_existing == 1 ? '' : 's'} already in related.csv)" if skipped_existing.positive?
     return if per_pair.empty?
 
     unique_ips = per_pair.each_value.flat_map { |b| b[:events].map { |e| e[:ip] } }
@@ -297,6 +309,26 @@ module IpGeoLookup
   end
 end
 
+def norm(s)
+  s.to_s.strip.downcase
+end
+
+def load_existing_pairs(path)
+  seen = Set.new
+  CSV.foreach(path, headers: true, encoding: "UTF-8") do |row|
+    cue = norm(row["cue"])
+    rel = norm(row["related"])
+    next if cue.empty? || rel.empty?
+    seen << [cue, rel]
+  end
+  seen
+end
+
+# Load curated pairs up-front so the DDB summary can suppress already-tagged
+# pairs. If the file is missing we fall back to an empty set (and the strict
+# check below will still abort the import path).
+existing = File.file?(related_csv) ? load_existing_pairs(related_csv) : Set.new
+
 if from_dynamodb
   $LOAD_PATH.unshift File.expand_path("../lib", __dir__)
   require "aws-sdk-dynamodb"
@@ -319,7 +351,7 @@ if from_dynamodb
   rows = FeedbackDynamoExport.scan_to_rows(client, table_name)
   FeedbackDynamoExport.write_feedback_csv(ddb_out, rows, header)
   puts "==> wrote #{rows.size} rows to #{ddb_out}"
-  FeedbackDynamoExport.print_ddb_summary(rows, geo_lookup: geo_lookup)
+  FeedbackDynamoExport.print_ddb_summary(rows, geo_lookup: geo_lookup, existing: existing)
 
   if export_only
     puts
@@ -335,21 +367,6 @@ end
 unless File.file?(related_csv)
   warn "missing #{related_csv}; refusing to create from scratch"
   exit 1
-end
-
-def norm(s)
-  s.to_s.strip.downcase
-end
-
-def load_existing_pairs(path)
-  seen = Set.new
-  CSV.foreach(path, headers: true, encoding: "UTF-8") do |row|
-    cue = norm(row["cue"])
-    rel = norm(row["related"])
-    next if cue.empty? || rel.empty?
-    seen << [cue, rel]
-  end
-  seen
 end
 
 def replay_feedback(path)
@@ -382,7 +399,6 @@ def replay_feedback(path)
   pair_tally
 end
 
-existing = load_existing_pairs(related_csv)
 warn "loaded #{existing.size} existing (cue, related) pairs from #{related_csv}"
 
 tally = replay_feedback(feedback_csv)
