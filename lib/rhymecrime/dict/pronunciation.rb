@@ -266,6 +266,23 @@ class Pronunciation
     rich_rime_array.join(" ")
   end
 
+  # +rich_rime+ starts at the beginning of the primary-stress syllable while
+  # +rime+ starts at the primary-stress vowel itself. When that syllable has
+  # no onset consonant, the two cover identical spans and +rich_rime+ carries
+  # zero information beyond +rime+. Call that a +trivially_rich_rime?+: any
+  # cross-word match on +rich_rime+ in this case is equivalent to a plain
+  # rime match, not a true rich rhyme (which requires the onset to match
+  # too). Length-compares the underlying arrays — flap-T normalization in
+  # +rime_array+ shifts phoneme identity (T → D) but preserves length, and
+  # both arrays share the same end and the same stress-digit stripping.
+  def trivially_rich_rime?
+    rich_rime_array.length == rime_array.length
+  end
+
+  def nontrivially_rich_rime?
+    !trivially_rich_rime?
+  end
+
   # Split +@phonemes+ on +.+ tokens into per-syllable arrays. Cheap; used by
   # the vowel-count invariant and any caller that needs a structural view of
   # an already-syllabified pronunciation.

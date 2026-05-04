@@ -645,14 +645,23 @@ def homophone_rhyme?(rhyme, target_pron)
   return false
 end
 
-def all_rich_rhymes?(words)
+def all_nontrivially_rich_rhymes?(words)
+  # Bucket-wide rich_rime collision is only a real rich-rhyme signal when at
+  # least one of the prons has a +nontrivially_rich_rime?+ (i.e. its primary-
+  # stress syllable carries an onset consonant that the rich rime captures).
+  # Tuples like [viola, hemiola, payola] all have onsetless OW1 syllables, so
+  # every rich_rime trivially equals the plain rime — they're plain rhymes,
+  # not rich rhymes, and dropping them silently buries good music tuples like
+  # +music → viola / hemiola+.
   syllable_signatures = Hash.new
+  any_nontrivial = false
   for word in words do
     for pron in pronunciations(word)
       syllable_signatures[pron.rich_rime] = true
+      any_nontrivial = true if pron.nontrivially_rich_rime?
     end
   end
-  if syllable_signatures.length == 1
+  if syllable_signatures.length == 1 && any_nontrivial
     debug "Filtered out rich rhymes #{words}"
     return true
   else
@@ -1303,7 +1312,7 @@ end
 # the kept tuples.
 # Within a single rhyming tuple, drop members that are morphological +COMMON_PREFIXES+
 # derivations of another member already present in the tuple, when the two share an
-# matching rich rime (the criterion +all_rich_rhymes?+ already
+# matching rich rime (the criterion +all_nontrivially_rich_rhymes?+ already
 # uses to identify phonologically-redundant members). Example:
 # +[healthy, stealthy, unhealthy]+ -> +[healthy, stealthy]+ because +unhealthy+ = +un+
 # + +healthy+ and both share the +HH EH L TH IY+ rich rime. Does not touch independent
@@ -2185,7 +2194,7 @@ def really_find_rhyming_tuples(input_rel1, common_only = false)
   tuples = []
   related_rhymes.each do |_rime, relrhymes|
     relrhymes.sort!.uniq!
-    tuples.push(relrhymes.sort) if relrhymes.length > 1 && !all_rich_rhymes?(relrhymes)
+    tuples.push(relrhymes.sort) if relrhymes.length > 1 && !all_nontrivially_rich_rhymes?(relrhymes)
   end
   # Alternate pronunciations can yield different +rime+ keys (e.g. OW_L_IY_AH_N vs OW_L_Y_AH_N) with the
   # same sorted word set — dedupe before suffix pruning so output is not repeated line-for-line.

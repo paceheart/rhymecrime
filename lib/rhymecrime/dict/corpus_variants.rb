@@ -1039,8 +1039,49 @@ def resolve_wiktionary_variant_winner(a, b, rows, wordfreq_hash)
     return [target, variant]
   end
 
+  paradigm_winner = pick_inflectional_paradigm_winner(a, b)
+  if paradigm_winner
+    alt = (paradigm_winner == a) ? b : a
+    return [paradigm_winner, alt]
+  end
+
   sorted = [a, b].sort
   [sorted[0], sorted[1]]
+end
+
+# Tiebreaker for spelling-variant pairs where Wiktionary supplies no
+# directional evidence (no misspelling tag, no +alt-of+ pointer) and corpus
+# frequency is tied or absent. Picks the form with the richer attested
+# inflectional paradigm in +$word_dict+: the canonical spelling typically
+# anchors a productive paradigm (+arrest+ → +arrests+, +arrested+,
+# +arresting+, +arrester+) while a misspelled stem rarely accumulates one
+# (+arest+ → none). Returns +nil+ when the paradigm counts are within 1 of
+# each other, leaving the alphabetical fallback to resolve ambiguous cases
+# like +cipher+/+cypher+ where both stems generate parallel paradigms.
+def pick_inflectional_paradigm_winner(a, b)
+  count_a = inflectional_paradigm_count(a)
+  count_b = inflectional_paradigm_count(b)
+  return a if count_a >= count_b + 2
+  return b if count_b >= count_a + 2
+  nil
+end
+
+# Concatenate the regular inflectional suffixes onto +stem+ and count how many
+# of the resulting surfaces are live +$word_dict+ headwords. A relative measure:
+# a misspelled stem typically produces zero attested inflections, while the
+# canonical spelling produces several. Naive concatenation undercounts cases
+# that involve consonant-doubling or +-y+ → +-i+ rewriting, but as a comparison
+# between two close-spelling candidates the absolute miss rate is symmetric
+# and the relative ordering still holds.
+def inflectional_paradigm_count(stem)
+  return 0 if stem.nil? || stem.empty? || $word_dict.nil?
+  REGULAR_INFLECTION_SUFFIX_PAIRS.count do |sfx, _|
+    inflected = regular_inflect(stem, sfx)
+    next false unless inflected
+    entry = $word_dict[inflected]
+    next false if entry.nil?
+    !(defined?(BuildEntry) && entry.is_a?(BuildEntry) && entry.tombstoned?)
+  end
 end
 
 # Pick the canonical surface in a connected-component cluster of VarCon-linked spellings
