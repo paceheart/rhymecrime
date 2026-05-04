@@ -1392,7 +1392,22 @@ def preferred_among_hyphen_equivalents(forms)
     parts << f if PARTICLE_HYPHEN_PREF_RE.match?(f)
     i += 1
   end
-  return parts.min if parts.any?
+  unless parts.empty?
+    # Particle-prefix compounds (in-laws, on-line, off-stage, on-screen)
+    # default to keeping the hyphen, but when the solid alternative is also
+    # a real headword AND has strictly higher corpus frequency than the
+    # hyphenated form, the solid form wins instead. Catches verbal
+    # lexicalizations like 'offset' (freq 9) over 'off-set' (freq 5) where
+    # modern usage has collapsed the hyphen, while leaving 'in-laws',
+    # 'on-line', 'off-stage', 'on-screen' (where the hyphenated form is at
+    # least as frequent) on their preferred hyphenated spelling.
+    hyph_pick = parts.min
+    solid_alt = forms.find { |f| !f.include?("-") }
+    if solid_alt.nil? || frequency(solid_alt) <= frequency(hyph_pick)
+      return hyph_pick
+    end
+    # else fall through to solid-form-wins fallback below
+  end
   redups = []
   i = 0
   while i < n
