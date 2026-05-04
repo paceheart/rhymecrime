@@ -381,7 +381,7 @@ describe 'RHYMES' do
     oughta_rhyme 'confide', 'defied'
     oughta_rhyme 'plied', 'applied' # ap- is not a prefix
     oughta_rhyme 'complied', 'applied'
-    oughta_rhyme 'illicit', 'solicit' # I'm sad that these are identical rhymes. illicit [IH2 L IH1 S AH0 T] solicit [S AH0 L IH1 S IH0 T]
+    oughta_rhyme 'illicit', 'solicit' # I'm sad that these are rich rhymes. illicit [IH2 L IH1 S AH0 T] solicit [S AH0 L IH1 S IH0 T]
     oughta_rhyme 'specter', 'inspector'
     oughta_rhyme 'spectre', 'inspector'
     oughta_rhyme 'supplemented', 'fermented'
@@ -411,7 +411,7 @@ describe 'RHYMES' do
     oughta_rhyme 'totalitarian', 'vegetarian'
     oughta_rhyme 'nation', 'abomination'
     ought_not_rhyme 'corn', 'acorn' # stress mismatch
-    # S ER V vs. Z ER V (and plurals/participles), so these aren't actually identical rhymes
+    # S ER V vs. Z ER V (and plurals/participles), so these aren't actually rich rhymes
     # phonetically. They share the +de-+ shape orthographically and the spelling-only filter
     # used to drop them as splash damage; +pron_suffix_aligned?+ now sees the S → Z onset
     # shift and lets the pair through.
