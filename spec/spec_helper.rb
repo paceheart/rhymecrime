@@ -46,6 +46,12 @@ end
 # examples:  rspec spec/rarity_spec.rb --tag ~rarity_ish
 
 RSpec.configure do |config|
+  # Persist per-example pass/fail status across runs so +--only-failures+ and
+  # +--next-failure+ can replay just the red examples. The whole suite takes
+  # ~5 minutes; iterating on a fix is ~10s per cycle through this file. The
+  # path is gitignored — see +.gitignore+. RSpec writes it on every run.
+  config.example_status_persistence_file_path = "spec/examples.txt"
+
   # rspec-expectations config goes here. You can use an alternate
   # assertion/expectation library such as wrong or the stdlib/minitest
   # assertions if you prefer.

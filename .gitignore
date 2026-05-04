@@ -10,3 +10,4 @@ tmp/*
 lambda-build/
 .venv/
 .cache/
+spec/examples.txt
