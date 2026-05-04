@@ -317,15 +317,15 @@ def filter_cmudict(cmudict, rdict)
   return filtered_cmudict
 end
 
-# Parallels +homophone_rhyme?+ in crime.rb (with rsyll-only matching, not full-phoneme): true when every +target_rime+ pronunciation of +rhyme_word+ matches +target_rs+,
+# Parallels +homophone_rhyme?+ in crime.rb (with rich-rime-only matching, not full-phoneme): true when every +target_rime+ pronunciation of +rhyme_word+ matches +target_rich_rime_array+,
 # or when there is no such pronunciation (vacuous; candidate is filtered out for homophone_ok=false).
-def headword_identical_rhyme?(rhyme_word, target_rs, target_rime, word_dict)
+def headword_identical_rhyme?(rhyme_word, target_rich_rime_array, target_rime, word_dict)
   entry = word_dict[rhyme_word]
   prons = entry ? entry[1] : nil
   return true if prons.nil? || prons.empty?
   prons.each do |pron|
     next unless pron.rime == target_rime
-    return false if pron.rich_rime_array != target_rs
+    return false if pron.rich_rime_array != target_rich_rime_array
   end
   true
 end
@@ -343,14 +343,14 @@ def headword_has_nonidentical_rhyme_partner?(word, prons, rdict, word_dict)
     prons.each do |pron|
       rime = pron.rime
       next if rime.empty?
-      rs = pron.rich_rime_array
-      key = [rime, rs]
+      rich_rime_array = pron.rich_rime_array
+      key = [rime, rich_rime_array]
       next if seen[key]
 
       seen[key] = true
       (rdict[rime] || []).each do |other|
         next if preferred_form_in_build_lexicon(other, word_dict) == word_pf
-        next if headword_identical_rhyme?(other, rs, rime, word_dict)
+        next if headword_identical_rhyme?(other, rich_rime_array, rime, word_dict)
         return true
       end
     end

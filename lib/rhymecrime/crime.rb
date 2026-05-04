@@ -102,9 +102,9 @@ def debug_info(word)
 
     # rhyme syllables string
     if prons.length == 1
-      result << " rsyll="
+      result << " rich_rime="
     else
-      result << " rsyll#{i}="
+      result << " rich_rime#{i}="
     end
 
     result << pron.rich_rime
@@ -1305,7 +1305,7 @@ end
 # identical rhyme-syllable fingerprint (the criterion +all_identical_rhymes?+ already
 # uses to identify phonologically-redundant members). Example:
 # +[healthy, stealthy, unhealthy]+ -> +[healthy, stealthy]+ because +unhealthy+ = +un+
-# + +healthy+ and both share the +HH EH L TH IY+ rsyll. Does not touch independent
+# + +healthy+ and both share the +HH EH L TH IY+ rich rime. Does not touch independent
 # same-pron homophones (+coral+/+choral+, +flour+/+flower+) since neither is a prefix
 # derivation of the other.
 #
@@ -1326,9 +1326,9 @@ GLOSS_GATED_PREFIXES = Set["sub"].freeze
 
 def condense_tuple_derived_forms(tup, focal_word = nil)
   return tup if tup.size < 2
-  rsyll_set_of = {}
+  rich_rime_set_of = {}
   tup.each do |w|
-    rsyll_set_of[w] = pronunciations(w).map { |p| p.rich_rime }.to_set
+    rich_rime_set_of[w] = pronunciations(w).map { |p| p.rich_rime }.to_set
   end
   dropped = Set.new
   tup.each do |derived|
@@ -1337,15 +1337,15 @@ def condense_tuple_derived_forms(tup, focal_word = nil)
       next if base == derived
       next if dropped.include?(base)
       next if dropped.include?(derived)
-      # Phonological proximity: rsyll overlap (fast path) or +pron_suffix_aligned?+
-      # fallback. The fallback catches cases where rsyll differs by an extra
+      # Phonological proximity: rich-rime overlap (fast path) or +pron_suffix_aligned?+
+      # fallback. The fallback catches cases where the rich rime differs by an extra
       # syllable-onset consonant due to syllabifier choices (+disorienting+'s
-      # "S AO ..." rsyll vs +orienting+'s "AO ..." — the +S+ migrated onset
+      # "S AO ..." rich rime vs +orienting+'s "AO ..." rich rime — the +S+ migrated onset
       # because the dis- prefix's +AH0+ stays open before the new third
       # syllable). The pron-tail check is what +prefix_words+ already uses
       # as the safety gate, so accepting it here aligns the within-tuple
       # condenser with the rhyme filter.
-      next if (rsyll_set_of[derived] & rsyll_set_of[base]).empty? &&
+      next if (rich_rime_set_of[derived] & rich_rime_set_of[base]).empty? &&
         !pron_suffix_aligned?(derived, base)
       COMMON_PREFIXES.each do |prefix|
         next unless derived.start_with?(prefix) && derived[prefix.length..] == base
