@@ -1374,6 +1374,22 @@ def hyphen_multi_fold_map
   @hyphen_multi_fold ||= (load_hyphen_multi_fold_map_from_disk || build_hyphen_multi_fold_map)
 end
 
+# Frequency lookup that works in both runtime and build contexts. Runtime
+# (+crime.rb+ loaded) defers to +word_dict+'s lazy loader; build time
+# (+bin/dict-build+, where +crime.rb+ is not on the load path) reads the
+# +$word_dict+ global pinned by +preferred_form_in_build_lexicon+. Calling
+# +frequency(word)+ directly would NameError during the build because
+# +crime.rb+ is the only place it's defined.
+def preferred_form_frequency_lookup(word)
+  return 0 if word.nil?
+  wd = defined?(word_dict) ? word_dict : $word_dict
+  return 0 if wd.nil?
+  entry = wd[word]
+  return 0 if entry.nil?
+  return 0 if defined?(BuildEntry) && entry.is_a?(BuildEntry) && entry.tombstoned?
+  (entry[0] || 0).to_i
+end
+
 def preferred_among_hyphen_equivalents(forms)
   n = forms.length
   return forms[0] if n <= 1
@@ -1393,17 +1409,17 @@ def preferred_among_hyphen_equivalents(forms)
     i += 1
   end
   unless parts.empty?
-    # Particle-prefix compounds (in-laws, on-line, off-stage, on-screen)
-    # default to keeping the hyphen, but when the solid alternative is also
-    # a real headword AND has strictly higher corpus frequency than the
-    # hyphenated form, the solid form wins instead. Catches verbal
-    # lexicalizations like 'offset' (freq 9) over 'off-set' (freq 5) where
-    # modern usage has collapsed the hyphen, while leaving 'in-laws',
-    # 'on-line', 'off-stage', 'on-screen' (where the hyphenated form is at
-    # least as frequent) on their preferred hyphenated spelling.
+    # Particle-prefix compounds (off-stage, on-line, in-box) default to
+    # keeping the hyphen ONLY when the solid alternative is absent or has
+    # strictly lower corpus frequency. Tied or solid-wins falls through
+    # to the orthographic default below, picking up verbal lexicalizations
+    # like 'offset' (vs 'off-set') where modern usage has collapsed the
+    # hyphen. Cases like 'in-laws' (different stress from 'inlaws') are
+    # filtered out earlier by the pron-compatibility guard in
+    # +preferred_form+, so this rule never sees them.
     hyph_pick = parts.min
     solid_alt = forms.find { |f| !f.include?("-") }
-    if solid_alt.nil? || frequency(solid_alt) <= frequency(hyph_pick)
+    if solid_alt.nil? || preferred_form_frequency_lookup(solid_alt) < preferred_form_frequency_lookup(hyph_pick)
       return hyph_pick
     end
     # else fall through to solid-form-wins fallback below
@@ -1416,7 +1432,63 @@ def preferred_among_hyphen_equivalents(forms)
     i += 1
   end
   return redups.min if redups.any?
+  # Corpus-frequency override before the default fewer-hyphens-wins rule:
+  # when one form is strictly more frequent, prefer it. Catches foreign
+  # loanword phrases like 'avant-garde' (freq 10) vs 'avantgarde' (freq 2)
+  # where the hyphenated spelling is the standard English rendering and
+  # the dehyphenated form is a rare back-formation. When all forms are
+  # tied (or zero-frequency), fall through to the orthographic default.
+  freqs = forms.map { |f| [f, preferred_form_frequency_lookup(f)] }
+  max_pair = freqs.max_by { |pair| pair[1] }
+  if max_pair && max_pair[1] > 0
+    second_max = freqs.reject { |p| p == max_pair }.map { |p| p[1] }.max || 0
+    return max_pair[0] if max_pair[1] > second_max
+  end
   forms.min_by { |f| [f.count("-"), f.downcase] }
+end
+
+# Filter +forms+ (a hyphen-fold equivalence class containing +word+) down to
+# those that share at least one pronunciation with +word+. Different stress
+# patterns or phoneme sequences mean the forms are different lexemes that
+# happen to share an orthographic fold ('inlaws' /IH1 N L AA2 Z/ is stressed
+# differently from 'in-laws' /IH2 N L AA1 Z/), so they shouldn't be grouped
+# as spelling variants. Returns the input forms unchanged when prons are
+# unavailable on either side, so this never breaks pron-less builds.
+def hyphen_fold_pron_compatible_forms(word, forms)
+  word_prons = pronunciation_phonemes_for_compat(word)
+  return forms if word_prons.empty?
+  forms.select do |f|
+    next true if f == word
+    f_prons = pronunciation_phonemes_for_compat(f)
+    next true if f_prons.empty?
+    f_prons.any? { |fp| word_prons.include?(fp) }
+  end
+end
+
+def pronunciation_phonemes_for_compat(word)
+  prons = pronunciations(word)
+  return [] if prons.nil? || prons.empty?
+  prons.map do |p|
+    raw = p.respond_to?(:phonemes) ? p.phonemes : p
+    normalize_phonemes_for_hyphen_fold_compat(raw)
+  end
+rescue StandardError
+  []
+end
+
+# Normalize a phoneme list so two prons that differ only in secondary or
+# unstressed vowel marks ('B AE1 K HH AE2 N D' vs 'B AE1 K HH AE0 N D' for
+# 'backhand' / 'back-hand') compare equal, while a real primary-stress
+# shift ('IH1 N L AA2 Z' for 'inlaws' vs 'IH2 N L AA1 Z' for 'in-laws')
+# stays distinct. Strips trailing '0' and '2' from each phoneme but keeps
+# the '1' marker so the position of the primary stress is preserved.
+def normalize_phonemes_for_hyphen_fold_compat(phonemes)
+  phonemes.map do |ph|
+    case ph
+    when /\A(.+?)[02]\z/ then ::Regexp.last_match(1)
+    else ph
+    end
+  end
 end
 
 def preferred_form(word)
@@ -1431,7 +1503,9 @@ def preferred_form(word)
   end
   forms = hyphen_multi_fold_map[spelling_variant_hyphen_fold(word)]
   return word if forms.nil? || forms.length < 2
-  preferred_among_hyphen_equivalents(forms)
+  compatible = hyphen_fold_pron_compatible_forms(word, forms)
+  return word if compatible.length < 2
+  preferred_among_hyphen_equivalents(compatible)
 end
 
 # Like +preferred_form+, but US/UK / hyphen resolution consults +word_dict+ (the build-time hash) via
@@ -1447,7 +1521,12 @@ end
 def all_forms(word)
   vf = variants[word]
   forms = hyphen_multi_fold_map[spelling_variant_hyphen_fold(word)]
-  forms = nil if forms.nil? || forms.length < 2
+  if forms && forms.length >= 2
+    compat = hyphen_fold_pron_compatible_forms(word, forms)
+    forms = compat.length >= 2 ? compat : nil
+  else
+    forms = nil
+  end
   morph = us_uk_morphology_variant_forms(word)
   if vf
     unless forms
@@ -1655,6 +1734,14 @@ COMMON_PREFIXES = [
   'syn',
   'tele',
   'teleo',   # teleological → logical (tele → ological wouldn't match)
+  'thermo',  # Greek combining form (thermoplastic/plastic, thermometer/meter,
+             # thermonuclear/nuclear, thermodynamics/dynamics, thermosphere/sphere,
+             # thermocouple/couple, thermotherapy/therapy). Listed here because
+             # +thermo+ is a rare dict headword (freq 2), so the +rare?+ gate in
+             # +compound_modifier_remainders+ would otherwise reject the peel that
+             # +electro+ (freq 10) sails through. Splash damage on +thermo+ words
+             # whose tail is non-derivational is bounded by the pron-suffix-
+             # alignment gate downstream.
   'trans',
   'tri',
   'un',
