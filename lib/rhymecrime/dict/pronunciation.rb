@@ -229,17 +229,17 @@ class Pronunciation
     @rime = rime_array.join("_").freeze
   end
 
-  def rhyme_syllables_array
-    return @rhyme_syllables_array if defined?(@rhyme_syllables_array)
+  def rich_rime_array
+    return @rich_rime_array if defined?(@rich_rime_array)
 
-    @rhyme_syllables_array = if empty?
-                               [].freeze
-                             else
-                               (rhyme_syllables_array_with_stress("1") || rhyme_syllables_array_with_stress("2") || rhyme_syllables_array_with_stress("0") or raise RuntimeError, "Pronunciation with no vowels: #{self}").freeze
-                             end
+    @rich_rime_array = if empty?
+                         [].freeze
+                       else
+                         (rich_rime_array_with_stress("1") || rich_rime_array_with_stress("2") || rich_rime_array_with_stress("0") or raise RuntimeError, "Pronunciation with no vowels: #{self}").freeze
+                       end
   end
 
-  def rhyme_syllables_array_with_stress(stress)
+  def rich_rime_array_with_stress(stress)
     parts = Array.new
     foundTheRhymingSyllable = false
     @phonemes.reverse.each { |phoneme|
@@ -262,8 +262,8 @@ class Pronunciation
     return nil
   end
 
-  def rhyme_syllables_string
-    rhyme_syllables_array.join(" ")
+  def rich_rime
+    rich_rime_array.join(" ")
   end
 
   # Split +@phonemes+ on +.+ tokens into per-syllable arrays. Cheap; used by

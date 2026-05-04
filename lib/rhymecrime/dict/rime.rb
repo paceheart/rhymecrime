@@ -250,11 +250,11 @@ def rime_common_pair_nonidentical_for_rime?(a, b, rime, word_dict)
 
   pr_a.each do |pa|
     next unless pa.rime == rime
-    return true unless headword_identical_rhyme?(b, pa.rhyme_syllables_array, rime, word_dict)
+    return true unless headword_identical_rhyme?(b, pa.rich_rime_array, rime, word_dict)
   end
   pr_b.each do |pb|
     next unless pb.rime == rime
-    return true unless headword_identical_rhyme?(a, pb.rhyme_syllables_array, rime, word_dict)
+    return true unless headword_identical_rhyme?(a, pb.rich_rime_array, rime, word_dict)
   end
   false
 end
@@ -270,7 +270,7 @@ def rime_bucket_all_common_pairs_identical_only?(rime, words, word_dict)
   true
 end
 
-# After rare/mixed pruning: drop buckets where all common–common rhyme links are identical (+identical_ok=false+
+# After rare/mixed pruning: drop buckets where all common–common rhyme links are identical (+homophone_ok=false+
 # would find no partner within the common subset). Skipped when +INCLUDE_IDENTICAL_RHYMES+ is true.
 # Same rdict-reads-during-prune wrap as +delete_rare_only_rime_buckets!+.
 def delete_common_identical_only_rime_buckets!(rdict, word_dict, log: true)
@@ -317,15 +317,15 @@ def filter_cmudict(cmudict, rdict)
   return filtered_cmudict
 end
 
-# Mirrors +identical_rhyme?+ in crime.rb: true when every +target_rime+ pronunciation of +rhyme_word+ matches +target_rs+,
-# or when there is no such pronunciation (vacuous; candidate is filtered out for identical_ok=false).
+# Parallels +homophone_rhyme?+ in crime.rb (with rsyll-only matching, not full-phoneme): true when every +target_rime+ pronunciation of +rhyme_word+ matches +target_rs+,
+# or when there is no such pronunciation (vacuous; candidate is filtered out for homophone_ok=false).
 def headword_identical_rhyme?(rhyme_word, target_rs, target_rime, word_dict)
   entry = word_dict[rhyme_word]
   prons = entry ? entry[1] : nil
   return true if prons.nil? || prons.empty?
   prons.each do |pron|
     next unless pron.rime == target_rime
-    return false if pron.rhyme_syllables_array != target_rs
+    return false if pron.rich_rime_array != target_rs
   end
   true
 end
@@ -343,7 +343,7 @@ def headword_has_nonidentical_rhyme_partner?(word, prons, rdict, word_dict)
     prons.each do |pron|
       rime = pron.rime
       next if rime.empty?
-      rs = pron.rhyme_syllables_array
+      rs = pron.rich_rime_array
       key = [rime, rs]
       next if seen[key]
 

@@ -107,7 +107,7 @@ def debug_info(word)
       result << " rsyll#{i}="
     end
 
-    result << pron.rhyme_syllables_string
+    result << pron.rich_rime
 
     if prons.length == 1
       result << " rime="
@@ -561,7 +561,7 @@ def phoneme_tail_match?(a, b, longer_has_primary: true)
   end
 end
 
-def find_rhyming_words(word, identical_ok=true)
+def find_rhyming_words(word, homophone_ok=true)
   # merges multiple pronunciations of WORD
   # use our compiled rime dictionary
   #
@@ -578,7 +578,7 @@ def find_rhyming_words(word, identical_ok=true)
     next if explicitly_forbidden?(form)
     debug "Finding rhyming words for #{form} #{debug_info(form)}:"
     for pron in pronunciations(form)
-      for rhyme in find_rhyming_words_for_pronunciation(pron, identical_ok)
+      for rhyme in find_rhyming_words_for_pronunciation(pron, homophone_ok)
         rhyming_words.push(rhyme)
       end
     end
@@ -618,7 +618,7 @@ def pronunciation_phoneme_homophone_trap_duplicate?(pron_a, pron_b)
   true
 end
 
-def identical_rhyme?(rhyme, target_pron)
+def homophone_rhyme?(rhyme, target_pron)
   # Catches true homophones (same full pronunciation): +write+/+right+, +plain+/+plane+,
   # +symbol+/+cymbal+, +flour+/+flower+, +puffin+/+puffin'+. These would pass a
   # rime-cohort lookup but almost never count as legitimate rhymes; they're
@@ -648,7 +648,7 @@ def all_identical_rhymes?(words)
   syllable_signatures = Hash.new
   for word in words do
     for pron in pronunciations(word)
-      syllable_signatures[pron.rhyme_syllables_string] = true
+      syllable_signatures[pron.rich_rime] = true
     end
   end
   if syllable_signatures.length == 1
@@ -659,13 +659,13 @@ def all_identical_rhymes?(words)
   end
 end
 
-def find_rhyming_words_for_pronunciation(pron, identical_ok=true)
+def find_rhyming_words_for_pronunciation(pron, homophone_ok=true)
   # use our compiled rime dictionary
   results = Array.new
   rime = pron.rime
   rdict_lookup(rime).each do |rhyme|
-    if(!identical_ok && identical_rhyme?(rhyme, pron))
-      debug "Filtered out identical rhyme: #{pron} / #{rhyme} (#{debug_info(rhyme)})"
+    if(!homophone_ok && homophone_rhyme?(rhyme, pron))
+      debug "Filtered out homophone rhyme: #{pron} / #{rhyme} (#{debug_info(rhyme)})"
     else
       results.push(rhyme)
     end
@@ -1328,7 +1328,7 @@ def condense_tuple_derived_forms(tup, focal_word = nil)
   return tup if tup.size < 2
   rsyll_set_of = {}
   tup.each do |w|
-    rsyll_set_of[w] = pronunciations(w).map { |p| p.rhyme_syllables_string }.to_set
+    rsyll_set_of[w] = pronunciations(w).map { |p| p.rich_rime }.to_set
   end
   dropped = Set.new
   tup.each do |derived|
@@ -1444,30 +1444,39 @@ def condense_tuple_parallel_derivations(tup, focal_word = nil)
 end
 
 # Pick which of two parallel-derivation siblings to drop. Cue-aware: rank
-# both by +(score, frequency, alphabetical)+ against +focal_word+ and
-# return the lower-ranked surface; +focal_word+ +nil+ degenerates to
-# lex-max so en-masse compute / pair-trivial callers get deterministic
-# focal-independent behavior.
+# both by +(score, frequency, length, alphabetical)+ against +focal_word+
+# and return the lower-ranked surface; +focal_word+ +nil+ degenerates to
+# +(length, lex-max)+ so en-masse compute / pair-trivial callers get
+# deterministic focal-independent behavior that still favors the
+# shorter/canonical form.
+#
+# Length is a tertiary signal so on a true score+frequency tie the
+# shorter (more canonical) member wins — e.g. +music+ ->
+# +record+ / +prerecord+, both scoring 100 with identical frequency
+# buckets, where +record+ is the canonical form a rhyme partner like
+# +chord+ expects. Without the length tie-break the lex order picks
+# +prerecord+, silently stripping +record+ from the AO_R_D bucket.
 #
 # +score+ falls back from the cached +similarity+ to a live
 # +relatedness_score+ when the cached read is uninformative (zero for
 # both siblings — the typical shape when +focal_word+ is a non-cached
 # cue, e.g. +pirate+, where the +RelatedWords.lookup_score+ path returns
 # 0 for every related). Without the live fallback the tiebreak collapses
-# to frequency / lex-max for *every* parallel-derivation pair under a
-# non-cached cue, defeating the purpose of being cue-aware. The live
-# call is cheap here (two +PairSignals+ evaluations per pair) and only
-# fires when the prune is already in the live-compute branch — cached
-# cues hit +Store.fetch_set_related_tuples+ before reaching the prune.
+# to frequency / length / lex-max for *every* parallel-derivation pair
+# under a non-cached cue, defeating the purpose of being cue-aware. The
+# live call is cheap here (two +PairSignals+ evaluations per pair) and
+# only fires when the prune is already in the live-compute branch —
+# cached cues hit +Store.fetch_set_related_tuples+ before reaching the
+# prune.
 def parallel_sibling_loser(a, b, focal_word)
   if focal_word.nil? || focal_word.to_s.empty?
-    return [a, b].max
+    return [a, b].sort_by { |w| [w.length, w] }.last
   end
   sim_a = parallel_sibling_score(focal_word, a)
   sim_b = parallel_sibling_score(focal_word, b)
   ranked = [a, b].sort_by.with_index do |w, i|
     sim = i.zero? ? sim_a : sim_b
-    [-sim, -frequency(w).to_i, w]
+    [-sim, -frequency(w).to_i, w.length, w]
   end
   ranked.last
 end
@@ -1625,17 +1634,65 @@ def gloss_cites_base?(derived, base)
 end
 
 # Within a single rhyming tuple, break homophone clusters down to one winner.
-# "Homophone cluster" = members sharing a full phoneme sequence (+identical_rhyme?+):
-# +coral+/+choral+, +flour+/+flower+, +write+/+right+, +rite+/+right+, +symbol+/+cymbal+.
+# "Homophone cluster" = members sharing a full phoneme sequence (+homophone_rhyme?+):
+# +coral+/+choral+, +flour+/+flower+, +write+/+right+, +rite+/+right+, +symbol+/+cymbal+,
+# and same-pron near-twins where the dictionary records the surfaces with an
+# epenthetic /t/ (+chance+/+chants+, both +CH AE1 N T S+).
+#
 # Unlike +condense_tuple_derived_forms+ (which handles +COMMON_PREFIXES+ derivations
 # sharing only a rhyme-syllable fingerprint), neither member here is morphologically
 # derived from the other, so there's no a-priori favorite; we need the cue to pick.
+#
 # Ranking key per member +w+:
-#   1. +similarity(focal_word, w)+ — stored relatedness to the cue, highest wins.
-#   2. +frequency(w)+ — unigram frequency, highest wins (user-specified tiebreak).
+#   1. +parallel_sibling_score(focal_word, w)+ — cached +similarity+ first, falling
+#      back to a live +relatedness_score+ when the cached read is uninformative
+#      (zero for both cluster members — the typical shape under a non-cached
+#      cue, e.g. +magic+, where +RelatedWords.lookup_score+ has no row to
+#      consult). Without the live fallback the tiebreak collapses to
+#      frequency / lex for *every* homophone cluster under a non-cached cue,
+#      and the alphabetically-earlier surface wins by accident even when the
+#      other is the cue-relevant homophone (+chants+ vs +chance+ under +magic+;
+#      +rite+ vs +right+ under +prayers+).
+#   2. +frequency(w)+ — unigram frequency, highest wins.
 #   3. alphabetical +w+ — final deterministic tiebreak.
 # A +nil+ +focal_word+ (callers that haven't plumbed the cue through) disables this
 # pass; the tuple is returned untouched.
+# Spelling tails that encode an underlying /N S/ or /M S/ rime (no /T/ or /P/
+# in the morphology), which CMUdict nonetheless stores with an epenthetic
+# stop. Paired against +EPENTHETIC_TS_TAILS+ to detect chance/chants-style
+# pseudo-homophones.
+EPENTHETIC_CE_TAILS = ["nce", "nse", "mse"].freeze
+# Spelling tails that encode a real /N T S/ or /M P S/ rime — chants is the
+# plural of chant, prints is the plural of print. When two surfaces share a
+# CMUdict pron but one ends in a +EPENTHETIC_CE_TAILS+ form and the other in
+# a +EPENTHETIC_TS_TAILS+ form, they are not genuine homophones — the dict
+# just bakes in the same epenthetic stop for both spellings.
+EPENTHETIC_TS_TAILS = ["nts", "mps"].freeze
+
+# True when +a+ and +b+ share a CMUdict pron only because the dictionary
+# inserts an epenthetic /T/ (after /N/ before /S/) or /P/ (after /M/ before
+# /S/), and the two surfaces' orthographies disagree about whether that
+# stop is morphologically present. +chance+ (CH AE1 N T S, /T/ epenthetic —
+# underlying form is /N S/) vs +chants+ (CH AE1 N T S, real /T/ from
+# +chant + s+); +sense+/+cents+; +mince+/+mints+; +prince+/+prints+;
+# +dense+/+dents+. Genuine homophones (+flour+/+flower+, +write+/+right+,
+# +knows+/+nose+) are unaffected because either their shared pron does not
+# end in /N T S/ or /M P S/, or both surfaces use the same tail family
+# (+ants+/+aunts+ both spell out the /T S/).
+def epenthetic_t_pseudo_homophone?(a, b)
+  return false if a == b
+  pa = pronunciations(a).first&.to_s
+  pb = pronunciations(b).first&.to_s
+  return false if pa.nil? || pb.nil? || pa != pb
+  a_low = a.downcase
+  b_low = b.downcase
+  a_ts = EPENTHETIC_TS_TAILS.any? { |e| a_low.end_with?(e) }
+  a_ce = EPENTHETIC_CE_TAILS.any? { |e| a_low.end_with?(e) }
+  b_ts = EPENTHETIC_TS_TAILS.any? { |e| b_low.end_with?(e) }
+  b_ce = EPENTHETIC_CE_TAILS.any? { |e| b_low.end_with?(e) }
+  (a_ts && b_ce) || (a_ce && b_ts)
+end
+
 def condense_tuple_homophones(tup, focal_word)
   return tup if tup.size < 2 || focal_word.nil?
   ungrouped = tup.dup
@@ -1643,7 +1700,8 @@ def condense_tuple_homophones(tup, focal_word)
   while (seed = ungrouped.shift)
     seed_prons = pronunciations(seed)
     mates = ungrouped.select do |other|
-      seed_prons.any? { |sp| identical_rhyme?(other, sp) }
+      next false if epenthetic_t_pseudo_homophone?(seed, other)
+      seed_prons.any? { |sp| homophone_rhyme?(other, sp) }
     end
     next if mates.empty?
     ungrouped -= mates
@@ -1653,7 +1711,7 @@ def condense_tuple_homophones(tup, focal_word)
   dropped = Set.new
   clusters.each do |cluster|
     ranked = cluster.sort_by do |w|
-      [-similarity(focal_word, w).to_i, -frequency(w).to_i, w]
+      [-parallel_sibling_score(focal_word, w), -frequency(w).to_i, w]
     end
     ranked[1..].each { |w| dropped << w }
   end
@@ -1662,7 +1720,7 @@ end
 
 # True when the pair +[a, b]+ would collapse to a single member under within-tuple
 # derivation/homophone condensation — i.e. it is a morphological +COMMON_PREFIXES+
-# derivation over matching +rhyme_syllables_string+ (+condense_tuple_derived_forms+),
+# derivation over matching +rich_rime+ (+condense_tuple_derived_forms+),
 # or a true same-phoneme homophone pair (+condense_tuple_homophones+). Examples:
 # +[healthy, unhealthy]+ (prefix); +[flour, flower]+, +[coral, choral]+,
 # +[symbol, cymbal]+ (homophones). The homophone condenser needs a +focal_word+
@@ -1714,7 +1772,7 @@ $disable_cross_tuple_redundancy_pruning = false
 #     spelling variants of one root — +desperados / desperadoes+).
 #   * a (possibly shorter) tuple — survived the wholesale-drop steps;
 #     within-tuple derivation condensation may have removed prefix-derivation
-#     members whose +rhyme_syllables_string+ matched a base already present
+#     members whose +rich_rime+ matched a base already present
 #     in the tuple (+[healthy, stealthy, unhealthy] → [healthy, stealthy]+,
 #     +[recorded, prerecorded, unrecorded] → [recorded]+).
 #
@@ -1875,7 +1933,7 @@ end
 #     *spelling-variant wholesale drop* (drop tuples whose members are
 #     all spelling variants of one root — +desperados / desperadoes+),
 #     and *within-tuple derivation condensation* (drop +COMMON_PREFIXES+
-#     derivation members whose +rhyme_syllables_string+ matches a base
+#     derivation members whose +rich_rime+ matches a base
 #     already in the tuple — +[healthy, stealthy, unhealthy] → [healthy,
 #     stealthy]+).
 #   * Within-tuple homophone condensation — +condense_tuple_homophones+.
