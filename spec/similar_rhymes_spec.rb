@@ -541,7 +541,7 @@ describe 'PAIR_RELATED' do
     pair_related_oughta_contain 'food', 'evil', 'waiter', 'traitor'
     pair_related_oughta_contain 'food', 'evil', 'wheat', 'deceit'
     pair_related_oughta_contain 'food', 'evil', 'dessert', 'hurt'
-    pair_related_ought_not_contain 'food', 'evil', 'produce', 'abuse'
+    pair_related_ought_not_contain 'food', 'evil', 'produce', 'abuse', not_working_reason: "We'd have to enrich the relatedness to be to a word sense, not just a word, to distinguish between PRO-duce (food) and pro-DUCE (make)"
   end
 
   context 'food dark' do

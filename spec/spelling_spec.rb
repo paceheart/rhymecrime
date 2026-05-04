@@ -169,6 +169,7 @@ describe "SPELLING VARIANTS" do
   end
 
   context 'hyphens' do
+    prefer_spelling 'offset', 'off-set'
     prefer_spelling 'backhand', 'back-hand'
     prefer_spelling 'backhands', 'back-hands'
     prefer_spelling 'backhanded', 'back-handed'

@@ -9150,11 +9150,11 @@ beautiful,gay,unrelated,assumed unrelated due to symmetry
 beauty,gay,unrelated,assumed unrelated due to symmetry
 boy,gay,unrelated,assumed unrelated due to symmetry
 carefree,gay,unrelated,assumed unrelated due to symmetry
-dark,ashen,unrelated,assumed unrelated due to symmetry
+dark,ashen,related,assumed unrelated due to symmetry
 disease,gay,unrelated,assumed unrelated due to symmetry
 drab,dark,unrelated,assumed unrelated due to symmetry
-evil,abomination,unrelated,assumed unrelated due to symmetry
-evil,apocalypse,unrelated,assumed unrelated due to symmetry
+evil,abomination,related_ish,food+evil -> starvation/abomination
+evil,apocalypse,related_ish,food+evil -> chips / apocalypse
 family,gay,unrelated,assumed unrelated due to symmetry
 fantasy,gay,unrelated,assumed unrelated due to symmetry
 genetic,gay,unrelated,assumed unrelated due to symmetry
