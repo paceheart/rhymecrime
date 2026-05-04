@@ -123,6 +123,73 @@ RSpec.describe Rhymecrime::LocalStore do
     end
   end
 
+  describe ".delete_database_file!" do
+    # Regression: +bin/compute-relatedness+ used to do a bare
+    # +File.delete(shard_path)+ on the shard mains between runs and leave the
+    # +-shm+ / +-wal+ sidecars on disk. SQLite then re-opened the freshly
+    # created shard, found a WAL pair whose header counters didn't match the
+    # new (empty) main, and faulted the very first +execute_batch+ with a
+    # +disk I/O error+ (+SQLITE_IOERR+). +delete_database_file!+ exists to
+    # take the WAL pair down with the main file so the next +open_for_write+
+    # always sees a clean slate.
+    it "removes the main file alongside its WAL sidecars" do
+      described_class.open_for_write(db_path) do |writer|
+        writer.upsert_related("cat", %w[dog], [80])
+      end
+      # Sanity: WAL mode is on so the sidecars exist on disk after the
+      # transaction; if WAL ever defaults change this assertion makes the
+      # behaviour shift loud rather than silently making the regression
+      # untestable.
+      expect(File.exist?(db_path)).to be true
+      expect(File.exist?("#{db_path}-wal")).to be true
+      expect(File.exist?("#{db_path}-shm")).to be true
+
+      described_class.delete_database_file!(db_path)
+
+      expect(File.exist?(db_path)).to be false
+      expect(File.exist?("#{db_path}-wal")).to be false
+      expect(File.exist?("#{db_path}-shm")).to be false
+    end
+
+    it "is a no-op on missing paths and tolerates a partial sidecar set" do
+      # Pre-fork cleanup runs unconditionally before every shard, so the
+      # common case is "nothing exists yet"; it must not raise. Likewise a
+      # crash that left only the +-shm+ behind (no main) should still get
+      # cleaned up so the next open starts fresh.
+      missing = File.join(tmpdir, "never_existed.sqlite3")
+      expect { described_class.delete_database_file!(missing) }.not_to raise_error
+
+      File.write("#{missing}-shm", "")
+      described_class.delete_database_file!(missing)
+      expect(File.exist?("#{missing}-shm")).to be false
+    end
+
+    it "lets a fresh +open_for_write+ on the same path succeed even when stale sidecars were present" do
+      # Direct reproduction of the failure mode. Simulate a previous-run
+      # crash by writing a sidecar then dropping the main file the way the
+      # old cleanup did, and confirm the new helper unblocks the next
+      # +open_for_write+ where a bare +File.delete+ would have left the
+      # +SQLITE_IOERR+ landmine in place.
+      described_class.open_for_write(db_path) do |writer|
+        writer.upsert_related("cat", %w[dog], [80])
+      end
+      File.delete(db_path) # the old buggy cleanup
+      expect(File.exist?("#{db_path}-wal")).to be true
+
+      described_class.delete_database_file!(db_path)
+      expect {
+        described_class.open_for_write(db_path) do |writer|
+          writer.upsert_related("frog", %w[toad], nil)
+        end
+      }.not_to raise_error
+
+      raw = SQLite3::Database.new(db_path, readonly: true)
+      pks = raw.execute("SELECT pk FROM related ORDER BY pk").flatten
+      raw.close
+      expect(pks).to contain_exactly("related#frog")
+    end
+  end
+
   describe "merge_shard" do
     it "copies rows from both tables across attached databases" do
       shard_path = File.join(tmpdir, "shard.sqlite3")

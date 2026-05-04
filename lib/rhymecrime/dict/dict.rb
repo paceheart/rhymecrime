@@ -477,10 +477,23 @@ def compute_lemma_map(word_dict)
 
         # If word is in WordNet, base must share a synset (crew≠crow, ring≠re, thing≠the).
         # If word is NOT in WordNet, base must at least be in WordNet (tran, sacre, etc. are not).
+        # Function-word bases (+as+, +out+, +the+, +they+, +got+, +about+, ...) need the
+        # stronger gate even when +word+ isn't in WordNet: the weak +wn_has_entry?(base)+
+        # check otherwise accepts every surface that orthographically peels to a stopword
+        # as that stopword's inflection (+assed → as+, +theyed → they+, +gots → got+,
+        # +abouts → about+), since stopwords all have WN entries by virtue of being valid
+        # English. Real inflectional descendants of function words (+outs → out+ as a noun
+        # plural, +outing → out+ as a verbal -ing) survive: their morphological link is
+        # encoded in WN's morphy / synset / derivation pointers, so
+        # +wn_accept_inflection_lemma_pair?+ returns true. Pure orthographic coincidences
+        # do not, and get rejected here.
         if word_in_wn
           next unless wn_accept_inflection_lemma_pair?(word, base)
         else
           next unless wn_has_entry?(base)
+          if semantically_promiscuous_words.include?(base) || unrhymable_stop_word?(base)
+            next unless wn_accept_inflection_lemma_pair?(word, base)
+          end
         end
 
         base_freq = word_dict[base][0]

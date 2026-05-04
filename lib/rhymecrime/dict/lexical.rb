@@ -280,6 +280,20 @@ def wn_noun_plural_via_morphy?(word, base)
   return false unless kind == :s
   return false unless wn_base_has_noun?(base)
 
+  # Reject morphy's opportunistic +-ss+ → +-s+ chops (+ass+→+as+, +boss+→+bos+,
+  # +pass+→+pas+, +buss+→+bus+). +morphy(word, "noun")+ tries stripping a
+  # single +s+ from any +-ss+ surface and returns the result whenever WordNet
+  # happens to have a noun entry for it, regardless of whether the two are
+  # semantically related. English doesn't pluralize +s+-final bases by adding
+  # another +s+ — the real plural inflection of +as+/+bos+/+pas+/+bus+ is
+  # +-es+ (+asses+/+boses+/+pases+/+buses+). So a +kind == :s+ shape where
+  # +word+ ends in +-ss+ and +base+ ends in +-s+ is virtually always the
+  # opportunistic chop, never a real plural. Doc-preserved pluralia-tantum
+  # (+glasses+→+glass+, +arms+→+arm+, +communications+→+communication+,
+  # +kisses+→+kiss+) end in +-sses+/+-ms+/+-tions+, never +-ss+ over +-s+, so
+  # this guard doesn't touch them.
+  return false if word.end_with?("ss") && base.end_with?("s")
+
   stems = (WordNet::Synset.morphy(word, "noun") rescue [])
   return false if stems.empty?
 

@@ -41,28 +41,28 @@ RELATED_PASS_RATE_SUSPICIOUS = 0.99
 
 # --- Spot-check helpers (one rspec example per call; for hand-curated cases). ---
 
-def oughta_be_related(word1, word2, not_working_message: nil)
+def oughta_be_related(word1, word2, not_working_reason: nil)
   test_name = "'#{word1}' oughta be related to '#{word2}'"
   it test_name do
-    skip_if_not_working(not_working_message)
+    skip_if_not_working(not_working_reason)
     sim = similarity(word1, word2).round
     expect(related?(word1, word2, false)).to eql(true), "'#{word1}' / '#{word2}': expected related but related? was false. similarity=#{sim} (Numberbatch+ConceptNet centiles, threshold #{similarity_threshold()}); gloss/sense-vector/USF paths can still pass when sim is lower. #{debug_info(word1)} / #{debug_info(word2)}"
   end
 end
 
-def ought_not_be_related(word1, word2, not_working_message: nil)
+def ought_not_be_related(word1, word2, not_working_reason: nil)
   test_name = "'#{word1}' ought not be related to '#{word2}'"
   it test_name do
-    skip_if_not_working(not_working_message)
+    skip_if_not_working(not_working_reason)
     sim = similarity(word1, word2).round
     expect(related?(word1, word2, false)).to eql(false), "'#{word1}' / '#{word2}': expected unrelated but related? was true. similarity=#{sim} (threshold #{similarity_threshold()}). If sim is below threshold, a rescue path matched (WordNet gloss containment, sense vectors, or USF two-hop). #{debug_info(word1)} / #{debug_info(word2)}"
   end
 end
 
-def related_words_ought_not_include(word1, word2, not_working_message: nil)
+def related_words_ought_not_include(word1, word2, not_working_reason: nil)
   test_name = "'Words related to #{word1}' ought not include '#{word2}'"
   it test_name do
-    skip_if_not_working(not_working_message)
+    skip_if_not_working(not_working_reason)
     related_words = find_related_words(word1, false, false, nil)
     expect(related_words.include?(word2)).to eql(false), "Words related to '#{word1}' ought not include '#{word2}', but they do: #{related_words}"
   end
@@ -159,6 +159,140 @@ describe 'RELATED' do
       related_words_ought_not_include 'gypsies', 'romanian'
       related_words_ought_not_include 'romanian', 'gypsy'
       related_words_ought_not_include 'romanian', 'gypsies'
+    end
+
+    # Underlying directional +thematically_related?(cue, related)+ assertions for
+    # every currently-failing +set_related+ / +pair_related+ example in
+    # +spec/similar_rhymes_spec.rb+. Each subcontext here mirrors one
+    # similar_rhymes failure and adds the two prereq pairs the spec depends on,
+    # so a relatedness regression fails loudly *here* (named, focused) instead
+    # of as opaque tuple-search misses in the much-slower similar_rhymes spec.
+    # When a similar_rhymes test fails but both prereqs here pass, the failure
+    # is downstream of relatedness (lemma-collapse, stress-mismatch, prefix
+    # filter, cross-tuple pruning, ...). When a prereq fails, that's the bug.
+    context 'similar_rhymes prereqs' do
+      context 'set_related: pirate -> seagull / illegal' do
+        oughta_be_related 'pirate', 'seagull'
+        oughta_be_related 'pirate', 'illegal'
+      end
+      context 'set_related: pirate -> shore / tor' do
+        oughta_be_related 'pirate', 'shore'
+        oughta_be_related 'pirate', 'tor', not_working_reason: "predictor gap: similarity=0; 'tor' (rocky peak) is too rare for the embeddings"
+      end
+      context 'set_related: pirate -> crude / pursued' do
+        oughta_be_related 'pirate', 'crude', not_working_reason: "predictor gap: similarity=0; 'crude' (raidable cargo) is a thematic stretch the embeddings miss"
+        oughta_be_related 'pirate', 'pursued', not_working_reason: "predictor gap: similarity=0; 'pursued' (chased by authorities) is a thematic stretch the embeddings miss"
+      end
+      context 'set_related: music -> enjoys / noise' do
+        oughta_be_related 'music', 'enjoys'
+        oughta_be_related 'music', 'noise'
+      end
+      context 'set_related: music -> audition / composition' do
+        oughta_be_related 'music', 'audition'
+        oughta_be_related 'music', 'composition'
+      end
+      context 'set_related: music -> composition* / musician*' do
+        oughta_be_related 'music', 'composition'
+        oughta_be_related 'music', 'musician'
+      end
+      context 'set_related: music -> glissando / ritardando' do
+        oughta_be_related 'music', 'glissando'
+        oughta_be_related 'music', 'ritardando'
+      end
+      context 'set_related: music -> viola / hemiola' do
+        oughta_be_related 'music', 'viola'
+        oughta_be_related 'music', 'hemiola'
+      end
+      context 'set_related: music -> rest / expressed' do
+        oughta_be_related 'music', 'rest'
+        oughta_be_related 'music', 'expressed'
+      end
+      context 'set_related: music -> fortissimo / pianissimo' do
+        oughta_be_related 'music', 'fortissimo'
+        oughta_be_related 'music', 'pianissimo'
+      end
+      # Negative similar_rhymes assertion. Both halves *are* music-related — the
+      # exclusion is a downstream filter (likely homophone-like coda overlap),
+      # not a relatedness call. These predicates ought to return +true+.
+      context 'set_related: music !-> bass / brass' do
+        oughta_be_related 'music', 'bass'
+        oughta_be_related 'music', 'brass'
+      end
+      context 'set_related: water -> marine / saline' do
+        oughta_be_related 'water', 'marine'
+        oughta_be_related 'water', 'saline'
+      end
+      context 'set_related: prayers -> addressed / blessed' do
+        oughta_be_related 'prayers', 'addressed', not_working_reason: "predictor gap: similarity=0; 'addressed' (as in 'addressed prayers') is functional, embeddings miss it"
+        oughta_be_related 'prayers', 'blessed'
+      end
+      context 'set_related: prayers -> blessed / request' do
+        oughta_be_related 'prayers', 'blessed'
+        oughta_be_related 'prayers', 'request'
+      end
+      context 'set_related: prayers -> recite* / rite*' do
+        oughta_be_related 'prayers', 'recite'
+        oughta_be_related 'prayers', 'rite', not_working_reason: "predictor gap: similarity=0; 'rite' (religious ritual) embeddings miss the prayers connection"
+      end
+      context 'set_related: magic -> chants / trance' do
+        oughta_be_related 'magic', 'chants'
+        oughta_be_related 'magic', 'trance'
+      end
+      context 'set_related: medicine -> disease / expertise' do
+        oughta_be_related 'medicine', 'disease'
+        oughta_be_related 'medicine', 'expertise'
+      end
+      context 'set_related: exploration -> knapsack / backtrack' do
+        oughta_be_related 'exploration', 'knapsack', not_working_reason: "predictor gap: similarity=0; 'knapsack' (explorer's gear) embeddings miss the exploration connection"
+        oughta_be_related 'exploration', 'backtrack'
+      end
+      context 'set_related: carbon -> ester / sequester' do
+        oughta_be_related 'carbon', 'ester'
+        oughta_be_related 'carbon', 'sequester'
+      end
+      context 'set_related: carbon -> extract / react' do
+        oughta_be_related 'carbon', 'extract'
+        oughta_be_related 'carbon', 'react'
+      end
+      # Negative similar_rhymes assertion. The inflected forms +extracted+ /
+      # +reacted+ remain chemistry-relevant and ought to be related to +carbon+
+      # — the exclusion is lemma-collapse vs. the +extract+ / +react+ pair,
+      # not relatedness. These predicates ought to return +true+.
+      context 'set_related: carbon !-> extracted / reacted' do
+        oughta_be_related 'carbon', 'extracted'
+        oughta_be_related 'carbon', 'reacted'
+      end
+      context 'set_related: cat -> arboreal / territorial' do
+        oughta_be_related 'cat', 'arboreal'
+        oughta_be_related 'cat', 'territorial', not_working_reason: "predictor gap: similarity=0; cats are textbook territorial but the embeddings miss it"
+      end
+      context 'pair_related: food / evil -> mushroom / doom' do
+        oughta_be_related 'food', 'mushroom'
+        oughta_be_related 'evil', 'doom'
+      end
+      context 'pair_related: food / evil -> chips / apocalypse' do
+        oughta_be_related 'food', 'chips'
+        oughta_be_related 'evil', 'apocalypse'
+      end
+      context 'pair_related: food / evil -> starvation / abomination' do
+        oughta_be_related 'food', 'starvation'
+        oughta_be_related 'evil', 'abomination'
+      end
+      # Negative similar_rhymes assertion. +produce+ (noun) is food and +abuse+
+      # is evil-adjacent — the exclusion is most likely a noun/verb stress
+      # mismatch in the homograph pronunciations, not a relatedness call.
+      context 'pair_related: food / evil !-> produce / abuse' do
+        oughta_be_related 'food', 'produce'
+        oughta_be_related 'evil', 'abuse'
+      end
+      context 'pair_related: food / dark -> ration / ashen' do
+        oughta_be_related 'food', 'ration'
+        oughta_be_related 'dark', 'ashen'
+      end
+      context 'pair_related: fashion / music -> avant-garde / bard' do
+        oughta_be_related 'fashion', 'avant-garde'
+        oughta_be_related 'music', 'bard'
+      end
     end
   end
 

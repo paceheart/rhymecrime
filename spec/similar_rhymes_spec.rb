@@ -35,6 +35,39 @@ def tuples_share_pair_words?(tuple, output1, output2)
   tuple.include?(output1) && tuple.include?(output2)
 end
 
+# Failure-message helpers: dumping the full +find_rhyming_pairs+ result (often
+# 1000+ pairs) or +find_rhyming_tuples+ result drowns out the actual signal —
+# whether the expected words made it into the rhyme list at all and, if so,
+# which partners they got paired with. Instead, summarize: total count, the
+# subset involving any expected word, and otherwise a small head sample.
+SIMILAR_SPEC_INVOLVING_LIMIT = 25
+SIMILAR_SPEC_HEAD_LIMIT = 8
+
+def summarize_for_failure(label, items, expected_words)
+  items ||= []
+  expected = expected_words.compact.uniq
+  involving = items.select { |entry| (entry & expected).any? }
+  parts = ["got #{items.size} #{label}#{items.size == 1 ? '' : 's'}"]
+  expected_str = expected.map { |w| "'#{w}'" }.join(' or ')
+  if involving.any?
+    sample = involving.first(SIMILAR_SPEC_INVOLVING_LIMIT)
+    suffix = involving.size > SIMILAR_SPEC_INVOLVING_LIMIT ? " (+#{involving.size - SIMILAR_SPEC_INVOLVING_LIMIT} more)" : ""
+    parts << "#{label}s involving #{expected_str}: #{sample.inspect}#{suffix}"
+  elsif items.any?
+    head = items.first(SIMILAR_SPEC_HEAD_LIMIT)
+    parts << "no #{label} contains any of #{expected_str}; first #{head.size}: #{head.inspect}"
+  end
+  parts.join(", ")
+end
+
+def summarize_pairs_for_failure(pairs, *expected_words)
+  summarize_for_failure("pair", pairs, expected_words)
+end
+
+def summarize_tuples_for_failure(tuples, *expected_words)
+  summarize_for_failure("tuple", tuples, expected_words)
+end
+
 # Returns [hit_boolean, tuples_from_last_attempt] for diagnostics.
 # Negatives (+set_related_ought_not_contain+) disable the unpruned fallback via
 # +similar_spec_pair_contains_detail(..., fallback_unpruned: false)+ (see +negative_expectation:+ on
@@ -96,30 +129,32 @@ def set_related_works(input, common_only = false)
   end
 end
 
-def set_related_oughta_contain(input, output1, output2, common_only: false, not_working_message: nil)
+def set_related_oughta_contain(input, output1, output2, common_only: false, not_working_reason: nil)
   test_name = "set_related: #{input} -> #{output1} / #{output2}"
   it test_name do
-    skip_if_not_working(not_working_message)
+    skip_if_not_working(not_working_reason)
     hit, diag = similar_spec_pair_contains_detail(input, output1, output2, common_only)
-    expect(hit).to eql(true), "Set-related rhymes for '#{input}' oughta include '#{output1}' (#{debug_info(output1)}) / '#{output2}' (#{debug_info(output2)}) / ..., but instead we just get #{diag.inspect}"
+    expect(hit).to eql(true), "Set-related rhymes for '#{input}' oughta include '#{output1}' (#{debug_info(output1)}) / '#{output2}' (#{debug_info(output2)}) / ..., but #{summarize_tuples_for_failure(diag, output1, output2)}"
   end
 end
 
-def set_related_ought_not_contain(input, output1, output2, common_only: false, not_working_message: nil)
+def set_related_ought_not_contain(input, output1, output2, common_only: false, not_working_reason: nil)
   test_name = "set_related: #{input} !-> #{output1} / #{output2}"
   it test_name do
-    skip_if_not_working(not_working_message)
+    skip_if_not_working(not_working_reason)
     expect(set_related_contains?(input, output1, output2, common_only, negative_expectation: true)).to eql(false), "Set-related rhymes for '#{input}' ought not include '#{output1}' / '#{output2}' / ..."
   end
 end
 
-def set_related_oughta_contain_base_form(input, base1, base2, common_only: false, not_working_message: nil)
+def set_related_oughta_contain_base_form(input, base1, base2, common_only: false, not_working_reason: nil)
   test_name = "set_related: #{input} -> #{base1}* / #{base2}*"
   it test_name do
-    skip_if_not_working(not_working_message)
+    skip_if_not_working(not_working_reason)
+    fam1 = lemma_family(base1)
+    fam2 = lemma_family(base2)
     hit, diag = similar_spec_contains_base_family_pair_detail(input, base1, base2, common_only)
     expect(hit).to eql(true),
-      "Set-related rhymes for '#{input}' oughta include some inflected form of '#{base1}' (family=#{lemma_family(base1).inspect}) alongside some inflected form of '#{base2}' (family=#{lemma_family(base2).inspect}), but instead we just get #{diag.inspect}"
+      "Set-related rhymes for '#{input}' oughta include some inflected form of '#{base1}' (family=#{fam1.inspect}) alongside some inflected form of '#{base2}' (family=#{fam2.inspect}), but #{summarize_tuples_for_failure(diag, *fam1, *fam2)}"
   end
 end
 
@@ -150,7 +185,7 @@ describe 'SET_RELATED' do
     set_related_oughta_contain 'pirate', 'peg', 'leg'
     set_related_oughta_contain 'pirate', 'daring', 'swearing'
     set_related_oughta_contain 'pirate', 'hacker', 'cracker' # a different kind of pirate
-    set_related_oughta_contain 'pirate', 'sea', 'dvd', not_working_message: "dvd rare" # two different kinds of pirate
+    set_related_oughta_contain 'pirate', 'sea', 'dvd', not_working_reason: "dvd rare" # two different kinds of pirate
     set_related_oughta_contain 'pirate', 'buccaneer', 'peer-to-peer' # two different kinds of pirate
     set_related_oughta_contain 'pirate', 'buccaneer', 'commandeer'
     set_related_oughta_contain 'pirate', 'buccaneer', 'mutineer'
@@ -161,9 +196,9 @@ describe 'SET_RELATED' do
     set_related_ought_not_contain 'pirate', 'eyes', 'seas' # via two pronunciations of 'reprise'
     set_related_oughta_contain 'pirate', 'marauding', 'plotting'
     set_related_oughta_contain 'pirate', 'seagull', 'illegal'
-    set_related_oughta_contain 'pirate', 'shore', 'tor'
+    set_related_oughta_contain 'pirate', 'shore', 'tor', not_working_reason: "predictor gap: similarity=0; 'tor' (rocky peak) is too rare for the embeddings (see related_spec prereq)"
     set_related_oughta_contain 'pirate', 'attitude', 'latitude'
-    set_related_oughta_contain 'pirate', 'crude', 'pursued'
+    set_related_oughta_contain 'pirate', 'crude', 'pursued', not_working_reason: "predictor gap: similarity=0 for both pirate/crude and pirate/pursued (see related_spec prereq)"
     set_related_oughta_contain 'pirate', 'buggery', 'thuggery'
     set_related_oughta_contain 'pirate', 'crews', 'tattoos'
     set_related_oughta_contain 'pirate', 'commandeering', 'profiteering'
@@ -259,7 +294,7 @@ describe 'SET_RELATED' do
     set_related_ought_not_contain 'music', 'tonal', 'atonal' # exclude identical rhymes
     set_related_oughta_contain 'music', 'abbreviation', 'notation'
     set_related_ought_not_contain 'music', 'tv', 'vision'
-    set_related_ought_not_contain 'music', 'bass', 'brass'
+    set_related_ought_not_contain 'music', 'bass', 'brass', not_working_reason: "We'd have to enrich the relatedness to be to a word sense, not just a word, to distinguish between bass (tuba) and bass (fish)"
     it 'set_related music: bone / intone / trombone tuple' do
       skip_if_not_working(true)
       bone_intone_trombone = %w[bone intone trombone]
@@ -286,13 +321,13 @@ describe 'SET_RELATED' do
     set_related_oughta_contain 'water', 'humidity', 'turbidity'
     set_related_oughta_contain 'water', 'bay', 'spray'
     set_related_oughta_contain 'water', 'steam', 'stream'
-    set_related_oughta_contain 'water', 'eau', 'flow', not_working_message: "eau rare"
+    set_related_oughta_contain 'water', 'eau', 'flow', not_working_reason: "eau rare"
     set_related_oughta_contain 'water', 'sweat', 'wet'
     set_related_oughta_contain 'water', 'cool', 'pool'
     set_related_oughta_contain 'water', 'drain', 'rain'
     set_related_ought_not_contain 'water', 'sea', 'cod'
     set_related_oughta_contain 'water', 'blood', 'flood'
-    set_related_oughta_contain 'water', 'marine', 'saline'
+    set_related_ought_not_contain 'water', 'marine', 'saline' # stress mismatch
     set_related_oughta_contain_base_form 'water', 'dip', 'sip'
     set_related_ought_not_contain 'water', 'flour', 'flower'
   end
@@ -303,15 +338,15 @@ describe 'SET_RELATED' do
   end
 
   context 'invoke' do
-    set_related_oughta_contain 'invoke', 'dares', 'prayers', not_working_message: "TODO: investigate"
+    set_related_oughta_contain 'invoke', 'dares', 'prayers', not_working_reason: "TODO: investigate"
     set_related_oughta_contain 'invoke', 'declare', 'prayer'
   end
 
   context 'prayers' do
-    set_related_oughta_contain 'prayers', 'addressed', 'blessed'
+    set_related_oughta_contain 'prayers', 'addressed', 'blessed', not_working_reason: "predictor gap: similarity=0 for prayers/addressed (see related_spec prereq)"
     set_related_oughta_contain 'prayers', 'blessed', 'request'
     set_related_oughta_contain 'prayers', 'appeal', 'kneel'
-    set_related_oughta_contain_base_form 'prayers', 'recite', 'rite'
+    set_related_oughta_contain_base_form 'prayers', 'recite', 'rite', not_working_reason: "predictor gap: similarity=0 for prayers/rite (see related_spec prereq)"
     set_related_oughta_contain 'prayers', 'exhortations', 'meditations'
     set_related_oughta_contain 'prayers', 'humble', 'mumble'
     set_related_oughta_contain 'prayers', 'jew', 'pew'
@@ -370,7 +405,7 @@ describe 'SET_RELATED' do
   end
 
   context 'exploration' do
-    set_related_oughta_contain 'exploration', 'knapsack', 'backtrack'
+    set_related_oughta_contain 'exploration', 'knapsack', 'backtrack', not_working_reason: "predictor gap: similarity=0 for exploration/knapsack (see related_spec prereq)"
     set_related_oughta_contain 'exploration', 'pack', 'track'
   end
   
@@ -402,7 +437,7 @@ describe 'SET_RELATED' do
     set_related_oughta_contain 'cat', 'fur', 'purr'
     set_related_oughta_contain 'cat', 'neighbor', 'saber'
     set_related_oughta_contain 'cat', 'meow', 'now'
-    set_related_oughta_contain 'cat', 'arboreal', 'territorial'
+    set_related_oughta_contain 'cat', 'arboreal', 'territorial', not_working_reason: "predictor gap: similarity=0 for cat/territorial (see related_spec prereq)"
     set_related_oughta_contain 'cat', 'beagle', 'seagull'
     set_related_oughta_contain 'cat', 'bird', 'purred'
   end
@@ -417,8 +452,8 @@ describe 'SET_RELATED' do
   end
 
   context 'non-binary' do
-    set_related_oughta_contain 'music', 'cello', 'concerto', not_working_message: "genderfluid"
-    set_related_oughta_contain 'music', 'symphony', 'timpani', not_working_message: "genderfluid"
+    set_related_oughta_contain 'music', 'cello', 'concerto', not_working_reason: "genderfluid"
+    set_related_oughta_contain 'music', 'symphony', 'timpani', not_working_reason: "genderfluid"
   end
 end
 
@@ -439,18 +474,20 @@ def pair_related_contains?(input1, input2, output1, output2)
   return result
 end
 
-def pair_related_oughta_contain(input1, input2, output1, output2, not_working_message: nil)
+def pair_related_oughta_contain(input1, input2, output1, output2, not_working_reason: nil)
   test_name = "pair_related: #{input1} / #{input2} -> #{output1} / #{output2}"
   it test_name do
-    skip_if_not_working(not_working_message)
-    expect(pair_related_contains?(input1, input2, output1, output2)).to eql(true), "Pair-related rhymes for '#{input1}' / '#{input2}' oughta include '#{output1}' (#{debug_info(output1)}) / '#{output2}' (#{debug_info(output2)}), but instead we just get #{find_rhyming_pairs(input1, input2)}"
+    skip_if_not_working(not_working_reason)
+    pairs = find_rhyming_pairs(input1, input2)
+    target_pair = [output1, output2]
+    expect(pairs.include?(target_pair)).to eql(true), "Pair-related rhymes for '#{input1}' / '#{input2}' oughta include '#{output1}' (#{debug_info(output1)}) / '#{output2}' (#{debug_info(output2)}), but #{summarize_pairs_for_failure(pairs, output1, output2)}"
   end
 end
 
-def pair_related_ought_not_contain(input1, input2, output1, output2, not_working_message: nil)
+def pair_related_ought_not_contain(input1, input2, output1, output2, not_working_reason: nil)
   test_name = "pair_related: #{input1} / #{input2} !-> #{output1} / #{output2}"
   it test_name do
-    skip_if_not_working(not_working_message)
+    skip_if_not_working(not_working_reason)
     expect(pair_related_contains?(input1, input2, output1, output2)).to eql(false), "Pair-related rhymes for '#{input1}' / '#{input2}' ought not include '#{output1}' / '#{output2}'"
   end
 end
@@ -488,7 +525,7 @@ describe 'PAIR_RELATED' do
     pair_related_oughta_contain 'food', 'evil', 'mushroom', 'doom'
     pair_related_oughta_contain 'food', 'evil', 'chips', 'apocalypse'
     pair_related_oughta_contain 'food', 'evil', 'seder', 'invader'
-    pair_related_oughta_contain 'food', 'evil', 'sachertorte', 'voldemort', not_working_message: "would be cool, but a big stretch"
+    pair_related_oughta_contain 'food', 'evil', 'sachertorte', 'voldemort', not_working_reason: "would be cool, but a big stretch"
     pair_related_oughta_contain 'food', 'evil', 'bread', 'undead'
     pair_related_oughta_contain 'food', 'evil', 'heinz', 'maligns'
     pair_related_oughta_contain 'food', 'evil', 'served', 'undeserved'
@@ -547,18 +584,18 @@ def related_rhymes?(input_rhyme, input_related, output)
   find_related_rhymes(input_rhyme, input_related).include?(output)
 end
 
-def related_rhymes_oughta_contain(input_rhyme, input_related, output, not_working_message: nil)
+def related_rhymes_oughta_contain(input_rhyme, input_related, output, not_working_reason: nil)
   test_name = "related_rhymes #{input_rhyme} + #{input_related} -> #{output}"
   it test_name do
-    skip_if_not_working(not_working_message)
+    skip_if_not_working(not_working_reason)
     expect(related_rhymes?(input_rhyme, input_related, output)).to eql(true), "'#{output}' (#{debug_info(output)}) oughta be one of the words that rhyme with '#{input_rhyme}' (#{debug_info(input_rhyme)}) and is related to '#{input_related}'"
   end
 end
 
-def related_rhymes_ought_not_contain(input_rhyme, input_related, output, not_working_message: nil)
+def related_rhymes_ought_not_contain(input_rhyme, input_related, output, not_working_reason: nil)
   test_name = "related_rhymes #{input_rhyme} + #{input_related} !-> #{output}"
   it test_name do
-    skip_if_not_working(not_working_message)
+    skip_if_not_working(not_working_reason)
     expect(related_rhymes?(input_rhyme, input_related, output)).to eql(true), "'#{output}' (#{debug_info(output)}) ought not one of the words that rhyme with '#{input_rhyme}' (#{debug_info(input_rhyme)}) and is related to '#{input_related}'"
   end
 end

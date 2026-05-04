@@ -16,21 +16,21 @@
 $LOAD_PATH.unshift File.expand_path("../lib", __dir__)
 require "rhymecrime/crime"
 
-# Skip an example when +not_working_message+ is truthy (except +false+).
+# Skip an example when +not_working_reason+ is truthy (except +false+).
 # Use +true+ or +""+ for the default reason "not working"; use a String for a custom skip message.
 #
 # To actually run those examples (see if fixes made them pass):
 #   RHYMECRIME_RUN_SKIPPED=1 rspec spec/rhyme_spec.rb
 # Values treated as on: 1, true, yes, on (case-insensitive).
-def skip_if_not_working(not_working_message)
-  return if not_working_message.nil? || not_working_message == false
+def skip_if_not_working(not_working_reason)
+  return if not_working_reason.nil? || not_working_reason == false
   return if rhymecrime_run_skipped_examples?
 
   reason =
-    if not_working_message == true
+    if not_working_reason == true
       "not working"
     else
-      s = not_working_message.to_s.strip
+      s = not_working_reason.to_s.strip
       s.empty? ? "not working" : s
     end
   skip(reason)

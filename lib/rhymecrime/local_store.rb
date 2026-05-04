@@ -90,6 +90,24 @@ module Rhymecrime
         db.execute("PRAGMA temp_store = MEMORY")
         db.execute("PRAGMA cache_size = -65536") # 64 MB page cache
       end
+
+      # Delete a SQLite database file along with its WAL sidecars (+-wal+,
+      # +-shm+) and any rollback journal. Use this instead of
+      # +File.delete(path)+ whenever you want to recreate the database from
+      # scratch: SQLite stores uncommitted/unmerged frames in the +-wal+ file
+      # and a memory-mapped index in +-shm+, and re-opening a freshly created
+      # main file with a stale WAL pair surfaces as +SQLITE_IOERR+ ("disk I/O
+      # error") on the very first write because the header counters disagree.
+      # A previous +bin/compute-relatedness+ crash that left the +.shardN.tmp+
+      # main files cleaned but the +-wal+ / +-shm+ behind would otherwise
+      # silently break every subsequent shard run on the same paths until the
+      # generated/ dir was hand-cleaned.
+      def delete_database_file!(path)
+        return unless path
+        [path, "#{path}-wal", "#{path}-shm", "#{path}-journal"].each do |p|
+          File.delete(p) if File.exist?(p)
+        end
+      end
     end
 
     # Row-level writer helper yielded by +open_for_write+.

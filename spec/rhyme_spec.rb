@@ -2,15 +2,15 @@
 # rhymes
 #
 
-def oughta_rhyme(word1, word2, not_working_message: nil)
-  oughta_rhyme_one_way(word1, word2, not_working_message: not_working_message)
-  oughta_rhyme_one_way(word2, word1, not_working_message: not_working_message)
+def oughta_rhyme(word1, word2, not_working_reason: nil)
+  oughta_rhyme_one_way(word1, word2, not_working_reason: not_working_reason)
+  oughta_rhyme_one_way(word2, word1, not_working_reason: not_working_reason)
 end
 
-def oughta_rhyme_one_way(word1, word2, not_working_message: nil)
+def oughta_rhyme_one_way(word1, word2, not_working_reason: nil)
   test_name = "'#{word1}' oughta have '#{word2}' in its list of rhymes"
   it test_name do
-    skip_if_not_working(not_working_message)
+    skip_if_not_working(not_working_reason)
     rhymes = find_preferred_rhyming_words(word1)
     # Accept any spelling variant of +word2+: the rhyme list only contains preferred forms,
     # so if the spec names a dispreferred variant (+spectre+ vs +specter+, +cord+ vs +chord+)
@@ -23,20 +23,20 @@ def oughta_rhyme_one_way(word1, word2, not_working_message: nil)
   end
 end
 
-def ought_not_rhyme(word1, word2, not_working_message: nil)
-  ought_not_rhyme_one_way(word1, word2, not_working_message: not_working_message)
-  ought_not_rhyme_one_way(word2, word1, not_working_message: not_working_message)
+def ought_not_rhyme(word1, word2, not_working_reason: nil)
+  ought_not_rhyme_one_way(word1, word2, not_working_reason: not_working_reason)
+  ought_not_rhyme_one_way(word2, word1, not_working_reason: not_working_reason)
 end
 
-def ought_not_rhyme_one_way(word1, word2, not_working_message: nil)
+def ought_not_rhyme_one_way(word1, word2, not_working_reason: nil)
   test_name = "'#{word1}' ought not have '#{word2}' in its list of rhymes"
   it test_name do
-    skip_if_not_working(not_working_message)
+    skip_if_not_working(not_working_reason)
     expect(find_preferred_rhyming_words(word1).include?(word2)).to eql(false), "'#{word1}' (#{debug_info(word1)}) ought not include '#{word2}' (#{debug_info(word2)}) as a rhyme, but it does, and it also rhymes with #{find_preferred_rhyming_words(word1)}"
   end
 end
 
-def could_go_either_way(word1, word2, not_working_message: nil)
+def could_go_either_way(word1, word2, not_working_reason: nil)
 end
 
 describe 'RHYMES' do
@@ -119,7 +119,7 @@ describe 'RHYMES' do
     ought_not_rhyme 'leader', 'lieder'
     ought_not_rhyme 'lindsay', 'lindsey'
     ought_not_rhyme 'hanukkah', 'chanukah' # what if the initial sounds are different, though? Then how do we know to eliminate this?
-    ought_not_rhyme 'adherence', 'adherents', not_working_message: "these aren't true homophones, but we forget that when we elide the T"
+    ought_not_rhyme 'adherence', 'adherents', not_working_reason: "these aren't true homophones, but we forget that when we elide the T"
     ought_not_rhyme 'moray', 'more'
     ought_not_rhyme 'morays', 'mores'
     ought_not_rhyme 'trustee', 'trusty'
@@ -244,9 +244,9 @@ describe 'RHYMES' do
     # TODO: rezoned (and thus these specs) want a pron from re- + zoned: prepend e.g. R IH0 or R IY0
     # plus a syllable boundary before zoned's CMU string. General prefix morphology is overkill for this alone.
     oughta_rhyme 'owned', 'zoned'
-    oughta_rhyme 'unowned', 'zoned', not_working_message: "TODO: unowned lacks pron"
-    oughta_rhyme 'owned', 'rezoned', not_working_message: "TODO: rezoned lacks pron"
-    oughta_rhyme 'unowned', 'rezoned', not_working_message: "TODO: unowned and rezoned lack prons"
+    oughta_rhyme 'unowned', 'zoned', not_working_reason: "TODO: unowned lacks pron"
+    oughta_rhyme 'owned', 'rezoned', not_working_reason: "TODO: rezoned lacks pron"
+    oughta_rhyme 'unowned', 'rezoned', not_working_reason: "TODO: unowned and rezoned lack prons"
     ought_not_rhyme 'atonal', 'tonal' # a-
     ought_not_rhyme 'flame', 'aflame' # a-
     ought_not_rhyme 'round', 'around' # a-
@@ -316,11 +316,12 @@ describe 'RHYMES' do
       # from opaque or borrowed look-alikes (abasement, impact, ahead).
       context "deferred pending better prefix-vs-opaque detection" do
         before(:each) { skip_if_not_working('pseudo-prefix: filter_out_prefix_words overfilters') }
-        nwm = 'splash damage: filter_out_prefix_words treats the false re- as derivational'
-        oughta_rhyme 'percussion', 'repercussion', not_working_message: nwm
-        oughta_rhyme 'lied', 'relied', not_working_message: nwm
-        oughta_rhyme_one_way 'corded', 'recorded', not_working_message: nwm
-        oughta_rhyme 'tween', 'between', not_working_message: nwm
+        nwr = 'splash damage: filter_out_prefix_words treats the false re- as derivational'
+        oughta_rhyme 'percussion', 'repercussion', not_working_reason: nwr
+        oughta_rhyme 'lied', 'relied', not_working_reason: nwr
+        oughta_rhyme 'quest', 'request', not_working_reason: nwr
+        oughta_rhyme_one_way 'corded', 'recorded', not_working_reason: nwr
+        oughta_rhyme 'tween', 'between', not_working_reason: nwr
         oughta_rhyme 'basement', 'abasement'
         oughta_rhyme 'bashed', 'abashed'
         oughta_rhyme 'but', 'abut'
@@ -384,7 +385,7 @@ describe 'RHYMES' do
     oughta_rhyme 'specter', 'inspector'
     oughta_rhyme 'spectre', 'inspector'
     oughta_rhyme 'supplemented', 'fermented'
-    oughta_rhyme 'jar', 'ajar', not_working_message: 'splash damage: a- prefix filter'
+    oughta_rhyme 'jar', 'ajar', not_working_reason: 'splash damage: a- prefix filter'
     oughta_rhyme 'bone', 'trombone' # trom- is not a prefix
     oughta_rhyme 'sable', 'disable' # arguable
     oughta_rhyme 'action', 'traction' # tr- is not a prefix
@@ -394,7 +395,7 @@ describe 'RHYMES' do
     oughta_rhyme 'nest', 'finessed'
     oughta_rhyme 'keto', 'mosquito'
     oughta_rhyme_one_way 'record', 'cord'
-    oughta_rhyme_one_way 'cord', 'record', not_working_message: 'splash damage: re- prefix filter (record is etymologically re+cord)'
+    oughta_rhyme_one_way 'cord', 'record', not_working_reason: 'splash damage: re- prefix filter (record is etymologically re+cord)'
     oughta_rhyme 'chord', 'record'
     # hemiola isn't in our lexicon at all; mandolin/violin have genuinely different rimes
     # (+AE_N_D_AH_L_AH_N+ vs +IH_N+ -- the stress lands in different places), so they
@@ -437,10 +438,12 @@ describe 'RHYMES' do
     ought_not_rhyme 'medical', 'biomedical'
     ought_not_rhyme 'plastic', 'thermoplastic'
     context "edge cases" do
+      oughta_rhyme 'semblance', 'resemblance'
+      oughta_rhyme 'angular', 'rectangular'
       oughta_rhyme 'thesis', 'prosthesis'
       oughta_rhyme 'mediterranean', 'subterranean' # medi- is not a prefix
-      ought_not_rhyme 'motion', 'locomotion', not_working_message: "TODO"
-      ought_not_rhyme 'magnetic', 'electromagnetic', not_working_message: "TODO"
+      ought_not_rhyme 'motion', 'locomotion', not_working_reason: "TODO"
+      ought_not_rhyme 'magnetic', 'electromagnetic'
       oughta_rhyme 'prudence', 'jurisprudence' # they're semantically different enough to be interesting
       ought_not_rhyme 'explosion', 'implosion'
     end
@@ -710,7 +713,7 @@ describe 'RHYMES' do
     oughta_rhyme 'blotch', 'watch'
     oughta_rhyme 'blotched', 'watched'
     oughta_rhyme 'poor', 'tour' # P UW R / T UH R
-    oughta_rhyme 'informant', 'torment', not_working_message: true
+    oughta_rhyme 'informant', 'torment', not_working_reason: true
   end
 
   context "-in'" do
@@ -728,8 +731,8 @@ describe 'RHYMES' do
     oughta_rhyme "sobbin'", "bobbin'"
     ought_not_rhyme "bobbin'", "bobbin'"
     oughta_rhyme 'layman', "shaman"
-    oughta_rhyme 'layman', "gamin'", not_working_message: "gamin' gets pruned"
-    oughta_rhyme 'layman', "daemon", not_working_message: "daemon is marked as a spelling variant of demon"
+    oughta_rhyme 'layman', "gamin'"
+    oughta_rhyme 'layman', "daemon", not_working_reason: "daemon is marked as a spelling variant of demon"
     ought_not_rhyme 'shaman', "shamin'" # homophone
     oughta_rhyme 'shaman', 'common'
   end
@@ -743,12 +746,12 @@ describe 'RHYMES' do
     oughta_rhyme 'dodged', 'massaged'
     oughta_rhyme 'dodging', 'massaging'
     oughta_rhyme 'fennel', 'sentimental' # it's OK to elide the final T in 'sentimental'
-    oughta_rhyme 'greediest', 'devious', not_working_message: true
-    oughta_rhyme 'fence', 'wince', not_working_message: true
-    oughta_rhyme 'girl', 'world', not_working_message: true
+    oughta_rhyme 'greediest', 'devious', not_working_reason: true
+    oughta_rhyme 'fence', 'wince', not_working_reason: true
+    oughta_rhyme 'girl', 'world', not_working_reason: true
     oughta_rhyme 'false', 'malts' # sure I guess? otherwise 'false' won't rhyme with anything at all
     oughta_rhyme 'else', 'melts' # sure I guess? otherwise 'else' won't rhyme with anything at all
-    oughta_rhyme 'poor', 'core', not_working_message: "in some dialects, these rhyme"
+    oughta_rhyme 'poor', 'core', not_working_reason: "in some dialects, these rhyme"
     oughta_rhyme 'cajun', 'occasion'
     context 'pin/pen' do # I'm torn on this one
       ought_not_rhyme 'pin', 'pen'
@@ -805,8 +808,8 @@ describe 'RHYMES' do
 
   context '-er' do
     ought_not_rhyme 'freer', 'beer'
-    oughta_rhyme 'freer', 'seer', not_working_message: "bad seer pron in CMUdict"
-    ought_not_rhyme 'seer', 'beer', not_working_message: "bad seer pron in CMUdict"
+    oughta_rhyme 'freer', 'seer', not_working_reason: "bad seer pron in CMUdict"
+    ought_not_rhyme 'seer', 'beer', not_working_reason: "bad seer pron in CMUdict"
   end
 
   context 'common_words.txt' do
@@ -847,13 +850,13 @@ describe 'RHYMES' do
   end
 
   context 'non-binary rhymes' do
-    oughta_rhyme 'latex', 'paychecks', not_working_message: 'TODO: support non-binary rhymes'
-    oughta_rhyme 'pitiful', 'biddable', not_working_message: 'non-binary plus T -> D'
-    oughta_rhyme 'cello', 'concerto', not_working_message: 'TODO: support non-binary rhymes'
-    oughta_rhyme 'symphony', 'timpani', not_working_message: 'TODO: support non-binary rhymes'
+    oughta_rhyme 'latex', 'paychecks', not_working_reason: 'TODO: support non-binary rhymes'
+    oughta_rhyme 'pitiful', 'biddable', not_working_reason: 'non-binary plus T -> D'
+    oughta_rhyme 'cello', 'concerto', not_working_reason: 'TODO: support non-binary rhymes'
+    oughta_rhyme 'symphony', 'timpani', not_working_reason: 'TODO: support non-binary rhymes'
     context 'multi-word' do
-      oughta_rhyme 'cello', 'hell no', not_working_message: 'TODO: support multi-word non-binary rhymes'
-      oughta_rhyme 'bounty', 'brown tea', not_working_message: 'TODO: support multi-word non-binary rhymes'
+      oughta_rhyme 'cello', 'hell no', not_working_reason: 'TODO: support multi-word non-binary rhymes'
+      oughta_rhyme 'bounty', 'brown tea', not_working_reason: 'TODO: support multi-word non-binary rhymes'
     end
   end
 
@@ -937,7 +940,7 @@ describe 'RHYMES' do
     oughta_rhyme 'expressed', 'rest'
     oughta_rhyme 'fandango', 'tango'
     oughta_rhyme 'flute', 'lute'
-    oughta_rhyme 'fortissimo', 'pianissimo', not_working_message: 'both rare, rime bucket pruned'
+    oughta_rhyme 'fortissimo', 'pianissimo', not_working_reason: 'both rare, rime bucket pruned'
     oughta_rhyme 'funk', 'punk'
     oughta_rhyme 'gong', 'song'
     oughta_rhyme 'harmonic', 'sonic'
@@ -1096,10 +1099,13 @@ describe 'RHYMES' do
   end
 
   context 'bad pronunciations' do
+    oughta_rhyme 'than', 'man'
+    oughta_rhyme 'fun', 'none'
+    ought_not_rhyme 'than', 'none'
     oughta_rhyme 'confuse', 'muse'
     oughta_rhyme 'redoes', 'buzz'
     ought_not_rhyme 'confuse', 'redoes'
-    ought_not_rhyme 'debutantes', 'renaissance' # stress mismatch
+    ought_not_rhyme 'debutantes', 'renaissance' # stress mismaatch
     ought_not_rhyme 'prosthesis', 'transgresses'
     oughta_rhyme 'causal', 'menopausal'
     oughta_rhyme 'spousal', 'tousle'
@@ -1204,4 +1210,8 @@ describe 'RHYMES' do
     oughta_rhyme 'agonise', 'antagonize'
     oughta_rhyme 'agonise', 'antagonise'
   end
+
+  context "semantically promiscuous" do
+    ought_not_rhyme 'alles', 'males'
+  end    
 end

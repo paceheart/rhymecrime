@@ -198,6 +198,15 @@ end
 # +frequency.rb+ / +phonology.rb+): +lemma+ falls back to +lexicon_word_entry+
 # and ultimately to the word itself, so a missing map just collapses the
 # fallback into the direct check we already did.
+#
+# Build-time interaction: the dict-build seed loop in +add_frequency_info+
+# uses this predicate to stamp +999999+ (sentinel-high) frequencies, which
+# means the lemma fallback also sweeps in Wiktionary/Kaikki paradigm-noise
+# surfaces (+gots+, +alles+, +nots+, +theyed+, +abouts+, ...). The
+# +stopword_inflection_scrub+ pass right after +unrhymable_scrub+ deletes
+# those noise surfaces back out, gated by WordNet / wordfreq-Zipf /
+# +rarity.csv+ attestation so legitimate inflections (+outing+, +mostly+,
+# +willing+, +owned+, +others+) are preserved.
 def semantically_promiscuous?(word)
   return true if semantically_promiscuous_words.include?(word)
   base = lemma(word)

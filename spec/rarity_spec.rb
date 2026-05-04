@@ -66,40 +66,40 @@ end
 # --- Spot-check helpers (one rspec example per call; for hand-curated cases
 # where a named regression is more useful than a row in rarity.csv). ---
 
-def oughta_be_common(word, important: true, not_working_message: nil)
+def oughta_be_common(word, important: true, not_working_reason: nil)
   test_name = "'#{word}' oughta be common"
   it test_name do
-    skip_if_not_working(not_working_message)
+    skip_if_not_working(not_working_reason)
     msg = "'#{word}' oughta be common, but is #{rarity_category(word)} — #{rarity_status_line(word)}"
     msg += " (but it's not that big a deal)" unless important
     expect(rarity_category(word)).to eq(:common), msg
   end
 end
 
-def ought_not_be_common(word, important: true, not_working_message: nil)
+def ought_not_be_common(word, important: true, not_working_reason: nil)
   test_name = "'#{word}' ought not be common"
   it test_name do
-    skip_if_not_working(not_working_message)
+    skip_if_not_working(not_working_reason)
     msg = "'#{word}' ought not be common, but is: — #{rarity_status_line(word)}"
     msg += " (but it's not that big a deal)" unless important
     expect(rarity_category(word)).to_not eq(:common), msg
   end
 end
 
-def oughta_be_rare(word, important: true, not_working_message: nil)
+def oughta_be_rare(word, important: true, not_working_reason: nil)
   test_name = "'#{word}' oughta be rare"
   it test_name do
-    skip_if_not_working(not_working_message)
+    skip_if_not_working(not_working_reason)
     msg = "'#{word}' oughta be rare, but is #{rarity_category(word)} — #{rarity_status_line(word)}"
     msg += " (but it's not that big a deal)" unless important
     expect(rarity_category(word)).to eq(:rare), msg
   end
 end
 
-def oughta_be_forbidden(word, not_working_message: nil)
+def oughta_be_forbidden(word, not_working_reason: nil)
   test_name = "'#{word}' oughta be forbidden"
   it test_name do
-    skip_if_not_working(not_working_message)
+    skip_if_not_working(not_working_reason)
     msg = "'#{word}' oughta be forbidden, but is #{rarity_category(word)} — #{rarity_status_line(word)}"
     expect(rarity_category(word)).to eq(:forbidden), msg
   end
@@ -274,6 +274,10 @@ describe "RARITY" do
     oughta_be_forbidden 'e-mai'
     oughta_be_forbidden 'iii'
     oughta_be_forbidden 'the' # stop word
+    oughta_be_forbidden 'alles'
+    oughta_be_forbidden 'theyed'
+    oughta_be_forbidden 'gots'
+    oughta_be_forbidden 'nots'
     
     oughta_be_rare 'blepharoplasty'
     oughta_be_rare 'wakefield'
@@ -281,6 +285,7 @@ describe "RARITY" do
 
     ought_not_be_common 'rikers'
     ought_not_be_common 'taw'
+    ought_not_be_common 'sameer'
 
     oughta_be_common 'fiddler'
     oughta_be_common 'pirate'

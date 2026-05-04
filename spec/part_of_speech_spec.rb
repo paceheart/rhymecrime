@@ -3,7 +3,7 @@
 #
 # Table: each row is either
 #   - an Array: word, then POS abbreviations (noun, verb, adj, adv — keys match Kaikki), or
-#   - a Hash: :word, :expect (array of tags), optional :not_working_message (truthy → skip with that reason; use true for "not working").
+#   - a Hash: :word, :expect (array of tags), optional :not_working_reason (truthy → skip with that reason; use true for "not working").
 
 PART_OF_SPEECH_EXPECTED = [
   %w[run verb noun],
@@ -25,9 +25,9 @@ PART_OF_SPEECH_EXPECTED = [
   %w[fox noun],
   %w[foxy adj],
   %w[foxily adv],
-  { word: "foxiness", expect: %w[noun], not_working_message: true },
+  { word: "foxiness", expect: %w[noun], not_working_reason: true },
   %w[very adv adj], # the very (adj) best
-  { word: "downtown", expect: %w[noun adj], not_working_message: true },
+  { word: "downtown", expect: %w[noun adj], not_working_reason: true },
   %w[central adj],
   %w[centralize verb],
   %w[centralization noun],
@@ -47,13 +47,13 @@ PART_OF_SPEECH_EXPECTED = [
   %w[jogger noun],
   %w[dance noun verb],
   %w[ant noun],
-  { word: "ants", expect: %w[noun], not_working_message: true },
+  { word: "ants", expect: %w[noun], not_working_reason: true },
   %w[magenta adj noun],
   %w[yellow adj noun verb],
   %w[margin noun],
   %w[marginal adj],
   %w[quickly adv],
-  { word: "yeet", expect: %w[verb], not_working_message: true },
+  { word: "yeet", expect: %w[verb], not_working_reason: true },
   %w[twerk verb]
 ].freeze
 
@@ -67,14 +67,14 @@ describe "PART OF SPEECH" do
   end
 
   PART_OF_SPEECH_EXPECTED.each do |row|
-    word, expected, not_working_message =
+    word, expected, not_working_reason =
       if row.is_a?(Hash)
-        [row.fetch(:word), row.fetch(:expect), row[:not_working_message]]
+        [row.fetch(:word), row.fetch(:expect), row[:not_working_reason]]
       else
         [row[0], row[1..], nil]
       end
     it "#{word} is #{expected.join(', ')}" do
-      skip_if_not_working(not_working_message)
+      skip_if_not_working(not_working_reason)
       expect(tags(word)).to match_array(expected)
     end
   end

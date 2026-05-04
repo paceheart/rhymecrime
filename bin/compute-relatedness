@@ -437,7 +437,10 @@ if threads <= 1 || n.zero?
     # Non-incremental: wipe the old DB so rows dropped by the current cue
     # filter don't survive. Incremental: keep the existing DB; the single-
     # writer transaction below will +INSERT OR REPLACE+ just the new rows.
-    File.delete(output_path) if !incremental && File.exist?(output_path)
+    # +delete_database_file!+ also removes the +-wal+ / +-shm+ sidecars; a
+    # bare +File.delete+ would leave them behind and SQLite would fault the
+    # next +open_for_write+ with +SQLITE_IOERR+ on the first transaction.
+    Rhymecrime::LocalStore.delete_database_file!(output_path) unless incremental
     Rhymecrime::LocalStore.open_for_write(output_path) do |writer|
       run_shard.call(lemmas, writer, "0")
     end
@@ -480,8 +483,12 @@ else
   shard_paths = dry_run ? Array.new(threads) { nil } : Array.new(threads) { |i| "#{output_path}.shard#{i}.tmp" }
 
   # Fresh shard files every run: stale rows from a crashed previous shard
-  # would otherwise survive the merge.
-  shard_paths.each { |p| File.delete(p) if p && File.exist?(p) }
+  # would otherwise survive the merge. Also tears down the +-wal+ / +-shm+
+  # sidecars; SQLite refuses to open a brand-new main file paired with an
+  # inherited WAL pair (counters disagree → +SQLITE_IOERR+ on first write),
+  # which is exactly the failure mode that bit when a previous compute crash
+  # left +.shardN.tmp-shm+ files alongside cleaned +.tmp+ mains.
+  shard_paths.each { |p| Rhymecrime::LocalStore.delete_database_file!(p) }
 
   # Flush so parent's stdout buffer isn't duplicated into every child.
   $stdout.flush
@@ -511,8 +518,8 @@ else
 
   unless failed.empty?
     # Clean up partial shard files on failure so the next run doesn't merge
-    # half-written output.
-    shard_paths.each { |p| File.delete(p) if p && File.exist?(p) }
+    # half-written output. Sidecars too — see +delete_database_file!+.
+    shard_paths.each { |p| Rhymecrime::LocalStore.delete_database_file!(p) }
     failed.each { |idx, st| warn "worker w#{idx} failed: #{st.inspect}" }
     exit 1
   end
@@ -521,8 +528,9 @@ else
     # Non-incremental: wipe the destination so rows dropped by the current
     # cue filter don't survive. Incremental: keep it; +merge_shard+ does
     # +INSERT OR REPLACE+ so the new shards overlay cleanly on the existing
-    # rows without touching cues not in this run.
-    File.delete(output_path) if !incremental && File.exist?(output_path)
+    # rows without touching cues not in this run. +delete_database_file!+
+    # so the +-wal+ / +-shm+ go too — see comment above.
+    Rhymecrime::LocalStore.delete_database_file!(output_path) unless incremental
     puts "Merging #{shard_paths.size} shard#{shard_paths.size == 1 ? '' : 's'} into #{output_path}..."
     t_merge = Process.clock_gettime(Process::CLOCK_MONOTONIC)
     Rhymecrime::LocalStore.open_for_write(output_path, transaction: false) do |writer|
@@ -533,7 +541,7 @@ else
     merge_elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC) - t_merge
     size_mb = (File.size(output_path).to_f / (1024 * 1024)).round(1)
     puts "Merged into #{output_path} (#{size_mb} MB) in #{format('%.1f', merge_elapsed)}s."
-    shard_paths.each { |p| File.delete(p) if p && File.exist?(p) }
+    shard_paths.each { |p| Rhymecrime::LocalStore.delete_database_file!(p) }
   end
 end
 

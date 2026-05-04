@@ -1829,6 +1829,49 @@ def add_frequency_info(cmudict, subtlex_hash, subtlex_total_hash, wordfreq_hash,
   end
   puts "#{unrhymable_scrub} unrhymable stop words removed after frequency phases" if unrhymable_scrub > 0
 
+  # Inflections of curated stop-word lemmas (+semantically_promiscuous.txt+ /
+  # +unrhymable_stop_words.txt+) that arrive from Wiktionary/Kaikki paradigm
+  # tables but lack corpus attestation are paradigm noise — Wiktionary
+  # documents the full theoretical inflection set for a lemma (+gots+,
+  # +nots+, +alles+, +theyed+, +abouts+, +eaches+, +heyed+, +hithers+,
+  # +othering+, ...) but real English never uses these surfaces. The seed
+  # loop's +semantically_promiscuous?(word)+ check stamps them at the
+  # +999999+ sentinel via the predicate's lemma fallback even though they
+  # aren't on either curated list themselves; without this scrub they leak
+  # into the live dictionary as ultra-common headwords and spec/rarity_spec.rb
+  # flags them as +oughta_be_forbidden+ regressions.
+  #
+  # Real inflections (+outing+, +mostly+, +willing+, +owned+, +others+,
+  # +outs+, +ups+, +beings+, +getters+ from +rarity.csv+ as common, ...)
+  # survive via the corpus-attestation gate: WordNet entry, wordfreq
+  # Zipf >= +WORDFREQ_COMMON_ZIPF+, or an explicit row in +rarity.csv+
+  # (curator's escape hatch — both common-band and rare-band rows are
+  # honored, since a rare-band row still wants the surface kept rather than
+  # promoted to forbidden).
+  stopword_inflection_scrub = 0
+  hash.keys.each do |word|
+    next if semantically_promiscuous_words.include?(word)
+    next if unrhymable_stop_word?(word)
+    base = lemma(word)
+    next if base == word
+    next unless semantically_promiscuous_words.include?(base) || unrhymable_stop_word?(base)
+    next if wn_has_entry?(word)
+    next if (wordfreq_hash[word] || 0) >= WORDFREQ_COMMON_ZIPF
+    next if common_words.include?(word)
+    next if rare_words.include?(word)
+    entry = hash[word]
+    next unless entry
+    next if entry.is_a?(BuildEntry) && entry.tombstoned?
+    dict_trace_puts(word, "stopword_inflection_scrub: DELETE (lemma=#{base} ∈ curated stop-word list, no corpus attestation)") if dict_trace_word?(word)
+    entry.mark_tombstoned!(
+      phase: :stopword_inflection_scrub,
+      reason: :paradigm_noise_inflection_of_stop_word_lemma,
+      detail: { lemma: base, zipf: wordfreq_hash[word] || 0 },
+    )
+    stopword_inflection_scrub += 1
+  end
+  puts "#{stopword_inflection_scrub} paradigm-noise inflections of curated stop words removed after frequency phases" if stopword_inflection_scrub > 0
+
   hyp_edge = delete_headwords_with_edge_hyphen!(hash)
   puts "#{hyp_edge} headwords with a leading or trailing '-' removed after frequency phases" if hyp_edge > 0
 

@@ -187,7 +187,15 @@ describe 'prune_suffix_redundant_rhyming_tuples' do
     prune_rhyming_tuple 'quiz / whiz', 'quizzes / whizzes'
     prune_rhyming_tuple "'tis / biz / his / is / quiz / whiz", 'quizzes / whizzes'
     prune_entire_rhyming_tuple 'aficionadoes / aficionados'
-    prune_rhyming_tuple 'anorexia / dyslexia', 'anorexic', 'dyslexic' # either way is fine
+    prune_rhyming_tuple 'anorexia / dyslexia', 'anorexic / dyslexic' # either way is fine
+    prune_entire_rhyming_tuple 'disorient / reorient'
+    prune_entire_rhyming_tuple 'disoriented / reoriented'
+    prune_entire_rhyming_tuple 'disorienting / reorienting'
+    prune_entire_rhyming_tuple 'disorients / reorients'
+    prune_entire_rhyming_tuple 'disorient / orient / reorient'
+    prune_entire_rhyming_tuple 'disoriented / oriented / reoriented'
+    prune_entire_rhyming_tuple 'disorienting / orienting / reorienting'
+    prune_entire_rhyming_tuple 'disorients / orients / reorients'
   end
 
   context 'stop words' do

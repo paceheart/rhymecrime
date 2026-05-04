@@ -38,7 +38,18 @@ end
 
 describe 'semantically_promiscuous?' do
   oughta_be_promiscuous 'about'
-  oughta_be_promiscuous 'abouts' # derived forms of semantically promiscuous words ought to inherit promiscuity
+  # Derived forms of semantically promiscuous words ought to inherit promiscuity
+  # via the +lemma()+ fallback in the predicate. +outs+ (lemma=out) survives
+  # +stopword_inflection_scrub+ via its corpus attestation (Zipf > COMMON), so
+  # it's still in +word_dict+ at runtime — and the runtime needs the predicate
+  # to flag it so relatedness scoring short-circuits it as a function-word-like
+  # candidate. +abouts+ used to be the canonical example here but it's now
+  # tombstoned by +stopword_inflection_scrub+ (no WN entry, no rarity.csv row,
+  # Zipf below COMMON), and a tombstoned word is absent from the lemma map so
+  # the predicate's fallback can't reach +about+ from +abouts+ any more.
+  oughta_be_promiscuous 'outs'
   oughta_be_unrhymable 'the' # different category from promiscuous: deleted from word_dict at build time
   ought_not_be_promiscuous 'cat'
+  ought_not_be_promiscuous 'ass'
+  ought_not_be_promiscuous 'assed'
 end

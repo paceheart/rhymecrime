@@ -374,6 +374,20 @@ end
 # ≥ +COMPOUND_MODIFIER_REST_MIN_LENGTH+. Returns the +REST+ candidates. Skips
 # hyphenated input — those go through +hyphen_compound_remainders+.
 #
+# Skips apostrophe-bearing input. In standard English orthography an apostrophe
+# inside a "word" marks a contraction of an inflectional or function-word morpheme
+# (verbal +-in'+ for +-ing+, +'em+ for +them+, +'tis+ for +it is+, +'bout+ for
+# +about+, +o'clock+ for +of the clock+). Contractions are not free-standing
+# lexical elements that combine into compounds. Without this guard, the 3-char
+# +-in'+ contraction (exactly +COMPOUND_MODIFIER_REST_MIN_LENGTH+, slipping past
+# the size threshold that excludes the bare 2-char preposition +in+) gets treated
+# as a compound REST: +failin'+ falsely peels to +fail+ + +in'+, +huffin'+ to
+# +huff+ + +in'+, +poopin'+ to +poop+ + +in'+, etc. The shared phantom +in'+
+# ancestor then causes +prefix_words+ to filter sibling +-in'+ rhymes
+# (+failin'+/+wailin'+, +huffin'+/+puffin'+, +poopin'+/+scoopin'+) out of each
+# other's preferred-rhyme lists. The substring rule is sufficient because
+# substrings of an apostrophe-free +word+ are themselves apostrophe-free.
+#
 # The rare-headword exclusion drops opaque-Latin compounds whose split words happen to
 # be in dict only because they're corner-case headwords (+juris+ in +jurisprudence+:
 # freq=2, rare). The pron-prefix-alignment gate (with the same primary-stress
@@ -384,7 +398,7 @@ end
 # on transparent productive compounds (+business+person+, +council+men+,
 # +thermo+plastic+).
 def compound_modifier_remainders(word)
-  return [] if word.nil? || word.empty? || word.include?("-")
+  return [] if word.nil? || word.empty? || word.include?("-") || word.include?("'")
   result = []
   head_min = COMPOUND_MODIFIER_HEAD_MIN_LENGTH
   rest_min = COMPOUND_MODIFIER_REST_MIN_LENGTH
@@ -427,7 +441,8 @@ def pron_prefix_aligned?(longer, shorter)
       l_phones = lp.phonemes.reject(&:syllable_boundary?)
       next false if l_phones.length <= s_phones.length
       l_head = l_phones[0...s_phones.length]
-      l_head.zip(s_phones).all? { |a, b| phoneme_tail_match?(a, b) }
+      longer_has_primary = pron_phones_have_primary_stress?(l_phones)
+      l_head.zip(s_phones).all? { |a, b| phoneme_tail_match?(a, b, longer_has_primary: longer_has_primary) }
     end
   end
 end
@@ -474,9 +489,21 @@ def pron_suffix_aligned?(longer, shorter)
       l_phones = lp.phonemes.reject(&:syllable_boundary?)
       next false if l_phones.length <= s_phones.length
       l_tail = l_phones[-s_phones.length..]
-      l_tail.zip(s_phones).all? { |a, b| phoneme_tail_match?(a, b) }
+      longer_has_primary = pron_phones_have_primary_stress?(l_phones)
+      l_tail.zip(s_phones).all? { |a, b| phoneme_tail_match?(a, b, longer_has_primary: longer_has_primary) }
     end
   end
+end
+
+# True when any phoneme in +phones+ carries primary stress (digit "1"). Used by
+# +pron_suffix_aligned?+ / +pron_prefix_aligned?+ to detect prons that lack
+# primary stress entirely (occasional dict-build artifacts on inferred forms
+# like +microamerica+: M AY2 K R OW0 AH0 M EH2 R AH0 K AH0). +phoneme_tail_match?+
+# relaxes its primary-preservation gate in that case so the highest-stressed
+# vowel acts as the de-facto primary, matching the rime extractor's stress-1
+# → 2 → 0 fallback.
+def pron_phones_have_primary_stress?(phones)
+  phones.any? { |p| p.to_s.include?("1") }
 end
 
 # Phoneme equivalence for +pron_suffix_aligned?+. +a+ is the longer-side phone,
@@ -487,21 +514,26 @@ end
 # Vowels: bare bases must match; if neither phoneme carries primary stress, any
 # vowel-vowel pair counts as a match (handles morphological vowel reduction at
 # the prefix-stem boundary, e.g. +enchanted+ EH0 N ↔ +disenchanted+'s AH0 N
-# tail). Additionally, when the SHORTER side carries primary stress, the LONGER
-# side must carry primary stress at the same position. This blocks
-# secondary-stressed compound elements from aligning with the bare element's
-# primary (+handout+'s +AW2+ tail vs +out+'s +AW1+ — perceptually a different
-# rhyme contour from a true compound-rhyme like +businessperson+/+person+
-# where both keep primary on +per+). Pre-strengthening, the bare-base check
-# alone passed AW2/AW1 and over-filtered sibling compounds whose shared
-# element kept secondary stress (+handout+/+standout+).
-def phoneme_tail_match?(a, b)
+# tail). Additionally, when the SHORTER side carries primary stress AND the
+# longer pron has primary stress somewhere, the LONGER side must carry primary
+# stress at the same position. This blocks secondary-stressed compound
+# elements from aligning with the bare element's primary (+handout+'s +AW2+
+# tail vs +out+'s +AW1+ — perceptually a different rhyme contour from a true
+# compound-rhyme like +businessperson+/+person+ where both keep primary on
+# +per+). When the longer pron carries no primary stress at all
+# (+microamerica+: only AY2 / EH2), the gate relaxes — the highest-stressed
+# vowel is the de-facto primary under the same fallback the rime extractor
+# uses (stress 1 → 2 → 0), so secondary at the aligned position counts as
+# primary-equivalent. Pre-strengthening, the bare-base check alone passed
+# AW2/AW1 and over-filtered sibling compounds whose shared element kept
+# secondary stress (+handout+/+standout+).
+def phoneme_tail_match?(a, b, longer_has_primary: true)
   return true if a == b
   return false if a.syllable_boundary? || b.syllable_boundary?
   if a.vowel? && b.vowel?
     return true if !a.include?("1") && !b.include?("1")
     return false unless Phoneme.bare_base(a) == Phoneme.bare_base(b)
-    return false if b.include?("1") && !a.include?("1")
+    return false if b.include?("1") && !a.include?("1") && longer_has_primary
     true
   else
     return false if a.vowel? || b.vowel?
@@ -873,6 +905,69 @@ def rhyming_tuples_share_hidden_base(a, b)
   nil
 end
 
+# Greek/Latin derivational suffix pairs used by
+# +rhyming_tuples_share_letter_stem_via_derivational_suffix?+. Each entry is a
+# pair of suffixes that attach to a shared letter stem to produce sibling
+# noun/adjective forms (+anorex+ + +ia+ = +anorexia+, +anorex+ + +ic+ =
+# +anorexic+). Order matters within a pair: the FIRST element is preferred —
+# the cross-tuple sweep keeps tuples whose suffix matches +.first+ and prunes
+# the sibling whose suffix matches +.last+. (For the cases here that means we
+# keep the noun and prune the adjective: +anorexia / dyslexia+ wins over
+# +anorexic / dyslexic+.) These derivations aren't productive in modern
+# English — they're fossilized Greek/Latin loans — so +Inflect+ doesn't list
+# them and the rhyming-tuple pruner's stock probes
+# (+rhyming_tuples_share_hidden_base+, +rhyming_tuple_suffix_redundant_with?+)
+# all decline. Listed conservatively; add new pairs only when a failing tuple
+# in +spec/prune_redundant_tuples_spec.rb+ shows up.
+DERIVATIONAL_SUFFIX_PAIRS = [
+  %w[ia ic], # anorexia / anorexic, dyslexia / dyslexia → noun preferred
+].freeze
+
+# Recognize same-length sibling tuples that share a fixed letter-stem prefix
+# at every slot and differ only by a known derivational suffix pair from
+# +DERIVATIONAL_SUFFIX_PAIRS+. Returns +true+ when the slot-aligned suffix
+# pair (+ear[i]+'s suffix, +tup[i]+'s suffix) matches a registered pair (any
+# orientation) and stays consistent across all slots; the per-slot stem
+# overlap must be at least +DERIVATIONAL_STEM_MIN_LENGTH+ characters so we
+# don't latch onto trivial 1-2-letter coincidences. Used by
+# +really_rhyming_tuple_redundant_with?+ to mark +tup+ as redundant with
+# +ear+ when the suffix pair fires in the +ear-preferred+ direction
+# (+ear+'s suffix is +.first+ in the registered pair). False otherwise — the
+# reverse direction is handled implicitly by the cross-tuple sweep iterating
+# in sort order: the noun tuple sorts before the adjective tuple
+# alphabetically (+anorexia+ < +anorexic+), so it lands in +kept+ first and
+# the adjective tuple gets compared against it (+ear+=noun, +tup+=adj) →
+# pruned.
+DERIVATIONAL_STEM_MIN_LENGTH = 4
+def rhyming_tuples_share_letter_stem_via_derivational_suffix?(ear, tup)
+  return false if ear.size != tup.size || ear.empty?
+  return false if ear == tup
+
+  pair_key = nil
+  ear.each_with_index do |ew, i|
+    tw = tup[i]
+    return false if ew == tw
+
+    # Try every registered suffix pair before splitting the stem. A naive
+    # longest-common-prefix split would mis-segment +anorexia+/+anorexic+ at
+    # +anorexi+ (the trailing +i+ is shared) and miss the +ia+/+ic+ pair —
+    # the suffix has to bound the stem instead of the other way around.
+    matched = DERIVATIONAL_SUFFIX_PAIRS.find do |es_suf, ts_suf|
+      ew.end_with?(es_suf) && tw.end_with?(ts_suf) &&
+        ew[0...-es_suf.bytesize] == tw[0...-ts_suf.bytesize] &&
+        (ew.bytesize - es_suf.bytesize) >= DERIVATIONAL_STEM_MIN_LENGTH
+    end
+    return false unless matched
+
+    if pair_key.nil?
+      pair_key = matched
+    else
+      return false unless matched == pair_key
+    end
+  end
+  !pair_key.nil?
+end
+
 # True if every word in +bases+ (the shorter tuple) inflects into a distinct word in +inflecteds+
 # (the longer tuple) using one shared +Inflect+ suffix kind. Used to detect the case where a
 # base-form tuple is a strict inflectional subset of a richer inflected tuple (e.g. the 3-member
@@ -1026,6 +1121,20 @@ def tuple_redundancy_keys_for_word(word)
     keys.add(word[0...-4])
   end
 
+  # Letter-stem reversals of +DERIVATIONAL_SUFFIX_PAIRS+ entries used by
+  # +rhyming_tuples_share_letter_stem_via_derivational_suffix?+: the index
+  # bucket for both sides of a pair (+anorexia+, +anorexic+) needs to share a
+  # stem key (+anorex+) so the cross-tuple sweep ever brings the two tuples
+  # into +really_rhyming_tuple_redundant_with?+ for the dedicated probe to
+  # fire. Like the +:y_adj_er+ / +:ier+ stems above, these are added
+  # unvalidated — false-positive index entries are cheap; the predicate
+  # validates the per-slot suffix pair against +DERIVATIONAL_SUFFIX_PAIRS+.
+  DERIVATIONAL_SUFFIX_PAIRS.flatten.uniq.each do |suf|
+    if word.bytesize >= suf.bytesize + DERIVATIONAL_STEM_MIN_LENGTH && word.end_with?(suf)
+      keys.add(word[0...-suf.bytesize])
+    end
+  end
+
   keys
 end
 
@@ -1130,6 +1239,12 @@ def really_rhyming_tuple_redundant_with?(ear, tup)
     return true if rhyming_tuples_lemma_subset?(tup, ear) &&
       rhyming_tuples_lemma_subset?(ear, tup) &&
       rhyming_tuple_inflection_distance(ear) < rhyming_tuple_inflection_distance(tup)
+    # Fallback: Greek/Latin derivational siblings (+anorexia+/+anorexic+,
+    # +dyslexia+/+dyslexic+). +Inflect+ doesn't list these unproductive
+    # alternations, so the probes above all decline; the dedicated
+    # letter-stem probe consults +DERIVATIONAL_SUFFIX_PAIRS+ to pair the
+    # noun-side tuple (kept) with the adjective-side tuple (pruned).
+    return true if rhyming_tuples_share_letter_stem_via_derivational_suffix?(ear, tup)
     false
   elsif ear.size > tup.size
     return true if rhyming_tuple_suffix_redundant_with?(ear, tup)
@@ -1200,7 +1315,16 @@ def condense_tuple_derived_forms(tup)
     tup.each do |base|
       next if base == derived
       next if dropped.include?(base)
-      next if (rsyll_set_of[derived] & rsyll_set_of[base]).empty?
+      # Phonological proximity: rsyll overlap (fast path) or +pron_suffix_aligned?+
+      # fallback. The fallback catches cases where rsyll differs by an extra
+      # syllable-onset consonant due to syllabifier choices (+disorienting+'s
+      # "S AO ..." rsyll vs +orienting+'s "AO ..." — the +S+ migrated onset
+      # because the dis- prefix's +AH0+ stays open before the new third
+      # syllable). The pron-tail check is what +prefix_words+ already uses
+      # as the safety gate, so accepting it here aligns the within-tuple
+      # condenser with the rhyme filter.
+      next if (rsyll_set_of[derived] & rsyll_set_of[base]).empty? &&
+        !pron_suffix_aligned?(derived, base)
       COMMON_PREFIXES.each do |prefix|
         next unless derived.start_with?(prefix) && derived[prefix.length..] == base
         if GLOSS_GATED_PREFIXES.include?(prefix)
@@ -1212,8 +1336,101 @@ def condense_tuple_derived_forms(tup)
       break if dropped.include?(derived)
     end
   end
+
   return tup if dropped.empty?
   tup - dropped.to_a
+end
+
+# Within a single rhyming tuple, when two members are parallel
+# +COMMON_PREFIXES+ derivations of an absent shared base, drop one — the
+# pair carries no rhyme information beyond the implicit base. Catches
+# +[disorient, reorient]+, +[extralegal, illegal]+, +[disoriented,
+# reoriented]+, and the plural/gerund variants where the bare base
+# (+orient+, +legal+) isn't in the tuple, while leaving +[coral, choral]+
+# alone (no shared prefix-strip ancestor) and +[eyeball, highball]+ alone
+# (the AA2/AO1 stress mismatch makes +pron_suffix_aligned?+ decline
+# against the bare +ball+).
+#
+# Cue-aware tie-break: same ranking as +condense_tuple_homophones+ —
+#
+#   1. +similarity(focal_word, w)+ — stored relatedness to the cue, highest wins.
+#   2. +frequency(w)+ — unigram frequency, highest wins.
+#   3. alphabetical +w+ — final deterministic tiebreak.
+#
+# When +focal_word+ is +nil+ (en-masse compute callers that haven't
+# plumbed the cue through, plus +rhyming_pair_trivial?+ where the
+# collapse-or-not answer is independent of which member wins) the rank
+# degenerates to lex-max, preserving the historic deterministic behavior.
+def condense_tuple_parallel_derivations(tup, focal_word = nil)
+  return tup if tup.size < 2
+  ancestors_of = {}
+  tup.each do |w|
+    ancestors_of[w] = recursive_prefix_ancestors(w) - [w]
+  end
+  dropped = Set.new
+  tup.each do |a|
+    next if dropped.include?(a)
+    tup.each do |b|
+      next if a == b || dropped.include?(b)
+      shared = ancestors_of[a] & ancestors_of[b]
+      next if shared.empty?
+      matched = shared.any? do |anc|
+        pron_suffix_aligned?(a, anc) && pron_suffix_aligned?(b, anc)
+      end
+      next unless matched
+      loser = parallel_sibling_loser(a, b, focal_word)
+      dropped << loser
+      break if loser == a
+    end
+  end
+  return tup if dropped.empty?
+  tup - dropped.to_a
+end
+
+# Pick which of two parallel-derivation siblings to drop. Cue-aware: rank
+# both by +(score, frequency, alphabetical)+ against +focal_word+ and
+# return the lower-ranked surface; +focal_word+ +nil+ degenerates to
+# lex-max so en-masse compute / pair-trivial callers get deterministic
+# focal-independent behavior.
+#
+# +score+ falls back from the cached +similarity+ to a live
+# +relatedness_score+ when the cached read is uninformative (zero for
+# both siblings — the typical shape when +focal_word+ is a non-cached
+# cue, e.g. +pirate+, where the +RelatedWords.lookup_score+ path returns
+# 0 for every related). Without the live fallback the tiebreak collapses
+# to frequency / lex-max for *every* parallel-derivation pair under a
+# non-cached cue, defeating the purpose of being cue-aware. The live
+# call is cheap here (two +PairSignals+ evaluations per pair) and only
+# fires when the prune is already in the live-compute branch — cached
+# cues hit +Store.fetch_set_related_tuples+ before reaching the prune.
+def parallel_sibling_loser(a, b, focal_word)
+  if focal_word.nil? || focal_word.to_s.empty?
+    return [a, b].max
+  end
+  sim_a = parallel_sibling_score(focal_word, a)
+  sim_b = parallel_sibling_score(focal_word, b)
+  ranked = [a, b].sort_by.with_index do |w, i|
+    sim = i.zero? ? sim_a : sim_b
+    [-sim, -frequency(w).to_i, w]
+  end
+  ranked.last
+end
+
+# Cached +similarity+ first; fall back to a live
+# +relatedness_score(PairSignals.new(cue, related))+ when the cached
+# value is 0 (typical for non-cached cues where +RelatedWords.lookup_score+
+# has no row to consult). Lazy-loads the relatedness compute pipeline on
+# first call from a process that hadn't already loaded it via
+# +find_related_words+ — at Lambda runtime this only fires when the
+# +set_related+ goal has already gone live-compute (the cached-tuples
+# path skips the prune entirely), so the load is paid for either way.
+def parallel_sibling_score(focal_word, w)
+  cached = similarity(focal_word, w).to_i
+  return cached if cached > 0
+  relatedness_lazy_load_compute!
+  relatedness_score(PairSignals.new(lemma(focal_word), lemma(w))).to_i
+rescue StandardError
+  0
 end
 
 # Per-word cache of tokenized lowercase WordNet gloss text. Built lazily on
@@ -1399,6 +1616,7 @@ end
 def rhyming_pair_trivial?(a, b)
   return false if a == b
   condense_tuple_derived_forms([a, b]).size < 2 ||
+    condense_tuple_parallel_derivations([a, b]).size < 2 ||
     condense_tuple_homophones([a, b], a).size < 2
 end
 
@@ -1683,10 +1901,30 @@ def prune_suffix_redundant_rhyming_tuples(tuples, focal_word = nil)
     end
   end
 
+  # Within-tuple parallel-derivation condensation — focal-dependent.
+  # Collapse +[disorient, reorient]+ / +[illegal, extralegal]+-style
+  # parallel sibling pairs (two members sharing a non-self prefix-strip
+  # ancestor that pron-suffix-aligns with both). Cue-aware tie-break in
+  # +parallel_sibling_loser+ keeps the sibling more similar to
+  # +focal_word+ — pirate's tuple keeps +illegal+ over +extralegal+,
+  # constitution's tuple would keep +extralegal+ over +illegal+.
+  tuples = tuples.map do |tup|
+    condensed = condense_tuple_parallel_derivations(tup, focal_word)
+    if verbose_prunes && condensed.size < tup.size
+      dropped = tup - condensed
+      puts "condensed rhyming tuple (dropped #{dropped.inspect}, parallel derivations): #{tup.join(' / ')} -> #{condensed.join(' / ')}"
+    end
+    if debug_pruning
+      (tup - condensed).each { |w| $debug_pruned_tuples << [w] }
+      tup
+    else
+      condensed
+    end
+  end
+
   # Within-tuple homophone condensation — focal-dependent. Within each
   # tuple, break full-pronunciation homophone clusters down to one
-  # winner by stored relatedness to +focal_word+. This is the only
-  # prune step that consults the cue.
+  # winner by stored relatedness to +focal_word+.
   tuples = tuples.map do |tup|
     condensed = condense_tuple_homophones(tup, focal_word)
     if verbose_prunes && condensed.size < tup.size
