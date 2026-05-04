@@ -52,6 +52,16 @@ RSpec.configure do |config|
   # path is gitignored — see +.gitignore+. RSpec writes it on every run.
   config.example_status_persistence_file_path = "spec/examples.txt"
 
+  # Per-file timing log used by `parallel_rspec --group-by runtime --runtime-log
+  # tmp/parallel_runtime_rspec.log`. Gated on TEST_ENV_NUMBER (which parallel_rspec
+  # sets per worker) so that single-process `bundle exec rspec spec/foo_spec.rb`
+  # runs don't truncate the log out from under us — the formatter's base class
+  # +File.open(path, 'w')+s the file at construction. Path is gitignored via tmp/*.
+  if ENV["TEST_ENV_NUMBER"]
+    require "parallel_tests/rspec/runtime_logger"
+    config.add_formatter ParallelTests::RSpec::RuntimeLogger, "tmp/parallel_runtime_rspec.log"
+  end
+
   # rspec-expectations config goes here. You can use an alternate
   # assertion/expectation library such as wrong or the stdlib/minitest
   # assertions if you prefer.

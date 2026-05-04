@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+#
+# Run the RSpec suite via +parallel_rspec+ with runtime-based bin-packing so
+# the slowest files (currently +related_spec.rb+, +similar_rhymes_set_related_
+# misc_spec.rb+, +similar_rhymes_pair_related_spec.rb+) are scheduled first
+# and onto separate workers. Beats the default filesize-based grouping when
+# file size doesn't predict runtime — which is the case here because most
+# +similar_rhymes_*+ files share a small DSL but differ wildly in cache hit
+# rate.
+#
+# The runtime log is +tmp/parallel_runtime_rspec.log+ (gitignored via
+# +tmp/*+). It's populated by the +ParallelTests::RSpec::RuntimeLogger+
+# formatter wired in +spec/spec_helper.rb+ — the formatter is gated on
+# +ENV['TEST_ENV_NUMBER']+, which +parallel_rspec+ sets per worker, so
+# single-process +bundle exec rspec spec/foo_spec.rb+ runs neither write
+# nor truncate the log.
+#
+# First run on a clean checkout: the log doesn't exist yet, so this falls
+# back to filesize grouping (parallel_tests does that automatically when
+# +--allowed-missing+ is exceeded). The same run populates the log via the
+# formatter, so subsequent invocations get runtime-based packing.
+#
+# Pass-through: any args here go to +parallel_rspec+ (e.g. +-n 8+ for fewer
+# workers if memory pressure is an issue with the default 14-worker
+# saturation, or +--+ +<rspec-options>+ to pipe through to RSpec itself).
+#
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+LOG=tmp/parallel_runtime_rspec.log
+mkdir -p tmp
+
+if [[ -s "$LOG" ]]; then
+  exec bundle exec parallel_rspec --group-by runtime --runtime-log "$LOG" "$@"
+else
+  echo "[parallel-rspec] no runtime log at $LOG yet; first run uses filesize grouping and populates the log" >&2
+  exec bundle exec parallel_rspec "$@"
+fi
