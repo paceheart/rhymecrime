@@ -332,6 +332,7 @@ def recursive_prefix_ancestors(word, depth = 0, set = nil)
     tail = lexical_root_after_prefix(word, prefix)
     next unless tail && !tail.empty?
     next if set.include?(tail)
+    next unless prefix_ancestor_morpheme_like?(tail)
     if word_dict_includes_headword?(tail)
       recursive_prefix_ancestors(tail, depth + 1, set)
     elsif morphologically_valid_non_dict_form?(tail)
@@ -341,11 +342,13 @@ def recursive_prefix_ancestors(word, depth = 0, set = nil)
 
   compound_modifier_remainders(word).each do |rest|
     next if set.include?(rest)
+    next unless prefix_ancestor_morpheme_like?(rest)
     recursive_prefix_ancestors(rest, depth + 1, set)
   end
 
   hyphen_compound_remainders(word).each do |rest|
     next if set.include?(rest)
+    next unless prefix_ancestor_morpheme_like?(rest)
     if word_dict_includes_headword?(rest)
       recursive_prefix_ancestors(rest, depth + 1, set)
     elsif morphologically_valid_non_dict_form?(rest)
@@ -354,6 +357,23 @@ def recursive_prefix_ancestors(word, depth = 0, set = nil)
   end
 
   set
+end
+
+# Minimum length for a pronunciation-less form to count as a morpheme-like
+# ancestor. Pron-less surfaces fall back to +pron_suffix_aligned?+'s
+# orthographic-suffix fallback, which matches by string suffix and so will
+# happily call any common letter ending a "shared ancestor" — +rest+ and
+# +best+ both end with the dict's contentless +st+ abbreviation row,
+# +expressed+ and +pressed+ both end with the inferred +ssed+ form. Real
+# pron-less morphological roots that need to survive are longer
+# (+plosion+ at 7 chars: indexed dict headword, no stored pron, anchors
+# the +explosion+/+implosion+ parallel-derivation collapse). 5 keeps that
+# anchor while excluding both noise cases above.
+PRONLESS_ANCESTOR_MIN_LENGTH = 5
+
+def prefix_ancestor_morpheme_like?(form)
+  return true unless pronunciations(form).empty?
+  form.to_s.length >= PRONLESS_ANCESTOR_MIN_LENGTH
 end
 
 # True when +form+ is a non-dict surface that an +Inflect.raw_candidate_bases_for_inflected+
@@ -1304,7 +1324,7 @@ end
 # collapse correctly.
 GLOSS_GATED_PREFIXES = Set["sub"].freeze
 
-def condense_tuple_derived_forms(tup)
+def condense_tuple_derived_forms(tup, focal_word = nil)
   return tup if tup.size < 2
   rsyll_set_of = {}
   tup.each do |w|
@@ -1312,9 +1332,11 @@ def condense_tuple_derived_forms(tup)
   end
   dropped = Set.new
   tup.each do |derived|
+    next if dropped.include?(derived)
     tup.each do |base|
       next if base == derived
       next if dropped.include?(base)
+      next if dropped.include?(derived)
       # Phonological proximity: rsyll overlap (fast path) or +pron_suffix_aligned?+
       # fallback. The fallback catches cases where rsyll differs by an extra
       # syllable-onset consonant due to syllabifier choices (+disorienting+'s
@@ -1330,15 +1352,49 @@ def condense_tuple_derived_forms(tup)
         if GLOSS_GATED_PREFIXES.include?(prefix)
           next unless gloss_cites_base?(derived, base)
         end
-        dropped << derived
+        loser = derived_form_loser(derived, base, focal_word)
+        dropped << loser if loser
         break
       end
-      break if dropped.include?(derived)
     end
   end
 
   return tup if dropped.empty?
   tup - dropped.to_a
+end
+
+# Pick which of an explicit (+derived+, +base+) prefix-derivation pair
+# +condense_tuple_derived_forms+ should drop. Returns +nil+ to keep both.
+#
+# Cue-blind path (+focal_word+ +nil+): always drop +derived+ — preserves
+# the historic behavior used by +rhyming_pair_trivial?+ and any future
+# focal-independent en-masse caller.
+#
+# Cue-aware path: when both members are materially related to the cue
+# (+score >= RELATEDNESS_SCORE_THRESHOLD+), keep both — the rhyme isn't
+# trivial-by-construction once both surfaces independently earn their
+# place in the cue's tuple set (+music+'s tuple keeps +composition+
+# alongside +position+; +prayers+ keeps +request+ alongside +quest+).
+# When only the +derived+ form clears the threshold, drop the +base+
+# instead (+pirate+'s +illegal+/+legal+: keep the cue-relevant +illegal+
+# even though +legal+ is the bare base). Otherwise fall back to the
+# cue-blind drop-derived default.
+#
+# Score is +parallel_sibling_score+'s (cached-then-live-relatedness)
+# blend so non-cached cues — the typical shape at runtime live-compute —
+# still get a meaningful signal rather than the constant-zero
+# +RelatedWords.lookup_score+ stub.
+def derived_form_loser(derived, base, focal_word)
+  return derived if focal_word.nil? || focal_word.to_s.empty?
+  sd = parallel_sibling_score(focal_word, derived)
+  sb = parallel_sibling_score(focal_word, base)
+  if sd >= RELATEDNESS_SCORE_THRESHOLD && sb >= RELATEDNESS_SCORE_THRESHOLD
+    return nil
+  end
+  if sd >= RELATEDNESS_SCORE_THRESHOLD && sb < RELATEDNESS_SCORE_THRESHOLD
+    return base
+  end
+  derived
 end
 
 # Within a single rhyming tuple, when two members are parallel
@@ -1649,10 +1705,9 @@ end
 # already-kept past-tense sibling tuple. Production runtime keeps it +false+.
 $disable_cross_tuple_redundancy_pruning = false
 
-# Pure focal-independent prune: applies the stop-word wholesale drop, the
-# spelling-variant wholesale drop, and within-tuple derivation condensation —
-# the cue-independent steps from +prune_suffix_redundant_rhyming_tuples+.
-# Returns either:
+# Per-tuple prune: applies the stop-word wholesale drop, the
+# spelling-variant wholesale drop, and within-tuple derivation
+# condensation. Returns either:
 #
 #   * +nil+ — tuple was dropped wholesale by the stop-word drop (all stop
 #     words — +above / of+) or the spelling-variant drop (all members are
@@ -1663,24 +1718,18 @@ $disable_cross_tuple_redundancy_pruning = false
 #     in the tuple (+[healthy, stealthy, unhealthy] → [healthy, stealthy]+,
 #     +[recorded, prerecorded, unrecorded] → [recorded]+).
 #
-# Pure function of +tup+: no $debug_pruned_tuples / VERBOSE side effects,
-# no consultation of +focal_word+. Same +tup+ always yields the same
-# result. This is the seam exposed for an en-masse compute caller that
-# wants to memoize the focal-independent prune work across many cues
-# (~50× hit rate when iterating all ~28K +set_related#+ rows; the same
-# tuple recurs across many cues' tuple sets) before layering the
-# focal-dependent +condense_tuple_homophones+ + the cross-tuple sweep on
-# top per cue.
-#
-# Within-tuple homophone condensation (+condense_tuple_homophones+)
-# intentionally lives outside this helper because it's the one prune step
-# that consults +focal_word+ (it picks a winner among full-pronunciation
-# homophones by stored relatedness to the cue) and so can't be cached
-# cue-agnostically.
-def prune_tuple_cue_independent_steps(tup)
+# Cue awareness: the wholesale-drop steps are pure functions of the
+# tuple. +condense_tuple_derived_forms+ consults +focal_word+ when one
+# is supplied, so a +derived+/+base+ pair where the +derived+ form is
+# the cue-relevant surface (+music+'s +composition+ over +position+,
+# +prayers+'s +request+ over +quest+) survives the collapse rather than
+# always losing to its bare base. With +focal_word+ +nil+ the helper
+# stays focal-independent and a cache-aware caller can memoize the
+# result across cues.
+def prune_tuple_cue_independent_steps(tup, focal_word = nil)
   return nil if tup.all? { |w| semantically_promiscuous?(w) }
   return nil if rhyming_tuple_all_spelling_variants?(tup)
-  condense_tuple_derived_forms(tup)
+  condense_tuple_derived_forms(tup, focal_word)
 end
 
 # Cross-tuple redundancy sweep: drops tuples that differ from another
@@ -1872,7 +1921,7 @@ def prune_suffix_redundant_rhyming_tuples(tuples, focal_word = nil)
   # debug-pruning side effects so the helper itself stays a pure function
   # of its tuple.
   tuples = tuples.flat_map do |tup|
-    survivor = prune_tuple_cue_independent_steps(tup)
+    survivor = prune_tuple_cue_independent_steps(tup, focal_word)
     if survivor.nil?
       # Wholesale drop (semantically-promiscuous or spelling-variant).
       reason = tup.all? { |w| semantically_promiscuous?(w) } ? "all semantically promiscuous" : "all spelling variants of one root"
