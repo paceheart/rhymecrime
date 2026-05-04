@@ -60,13 +60,21 @@ def evaluate_lemma_csv
 end
 
 LEMMA_TOTAL, LEMMA_PASSED = evaluate_lemma_csv
+LEMMA_PASS_RATE_FLOOR = 0.70
+LEMMA_PASS_RATE_SUSPICIOUS_THRESHOLD = 0.95
 
 describe "LEMMA" do
   it "covers >= 100 rows" do
     expect(LEMMA_TOTAL).to be >= 90
   end
-  it "has >= 75% pass rate" do
+
+  it "has >= #{format('%g', LEMMA_PASS_RATE_FLOOR * 100)}% pass rate" do
     rate = LEMMA_TOTAL.zero? ? 0.0 : LEMMA_PASSED.to_f / LEMMA_TOTAL
-    expect(rate).to be >= 0.70
+    expect(rate).to be >= LEMMA_PASS_RATE_FLOOR
+  end
+
+  it "has < #{format('%g', LEMMA_PASS_RATE_SUSPICIOUS_THRESHOLD * 100)}% pass rate; anything greater is suspicious" do
+    rate = LEMMA_TOTAL.zero? ? 0.0 : LEMMA_PASSED.to_f / LEMMA_TOTAL
+    expect(rate).to be < LEMMA_PASS_RATE_SUSPICIOUS_THRESHOLD
   end
 end

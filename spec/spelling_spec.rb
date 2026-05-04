@@ -169,6 +169,10 @@ describe "SPELLING VARIANTS" do
   end
 
   context 'hyphens' do
+    prefer_spelling 'in-laws', 'inlaws'
+    prefer_spelling 'outlaws', 'out-laws'
+    prefer_spelling 'outlaw', 'out-law'
+    prefer_spelling 'avant-garde', 'avantgarde'
     prefer_spelling 'offset', 'off-set'
     prefer_spelling 'backhand', 'back-hand'
     prefer_spelling 'backhands', 'back-hands'
@@ -180,6 +184,33 @@ describe "SPELLING VARIANTS" do
     prefer_spelling 'countryside', 'country-side'
     prefer_spelling 'footfall', 'foot-fall'
     prefer_spelling 'footfalls', 'foot-falls'
+
+    # Particle-prefix compounds where the solid form is the modern
+    # lexicalization (verb / agentive / abstract noun). The particle-rule
+    # tie-breaker should fall through to the orthographic default and
+    # pick the solid form, not pin the hyphen.
+    context 'particle-prefix solid lexicalizations' do
+      prefer_spelling 'inbox', 'in-box'
+      prefer_spelling 'inpatient', 'in-patient'
+      prefer_spelling 'offload', 'off-load'
+      prefer_spelling 'onlooker', 'on-looker'
+      prefer_spelling 'uptick', 'up-tick'
+      prefer_spelling 'downturn', 'down-turn'
+      prefer_spelling 'outguess', 'out-guess'
+      prefer_spelling 'outrigger', 'out-rigger'
+    end
+
+    # Hyphenated compound nouns / loan phrases where the dehyphenated
+    # spelling is a rare back-formation. The orthographic 'fewer-hyphens
+    # wins' default would pick the wrong form; the corpus-frequency
+    # override should pin the hyphenated spelling instead.
+    context 'corpus-dominant hyphenated compounds' do
+      prefer_spelling 'anti-vaxxer', 'antivaxxer'
+      prefer_spelling 'binge-watch', 'bingewatch'
+      prefer_spelling 'bench-press', 'benchpress'
+      prefer_spelling 'big-time', 'bigtime'
+      prefer_spelling 'bas-relief', 'basrelief'
+    end
   end
 
   context "manual list (curated/spelling.csv)" do

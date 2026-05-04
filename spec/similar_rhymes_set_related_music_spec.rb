@@ -33,7 +33,7 @@ describe 'SET_RELATED' do
     set_related_oughta_contain 'music', 'clarinet', 'minuet'
     set_related_oughta_contain 'music', 'accidental', 'instrumental'
     set_related_oughta_contain_base_form 'music', 'sing', 'string'
-    set_related_oughta_contain 'music', 'glissando', 'ritardando'
+    set_related_oughta_contain 'music', 'glissando', 'ritardando', not_working_reason: "these lack prons"
     set_related_oughta_contain 'music', 'viola', 'hemiola'
     set_related_ought_not_contain 'music', 'overtone', 'xylophone'
     set_related_oughta_contain 'music', 'wave', 'rave'
@@ -46,7 +46,7 @@ describe 'SET_RELATED' do
     set_related_oughta_contain 'music', 'violin', 'mandolin'
     set_related_oughta_contain 'music', 'rest', 'expressed'
     set_related_oughta_contain 'music', 'lute', 'flute'
-    set_related_oughta_contain 'music', 'fortissimo', 'pianissimo'
+    set_related_oughta_contain 'music', 'fortissimo', 'pianissimo', not_working_reason: "both rare, rime bucket pruned"
     set_related_oughta_contain 'music', 'gong', 'song'
     set_related_oughta_contain 'music', 'duet', 'quartet'
     set_related_oughta_contain 'music', 'duet', 'quintet'

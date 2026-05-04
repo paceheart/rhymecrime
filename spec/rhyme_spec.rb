@@ -112,6 +112,7 @@ describe 'RHYMES' do
   end
   
   context "homophones ought not count as rhymes" do
+    ought_not_rhyme 'principle', 'principal'
     ought_not_rhyme 'side', 'sighed'
     ought_not_rhyme 'blue', 'blew'
     ought_not_rhyme 'base', 'bass'
@@ -437,12 +438,46 @@ describe 'RHYMES' do
     ought_not_rhyme 'men', 'councilmen' # ought to be stress mismatch regardless
     ought_not_rhyme 'medical', 'biomedical'
     ought_not_rhyme 'plastic', 'thermoplastic'
+    ought_not_rhyme 'plastics', 'thermoplastics'
+    ought_not_rhyme 'nuclear', 'thermonuclear'
+    ought_not_rhyme 'dynamic', 'thermodynamic'
+    ought_not_rhyme 'dynamics', 'thermodynamics'
+    ought_not_rhyme 'meter', 'thermometer'
+    oughta_rhyme 'kilometer', 'thermometer' # kilo- is not in COMMON_PREFIXES, so the
+                                             # filter declines and the shared rime stands
+    # Additional Greek combining forms (auto-, bio-, micro-, macro-, mono-, endo-, exo-,
+    # hyper-) — same shape as thermo-: prefix peels to a real dict-headword tail with the
+    # same rime, primary stress preserved, so the prefix-rhyme filter must fire.
+    ought_not_rhyme 'biography', 'autobiography'
+    ought_not_rhyme 'feedback', 'biofeedback'
+    oughta_rhyme 'topic', 'microscopic'
+    ought_not_rhyme 'economic', 'macroeconomic'
+    ought_not_rhyme 'lingual', 'monolingual'
+    ought_not_rhyme 'lingual', 'bilingual'
+    ought_not_rhyme 'monolingual', 'bilingual'
+    ought_not_rhyme 'thermic', 'endothermic'
+    ought_not_rhyme 'thermic', 'exothermic'
+    ought_not_rhyme 'endothermic', 'exothermic'
+    ought_not_rhyme 'active', 'hyperactive'
+    # Latin-prefix coverage that extends the existing anti-/non-/post-/inter-/trans-
+    # families with rime-identical derivations.
+    ought_not_rhyme 'matter', 'antimatter'
+    ought_not_rhyme 'biotic', 'abiotic'
+    ought_not_rhyme 'biotic', 'antibiotic'
+    ought_not_rhyme 'fiction', 'nonfiction'
+    ought_not_rhyme 'stop', 'nonstop'
+    ought_not_rhyme 'natural', 'supernatural'
+    ought_not_rhyme 'national', 'transnational'
+    ought_not_rhyme 'venous', 'intravenous'
+    ought_not_rhyme 'modern', 'postmodern'
     context "edge cases" do
       oughta_rhyme 'semblance', 'resemblance'
       oughta_rhyme 'angular', 'rectangular'
       oughta_rhyme 'thesis', 'prosthesis'
+      ought_not_rhyme 'thesis', 'antithesis'
       oughta_rhyme 'mediterranean', 'subterranean' # medi- is not a prefix
       ought_not_rhyme 'motion', 'locomotion', not_working_reason: "TODO"
+      ought_not_rhyme 'magnet', 'electromagnet'
       ought_not_rhyme 'magnetic', 'electromagnetic'
       oughta_rhyme 'prudence', 'jurisprudence' # they're semantically different enough to be interesting
       ought_not_rhyme 'explosion', 'implosion'
@@ -1084,8 +1119,9 @@ describe 'RHYMES' do
     oughta_rhyme 'flan', 'pan'
     oughta_rhyme 'flans', 'trans'
     oughta_rhyme 'bard', 'hard'
-    ought_not_rhyme 'sachertorte', 'voldemort' # imperfect: stress mismatch
+    ought_not_rhyme 'sachertorte', 'voldemort' # stress mismatch
     oughta_rhyme 'cider', 'snyder'
+    ought_not_rhyme 'mushroom', 'doom' # stress mismatch
   end
 
   context 'prereqs from similar_rhymes_spec: related_rhymes' do

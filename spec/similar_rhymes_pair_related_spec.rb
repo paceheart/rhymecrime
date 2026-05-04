@@ -73,8 +73,8 @@ describe 'PAIR_RELATED' do
     pair_related_oughta_contain 'food', 'evil', 'vegetarian', 'totalitarian' # identical rime but so good
     pair_related_oughta_contain 'food', 'evil', 'dinner', 'sinner'
     pair_related_oughta_contain 'food', 'evil', 'cake', 'rake'
-    pair_related_oughta_contain 'food', 'evil', 'mushroom', 'doom'
-    pair_related_oughta_contain 'food', 'evil', 'chips', 'apocalypse'
+    pair_related_ought_not_contain 'food', 'evil', 'mushroom', 'doom' # stress mismatch
+    pair_related_ought_not_contain 'food', 'evil', 'chips', 'apocalypse' # stress mismatch
     pair_related_oughta_contain 'food', 'evil', 'seder', 'invader'
     pair_related_oughta_contain 'food', 'evil', 'sachertorte', 'voldemort', not_working_reason: "would be cool, but a big stretch"
     pair_related_oughta_contain 'food', 'evil', 'bread', 'undead'

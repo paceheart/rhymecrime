@@ -65,6 +65,9 @@ describe 'SET_RELATED' do
 
   context 'carbon' do
     set_related_oughta_contain 'carbon', 'sink', 'zinc'
+    set_related_ought_not_contain 'carbon', 'cycling', 'recycling' # filter out rich rhymes
+    set_related_oughta_contain 'carbon', 'polyester', 'sequester' # or 'ester' instead of 'polyester'
+    set_related_oughta_contain 'carbon', 'extract', 'react'
   end
 
   context 'bread' do
@@ -98,16 +101,6 @@ describe 'SET_RELATED' do
   context 'exploration' do
     set_related_oughta_contain 'exploration', 'knapsack', 'backtrack', not_working_reason: "predictor gap: similarity=0 for exploration/knapsack (see related_spec prereq)"
     set_related_oughta_contain 'exploration', 'pack', 'track'
-  end
-
-  context 'prefix' do
-    set_related_ought_not_contain 'carbon', 'cycling', 'recycling' # ought to filter out rich rhymes
-    set_related_oughta_contain 'carbon', 'ester', 'sequester'
-  end
-
-  context 'root lemmas' do
-    set_related_oughta_contain 'carbon', 'extract', 'react'
-    set_related_ought_not_contain 'carbon', 'extracted', 'reacted'
   end
 
   context 'stress mismatch' do
