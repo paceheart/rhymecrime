@@ -1,6 +1,19 @@
 require 'csv'
 require "rhymecrime/pace_utils"
 
+# True when +RHYMECRIME_VERBOSE_CSV_SWEEP+ is set to a truthy value (1/true/yes/on,
+# case-insensitive). Gates the per-row +puts "FAIL ..."+ diagnostics emitted by the
+# +evaluate_*_csv+ sweeps in +related_spec.rb+, +rarity_spec.rb+, and +lemma_spec.rb+.
+# Off by default so the rspec failure summary at the end of a run isn't drowned in
+# 1k+ lines of expected-but-not-yet-passing rows; the per-CSV summary line still
+# always prints (with the FAIL count), so you know whether to flip this on.
+#
+#   RHYMECRIME_VERBOSE_CSV_SWEEP=1 bundle exec rspec spec/related_spec.rb
+def csv_sweep_verbose?
+  v = ENV.fetch("RHYMECRIME_VERBOSE_CSV_SWEEP", "").strip.downcase
+  !v.empty? && %w[1 true yes on].include?(v)
+end
+
 # Valid values for the +oughta be related?+ column in curated/related.csv. Rows marked +whatever+ are
 # ignored by the spec / weighted accuracy script because either answer is acceptable. Rows marked
 # +*_ish+ represent weak-signal cases (originally encoded as a +ish+ marker in the +notes+ column).

@@ -48,7 +48,7 @@ def evaluate_lemma_csv
     got = semantic_base(surface)
     if got == expected
       passed += 1
-    else
+    elsif csv_sweep_verbose?
       puts "FAIL lemma(#{surface.inspect}) -> #{got.inspect}, expected #{expected.inspect}"
     end
   end

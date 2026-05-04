@@ -125,7 +125,7 @@ def evaluate_relatedness_csv
     if actual == expected
       weighted_correct += weight
       exact += 1
-    else
+    elsif csv_sweep_verbose?
       notes = row["notes"].to_s.strip
       notes_excerpt = notes.empty? ? "" : ", #{notes[0, 60]}"
       puts format(
@@ -146,7 +146,16 @@ def evaluate_relatedness_csv
   [evaluated, total_weight, weighted_correct]
 end
 
-RELATED_EVALUATED, RELATED_TOTAL_WEIGHT, RELATED_WEIGHTED_CORRECT = evaluate_relatedness_csv
+# Memoized accessor for +evaluate_relatedness_csv+. Lazy + per-process so
+# +rspec+ runs that don't touch the +csv sweep+ context (e.g. +rspec
+# spec/rhyme_spec.rb+, which still loads this file because of the default
+# +spec/**/*_spec.rb+ pattern) skip the 10k-row +thematically_related?+ sweep
+# entirely. Used to be assigned to +RELATED_*+ module constants at file load,
+# which made every rspec invocation in the repo pay the ~10s sweep cost.
+$related_csv_sweep_results = nil
+def related_csv_sweep_results
+  $related_csv_sweep_results ||= evaluate_relatedness_csv
+end
 
 describe 'RELATED' do
   context 'spot checks' do
@@ -298,17 +307,20 @@ describe 'RELATED' do
 
   context 'csv sweep (curated/related.csv)' do
     it "it's over #{RELATED_MIN_EVALUATED_ROWS}!!!!! (the row count, that is)" do
-      expect(RELATED_EVALUATED).to be > RELATED_MIN_EVALUATED_ROWS
+      evaluated, _total_weight, _weighted_correct = related_csv_sweep_results
+      expect(evaluated).to be > RELATED_MIN_EVALUATED_ROWS
     end
-    
+
     it "has >= #{format('%g', RELATED_PASS_RATE_FLOOR * 100)}% weighted pass rate" do
-      rate = RELATED_TOTAL_WEIGHT.positive? ? RELATED_WEIGHTED_CORRECT / RELATED_TOTAL_WEIGHT : 0.0
+      _evaluated, total_weight, weighted_correct = related_csv_sweep_results
+      rate = total_weight.positive? ? weighted_correct / total_weight : 0.0
       expect(rate).to be >= RELATED_PASS_RATE_FLOOR
     end
-    
+
     # This is to verify that the classifier isn't training on the labels
     it "has < #{format('%g', RELATED_PASS_RATE_SUSPICIOUS * 100)}% weighted pass rate" do
-      rate = RELATED_TOTAL_WEIGHT.positive? ? RELATED_WEIGHTED_CORRECT / RELATED_TOTAL_WEIGHT : 0.0
+      _evaluated, total_weight, weighted_correct = related_csv_sweep_results
+      rate = total_weight.positive? ? weighted_correct / total_weight : 0.0
       expect(rate).to be < RELATED_PASS_RATE_SUSPICIOUS
     end
   end

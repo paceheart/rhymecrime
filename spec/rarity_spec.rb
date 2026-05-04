@@ -244,7 +244,7 @@ def evaluate_rarity_csv
     weighted_score += weight * score
     if score == 1.0
       exact += 1
-    else
+    elsif csv_sweep_verbose?
       puts format(
         "FAIL %s -> %s (oughta be %s, score=%.2f, line %d, %s — %s)",
         word.inspect, actual, kind, score, i + 2, context, rarity_status_line(word)

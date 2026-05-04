@@ -34,6 +34,13 @@ group :development, :test do
                     # cosines in +lib/rhymecrime/relatedness/signals.rb+.
                     # Offline / local-dev only — signals.rb isn't loaded at
                     # Lambda runtime (see +lib/rhymecrime/related.rb+).
+  gem "parallel_tests" # +bundle exec parallel_rspec spec/+ partitions spec
+                       # files across worker processes (one per core by default).
+                       # Each worker pays the boot cost (~22s of msgpack parsing
+                       # in +require "rhymecrime/crime"+) once, then the slow
+                       # +similar_rhymes_*+ describe blocks fan out — see the
+                       # +spec/similar_rhymes_{set_related,pair_related,related_
+                       # rhymes}_spec.rb+ split. Dev/test only.
   gem "rack-test"
   gem "rspec"
 end
