@@ -2,9 +2,9 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-echo "==> dict-build (skip with SKIP_DICT_BUILD=1)"
-if [[ "${SKIP_DICT_BUILD:-0}" != "1" ]]; then
-  ./bin/dict-build
+echo "==> build (train classifiers + rebuild dict; skip with SKIP_BUILD=1)"
+if [[ "${SKIP_BUILD:-0}" != "1" ]]; then
+  ./bin/build
 fi
 
 if [[ "${SKIP_COMPUTE:-0}" == "1" ]]; then
