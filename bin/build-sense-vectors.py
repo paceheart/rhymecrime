@@ -77,6 +77,7 @@ def main():
 
     try:
         import msgpack  # noqa: F401
+        import torch
         from sentence_transformers import SentenceTransformer
     except ImportError as e:
         print(
@@ -88,6 +89,21 @@ def main():
             file=sys.stderr,
         )
         sys.exit(2)
+
+    # Determinism. MPS in particular schedules kernels non-deterministically by
+    # default; without this, two back-to-back encodes of the same JSONL produce
+    # bit-different embeddings and the downstream GBT classifier varies by ~50
+    # composite points across reruns. Seeded RNG + deterministic-cudnn covers the
+    # CUDA path too, and the MPS-specific env var disables the float-fallback
+    # paths that don't carry deterministic guarantees.
+    import os
+
+    torch.manual_seed(0)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(0)
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
+    os.environ.setdefault("PYTORCH_ENABLE_MPS_FALLBACK", "0")
 
     items = []
     with open(args.input, "r", encoding="utf-8") as f:
