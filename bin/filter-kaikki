@@ -8,28 +8,46 @@
 #     | gzip > corpora/wiktionary/kaikki-english-filtered.jsonl.gz
 #
 # The raw dump is ~1.5 GB; this filter keeps only the fields dict-build needs,
-# so the gzipped output stays around a few MB. We retain:
+# so the gzipped output stays around 50 MB. We retain:
 #   word, pos                   -- identity + POS gate
 #   sounds[{ipa, tags}]          -- IPA pronunciations (GA/RP disambiguation)
 #   forms[{form, tags}]          -- inflection paradigm (past/plural/etc.)
-#   senses[{tags, glosses[0..0], alt_of[{word}], form_of[{word}]}]
+#   senses[{tags, glosses[0..N], alt_of[{word}], form_of[{word}]}]
 #                                -- alt-spelling / misspelling / form-of pointers
 #                                   that let corpus_variants.rb recognize
-#                                   Wiktionary-attested spelling variants
-#                                   without any runtime cost.
+#                                   Wiktionary-attested spelling variants without
+#                                   runtime cost, plus definitional gloss text
+#                                   that feeds the gloss-containment, per-sense
+#                                   Numberbatch, MPNet per-sense and pooled-
+#                                   definition signals (signals.rb,
+#                                   bin/dump-sense-glosses).
 #
-# Every other field in the raw dump is dropped. Lines that lack both
-# pronunciations AND alt/form_of pointers are dropped entirely: they add mass
-# without being consumed anywhere downstream.
+# Every other field in the raw dump is dropped. A record survives iff it
+# contributes at least one of: a pronunciation, an inflectional form, an
+# alt_of/form_of pointer, or a definitional gloss. Default cutoffs for the gloss
+# side were tuned against the relatedness classifier on +curated/related.csv+;
+# see RHYMECRIME_KAIKKI_* env vars below for the knobs we swept and
+# notes/wiktionary-glosses-experiments.canvas for the results.
 
 require "json"
 
 $stdin.set_encoding("UTF-8")
 $stdout.set_encoding("UTF-8")
 
-GLOSSES_PER_SENSE = (ENV["RHYMECRIME_KAIKKI_GLOSSES_PER_SENSE"] || "1").to_i
-GLOSS_CHAR_LIMIT = (ENV["RHYMECRIME_KAIKKI_GLOSS_CHAR_LIMIT"] || "200").to_i
-KEEP_GLOSS_ONLY = ENV["RHYMECRIME_KAIKKI_KEEP_GLOSS_ONLY"] == "1"
+# Per-sense gloss cap. ~99.7% of senses in kaikki have exactly 1 gloss anyway,
+# so a value >1 only widens the long tail; default 5 captures the few
+# multi-gloss senses without bloating output.
+GLOSSES_PER_SENSE = (ENV["RHYMECRIME_KAIKKI_GLOSSES_PER_SENSE"] || "5").to_i
+# Per-gloss char truncation. Most glosses are <200 chars; long technical /
+# legal definitions hit the cap. Default 500 keeps them while staying under
+# MPNet's 512-token input.
+GLOSS_CHAR_LIMIT = (ENV["RHYMECRIME_KAIKKI_GLOSS_CHAR_LIMIT"] || "500").to_i
+# Keep records whose only signal is a definitional gloss (no pronunciation /
+# form / variant pointer). The original filter dropped these — that loses 833K
+# of 1.46M raw records (57%) and explains why most CMUDict-only headwords had
+# no Wiktionary gloss available in earlier builds. Set to 0 only if you
+# explicitly want the legacy variant-discovery-only corpus.
+KEEP_GLOSS_ONLY = ENV.fetch("RHYMECRIME_KAIKKI_KEEP_GLOSS_ONLY", "1") != "0"
 
 ARGF.each_line do |line|
   obj = begin
