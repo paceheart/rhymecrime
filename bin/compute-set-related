@@ -18,7 +18,7 @@
 #     +bin/compute-relatedness+ (the +related+ table — we read its rows
 #     to get the cueniverse and the post-filter related-words list per
 #     cue).
-#   * +word_dict+ / +rdict+ (the in-process Ruby dict — shipped via the
+#   * +word_dict+ / +rime_dict+ (the in-process Ruby dict — shipped via the
 #     msgpacks under +generated/+).
 #
 # Output: +set_related+ table in the same SQLite file, one row per cue
@@ -47,7 +47,7 @@
 #      the cue's relateds set. That's O(cues × |relateds(cue)| × prons ×
 #      cohort) ≈ 6h across the full ~28K cueniverse. Instead we build
 #      a once-global +cues_by_word+ inverted index (word → Set<cue>) and
-#      walk +rdict+ exactly once: for each rime cohort, for each pair of
+#      walk +rime_dict+ exactly once: for each rime cohort, for each pair of
 #      cohort members, intersect their cue sets and push the pair into
 #      every shared cue's per-rime bucket. Drops to ~30-60s.
 #
@@ -117,10 +117,10 @@ unless File.exist?(output_path)
   exit 1
 end
 
-puts "Loading dict + rdict..."
+puts "Loading dict + rime_dict..."
 wd = word_dict
-rd = rdict
-puts "  word_dict=#{wd.size} entries, rdict=#{rd.size} rimes"
+rd = rime_dict
+puts "  word_dict=#{wd.size} entries, rime_dict=#{rd.size} rimes"
 
 # Compute the +common-preferred headword+ universe once so the
 # per-row filter below is just a Set membership check instead of three
@@ -231,7 +231,7 @@ words_by_cue.each do |cue, words|
 end
 puts "  inverted index: #{cues_by_word.size} distinct relateds (avg #{(cues_by_word.values.sum(&:size).to_f / [cues_by_word.size, 1].max).round(1)} cues per word)"
 
-# 3. Walk +rdict+ once, accumulating per-cue per-rime buckets. For each
+# 3. Walk +rime_dict+ once, accumulating per-cue per-rime buckets. For each
 #    rime cohort, find members that appear in +cues_by_word+ (i.e. are
 #    related to at least one cue), enumerate pairs, and intersect each
 #    pair's cue sets — every shared cue gets both members pushed into

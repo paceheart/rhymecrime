@@ -180,13 +180,13 @@ module Rhymecrime
     end
 
     # Shared filter step. The lexicon (+lexicon_word_entry+) and rime cohort
-    # (+rdict_lookup+) are now in-process from the bundled msgpacks, so the
+    # (+rime_dict_lookup+) are now in-process from the bundled msgpacks, so the
     # filter is a pure CPU loop — no DDB round-trip. Mirrors
     # +LocalStore#filter_related_words+; the +defined?+ guard keeps this
     # module importable by tools that don't load +crime.rb+ (e.g.
     # +bin/upload-to-dynamodb+).
     def filter_related_words(words, include_rhymeless, common_only)
-      return words.dup unless defined?(lexicon_word_entry) && defined?(rdict_lookup)
+      return words.dup unless defined?(lexicon_word_entry) && defined?(rime_dict_lookup)
 
       words.select do |w|
         entry = lexicon_word_entry(w)
@@ -196,7 +196,7 @@ module Rhymecrime
         if include_rhymeless
           true
         else
-          entry[1].any? { |pron| !pron.rime.to_s.empty? && !rdict_lookup(pron.rime).empty? }
+          entry[1].any? { |pron| !pron.rime.to_s.empty? && !rime_dict_lookup(pron.rime).empty? }
         end
       end
     end

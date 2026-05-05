@@ -138,13 +138,13 @@ end
 
 WORDS_NEEDED_FOR_TESTING = ['arpeggio', 'asterisk', 'blackmail', 'bobcat', 'burglar', 'burglary', 'cat', 'celebrity', 'costume', 'crime', 'doubloons', 'drumsticks', 'fanciers', 'feline', 'fortissimo', 'galaxy', 'glissando', 'halloween', 'hemiola', 'homicide', 'item', 'jaguar', 'mandolin', 'music', 'overtone', 'pianissimo', 'pirate', 'pussy', 'repertoire', 'ritardando', 'scurvy', 'star', 'thing', 'tree', 'treetop', 'trespassing', 'whiskers', 'wildcat', 'xylophone'] # include these even if they don't have any rhymes
 
-$rdict = nil # rime (underscore ARPABET key) -> words hash
-def rdict
+$rime_dict = nil # rime (underscore ARPABET key) -> words hash
+def rime_dict
   # rime => [rhyming_word1 rhyming_word2 ...]
-  return $rdict unless $rdict.nil?
+  return $rime_dict unless $rime_dict.nil?
   # Mirror of the +word_dict+ loader: prefer +rime_dict.msgpack+, fall back to
   # the +.txt+ surface for pre-dict-build checkouts.
-  $rdict = load_rime_dict_msgpack || load_rime_dict_as_hash
+  $rime_dict = load_rime_dict_msgpack || load_rime_dict_as_hash
 end
 
 def load_rime_dict_as_hash()
@@ -197,9 +197,9 @@ def part_of_speech_tags(word)
   tags.is_a?(Array) ? tags : []
 end
 
-# Cohort for +rime+ from +rime_dict+ (dict-build keeps preferred headwords only; see +strip_dispreferred_headwords_from_rdict!+).
-def rdict_lookup(rime)
-  rdict[rime] || []
+# Cohort for +rime+ from +rime_dict+ (dict-build keeps preferred headwords only; see +strip_dispreferred_headwords_from_rime_dict!+).
+def rime_dict_lookup(rime)
+  rime_dict[rime] || []
 end
 
 def find_preferred_rhyming_words(word)
@@ -673,7 +673,7 @@ def find_rhyming_words_for_pronunciation(pron, homophone_ok=true)
   # use our compiled rime dictionary
   results = Array.new
   rime = pron.rime
-  rdict_lookup(rime).each do |rhyme|
+  rime_dict_lookup(rime).each do |rhyme|
     if(!homophone_ok && homophone_rhyme?(rhyme, pron))
       debug "Filtered out homophone rhyme: #{pron} / #{rhyme} (#{debug_info(rhyme)})"
     else
@@ -687,7 +687,7 @@ def has_rhyming_word?(word)
   unless(explicitly_forbidden?(word))
     for pron in pronunciations(word)
       rime = pron.rime
-      if(! rdict_lookup(rime).empty?)
+      if(! rime_dict_lookup(rime).empty?)
         return true
       end
     end

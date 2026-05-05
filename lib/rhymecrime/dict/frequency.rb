@@ -217,7 +217,7 @@ end
 # *-in'* merged after original CMU snapshot (Wiktionary/Inflect, e.g. fakin'): same disconnect case as takin'
 # but +original_cmudict_headwords+ does not include them. Pattern is tight (*…in'*); +kitchenin'+ is removed
 # earlier if +explicitly_forbidden?+.
-# Prunes +rdict+ and re-runs +delete_rare_only_rime_buckets!+ until fixed point so partner removal can cascade.
+# Prunes +rime_dict+ and re-runs +delete_rare_only_rime_buckets!+ until fixed point so partner removal can cascade.
 def cmudict_surface_rhyme_rescue?(word, prons, has_rhyme, original_cmudict_headwords)
   return false unless word.is_a?(String)
   return false if prons.nil? || prons.empty?
@@ -263,30 +263,30 @@ def strip_gdrop_bare_homographs!(hash, cmudict_orig)
   removed
 end
 
-def filter_word_dict_disconnected!(word_dict, rdict, subtlex_hash, wordfreq_hash, pos_map, forms_map, original_cmudict_headwords = nil, wiktionary_words = nil)
+def filter_word_dict_disconnected!(word_dict, rime_dict, subtlex_hash, wordfreq_hash, pos_map, forms_map, original_cmudict_headwords = nil, wiktionary_words = nil)
   # Fresh pruning window for every disconnect call. The outer
-  # +with_pruning_active+ block flips +rdict.pruning_active?+ on; naive reads
-  # of +rdict[rime]+ / +rdict.each+ / ... from inside the block raise unless
-  # the reader wraps its own reads in +rdict.with_reads_during_prune+. Four
+  # +with_pruning_active+ block flips +rime_dict.pruning_active?+ on; naive reads
+  # of +rime_dict[rime]+ / +rime_dict.each+ / ... from inside the block raise unless
+  # the reader wraps its own reads in +rime_dict.with_reads_during_prune+. Four
   # authorized readers live inside this window today:
   #
   #   1. +headword_has_non_rich_rhyme_partner?+ (surface wraps its body).
-  #   2. +prune_rdict_to_headwords!+ (wraps its body).
+  #   2. +prune_rime_dict_to_headwords!+ (wraps its body).
   #   3. +delete_rare_only_rime_buckets!+ (wraps its body).
   #   4. +delete_common_rich_only_rime_buckets!+ (wraps its body).
   #
   # Inner per-round word_dict deletions are deferred: each disconnect-dropped
   # row gets +mark_tombstoned!+ with the rescue-diagnostic detail,
   # and +live_word_dict_keys+ projects the pending-deleted-excluded keyset
-  # that the three rdict pruners use as the "allowed" cohort. The
+  # that the three rime_dict pruners use as the "allowed" cohort. The
   # termination criterion is "no new tombstoned marks this round";
   # marks from earlier scrubs / classifier rescore don't count (they
   # wouldn't increment the round counter either under the old "no new
   # hash.delete this round" rule).
-  do_filter_word_dict_disconnected!(word_dict, rdict, subtlex_hash, wordfreq_hash, pos_map, forms_map, original_cmudict_headwords, wiktionary_words)
+  do_filter_word_dict_disconnected!(word_dict, rime_dict, subtlex_hash, wordfreq_hash, pos_map, forms_map, original_cmudict_headwords, wiktionary_words)
 end
 
-def do_filter_word_dict_disconnected!(word_dict, rdict, subtlex_hash, wordfreq_hash, pos_map, forms_map, original_cmudict_headwords, wiktionary_words)
+def do_filter_word_dict_disconnected!(word_dict, rime_dict, subtlex_hash, wordfreq_hash, pos_map, forms_map, original_cmudict_headwords, wiktionary_words)
   dict_set = live_word_dict_keys(word_dict).to_set
   nb = nil
   cn = nil
@@ -302,7 +302,7 @@ def do_filter_word_dict_disconnected!(word_dict, rdict, subtlex_hash, wordfreq_h
     end
   end
 
-  with_pruning.call(rdict) do
+  with_pruning.call(rime_dict) do
     loop do
       rounds += 1
       new_marks = 0
@@ -313,24 +313,24 @@ def do_filter_word_dict_disconnected!(word_dict, rdict, subtlex_hash, wordfreq_h
         freq = entry[0]
         prons = entry[1]
         next if freq > 0
-        has_rhyme = headword_has_non_rich_rhyme_partner?(w, prons, rdict, word_dict)
+        has_rhyme = headword_has_non_rich_rhyme_partner?(w, prons, rime_dict, word_dict)
         if dict_trace_word?(w) && freq == 0
-          # Inside-the-window rdict reads for trace-word diagnostics; scope
+          # Inside-the-window rime_dict reads for trace-word diagnostics; scope
           # the opt-in to exactly this diagnostic region so the guard
           # continues to catch unscoped reads elsewhere in the loop.
-          rdict.with_reads_during_prune do
+          rime_dict.with_reads_during_prune do
             prons.each do |pron|
               next if pron.rime.empty?
-              cohort = rdict[pron.rime]
+              cohort = rime_dict[pron.rime]
               if cohort.nil? || cohort.empty?
-                dict_trace_puts(w, "disconnect: rime=#{pron.rime} has no rdict bucket (dropped as singleton/rare-only cohort earlier) — explains has_rhyme=false vs filter_cmudict message")
+                dict_trace_puts(w, "disconnect: rime=#{pron.rime} has no rime_dict bucket (dropped as singleton/rare-only cohort earlier) — explains has_rhyme=false vs filter_cmudict message")
               else
                 w_pf = preferred_form_in_build_lexicon(w, word_dict)
                 others = cohort.reject { |x| x == w_pf }
                 dict_trace_puts(w, "disconnect: rime=#{pron.rime} bucket=#{cohort.size} others=#{others.take(10).inspect}#{' …' if others.size > 10}")
               end
             end
-          end if rdict.respond_to?(:with_reads_during_prune)
+          end if rime_dict.respond_to?(:with_reads_during_prune)
         end
         in_wordfreq_tsv = wordfreq_hash.key?(w)
         # Kaikki-documented non-lemma paradigm forms (+polys+ form_of +poly+, +gollies+ form_of +golly+)
@@ -412,9 +412,9 @@ def do_filter_word_dict_disconnected!(word_dict, rdict, subtlex_hash, wordfreq_h
       total_removed += new_marks
       live_keys = live_word_dict_keys(word_dict)
       dict_set = live_keys.to_set
-      prune_rdict_to_headwords!(rdict, live_keys)
-      delete_rare_only_rime_buckets!(rdict, word_dict)
-      delete_common_rich_only_rime_buckets!(rdict, word_dict)
+      prune_rime_dict_to_headwords!(rime_dict, live_keys)
+      delete_rare_only_rime_buckets!(rime_dict, word_dict)
+      delete_common_rich_only_rime_buckets!(rime_dict, word_dict)
       # Terminate on "no new tombstoned marks this round" — the
       # parity-preserving analog of the old "no new hash.delete this round".
       # Earlier-phase scrub / classifier marks don't factor in here; those
@@ -1904,25 +1904,25 @@ def add_frequency_info(cmudict, subtlex_hash, subtlex_total_hash, wordfreq_hash,
   return hash
 end
 
-def build_word_dict(cmudict, rdict, subtlex_hash, subtlex_total_hash, wordfreq_hash, wiktionary_words, pos_map, forms_map, kaikki_verb_morph = nil, original_cmudict_headwords = nil, kaikki_capitalized_only = nil, kaikki_variant_map = nil, varcon_variant_map = nil)
-  cmudict = filter_cmudict(cmudict, rdict)
+def build_word_dict(cmudict, rime_dict, subtlex_hash, subtlex_total_hash, wordfreq_hash, wiktionary_words, pos_map, forms_map, kaikki_verb_morph = nil, original_cmudict_headwords = nil, kaikki_capitalized_only = nil, kaikki_variant_map = nil, varcon_variant_map = nil)
+  cmudict = filter_cmudict(cmudict, rime_dict)
   word_dict = add_frequency_info(cmudict, subtlex_hash, subtlex_total_hash, wordfreq_hash, wiktionary_words, pos_map, forms_map, kaikki_verb_morph, original_cmudict_headwords, kaikki_capitalized_only)
   append_r_to_orthographic_r_pronunciations!(word_dict, label: "word_dict")
   insert_r_before_final_d_for_red_pronunciations!(word_dict, label: "word_dict")
   insert_r_before_final_sibilant_for_s_pronunciations!(word_dict, label: "word_dict")
-  merge_word_dict_pronunciations_into_rdict!(rdict, word_dict)
+  merge_word_dict_pronunciations_into_rime_dict!(rime_dict, word_dict)
   emit_spelling_variants_auto!(word_dict, wordfreq_hash, kaikki_variant_map, varcon_variant_map)
   # +emit_spelling_variants_auto!+ has now populated the variant table that
   # +preferred_form_in_build_lexicon+ consults; copy prons from dispreferred
   # surfaces (+upend+) to their pron-less preferred siblings (+up-end+) before
   # the rime-bucket stripper runs, then re-merge so the newly-pronounced
-  # preferred forms make it into +rdict+.
+  # preferred forms make it into +rime_dict+.
   inherit_prons_from_dispreferred_to_preferred!(word_dict)
-  merge_word_dict_pronunciations_into_rdict!(rdict, word_dict)
-  strip_dispreferred_headwords_from_rdict!(rdict, word_dict)
-  delete_rare_only_rime_buckets!(rdict, word_dict)
-  delete_common_rich_only_rime_buckets!(rdict, word_dict)
-  filter_word_dict_disconnected!(word_dict, rdict, subtlex_hash, wordfreq_hash, pos_map, forms_map, original_cmudict_headwords, wiktionary_words)
+  merge_word_dict_pronunciations_into_rime_dict!(rime_dict, word_dict)
+  strip_dispreferred_headwords_from_rime_dict!(rime_dict, word_dict)
+  delete_rare_only_rime_buckets!(rime_dict, word_dict)
+  delete_common_rich_only_rime_buckets!(rime_dict, word_dict)
+  filter_word_dict_disconnected!(word_dict, rime_dict, subtlex_hash, wordfreq_hash, pos_map, forms_map, original_cmudict_headwords, wiktionary_words)
   # Terminal reducer: project every surviving +BuildEntry+ back to the
   # legacy +[freq, prons, lemma]+ shape that +save_word_dict+,
   # +save_word_dict_msgpack!+, and the rest of +rebuild_rhymecrime_dictionaries+

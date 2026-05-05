@@ -13,7 +13,7 @@
 #       → morphology — inflection policy + Kaikki-derived surface pronunciations
 #       → rime      — rime index build / merge / rare-bucket prune / filter_cmudict
 #       → frequency — SUBTLEX + wordfreq + compute_frequency + add_frequency_info + build_word_dict
-#         (build_word_dict merges pronunciations into rdict, strips dispreferred spellings from cohorts,
+#         (build_word_dict merges pronunciations into rime_dict, strips dispreferred spellings from cohorts,
 #          prunes weak rime buckets, drops freq==0 orphans
 #          per disconnect: wordfreq TSV row ⇒ keep; strict OOV ⇒ Kaikki/SUBTLEX rescue only, not rhyme-alone)
 #          Rare headword omission for export runs in +rebuild_rhymecrime_dictionaries+ after hyphen-map keys snapshot.)
@@ -540,7 +540,7 @@ def compute_lemma_map(word_dict)
 end
 
 # Drop Kaikki "obsolete-only" ghost headwords (+appeare+, +blesse+, +ladie+, +maide+,
-# +cherrie+, +saile+, +wolfe+, +eate+, +businesse+, …) from +word_dict+ and +rdict+ when
+# +cherrie+, +saile+, +wolfe+, +eate+, +businesse+, …) from +word_dict+ and +rime_dict+ when
 # their modern canonical target survives the build.
 #
 # These leak into +word_dict+ via +wordfreq.tsv+ Zipf rows (Project Gutenberg / KJV /
@@ -554,7 +554,7 @@ end
 # falls through to the modern canonical). Only drop when the +target+ is itself in word_dict;
 # if the canonical didn't survive (e.g. a rare archaic pair whose modern form is also missing),
 # leaving the obsolete headword gives runtime _something_ to resolve to.
-def prune_obsolete_alt_of_only_headwords!(word_dict, rdict, obsolete_alt_of_only)
+def prune_obsolete_alt_of_only_headwords!(word_dict, rime_dict, obsolete_alt_of_only)
   return 0 if obsolete_alt_of_only.nil? || obsolete_alt_of_only.empty?
   dropped = 0
   dropped_pron_orphans = 0
@@ -569,16 +569,16 @@ def prune_obsolete_alt_of_only_headwords!(word_dict, rdict, obsolete_alt_of_only
   end
 
   if dropped > 0
-    before_rdict_n = rdict.values.sum(&:size)
-    rdict.each_value do |words|
+    before_rime_dict_n = rime_dict.values.sum(&:size)
+    rime_dict.each_value do |words|
       next if words.nil? || words.empty?
       words.reject! { |w| obsolete_alt_of_only.key?(w) && !word_dict.key?(w) }
     end
-    rdict.delete_if { |_rime, words| words.nil? || words.empty? }
-    after_rdict_n = rdict.values.sum(&:size)
-    stripped = before_rdict_n - after_rdict_n
+    rime_dict.delete_if { |_rime, words| words.nil? || words.empty? }
+    after_rime_dict_n = rime_dict.values.sum(&:size)
+    stripped = before_rime_dict_n - after_rime_dict_n
     puts "Pruned #{dropped} Kaikki obsolete-alt-of ghost headwords from word_dict " \
-         "(#{dropped_pron_orphans} pronunciation-less), stripped #{stripped} from rdict"
+         "(#{dropped_pron_orphans} pronunciation-less), stripped #{stripped} from rime_dict"
   end
   dropped
 end
@@ -596,7 +596,7 @@ RHOTIC_FINAL_PHONEMES = %w[R ER0 ER1 ER2].to_set.freeze
 # (see +phonology.rb+'s +ER0 → AH0 R+ rewrite) is +vowel + R+, so a trailing +R+ is what's missing.
 #
 # Mutates +pron_hash+ (a +{word => [Pronunciation]}+ map: +cmudict+ before +build_rime_dict+, then
-# +word_dict+ entries +[freq, prons, ...]+ before +merge_word_dict_pronunciations_into_rdict!+).
+# +word_dict+ entries +[freq, prons, ...]+ before +merge_word_dict_pronunciations_into_rime_dict!+).
 # Returns the number of pronunciations that were patched.
 def append_r_to_orthographic_r_pronunciations!(pron_hash, label:)
   fixed_words = 0
@@ -875,22 +875,22 @@ def rebuild_rhymecrime_dictionaries()
   append_r_to_orthographic_r_pronunciations!(cmudict, label: "cmudict")
   insert_r_before_final_d_for_red_pronunciations!(cmudict, label: "cmudict")
   insert_r_before_final_sibilant_for_s_pronunciations!(cmudict, label: "cmudict")
-  rdict = build_rime_dict(cmudict)
-  word_dict = build_word_dict(cmudict, rdict, subtlex_hash, subtlex_total_hash, wordfreq_hash, wiktionary_words, pos_map, forms_map, kaikki_verb_morph, original_cmudict_headwords, kaikki_capitalized_only, kaikki_variant_map, varcon_variant_map)
-  prune_obsolete_alt_of_only_headwords!(word_dict, rdict, kaikki_obsolete_alt_of_only)
+  rime_dict = build_rime_dict(cmudict)
+  word_dict = build_word_dict(cmudict, rime_dict, subtlex_hash, subtlex_total_hash, wordfreq_hash, wiktionary_words, pos_map, forms_map, kaikki_verb_morph, original_cmudict_headwords, kaikki_capitalized_only, kaikki_variant_map, varcon_variant_map)
+  prune_obsolete_alt_of_only_headwords!(word_dict, rime_dict, kaikki_obsolete_alt_of_only)
   hyphen_fold_build_keys = word_dict.keys
   lemma_map = compute_lemma_map(word_dict)
-  save_string_hash(rdict, generated_dict_path_under_dict_dir(RIME_DICT_FILENAME), RIME_DICT_HEADER)
+  save_string_hash(rime_dict, generated_dict_path_under_dict_dir(RIME_DICT_FILENAME), RIME_DICT_HEADER)
   save_word_dict(word_dict, lemma_map)
   save_word_lemma_map!(word_dict, lemma_map)
   # Runtime-canonical msgpack mirrors of the two +.txt+ artifacts above.
-  # +word_dict()+ / +rdict()+ in +crime.rb+ load these in BOTH local-dev and
+  # +word_dict()+ / +rime_dict()+ in +crime.rb+ load these in BOTH local-dev and
   # Lambda mode; the +.txt+ files are kept on disk for human inspection only.
   # See the +WORD_DICT_MSGPACK_FILENAME+ doc comment in +utils_rhyme.rb+ for
   # the storage format and the rationale behind retiring the DDB +word#+ /
   # +rime#+ partitions.
   save_word_dict_msgpack!(word_dict, lemma_map)
-  save_rime_dict_msgpack!(rdict)
+  save_rime_dict_msgpack!(rime_dict)
   save_hyphen_variant_map!(hyphen_fold_build_keys, exported_keys: word_dict.keys)
   if include_conceptnet_numberbatch_dict_exports?
     rel_bases = relatedness_export_base_headwords(word_dict.keys, lemma_map)
@@ -925,7 +925,7 @@ def rebuild_rhymecrime_dictionaries()
     next unless cue_word?(base, word_dict)
 
     cue_n += 1
-    target_n += 1 if relatedness_target_word?(base, word_dict, rdict)
+    target_n += 1 if relatedness_target_word?(base, word_dict, rime_dict)
   end
   puts "word_dict: #{word_dict.size} entries"
   puts "  - #{common_n} common"

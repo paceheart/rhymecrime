@@ -213,7 +213,7 @@ File.foreach(word_path, encoding: "UTF-8") do |line|
 end
 
 wd = word_dict
-rd = rdict
+rd = rime_dict
 before_n = rep.size
 # Asymmetric cue / relateds filtering: see +cue_word?+ vs
 # +relatedness_target_word?+ in +lib/rhymecrime/dict/rime.rb+. Cues include

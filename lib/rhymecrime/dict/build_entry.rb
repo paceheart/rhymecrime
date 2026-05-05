@@ -37,12 +37,12 @@
 #                   disconnect, …).
 #
 # +RimeDict+ lives in this file too: it's a +Hash+ subclass whose read
-# methods consult a per-instance pruning-active flag so a naive +rdict[rime]+
-# from a future contributor can't silently read the half-pruned rdict
+# methods consult a per-instance pruning-active flag so a naive +rime_dict[rime]+
+# from a future contributor can't silently read the half-pruned rime_dict
 # during +filter_word_dict_disconnected!+'s fixed-point loop. Authorized
-# readers (the three rdict pruners and +headword_has_non_rich_rhyme_partner?+)
-# wrap their bodies in +rdict.with_reads_during_prune { ... }+; the
-# disconnect loop itself runs inside +rdict.with_pruning_active { ... }+.
+# readers (the three rime_dict pruners and +headword_has_non_rich_rhyme_partner?+)
+# wrap their bodies in +rime_dict.with_reads_during_prune { ... }+; the
+# disconnect loop itself runs inside +rime_dict.with_pruning_active { ... }+.
 #
 # See plan +defer-rarity-losses_refactor+ for the migration choreography
 # and parity constraints.
@@ -256,12 +256,12 @@ end
 # inside +filter_word_dict_disconnected!+ need to mutate, and Ruby's
 # mutating-method C implementations don't always route through +[]+ / +each+
 # anyway. The guard's purpose is to catch a naive new caller that reads
-# rdict during the window without realizing it's in an inconsistent
+# rime_dict during the window without realizing it's in an inconsistent
 # intermediate state; mutations from outside the pruning window aren't in
-# scope for this refactor (rdict has existing mutation points before and
+# scope for this refactor (rime_dict has existing mutation points before and
 # after the disconnect loop — +build_rime_dict+,
-# +merge_word_dict_pronunciations_into_rdict!+,
-# +strip_dispreferred_headwords_from_rdict!+, the two pre-disconnect
+# +merge_word_dict_pronunciations_into_rime_dict!+,
+# +strip_dispreferred_headwords_from_rime_dict!+, the two pre-disconnect
 # bucket pruners, and +prune_obsolete_alt_of_only_headwords!+ post-build —
 # and all of them run with +pruning_active?+ false).
 class RimeDict < Hash
@@ -327,23 +327,23 @@ class RimeDict < Hash
     site = loc ? "#{loc.path}:#{loc.lineno} in `#{loc.label}`" : "(unknown)"
     raise(
       "RimeDict##{method_name} called during the disconnect-filter pruning window " \
-      "without rdict.with_reads_during_prune { ... } opt-in — rdict state is " \
+      "without rime_dict.with_reads_during_prune { ... } opt-in — rime_dict state is " \
       "intentionally inconsistent mid-loop. Caller: #{site}. If this is an " \
       "authorized reader, wrap its body in with_reads_during_prune; if it's " \
-      "a new contributor adding an rdict read inside the window, consider " \
-      "whether rdict's post-pruning state is what you really want and defer " \
+      "a new contributor adding an rime_dict read inside the window, consider " \
+      "whether rime_dict's post-pruning state is what you really want and defer " \
       "the read until after filter_word_dict_disconnected! returns."
     )
   end
 end
 
-# Wrap +rdict_or_hash+ (a plain +Hash+) in a +RimeDict+ carrying the same
+# Wrap +rime_dict_or_hash+ (a plain +Hash+) in a +RimeDict+ carrying the same
 # entries. Used at the +build_rime_dict+ boundary so the rest of the build
-# sees a guarded +rdict+. No-op when the input is already a +RimeDict+.
-def wrap_as_rime_dict(rdict_or_hash)
-  return rdict_or_hash if rdict_or_hash.is_a?(RimeDict)
+# sees a guarded +rime_dict+. No-op when the input is already a +RimeDict+.
+def wrap_as_rime_dict(rime_dict_or_hash)
+  return rime_dict_or_hash if rime_dict_or_hash.is_a?(RimeDict)
   out = RimeDict.new
-  out.replace(rdict_or_hash)
+  out.replace(rime_dict_or_hash)
   out
 end
 
@@ -388,7 +388,7 @@ end
 
 # Convenience helper: returns the live set of headword keys in +word_dict+,
 # excluding entries whose +tombstoned+ is set. Used by the disconnect
-# loop and its rdict pruners during the tag-deferred deletion window (when
+# loop and its rime_dict pruners during the tag-deferred deletion window (when
 # entries are still in +word_dict+ but logically gone).
 def live_word_dict_keys(word_dict)
   out = []

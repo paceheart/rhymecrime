@@ -84,7 +84,7 @@ HEADER
 
 # Emit +generated/spelling_variants_auto.txt+ from +word_dict+, +wordfreq_hash+, and (optionally)
 # the Wiktionary and VarCon variant maps. Safe to call inside +build_word_dict+ before
-# +strip_dispreferred_headwords_from_rdict!+ so the rime-dict bucket stripper sees the resolved
+# +strip_dispreferred_headwords_from_rime_dict!+ so the rime-dict bucket stripper sees the resolved
 # pairs on the same build.
 #
 # Detector precedence (first-write-wins inside +dedupe_variant_pairs+):

@@ -19,7 +19,7 @@ WORD_DICT_FILENAME = "word_dict.txt"
 # lemmas are stored as +nil+ (matching +save_word_lemma_map!+'s policy) and
 # materialized back to the headword on load.
 #
-# These are the runtime-canonical artifacts: +word_dict()+ / +rdict()+ in
+# These are the runtime-canonical artifacts: +word_dict()+ / +rime_dict()+ in
 # +crime.rb+ load these in BOTH local-dev and Lambda mode (the DDB +word#+ /
 # +rime#+ partitions were retired — see +bin/upload-to-dynamodb+ and
 # +bin/stage-lambda+). The +.txt+ files are kept on disk for human inspection
@@ -464,7 +464,7 @@ end
 # keys total) because the hot path in +bin/compute-relatedness+ calls
 # +words_we_care_about(false, true)+ once per cue (~4000x per worker), and
 # rebuilding the ~20k-element filtered list — which includes a
-# +has_rhyming_word?+ pronunciations / rdict probe per candidate — dominated
+# +has_rhyming_word?+ pronunciations / rime_dict probe per candidate — dominated
 # the per-cue overhead. +word_dict+ is loaded once and treated as immutable
 # at runtime, so the memo is safe; dict-build scripts that mutate
 # +word_dict+ do not call this function.
@@ -2354,13 +2354,13 @@ end
 # the txt + .sanitize round-trip. Keys / values are stored verbatim (the txt
 # surface uses +.sanitize+ to fold +" "+ → +"_"+ for the whitespace-delimited
 # format; msgpack doesn't need the fold so we keep raw spaces). Called from
-# +rebuild_rhymecrime_dictionaries+ alongside +save_string_hash(... rdict
+# +rebuild_rhymecrime_dictionaries+ alongside +save_string_hash(... rime_dict
 # ...)+.
-def save_rime_dict_msgpack!(rdict)
+def save_rime_dict_msgpack!(rime_dict)
   ensure_generated_dict_dir!
   path = generated_dict_path_under_dict_dir(RIME_DICT_MSGPACK_FILENAME)
   obj = {}
-  rdict.each do |rime, words|
+  rime_dict.each do |rime, words|
     obj[rime.to_s] = (words || []).map(&:to_s)
   end
   MessagePackUtils.pack_and_save(path, obj)

@@ -393,7 +393,7 @@ module Rhymecrime
     # Mirror of +DynamoRuntime.find_all_related_computed+: returns the word
     # list filtered by the caller's visibility flags, without fetching scores.
     # Uses the in-process Ruby dict helpers (+lexicon_word_entry+,
-    # +rdict_lookup+) loaded by +crime.rb+.
+    # +rime_dict_lookup+) loaded by +crime.rb+.
     def find_all_related_computed(lemma_key, include_rhymeless, common_only)
       words = fetch_related_words(lemma_key)
       return [] if words.empty?
@@ -408,7 +408,7 @@ module Rhymecrime
       raw = fetch_related_tuples(lemma_key)
       return [] if raw.empty?
 
-      unless defined?(lexicon_word_entry) && defined?(rdict_lookup)
+      unless defined?(lexicon_word_entry) && defined?(rime_dict_lookup)
         return raw.dup
       end
 
@@ -423,7 +423,7 @@ module Rhymecrime
     # caller zipping against +scores+ can preserve alignment via Set
     # membership.
     def filter_related_words(words, include_rhymeless, common_only)
-      return words.dup unless defined?(lexicon_word_entry) && defined?(rdict_lookup)
+      return words.dup unless defined?(lexicon_word_entry) && defined?(rime_dict_lookup)
 
       words.select do |w|
         entry = lexicon_word_entry(w)
@@ -433,7 +433,7 @@ module Rhymecrime
         if include_rhymeless
           true
         else
-          entry[1].any? { |pron| !pron.rime.to_s.empty? && !rdict_lookup(pron.rime).empty? }
+          entry[1].any? { |pron| !pron.rime.to_s.empty? && !rime_dict_lookup(pron.rime).empty? }
         end
       end
     end
