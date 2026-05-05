@@ -323,7 +323,7 @@ def non_ascii_only?(word)
   word.bytes.all? { |b| b >= 0x80 }
 end
 
-# +explicitly_forbidden?+ unifies four policy sources:
+# +explicitly_forbidden?+ unifies three policy sources:
 #   1. +forbidden+/+forbidden_ish+ rows in +curated/rarity.csv+
 #      (the curated, hand-maintained block list)
 #   2. +non_ascii_only?+ — any word with zero ASCII characters
@@ -336,21 +336,21 @@ end
 #      +frequency.rb+ so the runtime classifier is correct even when the live
 #      +word_dict+ on disk was generated before the scrub landed (or before
 #      a particular paradigm-noise surface was added to the seed list).
-#   4. +wiktionary_overgenerated_abstract_nesses_plural?+ —
-#      Wiktionary/Kaikki paradigm-table pluralizations of abstract +-ness+
-#      nominalizations (+abruptnesses+, +stiffnesses+, +goodnesses+) that
-#      English never pluralizes. Concrete +-ness+ surfaces (+baronesses+ —
-#      noun.person) survive via the WordNet-lexname concreteness gate.
 # The build-time +forbidden_scrub+ pass in +frequency.rb+ iterates +word_dict+
-# keys against this predicate, so the policy-2 / policy-3 / policy-4 inputs
-# are also pruned from the generated dict on the next rebuild — no separate
-# scrub needed.
+# keys against this predicate, so the policy-2 / policy-3 inputs are also
+# pruned from the generated dict on the next rebuild — no separate scrub needed.
+#
+# +wiktionary_overgenerated_abstract_nesses_plural?+ deliberately is NOT
+# wired into this runtime predicate: it lives downstream in +frequency.rb+'s
+# +wiktionary_nesses_overplural_scrub+ where the verdict bakes into the
+# generated +word_dict+ (tombstoned). Same for the +-ings+ demote rule
+# (+wiktionary_gerund_overplural_scrub+). The build-time scrubs are the
+# single source of truth; runtime stays cheap.
 def explicitly_forbidden?(word)
   return true if non_ascii_only?(word)
   load_rarity_csv_word_sets! if $rarity_csv_forbidden_words_set.nil?
   return true if $rarity_csv_forbidden_words_set.include?(word)
-  return true if paradigm_noise_inflection?(word)
-  wiktionary_overgenerated_abstract_nesses_plural?(word)
+  paradigm_noise_inflection?(word)
 end
 
 # True when +word+ looks like a Wiktionary/Kaikki paradigm-table inflection
@@ -441,14 +441,16 @@ end
 #   * base must be a real gerund (in +word_dict+) — guards against typos
 #     like +xxxings+ where +xxxing+ isn't an attested verb form
 #   * base has at least one concrete WN noun sense (+morning+ noun.time,
-#     +meeting+ noun.group/event, +baroness+ noun.person — well that one's
-#     not a gerund but the concrete-gate idea is the same) → preserve
-#   * otherwise the surface is Wiktionary paradigm noise and +rare?+ in
-#     +crime.rb+ short-circuits to +true+ via this predicate
+#     +meeting+ noun.group/event, +saving+ noun.act-or-not — preserved when
+#     surface is in WN, otherwise dropped through this gate too) → preserve
+#   * otherwise the surface is Wiktionary paradigm noise: +word_dict+'s
+#     +wiktionary_gerund_overplural_scrub+ in +frequency.rb+ clamps freq to
+#     +RARE_FREQ_MAX+ at build time, so the runtime +rare?+ short-circuit
+#     fires naturally without needing a runtime predicate.
 #
-# Plumbed into +rare?+ in +crime.rb+ (not +explicitly_forbidden?+) — these
-# surfaces are demoted to +:rare+, not removed: rhyme output keeps them in
-# the "for the desperate" bucket rather than dropping them entirely.
+# Build-time scrub only — not wired into +rare?+ at runtime: the demote
+# bakes into the generated +word_dict+ via +append_freq_tag!+, so the live
+# rarity gates read it through plain +frequency(word) <= RARE_FREQ_MAX+.
 def wiktionary_overgenerated_gerund_plural?(word)
   return false if word.nil? || word.empty?
   return false unless word.end_with?("ings")
@@ -460,7 +462,7 @@ def wiktionary_overgenerated_gerund_plural?(word)
   return false if $rarity_csv_common_words&.include?(word)
   return false if $rarity_csv_rare_words&.include?(word)
   return false if wn_has_entry?(word)
-  return false unless word_dict.key?(base)
+  return false unless word_dict_includes_headword?(base)
   return false if wn_base_has_concrete_noun_sense?(base)
   true
 end
@@ -473,8 +475,10 @@ end
 #
 # Gates mirror +wiktionary_overgenerated_gerund_plural?+ — same shape /
 # rarity.csv / WN structure, just sliced for the +-nesses+ pluralization
-# pattern. Plumbed into +explicitly_forbidden?+ (not +rare?+) — these are
-# stronger junk than the +-ings+ class and we'd rather drop them entirely.
+# pattern. These are stronger junk than the +-ings+ class — the build-time
+# +wiktionary_nesses_overplural_scrub+ in +frequency.rb+ tombstones them
+# entirely (vs. the +-ings+ demote-to-rare). Build-time only; not wired
+# into +explicitly_forbidden?+ at runtime.
 def wiktionary_overgenerated_abstract_nesses_plural?(word)
   return false if word.nil? || word.empty?
   return false unless word.end_with?("nesses")
@@ -486,7 +490,7 @@ def wiktionary_overgenerated_abstract_nesses_plural?(word)
   return false if $rarity_csv_common_words&.include?(word)
   return false if $rarity_csv_rare_words&.include?(word)
   return false if wn_has_entry?(word)
-  return false unless word_dict.key?(base)
+  return false unless word_dict_includes_headword?(base)
   return false if wn_base_has_concrete_noun_sense?(base)
   true
 end

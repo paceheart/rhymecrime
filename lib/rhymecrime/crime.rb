@@ -2393,8 +2393,7 @@ def ubiquity(word)
 end
 
 def rare?(word)
-  return true if frequency(word) <= RARE_FREQ_MAX
-  wiktionary_overgenerated_gerund_plural?(word)
+  frequency(word) <= RARE_FREQ_MAX
 end
 
 def filter_out_rare_words(words)

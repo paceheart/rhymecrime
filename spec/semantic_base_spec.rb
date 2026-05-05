@@ -64,6 +64,23 @@ SEMANTIC_BASE_TOTAL, SEMANTIC_BASE_PASSED = evaluate_semantic_base_csv
 SEMANTIC_BASE_PASS_RATE_FLOOR = 0.70
 SEMANTIC_BASE_PASS_RATE_SUSPICIOUS_THRESHOLD = 0.95
 
+# Per-example assertion that +semantic_base(word) == expected+. Sibling to
+# +oughta_be_common+ / +oughta_rhyme+ — same +it+-block shape so individual
+# regressions show up as named rspec failures rather than dragging the
+# +curated/semantic_base.csv+ aggregate pass-rate floor down. Use this for
+# spot checks that document specific lemma / derivational-base bugs we
+# want red until +word_lemma_map+ / +word_semantic_base_map+ catch up
+# (e.g. +icier+ → +icey+ when the right answer is +icy+).
+def oughta_have_semantic_base(word, expected, not_working_reason: nil)
+  test_name = "'#{word}' oughta have semantic_base '#{expected}'"
+  it test_name do
+    skip_if_not_working(not_working_reason)
+    got = semantic_base(word)
+    expect(got).to eql(expected),
+      "semantic_base(#{word.inspect}) returned #{got.inspect}, expected #{expected.inspect}"
+  end
+end
+
 describe "SEMANTIC_BASE" do
   it "covers >= 100 rows" do
     expect(SEMANTIC_BASE_TOTAL).to be >= 90
@@ -77,5 +94,22 @@ describe "SEMANTIC_BASE" do
   it "has < #{format('%g', SEMANTIC_BASE_PASS_RATE_SUSPICIOUS_THRESHOLD * 100)}% pass rate; anything greater is suspicious" do
     rate = SEMANTIC_BASE_TOTAL.zero? ? 0.0 : SEMANTIC_BASE_PASSED.to_f / SEMANTIC_BASE_TOTAL
     expect(rate).to be < SEMANTIC_BASE_PASS_RATE_SUSPICIOUS_THRESHOLD
+  end
+
+  # Comparative / superlative forms whose lemma map currently routes through
+  # the dispreferred +-ey+ spellings (+icey+, +wavey+) instead of the
+  # canonical +-y+ heads (+icy+, +wavy+). Both heads have entries in
+  # +word_dict+, so this isn't a missing-lemma issue — it's a preferred-
+  # variant tie-break in +compute_word_lemma_map+. Listed here as failing
+  # spot checks so the bug is named and the next +word_lemma_map+ pass has
+  # a concrete acceptance criterion. Dual-purpose: also surfaces in the
+  # +leming-class+ rarity sweep where +icier+ / +iciest+ / +wavier+ /
+  # +waviest+ ride freq=10 off the bad lemma chain (see +curated/rarity.csv+
+  # +leming-class+ rows).
+  context 'preferred-variant comparative/superlative lemmas' do
+    oughta_have_semantic_base 'icier', 'icy'
+    oughta_have_semantic_base 'iciest', 'icy'
+    oughta_have_semantic_base 'wavier', 'wavy'
+    oughta_have_semantic_base 'waviest', 'wavy'
   end
 end

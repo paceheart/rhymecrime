@@ -1900,6 +1900,83 @@ def add_frequency_info(pronunciation_map, subtlex_hash, subtlex_total_hash, word
     kaikki_capitalized_only: kaikki_capitalized_only,
   )
 
+  # Wiktionary/Kaikki paradigm-table overgenerates +-s+ rows for every
+  # gerund-as-noun lemma — +addressings+, +bannings+, +pricings+, +typings+,
+  # +marketings+ etc. ride +freq=10+ off either the seed loop or the
+  # classifier rescore even though no corpus surface attests them. Demote
+  # (not tombstone) so they stay available as desperation rhymes; concrete
+  # bases (+morning+ noun.time, +meeting+ noun.group/event, +saving+ surface
+  # in WN) survive via the gates inside
+  # +wiktionary_overgenerated_gerund_plural?+.
+  #
+  # And: abstract +-ness+ pluralizations (+abruptnesses+, +stiffnesses+,
+  # +goodnesses+, +blandnesses+) are paradigm-table noise — English doesn't
+  # pluralize abstract qualities. Concrete +-ness+ surfaces (+baronesses+,
+  # base +baroness+ noun.person) survive via the WN concreteness gate.
+  # Stronger junk than the +-ings+ class — tombstone outright.
+  #
+  # Both scrubs run AFTER +rarity_rescore_and_dump!+ on purpose: the
+  # classifier might otherwise re-promote a freshly-demoted gerund surface
+  # back to +freq=10+. Running last makes the demote / tombstone the
+  # final word in the build pipeline.
+  #
+  # Bakes into +word_dict+ via +append_freq_tag!+ / +mark_tombstoned!+ —
+  # runtime +rare?+ / +explicitly_forbidden?+ then read the result through
+  # plain +frequency(word) <= RARE_FREQ_MAX+ / +!word_dict.key?(word)+,
+  # no live predicate needed.
+  #
+  # Predicates consult +$word_dict+ via +word_dict_includes_headword?+ —
+  # temporarily point that global at the in-flight +hash+ so the gate sees
+  # the mid-build dict (mirrors +preferred_form_in_build_lexicon+ /
+  # +emit_spelling_variants_auto!+).
+  previous_word_dict_for_overplural = $word_dict
+  $word_dict = hash
+  begin
+    gerund_overplural_scrub = 0
+    hash.keys.each do |word|
+      next unless wiktionary_overgenerated_gerund_plural?(word)
+      entry = hash[word]
+      next unless entry
+      next if entry.is_a?(BuildEntry) && entry.tombstoned?
+      pre = entry[0]
+      next if pre <= RARE_FREQ_MAX
+      dict_trace_puts(word, "wiktionary_gerund_overplural_scrub: DEMOTE freq=#{pre}->#{RARE_FREQ_MAX}") if dict_trace_word?(word)
+      if entry.is_a?(BuildEntry)
+        entry.append_freq_tag!(
+          phase: :wiktionary_gerund_overplural_scrub,
+          post_freq: RARE_FREQ_MAX,
+          pre_freq: pre,
+          gate_outcomes: { reason: :paradigm_noise_gerund_pluralization },
+        )
+      else
+        entry[0] = RARE_FREQ_MAX
+      end
+      gerund_overplural_scrub += 1
+    end
+    puts "#{gerund_overplural_scrub} Wiktionary -ings overpluralization surfaces demoted to freq=#{RARE_FREQ_MAX}" if gerund_overplural_scrub > 0
+
+    nesses_overplural_scrub = 0
+    hash.keys.each do |word|
+      next unless wiktionary_overgenerated_abstract_nesses_plural?(word)
+      entry = hash[word]
+      next unless entry
+      next if entry.is_a?(BuildEntry) && entry.tombstoned?
+      dict_trace_puts(word, "wiktionary_nesses_overplural_scrub: DELETE") if dict_trace_word?(word)
+      if entry.is_a?(BuildEntry)
+        entry.mark_tombstoned!(
+          phase: :wiktionary_nesses_overplural_scrub,
+          reason: :paradigm_noise_abstract_nesses_pluralization,
+        )
+      else
+        hash.delete(word)
+      end
+      nesses_overplural_scrub += 1
+    end
+    puts "#{nesses_overplural_scrub} Wiktionary -nesses overpluralization surfaces tombstoned" if nesses_overplural_scrub > 0
+  ensure
+    $word_dict = previous_word_dict_for_overplural
+  end
+
   puts "#{count + extra + common_extra + floor_applied + inherited + cw_inherited + morph_inherited + morph_corpus} total entries with frequency data"
   return hash
 end
