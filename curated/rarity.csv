@@ -4018,3 +4018,42 @@ hyphen folding,bolt-on,rare,1
 hyphen folding,de-tail,rare,1
 hyphen folding,de-tails,rare,1
 fix failing tests,arest,rare,1
+get rid of initialisms,ied,rare,1
+get rid of initialisms,sos,rare,1
+fix failing tests,leming,forbidden,1
+leming-class,alcids,rare,1
+leming-class,banyas,rare,1
+leming-class,barens,rare,1
+leming-class,bicking,rare,1
+leming-class,bliven,rare,1
+leming-class,bracker,rare,1
+leming-class,brucks,rare,1
+leming-class,chared,rare,1
+leming-class,cosiest,rare,1
+leming-class,crames,rare,1
+leming-class,farling,rare,1
+leming-class,fowers,rare,1
+leming-class,grames,rare,1
+leming-class,icier,rare,1
+leming-class,iciest,rare,1
+leming-class,jujus,rare,1
+leming-class,lakins,rare,1
+leming-class,lanting,rare,1
+leming-class,leaming,rare,1
+leming-class,mensing,rare,1
+leming-class,nading,rare,1
+leming-class,nowels,rare,1
+leming-class,reinking,rare,1
+leming-class,remics,rare,1
+leming-class,rhodies,rare,1
+leming-class,smoots,rare,1
+leming-class,swapes,rare,1
+leming-class,triers,rare,1
+leming-class,wavier,rare,1
+leming-class,waviest,rare,1
+leming-class,wissing,rare,1
+leming-class,yarling,rare,1
+wiktionary -ings overgeneration escape hatch,upswings,common,1
+leming investigation,dey,rare,1
+leming investigation,deys,rare,1
+spot check,wes,rare,1

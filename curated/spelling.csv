@@ -217,8 +217,6 @@ fueled,fuelled
 refueled,refuelled
 jeweled,jewelled
 skillful,skilful
-mama,mamma
-papa,pappa
 brian,bryan
 you're,yer
 fasciitis,fascitis
@@ -270,8 +268,10 @@ catalog,catalogue
 deejay,dj
 grammies,grammys
 coloring,colouring
-papa,poppa
-mama,momma
+papa,poppa,pappa
+mama,momma,mamma
+mom,mam
+moms,mams
 czar,tsar
 cabbie,cabby
 missus,mrs.,missis
@@ -281,3 +281,12 @@ cipher,cypher
 argh,aargh
 in-law,inlaw
 in-laws,inlaws
+reader,reeder
+readers,reeders
+dried,dryed
+cyprus,cypris
+reeve,rieve
+reeves,rieves
+baron,baren
+barons,barens
+eyeing,ayeing

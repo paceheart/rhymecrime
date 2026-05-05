@@ -371,6 +371,8 @@ describe 'RHYMES' do
   end
 
   context "identical rimes" do
+    oughta_rhyme 'fuse', 'diffuse'
+    oughta_rhyme 'fusion', 'diffusion'
     oughta_rhyme 'leave', 'believe'
     oughta_rhyme 'troll', 'patrol'
     oughta_rhyme 'troll', 'control'
@@ -426,9 +428,25 @@ describe 'RHYMES' do
     ought_not_rhyme 'members', 'dismembers'
     ought_not_rhyme 'science', 'pseudoscience'
     ought_not_rhyme 'scientific', 'pseudoscientific'
+    ought_not_rhyme 'automatic', 'semiautomatic'
+    ought_not_rhyme 'attack', 'counterattack'
+    ought_not_rhyme 'attacked', 'counterattacked'
     ought_not_rhyme 'point', 'counterpoint'
     ought_not_rhyme 'espionage', 'counterespionage'
     ought_not_rhyme 'indicated', 'contraindicated'
+    ought_not_rhyme 'house', 'boathouse'
+    ought_not_rhyme 'houses', 'boathouses'
+    ought_not_rhyme 'house', 'slaughterhouse'
+    ought_not_rhyme 'houses', 'slaughterhouses'
+    ought_not_rhyme 'mouse', 'boathouse' # stress mismatch
+    oughta_rhyme 'arouses', 'houses'
+    ought_not_rhyme 'arouses', 'boathouses' # stress mismatch
+    ought_not_rhyme 'arouses', 'slaughterhouses' # stress mismatch
+    ought_not_rhyme 'boiler', 'potboiler'
+    ought_not_rhyme 'boil', 'parboil'
+    ought_not_rhyme 'boiled', 'parboiled'
+    ought_not_rhyme 'smoking', 'non-smoking'
+    ought_not_rhyme 'fuse', 'defuse'
     ought_not_rhyme 'ultimate', 'penultimate'
     ought_not_rhyme 'penultimate', 'antepenultimate'
     ought_not_rhyme 'chamber', 'antechamber'
@@ -1135,6 +1153,9 @@ describe 'RHYMES' do
   end
 
   context 'bad pronunciations' do
+    oughta_rhyme 'duty', 'booty'
+    oughta_rhyme 'sooty', 'hoodie'
+    ought_not_rhyme 'duty', 'sooty'
     oughta_rhyme 'than', 'man'
     oughta_rhyme 'fun', 'none'
     ought_not_rhyme 'than', 'none'

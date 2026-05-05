@@ -5,13 +5,10 @@ To help me write better limericks quicklier.
 ## to-do list
 
 * improve good outputs
-** relatedness isn't symmetric. For set_related, we don't have to go related1, related2, rhyme. We could also go related, rhyme, related to input. Blocked on thematic relatedness.
 ** look for all plurals that differ in vowels to find more phonemes to conflate, e.g. ORPHANAGE  [AO1 R F AH0 N AH0 JH] ORPHANAGES  [AO1 R F AH0 N IH0 JH IH0 Z]
 
 * imperfect rhymes
 ** TH / DH
-** sitter / admit her
-** piton / lightin'
 ** mansion / stanchion
 ** bacon -> they can (bring back "CAN(1)  K AH0 N" but only when used as part of a phrase)
 
@@ -25,7 +22,6 @@ maybe NLTK wup_similarity or https://stackoverflow.com/questions/14148986/how-do
 
 * urlencode word links
 * test input phrases
-* mine Limerick Heist for more test cases
 
 ## user requests
 
@@ -48,8 +44,6 @@ handle compound words like "ice cream" "cream cheese" "hot dog"
 Genderfluid rhyme: each syllable from the primary-stressed syllable onward has an exactly matching rime (nucleus + coda), checked syllable-by-syllable. Subsumes masculine, feminine, and dactylic rhyme regardless of syllable count.
 
 Non-binary rhyme: a genderfluid rhyme that is not a perfect rhyme. The individual syllable rimes all match, but the intervening onsets (consonant clusters between syllables) differ, so the overall contiguous rime does not match. Examples: latex / paychecks, pitiful / biddable.
-
-consider adding rare words as keys (but not values)
 
 fix this duplication:
 accidental / dental / gentle / lentil / oriental / rental
@@ -78,5 +72,6 @@ in single column, add a "jump to"
 
 explain what it does
 
-Why is this not 100%?
-curated/rarity.csv: 99.85% weighted (3913 evaluated, 3854 exact, 59 partial/zero, weighted score 11310.1000 / weight 11327)
+get rid of initialisms
+
+try retraining relatedness with whatever mapped to related_ish, or related_ish_ish

@@ -323,7 +323,7 @@ def non_ascii_only?(word)
   word.bytes.all? { |b| b >= 0x80 }
 end
 
-# +explicitly_forbidden?+ unifies three policy sources:
+# +explicitly_forbidden?+ unifies four policy sources:
 #   1. +forbidden+/+forbidden_ish+ rows in +curated/rarity.csv+
 #      (the curated, hand-maintained block list)
 #   2. +non_ascii_only?+ — any word with zero ASCII characters
@@ -336,14 +336,21 @@ end
 #      +frequency.rb+ so the runtime classifier is correct even when the live
 #      +word_dict+ on disk was generated before the scrub landed (or before
 #      a particular paradigm-noise surface was added to the seed list).
+#   4. +wiktionary_overgenerated_abstract_nesses_plural?+ —
+#      Wiktionary/Kaikki paradigm-table pluralizations of abstract +-ness+
+#      nominalizations (+abruptnesses+, +stiffnesses+, +goodnesses+) that
+#      English never pluralizes. Concrete +-ness+ surfaces (+baronesses+ —
+#      noun.person) survive via the WordNet-lexname concreteness gate.
 # The build-time +forbidden_scrub+ pass in +frequency.rb+ iterates +word_dict+
-# keys against this predicate, so the policy-2 / policy-3 inputs are also
-# pruned from the generated dict on the next rebuild — no separate scrub needed.
+# keys against this predicate, so the policy-2 / policy-3 / policy-4 inputs
+# are also pruned from the generated dict on the next rebuild — no separate
+# scrub needed.
 def explicitly_forbidden?(word)
   return true if non_ascii_only?(word)
   load_rarity_csv_word_sets! if $rarity_csv_forbidden_words_set.nil?
   return true if $rarity_csv_forbidden_words_set.include?(word)
-  paradigm_noise_inflection?(word)
+  return true if paradigm_noise_inflection?(word)
+  wiktionary_overgenerated_abstract_nesses_plural?(word)
 end
 
 # True when +word+ looks like a Wiktionary/Kaikki paradigm-table inflection
@@ -377,6 +384,111 @@ def paradigm_noise_inflection?(word)
   base = lemma(word)
   return false if base == word
   semantically_promiscuous_words.include?(base) || unrhymable_stop_word?(base)
+end
+
+# WordNet noun lexicographer files we treat as "concrete" for the purposes of
+# the Wiktionary-overpluralization gates below. Bases whose noun senses span
+# at least one of these survive both the +-ings+ demote-to-rare and +-nesses+
+# forbid rules — a concrete sense is what licenses the plural in English
+# (you can have multiple +mornings+/+evenings+/+meetings+, multiple
+# +baronesses+/+hostesses+). Bases whose senses are exclusively in the
+# complement (noun.act, noun.attribute, noun.cognition, noun.communication,
+# noun.feeling, noun.motive, noun.phenomenon, noun.process, noun.relation,
+# noun.state, noun.Tops) read as abstract / mass and the surface is treated
+# as paradigm noise.
+WN_NOUN_LEXNAME_CONCRETE = Set.new(%w[
+  noun.animal
+  noun.artifact
+  noun.body
+  noun.event
+  noun.food
+  noun.group
+  noun.location
+  noun.object
+  noun.person
+  noun.plant
+  noun.possession
+  noun.quantity
+  noun.shape
+  noun.substance
+  noun.time
+]).freeze
+
+# True when +base+ has at least one WordNet noun sense in a concrete-leaning
+# lexicographer file (see +WN_NOUN_LEXNAME_CONCRETE+). Returns +false+ for
+# bases not in WordNet or with only abstract senses. Cheap because
+# +wn_lemma_find_all_cached+ memoizes per-process.
+def wn_base_has_concrete_noun_sense?(base)
+  return false if base.nil? || base.empty?
+  return false unless wn_has_entry?(base)
+  wn_noun_synsets_unified(base).any? do |s|
+    WN_NOUN_LEXNAME_CONCRETE.include?(wn_synset_noun_lexname(s))
+  end
+end
+
+# True when +word+ is a +<gerund>s+ surface (+addressings+, +upswings+,
+# +publishings+) that English never actually pluralizes — Wiktionary/Kaikki
+# enumerate +-s+ paradigm rows for every gerund-as-noun lemma, so the dict
+# inherits +bannings+, +dockings+, +marketings+, +pricings+, +typings+ etc.
+# none of which are real corpus surfaces.
+#
+# Gates (in order — early-exit cheap):
+#   * shape: ends in +-ings+, base (chomp +s+) ends in +-ing+, length >= 6
+#   * +rarity.csv+ +common+/+rare+ rows win (curator's call beats the rule —
+#     see the +upswings+ row in +curated/rarity.csv+)
+#   * surface in WordNet (+savings+, +findings+, +dealings+, +feelings+,
+#     +proceedings+) → preserve
+#   * base must be a real gerund (in +word_dict+) — guards against typos
+#     like +xxxings+ where +xxxing+ isn't an attested verb form
+#   * base has at least one concrete WN noun sense (+morning+ noun.time,
+#     +meeting+ noun.group/event, +baroness+ noun.person — well that one's
+#     not a gerund but the concrete-gate idea is the same) → preserve
+#   * otherwise the surface is Wiktionary paradigm noise and +rare?+ in
+#     +crime.rb+ short-circuits to +true+ via this predicate
+#
+# Plumbed into +rare?+ in +crime.rb+ (not +explicitly_forbidden?+) — these
+# surfaces are demoted to +:rare+, not removed: rhyme output keeps them in
+# the "for the desperate" bucket rather than dropping them entirely.
+def wiktionary_overgenerated_gerund_plural?(word)
+  return false if word.nil? || word.empty?
+  return false unless word.end_with?("ings")
+  return false if word.length < 6
+  base = word.chomp("s")
+  return false unless base.end_with?("ing")
+  rarity_csv_common_words # load
+  rarity_csv_rare_words # load
+  return false if $rarity_csv_common_words&.include?(word)
+  return false if $rarity_csv_rare_words&.include?(word)
+  return false if wn_has_entry?(word)
+  return false unless word_dict.key?(base)
+  return false if wn_base_has_concrete_noun_sense?(base)
+  true
+end
+
+# True when +word+ is a +<X>nesses+ surface (+abruptnesses+, +stiffnesses+,
+# +goodnesses+) that pluralizes an abstract +-ness+ nominalization — a
+# Wiktionary paradigm artifact, since English doesn't pluralize abstract
+# qualities. Concrete +-ness+ surfaces survive: +baronesses+ via the WN
+# concreteness gate (base +baroness+ is noun.person).
+#
+# Gates mirror +wiktionary_overgenerated_gerund_plural?+ — same shape /
+# rarity.csv / WN structure, just sliced for the +-nesses+ pluralization
+# pattern. Plumbed into +explicitly_forbidden?+ (not +rare?+) — these are
+# stronger junk than the +-ings+ class and we'd rather drop them entirely.
+def wiktionary_overgenerated_abstract_nesses_plural?(word)
+  return false if word.nil? || word.empty?
+  return false unless word.end_with?("nesses")
+  return false if word.length < 8
+  base = word.sub(/es\z/, "")
+  return false unless base.end_with?("ness")
+  rarity_csv_common_words # load
+  rarity_csv_rare_words # load
+  return false if $rarity_csv_common_words&.include?(word)
+  return false if $rarity_csv_rare_words&.include?(word)
+  return false if wn_has_entry?(word)
+  return false unless word_dict.key?(base)
+  return false if wn_base_has_concrete_noun_sense?(base)
+  true
 end
 
 #
@@ -1684,6 +1796,14 @@ COMMON_PREFIXES = [
   'com',
   'con',
   'contra',
+  'counter', # counterattack/attack, counterattacked/attacked, counterpoint/point,
+             # counterespionage/espionage. The bare-stem pairs are also caught by
+             # +compound_modifier_remainders+ (both +counter+ and +attack+ are dict
+             # headwords), but the inflected +counterattacked+ → +attacked+ peel
+             # needs the explicit prefix entry because +attacked+ isn't a dict
+             # headword. Splash damage: +counterfeit+/+feit+, +counterpane+/+pane+,
+             # +countervail+/+vail+ — but +feit+/+pane+/+vail+ aren't dict headwords
+             # (or aren't in the rime cohort) so the filter never fires on them.
   'de',
   'dis',
   'disen',   # compound dis- + en- (disenchanted → chanted). Now redundant with the
@@ -1742,6 +1862,13 @@ COMMON_PREFIXES = [
   'pseudo',  # pseudoscience/science etc.
   'pro',
   're',
+  'semi',    # semiautomatic/automatic, semistatic/static, semicircle/circle, etc.
+             # +semi+ is a rare dict headword (the +rare?+ gate in
+             # +compound_modifier_remainders+ would otherwise reject the peel that
+             # productive prefixes like +multi+ — also listed here — would be caught
+             # by). Same situation as +thermo+. Splash damage: virtually none —
+             # +semi-+ is almost exclusively a productive prefix in modern English
+             # (no opaque +semi+ words share rimes with their tails).
   'south',
   'sub',
   'super',

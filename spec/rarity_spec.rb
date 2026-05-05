@@ -278,6 +278,7 @@ describe "RARITY" do
     oughta_be_forbidden 'theyed'
     oughta_be_forbidden 'gots'
     oughta_be_forbidden 'nots'
+    oughta_be_forbidden 'leming'
     
     oughta_be_rare 'blepharoplasty'
     oughta_be_rare 'wakefield'
@@ -314,7 +315,38 @@ describe "RARITY" do
   # This is to verify that the classifier isn't training on the labels
   context 'words that do not appear in rarity.csv' do
     oughta_be_common 'elongated'
-    oughta_be_rare 'myonymy'
+    oughta_be_rare 'doubtfire'
+  end
+
+  # Wiktionary/Kaikki paradigm-table overgenerates +-s+ rows for every
+  # gerund-as-noun lemma, so the dict gets +bannings+, +pricings+,
+  # +addressings+, +marketings+ etc. — none real corpus surfaces. The
+  # +wiktionary_overgenerated_gerund_plural?+ predicate in +utils_rhyme.rb+
+  # demotes the shape to +:rare+ at runtime; concrete bases (+morning+
+  # noun.time, +meeting+ noun.group, +saving+ surface in WN) survive via the
+  # gates inside that predicate.
+  context 'wiktionary -ings overgeneration' do
+    oughta_be_rare 'addressings'
+    oughta_be_rare 'lendings'
+    oughta_be_rare 'pennings'
+    oughta_be_rare 'wranglings'
+    oughta_be_common 'mornings' # noun.time base — predicate preserves
+    oughta_be_common 'feelings' # surface in WN — predicate preserves
+    oughta_be_common 'upswings' # explicit common override in rarity.csv
+  end
+
+  # Wiktionary also pluralizes abstract +-ness+ nominalizations
+  # (+abruptnesses+, +stiffnesses+, +goodnesses+) — paradigm-table noise that
+  # English never produces. +wiktionary_overgenerated_abstract_nesses_plural?+
+  # in +utils_rhyme.rb+ forbids these via +explicitly_forbidden?+; concrete
+  # +-ness+ surfaces (+baronesses+, base +baroness+ noun.person) survive via
+  # the WN concreteness gate.
+  context 'wiktionary -nesses overgeneration' do
+    oughta_be_forbidden 'abruptnesses'
+    oughta_be_forbidden 'stiffnesses'
+    oughta_be_forbidden 'goodnesses'
+    oughta_be_forbidden 'blandnesses'
+    oughta_be_common 'baronesses' # noun.person base — predicate preserves
   end
 
   context "csv sweep (curated/rarity.csv)" do
