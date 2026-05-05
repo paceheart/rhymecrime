@@ -113,7 +113,7 @@ def likely_proper_noun_by_case?(word, subtlex_hash, subtlex_total_hash, kaikki_c
 end
 
 # True if +w+ hits at least one external lexicon used for runtime relatedness / audit (wordfreq TSV,
-# SUBTLEX FREQlow, WordNet lemma, pre-merge CMU headword, USF cue/target, ConceptNet lemma cache,
+# SUBTLEX FREQlow, WordNet lemma, pre-merge CMU headword, USF cue/target, ConceptNet vocab cache,
 # Numberbatch embedding list). Used to block morph phases from copying base_freq>RARE_FREQ_MAX onto
 # surfaces that exist only via Kaikki/Inflect (e.g. *necrophilias*).
 def inflection_surface_reference_attested?(w, subtlex_hash, wordfreq_hash, pronunciation_map_seed_headwords, cn_vocab, nb_token_set, usf_word_set, neol_words: nil)
@@ -890,7 +890,7 @@ def add_frequency_info(pronunciation_map, subtlex_hash, subtlex_total_hash, word
   rare_words = rarity_csv_rare_words
   common_words = rarity_csv_common_words
   pronunciation_map_seed = pronunciation_map_seed_headwords || Set.new
-  ref_cn = conceptnet_lemma_vocab_for_attestation
+  ref_cn = conceptnet_vocab_for_attestation
   ref_nb_path = numberbatch_txt_path
   ref_nb = ref_nb_path ? numberbatch_corpus_token_set(ref_nb_path) : nil
   ref_usf = usf_corpus_word_set

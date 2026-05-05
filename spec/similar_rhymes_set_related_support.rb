@@ -127,7 +127,7 @@ def set_related_ought_not_contain(input, output1, output2, common_only: false, n
   end
 end
 
-def set_related_oughta_contain_base_form(input, base1, base2, common_only: false, not_working_reason: nil)
+def set_related_oughta_contain_semantic_base(input, base1, base2, common_only: false, not_working_reason: nil)
   test_name = "set_related: #{input} -> #{base1}* / #{base2}*"
   it test_name do
     skip_if_not_working(not_working_reason)

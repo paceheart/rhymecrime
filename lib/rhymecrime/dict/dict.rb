@@ -20,7 +20,7 @@
 #     this file     — rebuild_rhymecrime_dictionaries only
 #
 # Corpus inputs live under <repo>/corpora/. Invoked by bin/dict-build.
-# ConceptNet lemma cache under generated/ is created by setup.sh after downloading assertions, or
+# ConceptNet vocab cache under generated/ is created by setup.sh after downloading assertions, or
 # automatically at the start of this rebuild if it is missing or older than assertions.gz.
 #
 # Fast-iteration default: bin/dict-build skips the slow ConceptNet edge-map and
@@ -836,7 +836,7 @@ end
 
 def rebuild_rhymecrime_dictionaries()
   clear_wordnet_lemma_cache!
-  ensure_conceptnet_lemma_cache_for_build!
+  ensure_conceptnet_vocab_cache_for_build!
   pronunciation_map = load_cmudict
   pronunciation_map_seed_headwords = pronunciation_map.keys.each_with_object(Set.new) { |k, s| s.add(k) }
   wordfreq_hash = load_wordfreq

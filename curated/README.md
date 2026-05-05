@@ -179,11 +179,12 @@ single weighted-pass-rate aggregate spec) and the
 `bin/train-relatedness-classifier` training pipeline. The `whatever` label
 opts a row out of accuracy scoring when either answer is acceptable.
 
-### `lemma.csv`
+### `semantic_base.csv`
 
-Lemma-column expectations from `generated/word_dict`:
-`(surface, lemma, skip, notes)`. Consumed by `spec/lemma_spec.rb` to assert
-that `lemma(surface) == lemma` for every row.
+Semantic-base column expectations from `generated/word_dict`:
+`(surface, semantic_base, skip, notes)`. Consumed by
+`spec/semantic_base_spec.rb` to assert that `semantic_base(surface) ==
+semantic_base` for every row.
 
 ## Layout note
 

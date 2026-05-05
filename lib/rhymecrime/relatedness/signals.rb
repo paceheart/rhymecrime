@@ -592,8 +592,8 @@ def gloss_word_token_set(lemma_word)
   $gloss_token_set_cache[lemma_word] ||= begin
     tokens = Set.new
     if gloss_source_use_wordnet?
-      WordNet::Lemma.find_all(lemma_word).each do |lemma|
-        lemma.synsets.each do |synset|
+      WordNet::Lemma.find_all(lemma_word).each do |wn_lemma|
+        wn_lemma.synsets.each do |synset|
           synset.gloss.downcase.scan(/[a-z]+/).each { |tok| tokens << tok }
         end
       end
@@ -613,8 +613,8 @@ $gloss_token_set_cache_wn = {}
 def gloss_word_token_set_wn_only(lemma_word)
   $gloss_token_set_cache_wn[lemma_word] ||= begin
     tokens = Set.new
-    WordNet::Lemma.find_all(lemma_word).each do |lemma|
-      lemma.synsets.each do |synset|
+    WordNet::Lemma.find_all(lemma_word).each do |wn_lemma|
+      wn_lemma.synsets.each do |synset|
         synset.gloss.downcase.scan(/[a-z]+/).each { |tok| tokens << tok }
       end
     end
@@ -750,8 +750,8 @@ def sense_vectors(word, max_senses = $SENSE_VECTOR_MAX_SENSES)
   rows = []
   fill_wn = lambda do
     next unless gloss_source_use_wordnet?
-    WordNet::Lemma.find_all(word).each do |lemma|
-      lemma.synsets.each do |synset|
+    WordNet::Lemma.find_all(word).each do |wn_lemma|
+      wn_lemma.synsets.each do |synset|
         break if rows.size >= max_senses
         v = gloss_text_to_sense_vector(synset.gloss, nb)
         rows << v if v
@@ -817,8 +817,8 @@ def sense_vectors_wn_only(word, max_senses = $SENSE_VECTOR_MAX_SENSES)
   return $sense_vectors_cache_wn[key] if $sense_vectors_cache_wn.key?(key)
   nb = numberbatch_table
   rows = []
-  WordNet::Lemma.find_all(word).each do |lemma|
-    lemma.synsets.each do |synset|
+  WordNet::Lemma.find_all(word).each do |wn_lemma|
+    wn_lemma.synsets.each do |synset|
       break if rows.size >= max_senses
       v = gloss_text_to_sense_vector(synset.gloss, nb)
       rows << v if v
@@ -891,9 +891,9 @@ def sense_vectors_morphy(word, max_senses = $SENSE_VECTOR_MAX_SENSES)
     break if rows.size >= max_senses
     fill_wn = lambda do
       next unless gloss_source_use_wordnet?
-      WordNet::Lemma.find_all(form).each do |lemma|
+      WordNet::Lemma.find_all(form).each do |wn_lemma|
         break if rows.size >= max_senses
-        lemma.synsets.each do |synset|
+        wn_lemma.synsets.each do |synset|
           break if rows.size >= max_senses
           v = gloss_text_to_sense_vector(synset.gloss, nb)
           rows << v if v

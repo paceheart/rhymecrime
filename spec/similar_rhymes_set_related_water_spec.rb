@@ -26,7 +26,7 @@ describe 'SET_RELATED' do
     set_related_ought_not_contain 'water', 'sea', 'cod'
     set_related_oughta_contain 'water', 'blood', 'flood'
     set_related_ought_not_contain 'water', 'marine', 'saline' # stress mismatch
-    set_related_oughta_contain_base_form 'water', 'dip', 'sip'
+    set_related_oughta_contain_semantic_base 'water', 'dip', 'sip'
     set_related_ought_not_contain 'water', 'flour', 'flower'
   end
 end

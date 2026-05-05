@@ -236,10 +236,10 @@ module Inflect
     structural_double = penult_vowel && final_cons && !cluster_final && !long_double_letters
     lc = base[-1]
 
-    lemma_memo = {}
-    lemma = lambda do |w|
-      lemma_memo[w] = wn_lemma?(w) unless lemma_memo.key?(w)
-      lemma_memo[w]
+    wn_lemma_known_memo = {}
+    wn_lemma_known = lambda do |w|
+      wn_lemma_known_memo[w] = wn_lemma?(w) unless wn_lemma_known_memo.key?(w)
+      wn_lemma_known_memo[w]
     end
 
     adj_memo = {}
@@ -251,28 +251,28 @@ module Inflect
       !adj_roots[w].empty?
     end
 
-    only_doubled_ed = structural_double && !lemma[base + "ed"] && lemma[base + lc + "ed"]
+    only_doubled_ed = structural_double && !wn_lemma_known[base + "ed"] && wn_lemma_known[base + lc + "ed"]
 
     suppress_simple = lambda do |kind|
       case kind
       when :ed
         return true if skip_ed_ing
         if structural_double
-          return true if !lemma[base + "ed"] && lemma[base + lc + "ed"]
-          return true if !lemma[base + "er"] && lemma[base + lc + "er"] && !lemma[base + "ed"]
+          return true if !wn_lemma_known[base + "ed"] && wn_lemma_known[base + lc + "ed"]
+          return true if !wn_lemma_known[base + "er"] && wn_lemma_known[base + lc + "er"] && !wn_lemma_known[base + "ed"]
         end
         false
       when :ing
         return true if skip_ed_ing
         if structural_double
-          return true if !lemma[base + "ing"] && lemma[base + lc + "ing"]
-          return true if !lemma[base + "er"] && lemma[base + lc + "er"] && !lemma[base + "ing"]
+          return true if !wn_lemma_known[base + "ing"] && wn_lemma_known[base + lc + "ing"]
+          return true if !wn_lemma_known[base + "er"] && wn_lemma_known[base + lc + "er"] && !wn_lemma_known[base + "ing"]
         end
         false
       when :er
         if structural_double
-          return true if !lemma[base + "er"] && lemma[base + lc + "er"]
-          return true if only_doubled_ed && !lemma[base + "er"] && !lemma[base + lc + "er"]
+          return true if !wn_lemma_known[base + "er"] && wn_lemma_known[base + lc + "er"]
+          return true if only_doubled_ed && !wn_lemma_known[base + "er"] && !wn_lemma_known[base + lc + "er"]
         end
         false
       when :est
@@ -285,9 +285,9 @@ module Inflect
           return true if sr.any? && sr == dr
           # *splitest*: adj morphy ties the surface to this lemma but there is no lexical row — doubled *splittest* is suppressed separately.
           roots_se = adj_roots[se]
-          return true if roots_se.any? && roots_se.include?(base) && !lemma[se]
-          return true if !lemma[base + "est"] && lemma[base + lc + "est"]
-          return true if only_doubled_ed && !lemma[base + "est"] && !lemma[base + lc + "est"]
+          return true if roots_se.any? && roots_se.include?(base) && !wn_lemma_known[se]
+          return true if !wn_lemma_known[base + "est"] && wn_lemma_known[base + lc + "est"]
+          return true if only_doubled_ed && !wn_lemma_known[base + "est"] && !wn_lemma_known[base + lc + "est"]
         end
         false
       else
@@ -299,17 +299,17 @@ module Inflect
       return false unless structural_double
       case kind
       when :ed
-        lemma[base + "ed"] && !lemma[base + lc + "ed"]
+        wn_lemma_known[base + "ed"] && !wn_lemma_known[base + lc + "ed"]
       when :ing
-        lemma[base + "ing"] && !lemma[base + lc + "ing"]
+        wn_lemma_known[base + "ing"] && !wn_lemma_known[base + lc + "ing"]
       when :er
         s = base + "er"
         d = base + lc + "er"
-        (lemma[s] && !lemma[d]) || (!lemma[s] && !lemma[d] && adj_roots_nonempty[s] && !adj_roots_nonempty[d])
+        (wn_lemma_known[s] && !wn_lemma_known[d]) || (!wn_lemma_known[s] && !wn_lemma_known[d] && adj_roots_nonempty[s] && !adj_roots_nonempty[d])
       when :est
         s = base + "est"
         d = base + lc + "est"
-        (lemma[s] && !lemma[d]) || (!lemma[s] && !lemma[d] && adj_roots_nonempty[s] && !adj_roots_nonempty[d])
+        (wn_lemma_known[s] && !wn_lemma_known[d]) || (!wn_lemma_known[s] && !wn_lemma_known[d] && adj_roots_nonempty[s] && !adj_roots_nonempty[d])
       else
         false
       end

@@ -2,16 +2,16 @@
 # frozen_string_literal: true
 
 # CMUdict body sort. Matches upstream 0.7b's order: strip the trailing +(n)+
-# alt-pron marker (if any), then sort by [root, alt_idx]. ASCII byte order on
-# the root string handles everything else — possessives, clitics, internal
-# apostrophes, hyphens, periods — without special cases:
+# alt-pron marker (if any), then sort by [bare_headword, alt_idx]. ASCII byte
+# order on the bare headword handles everything else — possessives, clitics,
+# internal apostrophes, hyphens, periods — without special cases:
 #
 #   ADULTS < ADULTS(1) < ADULTS' < ADULTS'(1)
 #   B      < B'GOSH    < B'NAI   < B'RITH   < B'S < B-J < B.
 #   WE     < WE'D      < WE'LL   < WE'LL(1) < WE'RE < WE'VE < WED
 #
-# +(n)+ groups with its base because we sort on the (n)-stripped root first
-# and the alt-pron index second; otherwise we'd pick up CMU's own quirk
+# +(n)+ groups with its base because we sort on the (n)-stripped bare headword
+# first and the alt-pron index second; otherwise we'd pick up CMU's own quirk
 # +ADULTS' (1)+ inside +ADULTS(1)+ etc.
 #
 # Apostrophe-like Unicode (U+2018/U+2019/U+2032) is folded to ASCII +'+ in the
@@ -42,9 +42,9 @@ module CmudictFileSort
     headword.unicode_normalize(:nfc).tr("\u2018\u2019\u2032", "'")
   end
 
-  # Returns [root, alt_idx] — root is the headword with a trailing +(n)+
-  # alt-pron marker stripped.
-  def root_and_alt_idx(headword)
+  # Returns +[bare_headword, alt_idx]+ — +bare_headword+ is the headword with a
+  # trailing +(n)+ alt-pron marker stripped.
+  def bare_headword(headword)
     h = normalize_headword(headword)
     if (m = h.match(/\A(.+)\((\d+)\)\z/))
       [m[1], m[2].to_i]
@@ -54,8 +54,8 @@ module CmudictFileSort
   end
 
   def headword_sort_key(headword)
-    root, alt_idx = root_and_alt_idx(headword)
-    [root, alt_idx]
+    bare, alt_idx = bare_headword(headword)
+    [bare, alt_idx]
   end
 
   # Empty lines sort last (should not appear in a clean CMUdict body).

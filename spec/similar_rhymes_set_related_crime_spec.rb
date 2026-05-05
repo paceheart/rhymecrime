@@ -13,7 +13,7 @@ describe 'SET_RELATED' do
     set_related_oughta_contain 'crime', 'acquitted', 'committed'
     set_related_oughta_contain 'crime', 'arrest', 'confessed'
     set_related_oughta_contain 'crime', 'sleuth', 'truth'
-    set_related_oughta_contain_base_form 'crime', 'drug', 'thug'
+    set_related_oughta_contain_semantic_base 'crime', 'drug', 'thug'
     set_related_oughta_contain 'crime', 'denial', 'trial'
     set_related_oughta_contain 'crime', 'job', 'mob'
     set_related_oughta_contain 'crime', 'sentence', 'repentance'

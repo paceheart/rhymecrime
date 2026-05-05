@@ -11,7 +11,7 @@
 # pick up a new Wiktionary dump without re-resolving the Gemfile).
 #
 # Prereqs on the host: ruby + bundler (for +bin/build-usf-associations+ and
-# +bin/preprocess-conceptnet-lemma-cache+), python3, curl, gunzip.
+# +bin/preprocess-conceptnet+), python3, curl, gunzip.
 
 set -euo pipefail
 
@@ -58,7 +58,7 @@ if [ ! -s corpora/conceptnet/conceptnet-assertions-5.7.0.csv.gz ]; then
   curl -fL -o corpora/conceptnet/conceptnet-assertions-5.7.0.csv.gz \
     "https://s3.amazonaws.com/conceptnet/downloads/2019/edges/conceptnet-assertions-5.7.0.csv.gz"
 fi
-./bin/preprocess-conceptnet-lemma-cache
+./bin/preprocess-conceptnet
 
 # --- ConceptNet Numberbatch 19.08 English (CC-BY-SA 4.0) --------------------
 # → corpora/numberbatch/numberbatch-en-19.08.txt

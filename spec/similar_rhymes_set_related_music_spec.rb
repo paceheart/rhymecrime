@@ -24,15 +24,15 @@ describe 'SET_RELATED' do
     set_related_oughta_contain 'music', 'flute', 'lute'
     set_related_oughta_contain 'music', 'fandango', 'tango'
     set_related_oughta_contain 'music', 'session', 'progression'
-    set_related_oughta_contain_base_form 'music', 'croon', 'tune'
+    set_related_oughta_contain_semantic_base 'music', 'croon', 'tune'
     set_related_oughta_contain 'music', 'ears', 'spheres'
     set_related_oughta_contain 'music', 'bridal', 'idol'
     set_related_oughta_contain 'music', 'audition', 'composition'
     set_related_oughta_contain 'music', 'chord', 'record'
-    set_related_oughta_contain_base_form 'music', 'composition', 'musician' # identical rime
+    set_related_oughta_contain_semantic_base 'music', 'composition', 'musician' # identical rime
     set_related_oughta_contain 'music', 'clarinet', 'minuet'
     set_related_oughta_contain 'music', 'accidental', 'instrumental'
-    set_related_oughta_contain_base_form 'music', 'sing', 'string'
+    set_related_oughta_contain_semantic_base 'music', 'sing', 'string'
     set_related_oughta_contain 'music', 'glissando', 'ritardando', not_working_reason: "these lack prons"
     set_related_oughta_contain 'music', 'viola', 'hemiola'
     set_related_ought_not_contain 'music', 'overtone', 'xylophone'

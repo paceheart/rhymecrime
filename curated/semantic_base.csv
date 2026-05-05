@@ -1,4 +1,4 @@
-surface,lemma,skip,notes
+surface,semantic_base,skip,notes
 spoiler,spoil
 tiring,tire
 recognizable,recognize
@@ -68,7 +68,7 @@ heraldry,herald
 cherubic,cherub
 cherubim,cherub
 seraphim,seraph
-serifs,serif,1,base 'serif' is not in word_dict so the lemma map can't point to it
+serifs,serif,1,base 'serif' is not in word_dict so the semantic_base map can't point to it
 bookkeeper,bookkeeping
 bookkeeping,bookkeeping
 apologize,apology

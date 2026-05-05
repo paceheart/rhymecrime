@@ -33,10 +33,10 @@ Data and build artifacts are split so **sources** stay under `corpora/` and **re
 | **`corpora/varcon/`** | VarCon `varcon.txt` (US/UK/CA/AU spelling-variant clusters by Atkinson & Titze, MIT-style). Vendored along with the upstream `README.txt` carrying the license. |
 | **`corpora/conceptnet/`** | Optional **ConceptNet** assertions gzip (`conceptnet-assertions-5.7.0.csv.gz`) for thematic edge weights in `generated/conceptnet_edges.json` (large; **gitignored**). |
 | **`corpora/numberbatch/`** | Optional **Numberbatch** English vectors (`numberbatch-en-19.08.txt`) for `generated/numberbatch_vectors.msgpack` (large; **gitignored**). |
-| **`curated/`** | All hand-edited inputs in one flat directory: stop-word lists (`semantically_promiscuous.txt`, `unrhymable_stop_words.txt`, `neol_supplement.txt`), the `authoritative_pronunciations.txt` overrides, the manually-declared `spelling.csv` variant clusters, and the labeled `lemma.csv` / `rarity.csv` / `related.csv` test/training sets. `rarity.csv` doubles as the source of truth for the common / rare / forbidden curated word lists (the retired `common_words.txt` / `rare_words.txt` / `forbid_list.txt`); rows are projected by `kind` into `rarity_csv_common_words` / `rarity_csv_rare_words` / `rarity_csv_forbidden_words`. See `curated/README.md`. |
+| **`curated/`** | All hand-edited inputs in one flat directory: stop-word lists (`semantically_promiscuous.txt`, `unrhymable_stop_words.txt`, `neol_supplement.txt`), the `authoritative_pronunciations.txt` overrides, the manually-declared `spelling.csv` variant clusters, and the labeled `semantic_base.csv` / `rarity.csv` / `related.csv` test/training sets. `rarity.csv` doubles as the source of truth for the common / rare / forbidden curated word lists (the retired `common_words.txt` / `rare_words.txt` / `forbid_list.txt`); rows are projected by `kind` into `rarity_csv_common_words` / `rarity_csv_rare_words` / `rarity_csv_forbidden_words`. See `curated/README.md`. |
 | **`generated/`** | **Outputs** of `./bin/dict-build` (see `lib/rhymecrime/dict/dict.rb`): `word_dict.txt`, `rime_dict.txt`, `part_of_speech.json`, `hyphen_variant_map.json`, `wordfreq.tsv`, and when source corpora are present `conceptnet_edges.json`, `numberbatch_vectors.msgpack`. Semantic relatedness also reads `usf_associations.json` here if present. Entire directory is **gitignored**; clone → run `setup.sh` (wordfreq, Kaikki, …) then `./bin/dict-build`. |
 | **`lib/rhymecrime/dict/`** | Dictionary compiler (`dict.rb`), pronunciation / inflection / Wiktionary loaders, and `dict/wordfreq/export_wordfreq_tsv.py`. (Hand-edited word lists previously kept here now live under `curated/`.) |
-| **`spec/`** | RSpec examples and supporting harnesses. Hand-labeled CSVs (`related.csv`, `rarity.csv`, `lemma.csv`, `spelling.csv`) live under `curated/`. |
+| **`spec/`** | RSpec examples and supporting harnesses. Hand-labeled CSVs (`related.csv`, `rarity.csv`, `semantic_base.csv`, `spelling.csv`) live under `curated/`. |
 
 ## Command Line Usage
 
@@ -178,7 +178,7 @@ For each word REL1 in RELATEDS1,
 
 End-to-end data flow runs in five phases. Each phase's outputs are inputs to the next; every step is idempotent and self-detects already-done state.
 
-**Phase 1 — Fetch corpora** (`bin/setup-corpora`). Downloads Wiktionary, ConceptNet 5.7, and Numberbatch 19.08 to `corpora/`; pre-aggregates USF associations, ConceptNet lemma cache, and the wordfreq Zipf table into `generated/`. CMUdict, VarCon, SUBTLEX-US, neol, and USF shards are vendored in the repo.
+**Phase 1 — Fetch corpora** (`bin/setup-corpora`). Downloads Wiktionary, ConceptNet 5.7, and Numberbatch 19.08 to `corpora/`; pre-aggregates USF associations, ConceptNet vocab cache, and the wordfreq Zipf table into `generated/`. CMUdict, VarCon, SUBTLEX-US, neol, and USF shards are vendored in the repo.
 
 **Phase 2 — Dictionary + classifier build** (`bin/build`, four stages). The orchestrator runs `bin/dict-build` twice (full first, slim rescore last) around two classifier-training stages:
 1. `dict-build` (full): merges every corpus into the canonical lexicon — `generated/word_dict.{txt,msgpack}`, `generated/rime_dict.{txt,msgpack}`, lemma / semantic-base / spelling-variant / hyphen-variant maps. Also exports `generated/conceptnet_edges.json`, `generated/numberbatch_vectors.msgpack`, and `generated/rarity_signals_dump.jsonl`.
@@ -210,7 +210,7 @@ corpora/                          generated/
 curated/                          ├─ conceptnet_edges.json       │ Phase 3
 ├─ rarity.csv      ──── Stage 2/4 ├─ usf_associations.json       │ inputs only
 ├─ related.csv     ──── Stage 3/4 ├─ model_sense_vectors.msgpack │
-├─ lemma.csv       ─┐             ├─ part_of_speech.json         │
+├─ semantic_base   ─┐             ├─ part_of_speech.json         │
 ├─ spelling.csv    ─┤── Stage 1/4 ├─ rarity_classifier.json     ─┘
 └─ stop word txts  ─┘  via dict.rb│
                                   ├─ relatedness_classifier.json ──┐

@@ -10,7 +10,7 @@
 #      at file load (NOT as per-row rspec examples) — we +puts+ a one-line
 #      +FAIL+ diagnostic per mismatch, then a single aggregate rspec example
 #      gates the suite on the coverage floor + weighted-pass-rate floor. Same
-#      shape as +spec/lemma_spec.rb+.
+#      shape as +spec/semantic_base_spec.rb+.
 #
 # Scoring (partial credit on mismatches; symmetric — false positives and
 # false negatives are penalized equally):
