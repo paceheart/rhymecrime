@@ -6,6 +6,13 @@
 # +bin/<verb>-...-aws+ should reuse this rather than re-rolling the
 # +AWS_PROFILE+ check).
 #
+# Profile resolution order (see +apply_rhymecrime_profile_override!+):
+#   1. +RHYMECRIME_AWS_PROFILE+ (repo-scoped knob; wins unconditionally when set
+#      so a leaked +AWS_PROFILE=production-admin+ from an earlier work-account
+#      session can't beat the developer's pinned RhymeCrime profile).
+#   2. +AWS_PROFILE+ from the parent shell.
+#   3. Hard error with a copy-pasteable re-run hint.
+#
 # Why a separate helper:
 #
 #   1. Cross-account safety. An unset +AWS_PROFILE+ lets the SDK's default
@@ -36,6 +43,40 @@ require "aws-sdk-sts"
 module AwsPreflight
   module_function
 
+  # Folds +RHYMECRIME_AWS_PROFILE+ (when set, non-empty) into +AWS_PROFILE+ for
+  # the rest of this process and any subprocess that inherits its env. The
+  # repo-scoped knob exists so a developer can pin "the profile RhymeCrime
+  # should use" in their shell rc once and not have to remember to prefix
+  # every dev-script invocation with +AWS_PROFILE=paceheart+ — and, more
+  # importantly, so a stray +AWS_PROFILE=production-admin+ leaked in from an
+  # earlier work-account session can't silently win over the repo's intended
+  # profile (the same wrong-account trap +require_profile!+ guards against).
+  #
+  # The override is unconditional when +RHYMECRIME_AWS_PROFILE+ is set: we
+  # *want* it to clobber a pre-existing +AWS_PROFILE+, otherwise the env-var
+  # leak case wouldn't be fixed. A one-line stderr note prints when the
+  # override actually changes the value, so the banner that follows
+  # (+==> AWS_PROFILE=…+) doesn't look like it came out of nowhere.
+  #
+  # Empty / whitespace-only +RHYMECRIME_AWS_PROFILE+ is treated as unset
+  # (matches +AWS_PROFILE+'s own +.to_s.empty?+ handling below) so an
+  # accidental +export RHYMECRIME_AWS_PROFILE=+ in the rc doesn't blank
+  # out a perfectly good +AWS_PROFILE+.
+  def apply_rhymecrime_profile_override!
+    rc_profile = ENV["RHYMECRIME_AWS_PROFILE"].to_s.strip
+    return if rc_profile.empty?
+
+    previous = ENV["AWS_PROFILE"].to_s
+    return if previous == rc_profile
+
+    if previous.empty?
+      warn "==> RHYMECRIME_AWS_PROFILE=#{rc_profile}: setting AWS_PROFILE"
+    else
+      warn "==> RHYMECRIME_AWS_PROFILE=#{rc_profile}: overriding AWS_PROFILE=#{previous}"
+    end
+    ENV["AWS_PROFILE"] = rc_profile
+  end
+
   # Aborts with a copy-pasteable re-run hint when +AWS_PROFILE+ is unset;
   # otherwise returns the resolved profile string.
   #
@@ -43,6 +84,8 @@ module AwsPreflight
   #                 used to build the suggested re-run command.
   # +original_argv+ the +ARGV+ snapshot the caller took before +OptionParser#parse!+.
   def require_profile!(script_name:, original_argv:)
+    apply_rhymecrime_profile_override!
+
     profile = ENV["AWS_PROFILE"].to_s
     return profile unless profile.empty?
 
@@ -61,6 +104,12 @@ module AwsPreflight
       Re-run with the profile pointing at your personal AWS account:
 
         #{suggested}
+
+      Or, to avoid prefixing every invocation, export +RHYMECRIME_AWS_PROFILE+
+      in your shell rc — this repo's pre-flight folds it into +AWS_PROFILE+
+      automatically (and overrides a leaked work-account +AWS_PROFILE+):
+
+        export RHYMECRIME_AWS_PROFILE=paceheart
 
       Available profiles on this machine: +aws configure list-profiles+.
     MSG
