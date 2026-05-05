@@ -1,0 +1,19 @@
+select, option, optgroup {
+    color: #22dce1;
+    font-family: "Verdana", Verdana, sans-serif;
+}
+
+[label]
+{
+    color: #ffffff;
+    font-family: "Verdana", Verdana, sans-serif;
+}
+		    
+select {
+    background: #000007;
+    margin: 3px;
+    padding: 3px;
+    padding-left: 6px;
+    padding-right: 6px;
+}
+

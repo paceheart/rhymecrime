@@ -518,7 +518,7 @@ end
 # +alt-of+ pointer (or "Obsolete spelling of T" gloss) pointing at the same T, with T != word.
 # Returns nil for records that carry any non-obsolete meaning (definitional gloss, live
 # regional variant, misspelling, mixed targets). Caller is expected to additionally verify
-# T is in +cmudict+ / +word_dict+ before acting on the result — we don't want to suppress a
+# T is in +pronunciation_map+ / +word_dict+ before acting on the result — we don't want to suppress a
 # headword whose only canonical target isn't even in the lexicon.
 def kaikki_record_obsolete_alt_of_only_target(obj, word)
   senses = obj["senses"]

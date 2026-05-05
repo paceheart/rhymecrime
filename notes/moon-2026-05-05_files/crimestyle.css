@@ -1,0 +1,220 @@
+body {
+    background-color: #333341;
+}
+
+.crime_main, h1, h2, h3 {
+    font-family: "Verdana", Verdana, sans-serif;
+    color: #eeeefa;
+}
+
+.focal_word, .output_p, .output_tuple, .results, .optional, p, td, input {
+    font-family: "Verdana", Verdana, sans-serif;
+    color: #ffdce1;
+}
+
+.results {
+    margin-top: 20px;
+}
+
+.fieldlabel {
+    white-space: nowrap;
+    font-weight: bold;
+    color: #eeeefa;
+}
+
+.verticalcenter {
+    margin: 0;
+    position: absolute;
+    top: 50%;
+    -ms-transform: translateY(-50%);
+    transform: translateY(-50%);
+}
+  
+.optional {
+    color: #eeeefa;
+    font-size: 75%;
+}
+
+.output_tuple {
+    line-height: 130%;
+    margin-bottom: 2px;
+    margin-top: 0px;
+}
+
+/* Pruning-debug view (?debug=1): tuples that +prune_suffix_redundant_rhyming_tuples+
+   would normally drop are retained and rendered in this muted color so the user
+   can see what the pruner is doing. Overrides word-similarity inline styles and
+   anchor colors, hence !important. */
+.output_tuple_pruned,
+.output_tuple_pruned .output_p,
+.output_tuple_pruned a,
+.output_tuple_pruned a:visited,
+.output_tuple_pruned a:hover,
+.output_tuple_pruned a:active,
+.output_tuple_pruned a:focus,
+.output_tuple_pruned span {
+    color: #555 !important;
+}
+
+.output_p {
+    color: #22dce1;
+    line-height: 110%;
+    margin-left: 15px;
+    text-indent: -15px;
+    margin-bottom: 0px;
+    margin-top: 0px;
+}
+
+.focal_word {
+    font-weight: bold;
+    color: #22dce1;
+}
+
+input {
+    background: black;
+    margin: 3px;
+    padding: 3px;
+    padding-left: 6px;
+    padding-right: 6px;
+}
+
+center {
+    color: #16aabb;
+}
+
+a,
+a:visited,
+a:hover,
+a:active,
+a:focus {
+    color: #22dce1;
+    text-decoration: none;
+}
+
+a:visited {
+    color: #1ac0d0;
+}
+
+/* Semantically promiscuous words (+perhaps+, +however+, ...) are rendered
+   without an +<a>+ wrap in +print_word+ (lib/rhymecrime/crime.rb): clicking
+   would land on relatedness columns that +frontend.rb+ short-circuits — dead-end
+   UX. The visual signal (no link) needs a color cue: inside +.output_p+ cyan
+   +#22dce1+ inherits to bare text, so without an override they'd match links.
+   Gray +#bbb+ reads clearly against the pink body (+#ffdce1+). */
+.stop-word {
+    color: #59a9ab
+}
+
+/* Inline thumbs-up / thumbs-down widget rendered after every "related word"
+   surface (see +emit_relatedness_feedback_widget+ in lib/rhymecrime/crime.rb).
+   Icons are inline SVGs whose +fill+ is +currentColor+, so the color rules
+   below (mint #00fa9a for up, hot pink-red #ff355e for down) drive both the
+   resting and voted states without any tinting/filter tricks. The buttons
+   are low-opacity at rest so they don't compete with the words; they bloom
+   on row hover and latch fully visible once a vote lands. */
+.feedback-thumbs {
+    margin-left: 0.25em;
+    /* Negative trailing margin so the down-thumb sits closer to the
+       following +/+ tuple separator (or end-of-line) than to the leading
+       word. The leading +" / "+ string still renders normally; we just
+       eat ~0.15em of its leading space. The space AFTER +/+ is unaffected,
+       preserving an asymmetric "thumbs hug the slash, slash hugs the next
+       word naturally" feel. */
+    margin-right: -0.15em;
+    white-space: nowrap;
+    font-size: 0.85em;
+    line-height: 1;
+}
+
+.feedback-thumbs .thumb {
+    background: transparent;
+    border: 0;
+    /* Asymmetric padding: zero on the leading edge of the up button (so it
+       sits flush against the word it's voting on), 1px between the two
+       buttons, zero trailing on the down button (so the next word starts
+       at its natural " / " separator without compounding gap). */
+    padding: 0;
+    margin: 0;
+    cursor: pointer;
+    font: inherit;
+    line-height: 0;
+    vertical-align: -0.15em;
+    opacity: 0.28;
+    transition: opacity 0.15s ease-in-out, transform 0.05s ease-in-out;
+}
+
+.feedback-thumbs .thumb-up   { color: #00fa9a; padding-right: 1px; }
+.feedback-thumbs .thumb-down { color: #ff355e; padding-left:  1px; }
+
+/* svg inherits +color+ via +fill="currentColor"+; nothing more to set here. */
+.feedback-thumbs .thumb svg {
+    display: inline-block;
+}
+
+/* Only the directly-hovered thumb lights up. We deliberately do NOT raise
+   both thumbs on row-hover, because then every cursor pass over a row of
+   results would flicker dozens of widgets at once and overwhelm the eye;
+   restricting the bloom to the single targeted button keeps the page
+   calm and makes the chosen vote target unambiguous. */
+.feedback-thumbs .thumb:hover {
+    opacity: 1;
+}
+
+/* Set by JS immediately after an undo click and cleared on +mouseleave+.
+   Without it, undoing a vote would leave the thumb visually "still chosen"
+   (because the cursor is still on top of it and the +:hover+ rule wins) —
+   contradicting the freshly-undone state. The class wins on specificity
+   (0, 3, 1) > (0, 2, 1) so it overrides the plain hover rule. */
+.feedback-thumbs .thumb.suppress-hover:hover {
+    opacity: 0.28;
+}
+
+.feedback-thumbs .thumb:active {
+    transform: scale(0.9);
+}
+
+/* Latched vote: the chosen direction stays at full opacity; the rejected
+   direction fades further so the current verdict is visually obvious even
+   without hover. */
+.feedback-thumbs[data-feedback="up"]   .thumb-up,
+.feedback-thumbs[data-feedback="down"] .thumb-down {
+    opacity: 1;
+}
+
+.feedback-thumbs[data-feedback="up"]   .thumb-down,
+.feedback-thumbs[data-feedback="down"] .thumb-up {
+    opacity: 0.2;
+}
+
+/* Mobile / narrow-viewport layout for the main results grid.
+   +print_html_column+ in lib/rhymecrime/frontend.rb emits a single <tr> of
+   alternating cells: content columns carry a +label='<goal>'+ attribute, and
+   the spacer + vertical-divider cells in between carry no +label+. Below
+   700px there isn't enough room for 4-5 side-by-side columns to stay legible,
+   so we collapse the table to a vertical stack: unlabeled spacer/divider
+   cells are hidden (they only read as columnar whitespace), and every
+   labeled cell after the first gets a horizontal top border in place of the
+   vertical left border the divider would have drawn. */
+@media screen and (max-width: 700px) {
+    .crime_main table,
+    .crime_main tbody,
+    .crime_main tr {
+        display: block;
+    }
+
+    .crime_main td[label] {
+        display: block;
+        width: auto !important;
+        padding: 0;
+    }
+
+    .crime_main td:not([label]) {
+        display: none;
+    }
+
+    .crime_main td[label] ~ td[label] {
+        border-top: 2px solid;
+        margin-top: 12px;
+        padding-top: 12px;
+    }
+}

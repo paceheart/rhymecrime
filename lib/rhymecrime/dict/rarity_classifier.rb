@@ -67,7 +67,7 @@ LEARNED_RARITY_FEATURE_NAMES = %w[
   subtlex_total
   subtlex_cap_ratio_present
   subtlex_cap_ratio
-  cmudict_original_flag
+  pronunciation_map_original_flag
   conceptnet_flag
   numberbatch_flag
   usf_flag
@@ -120,7 +120,7 @@ def learned_rarity_feature_vector(sig)
     sig.subtlex_total.to_f,
     _rf(cap_ratio_present),
     cap_ratio_val,
-    _rf(sig.cmudict_original_flag),
+    _rf(sig.pronunciation_map_original_flag),
     _rf(sig.conceptnet_flag),
     _rf(sig.numberbatch_flag),
     _rf(sig.usf_flag),

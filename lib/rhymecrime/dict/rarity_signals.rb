@@ -24,7 +24,7 @@
 #
 #   ctx = RarityContext.build(subtlex_hash:, subtlex_total_hash:, wordfreq_hash:,
 #                             pos_map:, wiktionary_words:, rare_words:,
-#                             common_words:, neol_words:, cmudict_orig:,
+#                             common_words:, neol_words:, pronunciation_map_seed:,
 #                             ref_cn:, ref_nb:, ref_usf:)
 #   sig = extract_rarity_signals(word, ctx)
 
@@ -37,7 +37,7 @@ RarityContext = Struct.new(
   :subtlex_hash, :subtlex_total_hash, :wordfreq_hash,
   :pos_map, :wiktionary_words,
   :rare_words, :common_words, :neol_words,
-  :cmudict_orig, :ref_cn, :ref_nb, :ref_usf,
+  :pronunciation_map_seed, :ref_cn, :ref_nb, :ref_usf,
   :usf_associations, :conceptnet_adjacency, :conceptnet_adjacency_loaded,
   keyword_init: true
 ) do
@@ -51,7 +51,7 @@ RarityContext = Struct.new(
       rare_words: kwargs[:rare_words] || Set.new,
       common_words: kwargs[:common_words] || Set.new,
       neol_words: kwargs[:neol_words] || Set.new,
-      cmudict_orig: kwargs[:cmudict_orig] || Set.new,
+      pronunciation_map_seed: kwargs[:pronunciation_map_seed] || Set.new,
       ref_cn: kwargs[:ref_cn],
       ref_nb: kwargs[:ref_nb],
       ref_usf: kwargs[:ref_usf] || Set.new,
@@ -78,7 +78,7 @@ RaritySignals = Struct.new(
   :subtlex_freqlow,               # Int >= 0 (lowercase occurrences only)
   :subtlex_total,                 # Int >= 0 (all cases)
   :subtlex_cap_ratio,             # Float in [0,1] or nil (<min total)
-  :cmudict_original_flag,
+  :pronunciation_map_original_flag,
   :conceptnet_flag,
   :numberbatch_flag,
   :usf_flag,
@@ -118,7 +118,7 @@ RaritySignals = Struct.new(
 
   # --- Post-propagation (recomputed by the classifier pass) ---
   :post_propagation_freq,
-  :freq_source_phase,                     # one of :cmudict_seed, :subtlex, :common_list, :neol, :wiktionary_floor, :morph_inherit_kaikki, :morph_inherit_listed, :morph_expand_listed, :morph_expand_subtlex, :gdrop, :unknown
+  :freq_source_phase,                     # one of :pronunciation_map_seed, :subtlex, :common_list, :neol, :wiktionary_floor, :morph_inherit_kaikki, :morph_inherit_listed, :morph_expand_listed, :morph_expand_subtlex, :gdrop, :unknown
   :received_donor_from_common_base_flag
 )
 
@@ -127,7 +127,7 @@ RaritySignals = Struct.new(
 # Append new sources at the end; renaming a symbol is safe (model doesn't see
 # the symbol name), but reordering invalidates +generated/rarity_classifier.json+.
 RARITY_FREQ_SOURCE_PHASES = [
-  :unknown, :cmudict_seed, :subtlex, :common_list, :neol,
+  :unknown, :pronunciation_map_seed, :subtlex, :common_list, :neol,
   :wiktionary_floor, :morph_inherit_kaikki, :morph_inherit_listed,
   :morph_expand_listed, :morph_expand_subtlex, :gdrop
 ].freeze
@@ -146,7 +146,7 @@ def extract_rarity_signals(word, ctx)
   zipf = (ctx.wordfreq_hash && ctx.wordfreq_hash[word]) || 0
   cap_ratio = subtlex_capitalized_ratio(word, ctx.subtlex_hash, ctx.subtlex_total_hash)
 
-  in_cmu = ctx.cmudict_orig.include?(word)
+  in_cmu = ctx.pronunciation_map_seed.include?(word)
   in_neol = ctx.neol_words.include?(word)
   in_common_list = ctx.common_words.include?(word)
   in_rare_list = ctx.rare_words.include?(word)

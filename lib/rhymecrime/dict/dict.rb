@@ -11,7 +11,7 @@
 #       → phonology — CMU + ARPAbet + syllabification + Wiktionary pronunciation merge
 #       → lexical   — WordNet + POS layers (+ inflect Zipf probes for POS pruning)
 #       → morphology — inflection policy + Kaikki-derived surface pronunciations
-#       → rime      — rime index build / merge / rare-bucket prune / filter_cmudict
+#       → rime      — rime index build / merge / rare-bucket prune / filter_pronunciation_map
 #       → frequency — SUBTLEX + wordfreq + compute_frequency + add_frequency_info + build_word_dict
 #         (build_word_dict merges pronunciations into rime_dict, strips dispreferred spellings from cohorts,
 #          prunes weak rime buckets, drops freq==0 orphans
@@ -595,7 +595,7 @@ RHOTIC_FINAL_PHONEMES = %w[R ER0 ER1 ER2].to_set.freeze
 # transcriptions where final +-r+ surfaces as schwa (+M AE1 . SH AH0+); the codebase's convention
 # (see +phonology.rb+'s +ER0 → AH0 R+ rewrite) is +vowel + R+, so a trailing +R+ is what's missing.
 #
-# Mutates +pron_hash+ (a +{word => [Pronunciation]}+ map: +cmudict+ before +build_rime_dict+, then
+# Mutates +pron_hash+ (a +{word => [Pronunciation]}+ map: +pronunciation_map+ before +build_rime_dict+, then
 # +word_dict+ entries +[freq, prons, ...]+ before +merge_word_dict_pronunciations_into_rime_dict!+).
 # Returns the number of pronunciations that were patched.
 def append_r_to_orthographic_r_pronunciations!(pron_hash, label:)
@@ -603,7 +603,7 @@ def append_r_to_orthographic_r_pronunciations!(pron_hash, label:)
   fixed_prons = 0
   pron_hash.each do |word, entry|
     next unless word.end_with?("r")
-    # Input shape is either +cmudict+ (+entry+ is +[pron1, pron2, ...]+,
+    # Input shape is either +pronunciation_map+ (+entry+ is +[pron1, pron2, ...]+,
     # an Array of +Pronunciation+) or +word_dict+ (+entry+ is
     # +[freq, prons, lemma]+ or a +BuildEntry+; +prons+ at +entry[1]+).
     # The first-slot-is-Pronunciation probe distinguishes; BuildEntry never
@@ -754,7 +754,7 @@ end
 # produces +-r+-final schwa drops (+jabbered+ → +JH AE1 . B AH0 D+); the canonical past-tense form is
 # +stem-pronunciation + D+, e.g. +JH AE1 . B AH0 R D+ to match +jabber+ +(JH AE1 . B AH0 R)+.
 #
-# Mutates +pron_hash+ entries +(cmudict: word => [Pronunciation], word_dict: word => [freq, prons, …])+.
+# Mutates +pron_hash+ entries +(pronunciation_map: word => [Pronunciation], word_dict: word => [freq, prons, …])+.
 # Independent of the +-r+-final pass: stem identification keys off orthography + presence in the hash,
 # not off any pron's phoneme content. The +:stem_c+ branch additionally requires per-pronunciation
 # alignment (+stem_c_pron_aligns?+) since the orthographic peel admits same-prefix lookalikes
@@ -837,27 +837,27 @@ end
 def rebuild_rhymecrime_dictionaries()
   clear_wordnet_lemma_cache!
   ensure_conceptnet_lemma_cache_for_build!
-  cmudict = load_cmudict
-  original_cmudict_headwords = cmudict.keys.each_with_object(Set.new) { |k, s| s.add(k) }
+  pronunciation_map = load_cmudict
+  pronunciation_map_seed_headwords = pronunciation_map.keys.each_with_object(Set.new) { |k, s| s.add(k) }
   wordfreq_hash = load_wordfreq
   wiktionary_prons, forms_map, pos_map, kaikki_verb_morph, kaikki_capitalized_only, kaikki_variant_map, kaikki_obsolete_alt_of_only, kaikki_glosses_map = load_wiktionary
   varcon_variant_map = load_varcon
   wiktionary_headwords = wiktionary_prons.keys
   apply_lexical_pos_layer_a!(pos_map)
-  wn_seed_pos_map_for_cmudict_gaps!(pos_map, cmudict)
+  wn_seed_pos_map_for_pronunciation_map_gaps!(pos_map, pronunciation_map)
   apply_lexical_pos_layer_b!(pos_map, wordfreq_hash)
   save_part_of_speech_map(pos_map)
   save_wiktionary_glosses!(kaikki_glosses_map)
-  merge_wiktionary!(cmudict, wiktionary_prons)
+  merge_wiktionary!(pronunciation_map, wiktionary_prons)
   wiktionary_prons.clear
   wiktionary_prons = nil
-  merge_inflected_forms!(cmudict, forms_map)
-  merge_gdropped_in_apostrophe_forms!(cmudict, forms_map)
+  merge_inflected_forms!(pronunciation_map, forms_map)
+  merge_gdropped_in_apostrophe_forms!(pronunciation_map, forms_map)
   subtlex_hash, subtlex_total_hash = load_subtlex
   # Track which words are inflected forms for frequency inheritance
   forms_map.each do |base_word, form_pairs|
     form_pairs.each do |inflected_word, base|
-      $inflection_base_words[inflected_word] = base if cmudict.key?(inflected_word)
+      $inflection_base_words[inflected_word] = base if pronunciation_map.key?(inflected_word)
     end
   end
   # Build set of all words with Wiktionary presence (for existence floor)
@@ -865,18 +865,18 @@ def rebuild_rhymecrime_dictionaries()
   forms_map.each do |base_word, form_pairs|
     wiktionary_words.add(base_word)
     form_pairs.each do |inflected_word, _|
-      wiktionary_words.add(inflected_word) if cmudict.key?(inflected_word)
+      wiktionary_words.add(inflected_word) if pronunciation_map.key?(inflected_word)
     end
   end
-  delete_explicitly_forbidden_keys_from_hash(cmudict)
-  delete_unrhymable_stop_words_from_hash(cmudict)
-  hyp_cmudict_edge = delete_headwords_with_edge_hyphen!(cmudict)
-  puts "Removed #{hyp_cmudict_edge} cmudict headwords with a leading or trailing '-'" if hyp_cmudict_edge > 0
-  append_r_to_orthographic_r_pronunciations!(cmudict, label: "cmudict")
-  insert_r_before_final_d_for_red_pronunciations!(cmudict, label: "cmudict")
-  insert_r_before_final_sibilant_for_s_pronunciations!(cmudict, label: "cmudict")
-  rime_dict = build_rime_dict(cmudict)
-  word_dict = build_word_dict(cmudict, rime_dict, subtlex_hash, subtlex_total_hash, wordfreq_hash, wiktionary_words, pos_map, forms_map, kaikki_verb_morph, original_cmudict_headwords, kaikki_capitalized_only, kaikki_variant_map, varcon_variant_map)
+  delete_explicitly_forbidden_keys_from_hash(pronunciation_map)
+  delete_unrhymable_stop_words_from_hash(pronunciation_map)
+  hyp_pronunciation_map_edge = delete_headwords_with_edge_hyphen!(pronunciation_map)
+  puts "Removed #{hyp_pronunciation_map_edge} pronunciation_map headwords with a leading or trailing '-'" if hyp_pronunciation_map_edge > 0
+  append_r_to_orthographic_r_pronunciations!(pronunciation_map, label: "pronunciation_map")
+  insert_r_before_final_d_for_red_pronunciations!(pronunciation_map, label: "pronunciation_map")
+  insert_r_before_final_sibilant_for_s_pronunciations!(pronunciation_map, label: "pronunciation_map")
+  rime_dict = build_rime_dict(pronunciation_map)
+  word_dict = build_word_dict(pronunciation_map, rime_dict, subtlex_hash, subtlex_total_hash, wordfreq_hash, wiktionary_words, pos_map, forms_map, kaikki_verb_morph, pronunciation_map_seed_headwords, kaikki_capitalized_only, kaikki_variant_map, varcon_variant_map)
   prune_obsolete_alt_of_only_headwords!(word_dict, rime_dict, kaikki_obsolete_alt_of_only)
   hyphen_fold_build_keys = word_dict.keys
   lemma_map = compute_lemma_map(word_dict)

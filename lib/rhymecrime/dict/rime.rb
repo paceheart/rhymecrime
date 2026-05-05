@@ -1,11 +1,11 @@
 # encoding: utf-8
-# Rime index: build, merge word_dict prons, rare-only bucket prune, filter_cmudict.
+# Rime index: build, merge word_dict prons, rare-only bucket prune, filter_pronunciation_map.
 
 require_relative "utils_rhyme"
 require_relative "pronunciation.rb"
 require_relative "constants"
 
-def build_rime_dict(cmudict)
+def build_rime_dict(pronunciation_map)
   # +RimeDict+ subclasses +Hash+ and adds a per-instance pruning-active flag
   # consulted by its read methods; the +filter_word_dict_disconnected!+
   # fixed-point loop flips the flag during its inner rounds so a naive
@@ -14,7 +14,7 @@ def build_rime_dict(cmudict)
   # boolean check per read. See +build_entry.rb+ for the full class.
   rime_dict = RimeDict.new {|h,k| h[k] = [] } # hash of arrays, each element of which is a Pronunciation
   i = 0;
-  for word, prons in cmudict
+  for word, prons in pronunciation_map
     for pron in prons
       rime = pron.rime
       rime_dict[rime].push(word)
@@ -62,14 +62,14 @@ def word_dict_live?(word_dict, key)
 end
 
 # Word_dict gains pronunciations from frequency phases (e.g. morph promotion) that never appear in
-# cmudict; runtime rhyme lookup uses rime_dict, so those words must be indexed here too.
+# pronunciation_map; runtime rhyme lookup uses rime_dict, so those words must be indexed here too.
 #
 # Tombstoned entries are intentionally INCLUDED in rime_dict here (and kept
 # by +strip_dispreferred_headwords_from_rime_dict!+ below) so that downstream
 # bucket-level decisions (+rime_bucket_one_common_preferred_with_any_rare?+,
 # +all_common_headwords_rich_rhyme_for_rime?+) see the same bucket
 # membership they saw in the pre-refactor build, where scrubbed / classifier-
-# forbidden rows lingered in rime_dict as stale cmudict references until the
+# forbidden rows lingered in rime_dict as stale pronunciation_map references until the
 # disconnect filter's +prune_rime_dict_to_headwords!+ pass at the end. Since
 # +word_dict_frequency_for_rime_bucket+ returns 0 for pending-deleted entries
 # (matching the baseline's +entry.nil?+ → 0 semantics), those bucket members
@@ -147,7 +147,7 @@ end
 # Tombstoned entries are intentionally kept (same as +nil+ entries) —
 # the disconnect filter's +prune_rime_dict_to_headwords!+ pass filters rime_dict
 # down to live word_dict keys at the end, matching the pre-refactor behavior
-# where scrubbed / classifier-forbidden rows lingered as stale cmudict
+# where scrubbed / classifier-forbidden rows lingered as stale pronunciation_map
 # references in rime_dict until that final pass.
 def strip_dispreferred_headwords_from_rime_dict!(rime_dict, word_dict, log: true)
   dropped = 0
@@ -295,26 +295,26 @@ def delete_common_rich_only_rime_buckets!(rime_dict, word_dict, log: true)
   end
 end
 
-def filter_cmudict(cmudict, rime_dict)
+def filter_pronunciation_map(pronunciation_map, rime_dict)
   # filter out words that differ only in apostrophes, and pronunciations with no rhymes
-  filtered_cmudict = Hash.new
+  filtered_pronunciation_map = Hash.new
   proncount = 0
   total = 0
-  for word, prons in cmudict
-    filtered_cmudict[word] = Array.new # we still want entries for words with no pronunciations, though, in case they have frequency data
+  for word, prons in pronunciation_map
+    filtered_pronunciation_map[word] = Array.new # we still want entries for words with no pronunciations, though, in case they have frequency data
     dict_trace_puts(word, "prons = #{prons}") if dict_trace_word?(word)
     for pron in prons
       total += 1
       rime = pron.rime
       if(!rime_dict[rime].empty?)
         proncount += 1
-        filtered_cmudict[word].push(pron)
+        filtered_pronunciation_map[word].push(pron)
         dict_trace_puts(word, "#{pron} passed filters; rime bucket = #{rime_dict[rime]}") if dict_trace_word?(word)
       end
     end
   end
   puts "#{proncount} out of #{total} pronunciations remain in the dictionary after removing pronunciations with no rhymes"
-  return filtered_cmudict
+  return filtered_pronunciation_map
 end
 
 # Parallels +homophone_rhyme?+ in crime.rb (with rich-rime-only matching, not full-phoneme): true when every +target_rime+ pronunciation of +rhyme_word+ matches +target_rich_rime_array+,

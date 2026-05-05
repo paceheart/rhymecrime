@@ -618,8 +618,8 @@ def apply_lexical_pos_layer_a!(pos_map)
 end
 
 # CMU headwords missing from Kaikki still get coarse POS from WordNet (Layer C seed).
-def wn_seed_pos_map_for_cmudict_gaps!(pos_map, cmudict)
-  cmudict.each_key do |w|
+def wn_seed_pos_map_for_pronunciation_map_gaps!(pos_map, pronunciation_map)
+  pronunciation_map.each_key do |w|
     next unless wn_has_entry?(w)
     next if pos_map.key?(w) && !pos_map[w].nil? && !pos_map[w].empty?
     pos_map[w] = wordnet_lexical_pos_set(w)

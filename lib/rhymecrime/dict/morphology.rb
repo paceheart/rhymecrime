@@ -461,7 +461,7 @@ def morph_gdropped_in_apostrophe_syllabified_pronunciation(ing_syll, in_prime_wo
 end
 
 # Kaikki-attested verbal *…ing* → colloquial *…in'* (not in CMU); same attestation gate as +merge_inflected_forms!+.
-def merge_gdropped_in_apostrophe_forms!(cmudict, forms_map)
+def merge_gdropped_in_apostrophe_forms!(pronunciation_map, forms_map)
   added = 0
   forms_map.each do |base_word, form_pairs|
     next unless wn_base_has_verb?(base_word)
@@ -469,20 +469,20 @@ def merge_gdropped_in_apostrophe_forms!(cmudict, forms_map)
     form_pairs.each do |inflected_word, b|
       next unless b == base_word
       next unless inflected_word.end_with?("ing")
-      next unless cmudict.key?(inflected_word)
+      next unless pronunciation_map.key?(inflected_word)
 
       in_prime = Inflect.gdropped_in_apostrophe_spelling(base_word, inflected_word)
       next if in_prime.nil?
-      next if cmudict.key?(in_prime)
-      next if ignore_cmudict_word?(in_prime, cmudict)
+      next if pronunciation_map.key?(in_prime)
+      next if ignore_cmudict_word?(in_prime, pronunciation_map)
 
-      ing_prons = cmudict[inflected_word]
+      ing_prons = pronunciation_map[inflected_word]
       next if ing_prons.nil? || ing_prons.empty?
 
       syll = morph_gdropped_in_apostrophe_syllabified_pronunciation(ing_prons.first, in_prime)
       next if syll.nil?
 
-      cmudict[in_prime] = [syll]
+      pronunciation_map[in_prime] = [syll]
       added += 1
       dict_trace_puts(in_prime, "g-drop merge: ← #{inflected_word} (base=#{base_word})") if dict_trace_word?(in_prime)
     end
@@ -491,21 +491,21 @@ def merge_gdropped_in_apostrophe_forms!(cmudict, forms_map)
   added
 end
 
-def merge_inflected_forms!(cmudict, forms_map)
+def merge_inflected_forms!(pronunciation_map, forms_map)
   added = 0
   forms_map.each do |base_word, form_pairs|
-    base_prons = cmudict[base_word]
+    base_prons = pronunciation_map[base_word]
     next if base_prons.nil? || base_prons.empty?
 
     base_pron = base_prons.first
     form_pairs.each do |inflected_word, _|
-      next if cmudict.key?(inflected_word)
-      next if ignore_cmudict_word?(inflected_word, cmudict)
+      next if pronunciation_map.key?(inflected_word)
+      next if ignore_cmudict_word?(inflected_word, pronunciation_map)
 
       syllabified = morph_derived_syllabified_pronunciation(base_pron, base_word, inflected_word)
       next if syllabified.nil?
 
-      cmudict[inflected_word] = [syllabified]
+      pronunciation_map[inflected_word] = [syllabified]
       added += 1
     end
   end

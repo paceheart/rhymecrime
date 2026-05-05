@@ -116,11 +116,11 @@ end
 # SUBTLEX FREQlow, WordNet lemma, pre-merge CMU headword, USF cue/target, ConceptNet lemma cache,
 # Numberbatch embedding list). Used to block morph phases from copying base_freq>RARE_FREQ_MAX onto
 # surfaces that exist only via Kaikki/Inflect (e.g. *necrophilias*).
-def inflection_surface_reference_attested?(w, subtlex_hash, wordfreq_hash, original_cmudict_headwords, cn_vocab, nb_token_set, usf_word_set, neol_words: nil)
+def inflection_surface_reference_attested?(w, subtlex_hash, wordfreq_hash, pronunciation_map_seed_headwords, cn_vocab, nb_token_set, usf_word_set, neol_words: nil)
   return true if wordfreq_hash.key?(w)
   return true if (subtlex_hash[w] || 0).to_i > 0
   return true if wn_has_entry?(w)
-  return true if original_cmudict_headwords.include?(w)
+  return true if pronunciation_map_seed_headwords.include?(w)
   return true if neol_words&.include?(w)
   return true if usf_word_set.include?(w)
 
@@ -215,14 +215,14 @@ end
 # Exception: CMU surface forms written with a hyphen or apostrophe (e.g. okey-dokey, takin') often lack
 # WordNet / wordfreq rows but share a live rime bucket; keep them when they were original CMU headwords.
 # *-in'* merged after original CMU snapshot (Wiktionary/Inflect, e.g. fakin'): same disconnect case as takin'
-# but +original_cmudict_headwords+ does not include them. Pattern is tight (*…in'*); +kitchenin'+ is removed
+# but +pronunciation_map_seed_headwords+ does not include them. Pattern is tight (*…in'*); +kitchenin'+ is removed
 # earlier if +explicitly_forbidden?+.
 # Prunes +rime_dict+ and re-runs +delete_rare_only_rime_buckets!+ until fixed point so partner removal can cascade.
-def cmudict_surface_rhyme_rescue?(word, prons, has_rhyme, original_cmudict_headwords)
+def pronunciation_map_seed_surface_rhyme_rescue?(word, prons, has_rhyme, pronunciation_map_seed_headwords)
   return false unless word.is_a?(String)
   return false if prons.nil? || prons.empty?
   return false unless has_rhyme
-  o = original_cmudict_headwords
+  o = pronunciation_map_seed_headwords
   return false if o.nil? || (o.respond_to?(:empty?) && o.empty?)
 
   hyphen_surface = word.include?("-")
@@ -238,7 +238,7 @@ end
 # Colloquial g-dropping: prefer *…in'* as the headword. Drop bare *…in* when the apostrophe form is also
 # present, *…in* is not an original CMU headword (keeps *puffin*, *bobbin*, …), or *makin* (CMU surname
 # homograph) when *makin'* is in original CMU.
-def strip_gdrop_bare_homographs!(hash, cmudict_orig)
+def strip_gdrop_bare_homographs!(hash, pronunciation_map_seed)
   removed = 0
   hash.keys.dup.each do |ap|
     next unless ap.is_a?(String)
@@ -248,7 +248,7 @@ def strip_gdrop_bare_homographs!(hash, cmudict_orig)
     bare_entry = hash[bare]
     next unless bare_entry
 
-    strip = !cmudict_orig.include?(bare) || (bare == "makin" && cmudict_orig.include?("makin'"))
+    strip = !pronunciation_map_seed.include?(bare) || (bare == "makin" && pronunciation_map_seed.include?("makin'"))
     next unless strip
     next if bare_entry.is_a?(BuildEntry) && bare_entry.tombstoned?
 
@@ -263,7 +263,7 @@ def strip_gdrop_bare_homographs!(hash, cmudict_orig)
   removed
 end
 
-def filter_word_dict_disconnected!(word_dict, rime_dict, subtlex_hash, wordfreq_hash, pos_map, forms_map, original_cmudict_headwords = nil, wiktionary_words = nil)
+def filter_word_dict_disconnected!(word_dict, rime_dict, subtlex_hash, wordfreq_hash, pos_map, forms_map, pronunciation_map_seed_headwords = nil, wiktionary_words = nil)
   # Fresh pruning window for every disconnect call. The outer
   # +with_pruning_active+ block flips +rime_dict.pruning_active?+ on; naive reads
   # of +rime_dict[rime]+ / +rime_dict.each+ / ... from inside the block raise unless
@@ -283,10 +283,10 @@ def filter_word_dict_disconnected!(word_dict, rime_dict, subtlex_hash, wordfreq_
   # marks from earlier scrubs / classifier rescore don't count (they
   # wouldn't increment the round counter either under the old "no new
   # hash.delete this round" rule).
-  do_filter_word_dict_disconnected!(word_dict, rime_dict, subtlex_hash, wordfreq_hash, pos_map, forms_map, original_cmudict_headwords, wiktionary_words)
+  do_filter_word_dict_disconnected!(word_dict, rime_dict, subtlex_hash, wordfreq_hash, pos_map, forms_map, pronunciation_map_seed_headwords, wiktionary_words)
 end
 
-def do_filter_word_dict_disconnected!(word_dict, rime_dict, subtlex_hash, wordfreq_hash, pos_map, forms_map, original_cmudict_headwords, wiktionary_words)
+def do_filter_word_dict_disconnected!(word_dict, rime_dict, subtlex_hash, wordfreq_hash, pos_map, forms_map, pronunciation_map_seed_headwords, wiktionary_words)
   dict_set = live_word_dict_keys(word_dict).to_set
   nb = nil
   cn = nil
@@ -323,7 +323,7 @@ def do_filter_word_dict_disconnected!(word_dict, rime_dict, subtlex_hash, wordfr
               next if pron.rime.empty?
               cohort = rime_dict[pron.rime]
               if cohort.nil? || cohort.empty?
-                dict_trace_puts(w, "disconnect: rime=#{pron.rime} has no rime_dict bucket (dropped as singleton/rare-only cohort earlier) — explains has_rhyme=false vs filter_cmudict message")
+                dict_trace_puts(w, "disconnect: rime=#{pron.rime} has no rime_dict bucket (dropped as singleton/rare-only cohort earlier) — explains has_rhyme=false vs filter_pronunciation_map message")
               else
                 w_pf = preferred_form_in_build_lexicon(w, word_dict)
                 others = cohort.reject { |x| x == w_pf }
@@ -388,15 +388,15 @@ def do_filter_word_dict_disconnected!(word_dict, rime_dict, subtlex_hash, wordfr
                  f2b = kaikki_form_rescue_set.include?(w)
                  s4 = subtlex_freqlow_positive?(w, subtlex_hash)
                  wnw = wn_has_entry?(w)
-                 surf_r = cmudict_surface_rhyme_rescue?(w, prons, has_rhyme, original_cmudict_headwords)
+                 surf_r = pronunciation_map_seed_surface_rhyme_rescue?(w, prons, has_rhyme, pronunciation_map_seed_headwords)
                  r = f2b || s4 || wnw || surf_r
                  rescue_detail[:branch] = :oov
                  rescue_detail[:oov_kaikki_form_rescue] = f2b
                  rescue_detail[:oov_subtlex_positive] = s4
                  rescue_detail[:wn] = wnw
-                 rescue_detail[:cmudict_surface_rhyme] = surf_r
+                 rescue_detail[:pronunciation_map_seed_surface_rhyme] = surf_r
                  if dict_trace_word?(w)
-                   dict_trace_puts(w, "disconnect round=#{rounds}: freq=0 wordfreq_row=no oov_2b=#{f2b} oov_subtlex=#{s4} wn=#{wnw} cmudict_surface_rhyme=#{surf_r} has_rhyme=#{has_rhyme} keep=#{r} remove=#{!r}")
+                   dict_trace_puts(w, "disconnect round=#{rounds}: freq=0 wordfreq_row=no oov_2b=#{f2b} oov_subtlex=#{s4} wn=#{wnw} pronunciation_map_seed_surface_rhyme=#{surf_r} has_rhyme=#{has_rhyme} keep=#{r} remove=#{!r}")
                  end
                  r
                end
@@ -806,7 +806,7 @@ end
 
 # List-pivot Inflect inheritance: try to lift +word+ to donor freq via +listed+
 # (rarity.csv: common/common_ish), forward or reverse Inflect match.
-def morph_inherit_listed_once!(word, listed, forward, hash, rare_words, common_words, pos_map, forms_map, kaikki_verb_morph, subtlex_hash, wordfreq_hash, cmudict_orig, ref_cn, ref_nb, ref_usf, neol_words)
+def morph_inherit_listed_once!(word, listed, forward, hash, rare_words, common_words, pos_map, forms_map, kaikki_verb_morph, subtlex_hash, wordfreq_hash, pronunciation_map_seed, ref_cn, ref_nb, ref_usf, neol_words)
   entry = hash[word]
   return false unless entry
   return false if entry[0] > RARE_FREQ_MAX
@@ -860,7 +860,7 @@ def morph_inherit_listed_once!(word, listed, forward, hash, rare_words, common_w
   end
   listed_freq = hash.key?(listed) ? hash[listed][0] : 0
   donor = listed_freq > RARE_FREQ_MAX ? listed_freq : 99
-  if donor > RARE_FREQ_MAX && !common_words.include?(listed) && !neol_words.include?(base) && !neol_words.include?(listed) && !inflection_surface_reference_attested?(word, subtlex_hash, wordfreq_hash, cmudict_orig, ref_cn, ref_nb, ref_usf, neol_words: neol_words)
+  if donor > RARE_FREQ_MAX && !common_words.include?(listed) && !neol_words.include?(base) && !neol_words.include?(listed) && !inflection_surface_reference_attested?(word, subtlex_hash, wordfreq_hash, pronunciation_map_seed, ref_cn, ref_nb, ref_usf, neol_words: neol_words)
     dict_trace_puts(word, "morph_inherit_listed ← base=#{base} (listed=#{listed}): skip (surface not in wordfreq/SUBTLEX/WN/CMU/USF/CN/NB/neol)") if tr
     return false
   end
@@ -883,19 +883,19 @@ def morph_inherit_listed_once!(word, listed, forward, hash, rare_words, common_w
   true
 end
 
-def add_frequency_info(cmudict, subtlex_hash, subtlex_total_hash, wordfreq_hash, wiktionary_words, pos_map, forms_map, kaikki_verb_morph = nil, original_cmudict_headwords = nil, kaikki_capitalized_only = nil)
+def add_frequency_info(pronunciation_map, subtlex_hash, subtlex_total_hash, wordfreq_hash, wiktionary_words, pos_map, forms_map, kaikki_verb_morph = nil, pronunciation_map_seed_headwords = nil, kaikki_capitalized_only = nil)
   $freq_propagation_metadata = {}
   count = 0
   hash = Hash.new
   rare_words = rarity_csv_rare_words
   common_words = rarity_csv_common_words
-  cmudict_orig = original_cmudict_headwords || Set.new
+  pronunciation_map_seed = pronunciation_map_seed_headwords || Set.new
   ref_cn = conceptnet_lemma_vocab_for_attestation
   ref_nb_path = numberbatch_txt_path
   ref_nb = ref_nb_path ? numberbatch_corpus_token_set(ref_nb_path) : nil
   ref_usf = usf_corpus_word_set
-  for word, prons in cmudict
-    seed_phase = :cmudict_seed
+  for word, prons in pronunciation_map
+    seed_phase = :pronunciation_map_seed
     seed_gates = nil
     comp = nil
     if(semantically_promiscuous?(word))
@@ -919,11 +919,11 @@ def add_frequency_info(cmudict, subtlex_hash, subtlex_total_hash, wordfreq_hash,
     entry.freq_computation = comp if comp
     entry.append_freq_tag!(phase: seed_phase, post_freq: freq, pre_freq: 0, gate_outcomes: seed_gates)
     hash[word] = entry
-    dict_trace_puts(word, "cmudict_seed: freq=#{freq}") if dict_trace_word?(word)
+    dict_trace_puts(word, "pronunciation_map_seed: freq=#{freq}") if dict_trace_word?(word)
   end
-  puts "#{count} of those entries have frequency data (from cmudict/wiktionary words)"
+  puts "#{count} of those entries have frequency data (from pronunciation_map/wiktionary words)"
 
-  # SUBTLEX expansion: add words from SUBTLEX that aren't in cmudict.
+  # SUBTLEX expansion: add words from SUBTLEX that aren't in pronunciation_map.
   extra = 0
   subtlex_hash.each_key do |word|
     next if hash.key?(word)
@@ -1177,7 +1177,7 @@ def add_frequency_info(cmudict, subtlex_hash, subtlex_total_hash, wordfreq_hash,
     base_zipf = wordfreq_hash[base] || 0
     surf_ok = wordfreq_hash.key?(inflected) ||
       wn_has_entry?(inflected) ||
-      cmudict_orig.include?(inflected) ||
+      pronunciation_map_seed.include?(inflected) ||
       neol_words.include?(inflected)
     # +base_has_corpus_anchor+ is the inheritance-gate's anchor predicate
     # MINUS the +common_words.include?(base)+ clause: real corpus / lexical
@@ -1271,7 +1271,7 @@ def add_frequency_info(cmudict, subtlex_hash, subtlex_total_hash, wordfreq_hash,
           dict_trace_puts(w, "morph_inherit_listed: skip row (in rarity.csv: rare)") if dict_trace_word?(w)
           next
         end
-        next unless morph_inherit_listed_once!(w, listed, true, hash, rare_words, common_words, pos_map, forms_map, kaikki_verb_morph, subtlex_hash, wordfreq_hash, cmudict_orig, ref_cn, ref_nb, ref_usf, neol_words)
+        next unless morph_inherit_listed_once!(w, listed, true, hash, rare_words, common_words, pos_map, forms_map, kaikki_verb_morph, subtlex_hash, wordfreq_hash, pronunciation_map_seed, ref_cn, ref_nb, ref_usf, neol_words)
         claimed[w] = true
         round += 1
         cw_inherited += 1
@@ -1289,7 +1289,7 @@ def add_frequency_info(cmudict, subtlex_hash, subtlex_total_hash, wordfreq_hash,
           dict_trace_puts(w, "morph_inherit_listed: skip row (in rarity.csv: rare)") if dict_trace_word?(w)
           next
         end
-        next unless morph_inherit_listed_once!(w, listed, false, hash, rare_words, common_words, pos_map, forms_map, kaikki_verb_morph, subtlex_hash, wordfreq_hash, cmudict_orig, ref_cn, ref_nb, ref_usf, neol_words)
+        next unless morph_inherit_listed_once!(w, listed, false, hash, rare_words, common_words, pos_map, forms_map, kaikki_verb_morph, subtlex_hash, wordfreq_hash, pronunciation_map_seed, ref_cn, ref_nb, ref_usf, neol_words)
         claimed[w] = true
         round += 1
         cw_inherited += 1
@@ -1549,7 +1549,7 @@ def add_frequency_info(cmudict, subtlex_hash, subtlex_total_hash, wordfreq_hash,
         # surf_attested via WN / CMUdict so legitimate rare plurals are unaffected.
         surf_attested = wordfreq_hash.key?(w) ||
           wn_has_entry?(w) ||
-          cmudict_orig.include?(w) ||
+          pronunciation_map_seed.include?(w) ||
           neol_words.include?(w)
         base_zipf = wordfreq_hash[base] || 0
         # Only require form-level surf_attested when the base itself lacks a "real word" anchor.
@@ -1731,7 +1731,7 @@ def add_frequency_info(cmudict, subtlex_hash, subtlex_total_hash, wordfreq_hash,
   end
   puts "#{gdrop_inherited} -in' g-drop surfaces inherited frequency from -ing base (rare-capped)" if gdrop_inherited > 0
 
-  strip_gdrop_bare_homographs!(hash, cmudict_orig)
+  strip_gdrop_bare_homographs!(hash, pronunciation_map_seed)
 
   # Drop bare possessive surface forms (+X's+) whose stem +X+ has freq 0 or is missing from the
   # dict. CMU ships encyclopedic surname / place-name possessives (+cardenas's+, +chinn's+,
@@ -1889,7 +1889,7 @@ def add_frequency_info(cmudict, subtlex_hash, subtlex_total_hash, wordfreq_hash,
     rare_words: rare_words,
     common_words: common_words,
     neol_words: neol_words,
-    cmudict_orig: cmudict_orig,
+    pronunciation_map_seed: pronunciation_map_seed,
     ref_cn: ref_cn,
     ref_nb: ref_nb,
     ref_usf: ref_usf,
@@ -1904,9 +1904,9 @@ def add_frequency_info(cmudict, subtlex_hash, subtlex_total_hash, wordfreq_hash,
   return hash
 end
 
-def build_word_dict(cmudict, rime_dict, subtlex_hash, subtlex_total_hash, wordfreq_hash, wiktionary_words, pos_map, forms_map, kaikki_verb_morph = nil, original_cmudict_headwords = nil, kaikki_capitalized_only = nil, kaikki_variant_map = nil, varcon_variant_map = nil)
-  cmudict = filter_cmudict(cmudict, rime_dict)
-  word_dict = add_frequency_info(cmudict, subtlex_hash, subtlex_total_hash, wordfreq_hash, wiktionary_words, pos_map, forms_map, kaikki_verb_morph, original_cmudict_headwords, kaikki_capitalized_only)
+def build_word_dict(pronunciation_map, rime_dict, subtlex_hash, subtlex_total_hash, wordfreq_hash, wiktionary_words, pos_map, forms_map, kaikki_verb_morph = nil, pronunciation_map_seed_headwords = nil, kaikki_capitalized_only = nil, kaikki_variant_map = nil, varcon_variant_map = nil)
+  pronunciation_map = filter_pronunciation_map(pronunciation_map, rime_dict)
+  word_dict = add_frequency_info(pronunciation_map, subtlex_hash, subtlex_total_hash, wordfreq_hash, wiktionary_words, pos_map, forms_map, kaikki_verb_morph, pronunciation_map_seed_headwords, kaikki_capitalized_only)
   append_r_to_orthographic_r_pronunciations!(word_dict, label: "word_dict")
   insert_r_before_final_d_for_red_pronunciations!(word_dict, label: "word_dict")
   insert_r_before_final_sibilant_for_s_pronunciations!(word_dict, label: "word_dict")
@@ -1922,7 +1922,7 @@ def build_word_dict(cmudict, rime_dict, subtlex_hash, subtlex_total_hash, wordfr
   strip_dispreferred_headwords_from_rime_dict!(rime_dict, word_dict)
   delete_rare_only_rime_buckets!(rime_dict, word_dict)
   delete_common_rich_only_rime_buckets!(rime_dict, word_dict)
-  filter_word_dict_disconnected!(word_dict, rime_dict, subtlex_hash, wordfreq_hash, pos_map, forms_map, original_cmudict_headwords, wiktionary_words)
+  filter_word_dict_disconnected!(word_dict, rime_dict, subtlex_hash, wordfreq_hash, pos_map, forms_map, pronunciation_map_seed_headwords, wiktionary_words)
   # Terminal reducer: project every surviving +BuildEntry+ back to the
   # legacy +[freq, prons, lemma]+ shape that +save_word_dict+,
   # +save_word_dict_msgpack!+, and the rest of +rebuild_rhymecrime_dictionaries+

@@ -8,10 +8,10 @@ require_relative "phoneme.rb"
 require_relative "pronunciation.rb"
 require_relative "constants"
 
-def delete_explicitly_forbidden_keys_from_hash(cmudict)
+def delete_explicitly_forbidden_keys_from_hash(pronunciation_map)
   count = 0
   for bad_word in forbid_list
-    if(cmudict.delete(bad_word.chomp))
+    if(pronunciation_map.delete(bad_word.chomp))
       count = count + 1
     end
   end
@@ -20,7 +20,7 @@ end
 
 # Sibling of +delete_explicitly_forbidden_keys_from_hash+ that drops every
 # entry in +curated/unrhymable_stop_words.txt+ from +hash+. Same shape, same
-# call sites: the early scrub on raw cmudict in +dict.rb+ and the late
+# call sites: the early scrub on raw pronunciation_map in +dict.rb+ and the late
 # +forbidden_scrub+ pass in +frequency.rb+. Two scrubs because SUBTLEX /
 # wiktionary expansion can re-introduce a word like "the" between the two
 # passes; the late scrub catches anything that snuck back in.
@@ -33,7 +33,7 @@ def delete_unrhymable_stop_words_from_hash(hash)
 end
 
 # Incomplete / artifact headwords (e.g. truncated compounds); not useful as lookup keys.
-# Called twice: early on raw +cmudict+ (values are pron arrays — hash.delete
+# Called twice: early on raw +pronunciation_map+ (values are pron arrays — hash.delete
 # removes the row outright) and late on +word_dict+ mid-build, where values
 # are +BuildEntry+ instances and deletion is deferred to the terminal reducer.
 # The +BuildEntry+ branch calls +mark_tombstoned!+ so the entry stays
@@ -321,10 +321,10 @@ AUTHORITATIVE_PRONUNCIATIONS_PATH = File.join(CURATED_DIR, "authoritative_pronun
 # Contract: for any word listed here, the downstream loaders skip adding
 # pronunciations from any other source:
 #   * +load_cmudict+                          — early +next+ on authoritative hit
-#   * +merge_wiktionary!+                     — +next if cmudict.key?(word)+
-#   * +merge_inflected_forms!+                — +next if cmudict.key?(inflected_word)+
-#   * +merge_gdropped_in_apostrophe_forms!+   — +next if cmudict.key?(in_prime)+
-# (The last three already guard on +cmudict.key?+, which is now true for
+#   * +merge_wiktionary!+                     — +next if pronunciation_map.key?(word)+
+#   * +merge_inflected_forms!+                — +next if pronunciation_map.key?(inflected_word)+
+#   * +merge_gdropped_in_apostrophe_forms!+   — +next if pronunciation_map.key?(in_prime)+
+# (The last three already guard on +pronunciation_map.key?+, which is now true for
 # authoritative words because we populate +hash+ ahead of the CMUdict load.)
 #
 # Cluster / consonant filters are *not* applied to authoritative entries: they
@@ -455,7 +455,7 @@ def load_cmudict()
   syllabified
 end
 
-def ignore_cmudict_word?(word, cmudict)
+def ignore_cmudict_word?(word, pronunciation_map)
   # ignore words containing digits, except w00t
   return true if (word =~ /\d/) && (word != "w00t")
   # ignore words containing a period anywhere: CMUDict uses dots for abbreviations,
@@ -485,21 +485,21 @@ def final_consonant_cluster_ok?(cluster)
   end
 end
 
-def redundant_apostrophe_word?(word, cmudict)
+def redundant_apostrophe_word?(word, pronunciation_map)
   if word.include?("'") && !semantically_promiscuous?(word)
     root = word.tr("'", "")
-    if(cmudict.key?(root) && (cmudict[root].sort == cmudict[word].sort)) # if pronunciations are the same (ignoring order)
+    if(pronunciation_map.key?(root) && (pronunciation_map[root].sort == pronunciation_map[word].sort)) # if pronunciations are the same (ignoring order)
       return true
     end
   end
   false
 end
 
-def merge_wiktionary!(cmudict, wiktionary)
+def merge_wiktionary!(pronunciation_map, wiktionary)
   added = 0
   wiktionary.each do |word, prons|
-    next if cmudict.key?(word)
-    next if ignore_cmudict_word?(word, cmudict)
+    next if pronunciation_map.key?(word)
+    next if ignore_cmudict_word?(word, pronunciation_map)
     valid_prons = prons.select do |pron|
       next false if pron.empty?
       next false unless pron.phonemes.any?(&:vowel?)
@@ -511,8 +511,8 @@ def merge_wiktionary!(cmudict, wiktionary)
       word_ok
     end
     next if valid_prons.empty?
-    cmudict[word] = dedupe_pronunciations(
-      valid_prons.map { |p| syllabify_with_common_prefix_split(word, normalize_flat_arphabet_pronunciation(p), cmudict) }
+    pronunciation_map[word] = dedupe_pronunciations(
+      valid_prons.map { |p| syllabify_with_common_prefix_split(word, normalize_flat_arphabet_pronunciation(p), pronunciation_map) }
     )
     added += 1
   end
