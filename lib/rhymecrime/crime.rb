@@ -1549,31 +1549,33 @@ def gloss_tokens_for_word(word)
   Inflect.configure_wordnet_db_path! if defined?(Inflect)
   tokens =
     begin
-      if defined?(WordNet::Lemma) &&
-          defined?(WordNet::DB) && !WordNet::DB.path.to_s.empty?
-        # Plurals/inflected forms (+submarines+, +rewrites+) don't have their
-        # own WN gloss entries — the lemma owns the gloss. Try the surface
-        # form first, then fall back to +lemma(word)+ so +submarines+'s
-        # citation check still consults +submarine+'s "submersible warship"
-        # gloss instead of returning empty (which would default-collapse).
-        forms = [word.to_s.downcase]
-        lem = lemma(word.to_s.downcase) rescue nil
-        forms << lem if lem && !forms.include?(lem)
-        glosses = nil
-        forms.each do |f|
-          g = WordNet::Lemma.find_all(f).flat_map { |l| l.synsets.map(&:gloss) }
-          if !g.empty?
-            glosses = g
-            break
-          end
+      # Plurals/inflected forms (+submarines+, +rewrites+) don't have their
+      # own gloss entries on either side — the lemma owns the gloss. Try the
+      # surface form first, then fall back to +lemma(word)+ so e.g.
+      # +submarines+'s citation check consults +submarine+'s "submersible
+      # warship" gloss instead of returning empty (which would default-
+      # collapse). Same lookup order is used for both WordNet and Wiktionary.
+      surface = word.to_s.downcase
+      lem = lemma(surface) rescue nil
+      forms = [surface]
+      forms << lem if lem && !forms.include?(lem)
+      glosses = []
+      wn_available = gloss_source_use_wordnet? &&
+        defined?(WordNet::Lemma) &&
+        defined?(WordNet::DB) && !WordNet::DB.path.to_s.empty?
+      forms.each do |f|
+        if wn_available
+          wn_g = WordNet::Lemma.find_all(f).flat_map { |l| l.synsets.map(&:gloss) }
+          glosses.concat(wn_g) unless wn_g.empty?
         end
-        if glosses
-          glosses.join(" ").downcase.scan(/[a-z]+/).freeze
-        else
-          [].freeze
-        end
-      else
+        wk_g = wiktionary_glosses_for(f)
+        glosses.concat(wk_g) unless wk_g.empty?
+        break unless glosses.empty?
+      end
+      if glosses.empty?
         [].freeze
+      else
+        glosses.join(" ").downcase.scan(/[a-z]+/).freeze
       end
     rescue StandardError
       [].freeze

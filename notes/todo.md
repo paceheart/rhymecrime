@@ -65,8 +65,6 @@ our / scour / tower
 
 review experiments/apostrophe-review.txt
 
-wherever we use wordnet glosses, also use wiktionary glosses
-
 try again to strengthen lemma to semantic_base and see if it helps
 we should be able to go even hammer with semantic_base, e.g. sembase(conflagration) -> fire
 

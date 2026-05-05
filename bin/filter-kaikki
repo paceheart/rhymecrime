@@ -27,6 +27,10 @@ require "json"
 $stdin.set_encoding("UTF-8")
 $stdout.set_encoding("UTF-8")
 
+GLOSSES_PER_SENSE = (ENV["RHYMECRIME_KAIKKI_GLOSSES_PER_SENSE"] || "1").to_i
+GLOSS_CHAR_LIMIT = (ENV["RHYMECRIME_KAIKKI_GLOSS_CHAR_LIMIT"] || "200").to_i
+KEEP_GLOSS_ONLY = ENV["RHYMECRIME_KAIKKI_KEEP_GLOSS_ONLY"] == "1"
+
 ARGF.each_line do |line|
   obj = begin
     JSON.parse(line)
@@ -63,7 +67,7 @@ ARGF.each_line do |line|
     # are machine-readable, but plenty of variants are only signaled by a gloss
     # like "Alternative spelling of X." Cap to the first gloss, truncated, to
     # keep the output small.
-    glosses = (s["glosses"] || [])[0, 1].map { |g| g.to_s[0, 200] }
+    glosses = (s["glosses"] || [])[0, GLOSSES_PER_SENSE].map { |g| g.to_s[0, GLOSS_CHAR_LIMIT] }
     next if alt_of.empty? && form_of.empty? && tags.empty? && glosses.empty?
     sense = {}
     sense["tags"] = tags unless tags.empty?
@@ -77,7 +81,11 @@ ARGF.each_line do |line|
   # Pronunciations feed wiktionary.rb's pron_hash; forms feed forms_map;
   # alt_of/form_of senses feed corpus_variants.rb's variant discovery.
   has_variant_signal = kept_senses.any? { |s| s["alt_of"] || s["form_of"] }
-  next if kept_sounds.empty? && kept_forms.empty? && !has_variant_signal
+  has_definitional_gloss = KEEP_GLOSS_ONLY && kept_senses.any? do |s|
+    g = s["glosses"]
+    g && !g.empty?
+  end
+  next if kept_sounds.empty? && kept_forms.empty? && !has_variant_signal && !has_definitional_gloss
 
   out = { "word" => word, "pos" => pos }
   out["sounds"] = kept_sounds unless kept_sounds.empty?

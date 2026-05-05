@@ -1,0 +1,340 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+#
+# Coverage + delta diagnostic for the WordNet ↔ Wiktionary gloss-source ablation.
+# Scans +curated/related.csv+ and reports, per relatedness label class:
+#
+#   * Per-headword coverage of WN glosses, WK glosses, both, neither.
+#   * Per-pair +gloss_match?+ flip statistics under each source — how often does
+#     adding Wiktionary turn a +false+ into a +true+, and how often is that flip
+#     on a positive (good) row vs a negative (false-positive) row.
+#   * Per-pair sense-vector cosine deltas: +sv_max+/+sv_min+ under WN-only vs
+#     WK-only vs both, mean/median + count of pairs where one source produced
+#     a higher cosine than the other.
+#
+# This is a *pre-retrain* sanity check: it tells us whether the new signal is
+# additive in the right direction (rescues real positives) or noisy (flips
+# negatives to positives). The classifier retrain still has the final word —
+# the GBT may opt to ignore a feature even when its raw stats look promising —
+# but the diagnostic is fast (~1-2 min) and clarifies what to expect from the
+# more expensive retrain comparisons.
+#
+# Usage:
+#
+#   ruby bin/diagnose-gloss-coverage                  # full curated/related.csv sweep
+#   ruby bin/diagnose-gloss-coverage --max-pairs 500  # smoke run
+#   ruby bin/diagnose-gloss-coverage --csv /tmp/coverage.csv   # also dump per-pair rows
+#
+# Reads the standard generated/ artifacts (Numberbatch, WordNet, Wiktionary
+# glosses); fail-closed on a missing one.
+
+$LOAD_PATH.unshift File.expand_path("../lib", __dir__)
+
+ENV.delete("RHYMECRIME_DATA_SOURCE")
+
+require "csv"
+require "optparse"
+require "set"
+
+require_relative "../lib/rhymecrime/dict/utils_rhyme"
+require_relative "../lib/rhymecrime/frontend"
+require_relative "../lib/rhymecrime/relatedness/signals"
+require_relative "../lib/rhymecrime/relatedness/score"
+
+options = {
+  csv_path: File.join(REPO_ROOT, "curated", "related.csv"),
+  max_pairs: nil,
+  output_csv: nil,
+}
+
+OptionParser.new do |opt|
+  opt.on("--csv-input PATH") { |v| options[:csv_path] = v }
+  opt.on("--max-pairs N", Integer) { |v| options[:max_pairs] = v }
+  opt.on("--csv PATH", "Also dump per-pair stats as CSV") { |v| options[:output_csv] = v }
+end.parse!
+
+# --- Source-scoped cache clear --------------------------------------------------
+# +bidirectional_gloss_contains?+, +gloss_word_token_set+, +sense_vectors+, and
+# +sense_vectors_morphy+ all memoize globally — and the cache keys do not include
+# the gloss-source flag, because under normal operation that flag is set once at
+# process start. The diagnostic flips the source for each scenario, so every
+# cache that holds gloss-derived data must be invalidated before the next pass.
+
+def reset_gloss_caches!
+  $gloss_token_set_cache = {}
+  $gloss_derivation_cache = {}
+  $gloss_negative_pair_cache = Set.new
+  $sense_vectors_cache = {}
+  $morphy_sv_cache = {}
+end
+
+# Force the +RHYMECRIME_GLOSS_SOURCE+ memoization to re-read the env var.
+def reset_gloss_source_memo!
+  # gloss_source_set memoizes on @gloss_source_set in the top-level singleton
+  # context where it was first called. main has its own @gloss_source_set; some
+  # other context (e.g. a class) might have its own copy but the diagnostic only
+  # ever calls these helpers from main's scope, so clearing main's instance var
+  # is sufficient.
+  TOPLEVEL_BINDING.eval("@gloss_source_set = nil")
+end
+
+# Switch the active gloss source and wipe every dependent cache so the next
+# evaluation pass walks fresh data.
+def with_gloss_source(source)
+  ENV["RHYMECRIME_GLOSS_SOURCE"] = source.to_s
+  reset_gloss_source_memo!
+  reset_gloss_caches!
+  yield
+end
+
+# --- CSV row classification (mirror spec/test_utils.rb so we stay apples-to- ---
+# apples with how related_spec evaluates predicate quality).
+
+def kind_class(kind)
+  k = kind.to_s.strip
+  case k
+  when "related" then :strong_pos
+  when "related_ish" then :ish_pos
+  when "unrelated" then :strong_neg
+  when "unrelated_ish" then :ish_neg
+  else :other
+  end
+end
+
+def kind_is_positive?(klass)
+  klass == :strong_pos || klass == :ish_pos
+end
+
+def kind_is_negative?(klass)
+  klass == :strong_neg || klass == :ish_neg
+end
+
+# Skip rows the predicate short-circuits (semantically promiscuous on either
+# side); same filter the trainer + spec use.
+def promiscuous_pair?(cue, rel)
+  semantically_promiscuous?(cue) || semantically_promiscuous?(rel) ||
+    semantically_promiscuous?(lemma(cue)) || semantically_promiscuous?(lemma(rel))
+end
+
+# --- Per-source per-pair signal extraction -------------------------------------
+
+def gloss_token_set_for(word)
+  ts = gloss_word_token_set(word)
+  ts.is_a?(Set) ? ts : Set.new(ts)
+end
+
+def pair_signals_for(cue, rel)
+  ps = PairSignals.new(cue, rel)
+  {
+    gloss_match: ps.gloss_match?,
+    sv_max: ps.sv_max,
+    sv_min: ps.sv_min,
+    sv_cue_count: ps.sv_cue_count,
+    sv_related_count: ps.sv_related_count,
+  }
+end
+
+# --- Run loader ---------------------------------------------------------------
+
+raw_rows = CSV.parse(File.read(options[:csv_path], encoding: "UTF-8"), headers: true)
+rows = raw_rows.each_with_index.filter_map do |r, i|
+  cue = r["cue"].to_s.strip
+  rel = r["related"].to_s.strip
+  kind = r["oughta be related?"].to_s.strip
+  next if cue.empty? || rel.empty?
+  klass = kind_class(kind)
+  next if klass == :other
+  # Stop-word pairs: predicate short-circuits, no signal in measuring them.
+  next if promiscuous_pair?(cue, rel)
+  { cue: cue, rel: rel, kind: kind, klass: klass, line: i + 2 }
+end
+rows = rows.first(options[:max_pairs]) if options[:max_pairs]
+
+puts "loaded #{rows.size} evaluable pairs from #{options[:csv_path]}"
+
+# --- Per-source word-level coverage (independent of pairs) --------------------
+# Touches the word-set in +rows+, not the full lexicon, so it stays cheap.
+
+unique_words = rows.flat_map { |r| [r[:cue], r[:rel]] }.uniq
+puts "unique words touched: #{unique_words.size}"
+
+wn_only_words = 0
+wk_only_words = 0
+both_source_words = 0
+neither_source_words = 0
+unique_words.each do |w|
+  with_gloss_source(:wordnet) { @wn_present = !gloss_token_set_for(w).empty? }
+  with_gloss_source(:wiktionary) { @wk_present = !gloss_token_set_for(w).empty? }
+  if @wn_present && @wk_present
+    both_source_words += 1
+  elsif @wn_present
+    wn_only_words += 1
+  elsif @wk_present
+    wk_only_words += 1
+  else
+    neither_source_words += 1
+  end
+end
+
+puts ""
+puts "=== headword coverage (#{unique_words.size} unique words on either side of an evaluable row) ==="
+[
+  ["both WN+WK", both_source_words],
+  ["WN only", wn_only_words],
+  ["WK only", wk_only_words],
+  ["neither", neither_source_words],
+].each do |label, n|
+  pct = unique_words.empty? ? 0.0 : 100.0 * n / unique_words.size
+  printf "  %-12s %5d  (%5.1f%%)\n", label, n, pct
+end
+
+# --- Per-pair scenarios -------------------------------------------------------
+
+def scenario_pass(rows, source_label)
+  with_gloss_source(source_label) do
+    rows.each do |r|
+      sig = pair_signals_for(r[:cue], r[:rel])
+      r[source_label] = sig
+    end
+  end
+end
+
+%i[wordnet wiktionary both].each do |src|
+  print "computing pair signals under source=#{src}... "
+  t0 = Time.now
+  scenario_pass(rows, src)
+  printf "done (%.1fs)\n", Time.now - t0
+end
+
+# --- Aggregate stats ----------------------------------------------------------
+
+def fmt_pct(num, denom)
+  denom.zero? ? "  n/a " : format("%5.1f%%", 100.0 * num / denom)
+end
+
+# +gloss_match?+ flip stats: BOTH vs WN-only.
+puts ""
+puts "=== gloss_match? deltas: BOTH vs WN-only (the ship-it diff) ==="
+buckets = Hash.new { |h, k| h[k] = { flip_to_true: 0, flip_to_false: 0, stay_true: 0, stay_false: 0 } }
+rows.each do |r|
+  wn = r[:wordnet][:gloss_match]
+  bo = r[:both][:gloss_match]
+  klass = r[:klass]
+  b = buckets[klass]
+  if wn && bo then b[:stay_true] += 1
+  elsif !wn && !bo then b[:stay_false] += 1
+  elsif !wn && bo then b[:flip_to_true] += 1
+  elsif wn && !bo then b[:flip_to_false] += 1
+  end
+end
+printf "%-15s %8s %8s %8s %8s %12s\n",
+  "kind", "stay_F", "stay_T", "→T (new)", "→F", "flip_T_rate"
+%i[strong_pos ish_pos strong_neg ish_neg].each do |klass|
+  b = buckets[klass]
+  total = b[:flip_to_true] + b[:flip_to_false] + b[:stay_true] + b[:stay_false]
+  printf "%-15s %8d %8d %8d %8d %12s\n",
+    klass.to_s,
+    b[:stay_false], b[:stay_true], b[:flip_to_true], b[:flip_to_false],
+    fmt_pct(b[:flip_to_true], total)
+end
+
+# Precision of the new flips: of the rows where WK pushed gloss_match from
+# false→true, how many were actually positives? (The signal is only useful if
+# it disproportionately fires on positives.)
+new_flip_total = 0
+new_flip_pos = 0
+new_flip_neg = 0
+rows.each do |r|
+  next if r[:wordnet][:gloss_match]
+  next unless r[:both][:gloss_match]
+  new_flip_total += 1
+  new_flip_pos += 1 if kind_is_positive?(r[:klass])
+  new_flip_neg += 1 if kind_is_negative?(r[:klass])
+end
+puts ""
+puts "=== precision of new gloss_match flips (false→true under BOTH that were false under WN-only) ==="
+puts "  total flips:    #{new_flip_total}"
+puts "  on positives:   #{new_flip_pos}  (#{fmt_pct(new_flip_pos, new_flip_total)})"
+puts "  on negatives:   #{new_flip_neg}  (#{fmt_pct(new_flip_neg, new_flip_total)})"
+if new_flip_pos + new_flip_neg < new_flip_total
+  other = new_flip_total - new_flip_pos - new_flip_neg
+  puts "  on other:       #{other}  (#{fmt_pct(other, new_flip_total)})"
+end
+
+# +gloss_match?+ stats under WK-only (sanity check that WK alone has signal —
+# tells us if WK is just adding noise on top of WN or carries real information).
+puts ""
+puts "=== gloss_match? rate by source (sanity) ==="
+%i[wordnet wiktionary both].each do |src|
+  pos_n = pos_match = neg_n = neg_match = 0
+  rows.each do |r|
+    if kind_is_positive?(r[:klass])
+      pos_n += 1
+      pos_match += 1 if r[src][:gloss_match]
+    elsif kind_is_negative?(r[:klass])
+      neg_n += 1
+      neg_match += 1 if r[src][:gloss_match]
+    end
+  end
+  printf "  source=%-10s positives matched %s  negatives matched %s\n",
+    src.to_s, fmt_pct(pos_match, pos_n), fmt_pct(neg_match, neg_n)
+end
+
+# Sense-vector deltas: how often does WK push sv_max higher than WN-only? By how much?
+puts ""
+puts "=== sv_max deltas: BOTH vs WN-only ==="
+%i[strong_pos ish_pos strong_neg ish_neg].each do |klass|
+  cls_rows = rows.select { |r| r[:klass] == klass }
+  next if cls_rows.empty?
+  diffs = cls_rows.map { |r| r[:both][:sv_max] - r[:wordnet][:sv_max] }
+  pos_diff = diffs.count(&:positive?)
+  zero_diff = diffs.count(&:zero?)
+  neg_diff = diffs.count(&:negative?)
+  mean_pos = pos_diff.zero? ? 0 : (diffs.select(&:positive?).sum.to_f / pos_diff)
+  printf "  %-12s n=%5d  ↑sv_max=%4d (mean+%5.2f)  =sv_max=%4d  ↓sv_max=%4d\n",
+    klass.to_s, cls_rows.size, pos_diff, mean_pos, zero_diff, neg_diff
+end
+
+# Coverage of pairs where neither source had any sense vector vs at least one.
+no_sv_under_wn = 0
+no_sv_under_either = 0
+sv_added_by_wk = 0
+rows.each do |r|
+  cue_wn = r[:wordnet][:sv_cue_count]
+  rel_wn = r[:wordnet][:sv_related_count]
+  cue_bo = r[:both][:sv_cue_count]
+  rel_bo = r[:both][:sv_related_count]
+  no_sv_under_wn += 1 if cue_wn.zero? && rel_wn.zero?
+  no_sv_under_either += 1 if cue_bo.zero? && rel_bo.zero?
+  sv_added_by_wk += 1 if (cue_wn.zero? || rel_wn.zero?) && cue_bo.positive? && rel_bo.positive?
+end
+puts ""
+puts "=== sense-vector availability (per pair) ==="
+puts "  pairs with no sense vectors under WN-only:  #{no_sv_under_wn}  (#{fmt_pct(no_sv_under_wn, rows.size)})"
+puts "  pairs with no sense vectors under BOTH:     #{no_sv_under_either}  (#{fmt_pct(no_sv_under_either, rows.size)})"
+puts "  pairs that WK turned into both-sides-have-sv: #{sv_added_by_wk}  (#{fmt_pct(sv_added_by_wk, rows.size)})"
+
+# Optional per-pair CSV dump.
+if options[:output_csv]
+  CSV.open(options[:output_csv], "w") do |csv|
+    csv << %w[
+      cue rel kind klass line
+      gloss_match_wn gloss_match_wk gloss_match_both
+      sv_max_wn sv_max_wk sv_max_both sv_min_wn sv_min_wk sv_min_both
+      sv_cue_count_wn sv_cue_count_wk sv_cue_count_both
+      sv_related_count_wn sv_related_count_wk sv_related_count_both
+    ]
+    rows.each do |r|
+      w = r[:wordnet]; k = r[:wiktionary]; b = r[:both]
+      csv << [
+        r[:cue], r[:rel], r[:kind], r[:klass], r[:line],
+        w[:gloss_match], k[:gloss_match], b[:gloss_match],
+        w[:sv_max], k[:sv_max], b[:sv_max], w[:sv_min], k[:sv_min], b[:sv_min],
+        w[:sv_cue_count], k[:sv_cue_count], b[:sv_cue_count],
+        w[:sv_related_count], k[:sv_related_count], b[:sv_related_count],
+      ]
+    end
+  end
+  puts ""
+  puts "wrote per-pair CSV to #{options[:output_csv]}"
+end

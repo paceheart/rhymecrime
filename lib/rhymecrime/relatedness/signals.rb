@@ -42,7 +42,7 @@ $SENSE_VECTOR_THRESHOLD = 10
 $SENSE_VECTOR_MIN_FLOOR = 5
 $SENSE_VECTOR_MORPHY_FLOOR = 13
 $SENSE_VECTOR_MIN_BASE = 6
-$SENSE_VECTOR_MAX_SENSES = 4
+$SENSE_VECTOR_MAX_SENSES = (ENV["RHYMECRIME_SENSE_VECTOR_CAP"] || "4").to_i
 # Asymmetric sense-vector bypass: when one direction is very strong (e.g. one word's
 # WordNet definitions clearly describe the other) the reverse direction is often
 # diluted by polysemy. Accept as related when +sv_max >= ASYMMETRIC_MAX+ and
@@ -570,12 +570,20 @@ def model_sense_sense_max_cosine(word1, word2, headword_cos = nil)
   ((sa.dot(sb.transpose)).max * 100).round
 end
 
-# --- WordNet gloss containment (high-precision polysemy rescue) ---
+# --- WordNet + Wiktionary gloss containment (high-precision polysemy rescue) ---
 # Checks if word1 (or a validated derivational form) literally appears as a word
-# in any WordNet definition of word2, or vice versa.
+# in any WordNet *or* Wiktionary definition of word2, or vice versa. The two
+# corpora cover overlapping but non-identical headwords and senses, so taking
+# the union gives more rescue opportunities (Wiktionary often has senses for
+# slang / neologisms / domain terms WordNet lacks; WordNet has classical
+# definitions Wiktionary phrases differently). Pointer-only Wiktionary senses
+# ("Alternative spelling of X") are filtered out at build time in
+# +collect_definitional_glosses+, so the gloss text contributed here is
+# definitional on both sides.
 
 $gloss_derivation_cache = {}
-# All lowercase gloss tokens for a headword (union of every synset gloss); built once per word.
+# All lowercase gloss tokens for a headword (union of every WN synset gloss + every
+# Wiktionary definitional gloss); built once per word.
 $gloss_token_set_cache = {}
 # Pairs (sorted key) known not to match gloss containment either direction.
 $gloss_negative_pair_cache = Set.new
@@ -583,10 +591,43 @@ $gloss_negative_pair_cache = Set.new
 def gloss_word_token_set(lemma_word)
   $gloss_token_set_cache[lemma_word] ||= begin
     tokens = Set.new
+    if gloss_source_use_wordnet?
+      WordNet::Lemma.find_all(lemma_word).each do |lemma|
+        lemma.synsets.each do |synset|
+          synset.gloss.downcase.scan(/[a-z]+/).each { |tok| tokens << tok }
+        end
+      end
+    end
+    wiktionary_glosses_for(lemma_word).each do |g|
+      g.to_s.downcase.scan(/[a-z]+/).each { |tok| tokens << tok }
+    end
+    tokens
+  end
+end
+
+# Source-restricted variants used by the +wn_/wk_+ split features in PairSignals.
+# These bypass +RHYMECRIME_GLOSS_SOURCE+ — the split features always study each
+# source independently regardless of the runtime gate, which is what the +D+
+# experiment (separate features) measures.
+$gloss_token_set_cache_wn = {}
+def gloss_word_token_set_wn_only(lemma_word)
+  $gloss_token_set_cache_wn[lemma_word] ||= begin
+    tokens = Set.new
     WordNet::Lemma.find_all(lemma_word).each do |lemma|
       lemma.synsets.each do |synset|
         synset.gloss.downcase.scan(/[a-z]+/).each { |tok| tokens << tok }
       end
+    end
+    tokens
+  end
+end
+
+$gloss_token_set_cache_wk = {}
+def gloss_word_token_set_wk_only(lemma_word)
+  $gloss_token_set_cache_wk[lemma_word] ||= begin
+    tokens = Set.new
+    wiktionary_glosses_raw_for(lemma_word).each do |g|
+      g.to_s.downcase.scan(/[a-z]+/).each { |tok| tokens << tok }
     end
     tokens
   end
@@ -626,10 +667,43 @@ def bidirectional_gloss_contains?(word1, word2)
   hit
 end
 
-# --- WordNet gloss-vector sense embeddings ---
-# For each WordNet sense, averages Numberbatch vectors of content words in
-# the definition to create a sense-specific embedding. Handles polysemy by
-# finding the best-matching sense pair.
+# Source-restricted +bidirectional_gloss_contains?+ variants for the +wn_/wk_+
+# split features. Use their own negative caches so a +false+ under one source
+# doesn't poison the other (a pair with no WN signal can still match through WK).
+$gloss_negative_pair_cache_wn = Set.new
+$gloss_negative_pair_cache_wk = Set.new
+
+def bidirectional_gloss_contains_wn_only?(word1, word2)
+  pair_key = word1 < word2 ? "#{word1}\t#{word2}" : "#{word2}\t#{word1}"
+  return false if $gloss_negative_pair_cache_wn.include?(pair_key)
+  d1 = $gloss_derivation_cache[word1] ||= validated_derivations(word1)
+  d2 = $gloss_derivation_cache[word2] ||= validated_derivations(word2)
+  t1 = gloss_word_token_set_wn_only(word1)
+  t2 = gloss_word_token_set_wn_only(word2)
+  hit = d1.any? { |d| t2.include?(d) } || d2.any? { |d| t1.include?(d) }
+  $gloss_negative_pair_cache_wn.add(pair_key) unless hit
+  hit
+end
+
+def bidirectional_gloss_contains_wk_only?(word1, word2)
+  pair_key = word1 < word2 ? "#{word1}\t#{word2}" : "#{word2}\t#{word1}"
+  return false if $gloss_negative_pair_cache_wk.include?(pair_key)
+  d1 = $gloss_derivation_cache[word1] ||= validated_derivations(word1)
+  d2 = $gloss_derivation_cache[word2] ||= validated_derivations(word2)
+  t1 = gloss_word_token_set_wk_only(word1)
+  t2 = gloss_word_token_set_wk_only(word2)
+  hit = d1.any? { |d| t2.include?(d) } || d2.any? { |d| t1.include?(d) }
+  $gloss_negative_pair_cache_wk.add(pair_key) unless hit
+  hit
+end
+
+# --- WordNet + Wiktionary gloss-vector sense embeddings ---
+# For each WordNet sense and each Wiktionary definitional sense, averages
+# Numberbatch vectors of content words in the definition to create a
+# sense-specific embedding. Handles polysemy by finding the best-matching
+# sense pair. WordNet senses are walked first so that under a tight
+# +max_senses+ cap the (usually shorter, hand-curated) WN glosses are picked
+# first; Wiktionary senses fill the remaining slots when the cap permits.
 
 GLOSS_STOP_WORDS = Set.new(%w[
   a an the is are was were be been being of in on at by to for or and not nor
@@ -640,12 +714,33 @@ GLOSS_STOP_WORDS = Set.new(%w[
   through during up down out off away back make made used one
 ]).freeze
 
+# Embed a single gloss text as the L2-normalized average of Numberbatch vectors of
+# its content words (gloss tokens minus +GLOSS_STOP_WORDS+, mapped through +lemma+
+# when the headword is in the dict). Returns a +Numo::SFloat(dim)+ row vector or
+# +nil+ when fewer than 2 content words are in vocabulary or the average vanishes.
+# Shared by +sense_vectors+ (WordNet path) and the Wiktionary extension path so the
+# two corpora produce comparable rows that stack into a single matrix.
+def gloss_text_to_sense_vector(gloss_text, nb)
+  content_words = gloss_text.to_s.downcase.scan(/[a-z]+/) - GLOSS_STOP_WORDS.to_a
+  embeds = content_words.filter_map do |gw|
+    gk = word_dict_includes_headword?(gw) ? hyphens_to_underscores(lemma(gw)) : hyphens_to_underscores(gw)
+    nb[gk]
+  end
+  return nil if embeds.size < 2
+  stacked = Numo::SFloat.vstack(embeds)
+  avg = stacked.sum(0)
+  mag = Math.sqrt(avg.dot(avg))
+  return nil if mag < 1e-9
+  avg / mag
+end
+
 # Cached per-word sense-vector matrix: either a +Numo::SFloat(K, dim)+ of K
-# L2-normalized sense vectors (one row per WordNet synset whose gloss contained
-# at least 2 Numberbatch-indexed content words) or +nil+ when the word has no
-# qualifying senses. Returning a single 2-D matrix lets callers fuse K per-sense
-# cosines into one BLAS +dot+ call instead of a Ruby +each+ + scalar-loop dot
-# per sense (see +directional_sense_cosines+).
+# L2-normalized sense vectors (one row per WordNet synset *and* one row per
+# Wiktionary definitional sense whose gloss contained at least 2 Numberbatch-
+# indexed content words, capped at +max_senses+ rows total) or +nil+ when the
+# word has no qualifying senses in either corpus. Returning a single 2-D matrix
+# lets callers fuse K per-sense cosines into one BLAS +dot+ call instead of a
+# Ruby +each+ + scalar-loop dot per sense (see +directional_sense_cosines+).
 $sense_vectors_cache = {}
 def sense_vectors(word, max_senses = $SENSE_VECTOR_MAX_SENSES)
   key = [word, max_senses]
@@ -653,23 +748,30 @@ def sense_vectors(word, max_senses = $SENSE_VECTOR_MAX_SENSES)
 
   nb = numberbatch_table
   rows = []
-  WordNet::Lemma.find_all(word).each do |lemma|
-    lemma.synsets.each do |synset|
-      break if rows.size >= max_senses
-      content_words = synset.gloss.downcase.scan(/[a-z]+/) - GLOSS_STOP_WORDS.to_a
-      embeds = content_words.filter_map do |gw|
-        gk = word_dict_includes_headword?(gw) ? hyphens_to_underscores(lemma(gw)) : hyphens_to_underscores(gw)
-        nb[gk]
+  fill_wn = lambda do
+    next unless gloss_source_use_wordnet?
+    WordNet::Lemma.find_all(word).each do |lemma|
+      lemma.synsets.each do |synset|
+        break if rows.size >= max_senses
+        v = gloss_text_to_sense_vector(synset.gloss, nb)
+        rows << v if v
       end
-      next if embeds.size < 2
-      stacked = Numo::SFloat.vstack(embeds)
-      avg = stacked.sum(0)
-      mag = Math.sqrt(avg.dot(avg))
-      next if mag < 1e-9
-      avg /= mag
-      rows << avg
+      break if rows.size >= max_senses
     end
-    break if rows.size >= max_senses
+  end
+  fill_wk = lambda do
+    wiktionary_glosses_for(word).each do |g|
+      break if rows.size >= max_senses
+      v = gloss_text_to_sense_vector(g, nb)
+      rows << v if v
+    end
+  end
+  if gloss_source_wk_first?
+    fill_wk.call
+    fill_wn.call if rows.size < max_senses
+  else
+    fill_wn.call
+    fill_wk.call if rows.size < max_senses
   end
 
   result = rows.empty? ? nil : Numo::SFloat.vstack(rows)
@@ -705,9 +807,79 @@ def directional_sense_cosines(word1, word2)
   [best_1to2, best_2to1]
 end
 
+# Source-restricted +sense_vectors+ variants for the +wn_/wk_+ split features.
+# Same +max_senses+ cap as +sense_vectors+ but only walks one source. Bypasses
+# +RHYMECRIME_GLOSS_SOURCE+ so the split features measure each source's signal
+# regardless of the runtime gate (parallel to +gloss_word_token_set_wn_only+ etc).
+$sense_vectors_cache_wn = {}
+def sense_vectors_wn_only(word, max_senses = $SENSE_VECTOR_MAX_SENSES)
+  key = [word, max_senses]
+  return $sense_vectors_cache_wn[key] if $sense_vectors_cache_wn.key?(key)
+  nb = numberbatch_table
+  rows = []
+  WordNet::Lemma.find_all(word).each do |lemma|
+    lemma.synsets.each do |synset|
+      break if rows.size >= max_senses
+      v = gloss_text_to_sense_vector(synset.gloss, nb)
+      rows << v if v
+    end
+    break if rows.size >= max_senses
+  end
+  result = rows.empty? ? nil : Numo::SFloat.vstack(rows)
+  $sense_vectors_cache_wn[key] = result
+  result
+end
+
+$sense_vectors_cache_wk = {}
+def sense_vectors_wk_only(word, max_senses = $SENSE_VECTOR_MAX_SENSES)
+  key = [word, max_senses]
+  return $sense_vectors_cache_wk[key] if $sense_vectors_cache_wk.key?(key)
+  nb = numberbatch_table
+  rows = []
+  wiktionary_glosses_raw_for(word).each do |g|
+    break if rows.size >= max_senses
+    v = gloss_text_to_sense_vector(g, nb)
+    rows << v if v
+  end
+  result = rows.empty? ? nil : Numo::SFloat.vstack(rows)
+  $sense_vectors_cache_wk[key] = result
+  result
+end
+
+# Source-restricted directional sense-vector cosines (parallel to
+# +directional_sense_cosines+). Returns +[cue→related, related→cue]+ centiles
+# 0..100. Used by +PairSignals#wn_sv_*+ / +#wk_sv_*+.
+def directional_sense_cosines_for_source(word1, word2, source_loader)
+  nb = numberbatch_table
+  best_1to2 = 0
+  v2_raw = nb[hyphens_to_underscores(word2)]
+  if v2_raw
+    m1 = source_loader.call(word1)
+    if m1
+      best = m1.dot(v2_raw).max.to_f
+      score = (best * 100).round
+      best_1to2 = score if score > 0
+    end
+  end
+
+  best_2to1 = 0
+  v1_raw = nb[hyphens_to_underscores(word1)]
+  if v1_raw
+    m2 = source_loader.call(word2)
+    if m2
+      best = m2.dot(v1_raw).max.to_f
+      score = (best * 100).round
+      best_2to1 = score if score > 0
+    end
+  end
+
+  [best_1to2, best_2to1]
+end
+
 # Morphy-derived sense-vector matrix (or +nil+), analogous to +sense_vectors+
 # but resolves inflected forms (plurals, verb conjugations) through WordNet's
-# morphy. Same return shape so both feed the same +directional_sense_cosines+
+# morphy and also consults Wiktionary glosses for the morphy-resolved forms.
+# Same return shape so both feed the same +directional_sense_cosines+
 # matrix-dot fast path.
 $morphy_sv_cache = {}
 def sense_vectors_morphy(word, max_senses = $SENSE_VECTOR_MAX_SENSES)
@@ -717,23 +889,30 @@ def sense_vectors_morphy(word, max_senses = $SENSE_VECTOR_MAX_SENSES)
   rows = []
   morphs.each do |form|
     break if rows.size >= max_senses
-    WordNet::Lemma.find_all(form).each do |lemma|
-      break if rows.size >= max_senses
-      lemma.synsets.each do |synset|
+    fill_wn = lambda do
+      next unless gloss_source_use_wordnet?
+      WordNet::Lemma.find_all(form).each do |lemma|
         break if rows.size >= max_senses
-        content_words = synset.gloss.downcase.scan(/[a-z]+/) - GLOSS_STOP_WORDS.to_a
-        embeds = content_words.filter_map do |gw|
-          gk = word_dict_includes_headword?(gw) ? hyphens_to_underscores(lemma(gw)) : hyphens_to_underscores(gw)
-          nb[gk]
+        lemma.synsets.each do |synset|
+          break if rows.size >= max_senses
+          v = gloss_text_to_sense_vector(synset.gloss, nb)
+          rows << v if v
         end
-        next if embeds.size < 2
-        stacked = Numo::SFloat.vstack(embeds)
-        avg = stacked.sum(0)
-        mag = Math.sqrt(avg.dot(avg))
-        next if mag < 1e-9
-        avg /= mag
-        rows << avg
       end
+    end
+    fill_wk = lambda do
+      wiktionary_glosses_for(form).each do |g|
+        break if rows.size >= max_senses
+        v = gloss_text_to_sense_vector(g, nb)
+        rows << v if v
+      end
+    end
+    if gloss_source_wk_first?
+      fill_wk.call
+      fill_wn.call if rows.size < max_senses
+    else
+      fill_wn.call
+      fill_wk.call if rows.size < max_senses
     end
   end
   result = rows.empty? ? nil : Numo::SFloat.vstack(rows)
@@ -1064,6 +1243,73 @@ class PairSignals
     return @sv_related_count if defined?(@sv_related_count)
     sv = sense_vectors(@related)
     @sv_related_count = sv ? sv.shape[0] : 0
+  end
+
+  # --- Source-split features for the +D+ experiment (separate +wn_/wk_+ features) ---
+  # These always read each source independently regardless of +RHYMECRIME_GLOSS_SOURCE+,
+  # so the GBT can learn per-source weights when the trainer presents both as features.
+  # Default-zero / default-false when the relevant source has no data for the pair —
+  # the existing +both_sv+ / +sv_count_*+ gates teach the GBT to discount missing-data
+  # rows; the same pattern works for the source-split versions through the +wn_both_sv+
+  # / +wk_both_sv+ availability flags below.
+
+  def wn_gloss_match?
+    return @wn_gloss_match if defined?(@wn_gloss_match)
+    @wn_gloss_match = bidirectional_gloss_contains_wn_only?(@cue, @related)
+  end
+
+  def wk_gloss_match?
+    return @wk_gloss_match if defined?(@wk_gloss_match)
+    @wk_gloss_match = bidirectional_gloss_contains_wk_only?(@cue, @related)
+  end
+
+  def wn_sv_directional
+    @wn_sv_directional ||= directional_sense_cosines_for_source(
+      @cue, @related, method(:sense_vectors_wn_only)
+    )
+  end
+
+  def wk_sv_directional
+    @wk_sv_directional ||= directional_sense_cosines_for_source(
+      @cue, @related, method(:sense_vectors_wk_only)
+    )
+  end
+
+  def wn_sv_max ; wn_sv_directional.max ; end
+  def wn_sv_min ; wn_sv_directional.min ; end
+  def wk_sv_max ; wk_sv_directional.max ; end
+  def wk_sv_min ; wk_sv_directional.min ; end
+
+  def wn_sv_cue_count
+    return @wn_sv_cue_count if defined?(@wn_sv_cue_count)
+    sv = sense_vectors_wn_only(@cue)
+    @wn_sv_cue_count = sv ? sv.shape[0] : 0
+  end
+
+  def wn_sv_related_count
+    return @wn_sv_related_count if defined?(@wn_sv_related_count)
+    sv = sense_vectors_wn_only(@related)
+    @wn_sv_related_count = sv ? sv.shape[0] : 0
+  end
+
+  def wk_sv_cue_count
+    return @wk_sv_cue_count if defined?(@wk_sv_cue_count)
+    sv = sense_vectors_wk_only(@cue)
+    @wk_sv_cue_count = sv ? sv.shape[0] : 0
+  end
+
+  def wk_sv_related_count
+    return @wk_sv_related_count if defined?(@wk_sv_related_count)
+    sv = sense_vectors_wk_only(@related)
+    @wk_sv_related_count = sv ? sv.shape[0] : 0
+  end
+
+  def wn_both_have_sense_vectors?
+    wn_sv_cue_count > 0 && wn_sv_related_count > 0
+  end
+
+  def wk_both_have_sense_vectors?
+    wk_sv_cue_count > 0 && wk_sv_related_count > 0
   end
 
   # Morphy-resolved directional cosines (0..100), or +nil+ when neither side needed

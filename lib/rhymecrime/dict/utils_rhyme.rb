@@ -89,6 +89,21 @@ RELATEDNESS_CLASSIFIER_FILENAME = "relatedness_classifier.json"
 # MessagePack: { model:, dim:, headword: {lemma=>vec}, senses: {lemma=>[vec,…]} }.
 # Provides the modern-embedding signals in +PairSignals+ that supplement Numberbatch.
 MODEL_SENSE_VECTORS_FILENAME = "model_sense_vectors.msgpack"
+# Wiktionary (Kaikki) per-headword definitional glosses, parallel to (and merged with) the
+# WordNet synset glosses consulted by the gloss-token, gloss-citation, and per-sense embedding
+# code paths. Built by +load_wiktionary+ at dict-build time from the same filtered Kaikki dump
+# the rest of +wiktionary.rb+ already loads, then serialized as MessagePack
+# +{ headword => [gloss_text_1, gloss_text_2, ...] }+ where each entry is one Kaikki sense's
+# first gloss (alt-of / form-of pointer senses are filtered out so only definitional text
+# survives — the alt-of pointers already feed +corpus_variants+).
+#
+# Loaded lazily into +$wiktionary_glosses+ on first call to +wiktionary_glosses_for+, with the
+# usual nil-loader / +false+-sentinel pattern so a missing file (fresh checkout pre-dict-build,
+# or Lambda runtime where corpora aren't shipped) collapses to "no glosses" instead of raising.
+# Same conservative-on-no-signal contract as +gloss_tokens_for_word+ in +crime.rb+ and
+# +gloss_word_token_set+ in +signals.rb+: callers default to the WordNet-only behavior when
+# this map is empty.
+WIKTIONARY_GLOSSES_FILENAME = "wiktionary_glosses.msgpack"
 # Word-frequency rare ceiling: treat as rare when frequency is at or below this (see rare? in crime.rb).
 RARE_FREQ_MAX = 4
 
@@ -2097,6 +2112,7 @@ def load_word_dict()
   $lemma_to_words = nil
   $word_to_lemma = nil
   $word_to_semantic_base = nil
+  $wiktionary_glosses = nil
   $thematically_related_memo = nil
   word_dict
 end
@@ -2327,6 +2343,7 @@ def load_word_dict_msgpack
   $lemma_to_words = nil
   $word_to_lemma = nil
   $word_to_semantic_base = nil
+  $wiktionary_glosses = nil
   $thematically_related_memo = nil
   word_dict
 end
@@ -2361,6 +2378,110 @@ def load_rime_dict_msgpack
   out = {}
   raw.each { |rime, words| out[rime.to_s] = (words || []).map(&:to_s) }
   out
+end
+
+# Source-selection ablation gate. Env var +RHYMECRIME_GLOSS_SOURCE+ ∈ {+wordnet+, +wiktionary+,
+# +both+} (default +both+); the four gloss-using code paths (+gloss_word_token_set+ /
+# +sense_vectors+ / +sense_vectors_morphy+ in +signals.rb+, +gloss_tokens_for_word+ in
+# +crime.rb+, +combined_glosses_for+ in +bin/dump-sense-glosses+) consult these helpers
+# before walking either corpus, so flipping the env var produces a clean A/B without code
+# edits. Used to retrain WN-only or WK-only baselines for direct classifier comparisons —
+# see +bin/diagnose-gloss-coverage+ and the experimental program around the Wiktionary-
+# glosses extension. Memoized at first call: changing the env var mid-process won't take
+# effect (the four paths cache token sets and sense-vector matrices keyed on word, not on
+# source — a fresh process is the boundary).
+def gloss_source_set
+  @gloss_source_set ||= begin
+    raw = ENV["RHYMECRIME_GLOSS_SOURCE"].to_s.strip.downcase
+    case raw
+    when "", "both" then Set[:wordnet, :wiktionary]
+    when "wordnet", "wn" then Set[:wordnet]
+    when "wiktionary", "wk", "kaikki" then Set[:wiktionary]
+    else
+      warn "RHYMECRIME_GLOSS_SOURCE=#{raw.inspect} not recognized; defaulting to both"
+      Set[:wordnet, :wiktionary]
+    end
+  end
+end
+
+def gloss_source_use_wordnet?
+  gloss_source_set.include?(:wordnet)
+end
+
+def gloss_source_use_wiktionary?
+  gloss_source_set.include?(:wiktionary)
+end
+
+# Source ordering for the cap-bounded sense-vector / MPNet-item paths
+# (+sense_vectors+, +sense_vectors_morphy+ in +signals.rb+, +combined_glosses_for+
+# in +bin/dump-sense-glosses+). When both sources have more senses than the cap,
+# the source listed first eats the slots; the other only contributes if the first
+# leaves room. Default +wn-first+ matches the original integration; flip to
+# +wk-first+ via +RHYMECRIME_GLOSS_ORDER=wk-first+ to test whether the trained
+# classifier prefers Wiktionary's denser per-word sense pool.
+# The token-union and pooled-definition paths (+gloss_word_token_set+,
+# +gloss_tokens_for_word+, +def_cos+) are unaffected — they consume both sources
+# fully rather than bumping into a cap.
+def gloss_source_wk_first?
+  @gloss_source_wk_first ||= (ENV["RHYMECRIME_GLOSS_ORDER"].to_s.strip.downcase == "wk-first") ? :yes : :no
+  @gloss_source_wk_first == :yes
+end
+
+# Lazy +$wiktionary_glosses+ load. Map shape is +{ headword => [gloss_text, ...] }+ where
+# each entry is one Kaikki sense's first gloss (alt-of / form-of pointer senses excluded
+# at build time by +load_wiktionary+ so only definitional text survives). Missing-file
+# collapse to a +false+ sentinel so callers don't pay a +stat+ on every lookup; the
+# read accessor +wiktionary_glosses_for+ unwraps the sentinel back to an empty array.
+$wiktionary_glosses = nil
+def load_wiktionary_glosses!
+  path = generated_dict_path(WIKTIONARY_GLOSSES_FILENAME)
+  $wiktionary_glosses = File.exist?(path) ? MessagePackUtils.load_and_unpack(path) : false
+end
+
+# Returns +Array<String>+ of Wiktionary glosses for +word+ (one entry per definitional sense
+# in the filtered Kaikki dump), or +[]+ when the headword has no Wiktionary glosses, the
+# msgpack isn't on disk yet, or +RHYMECRIME_GLOSS_SOURCE+ excludes Wiktionary. Same
+# conservative no-signal contract as +gloss_tokens_for_word+ in +crime.rb+: callers fall
+# back to WordNet-only behavior when this returns empty.
+def wiktionary_glosses_for(word)
+  return [] if word.nil? || word.to_s.empty?
+  return [] unless gloss_source_use_wiktionary?
+  load_wiktionary_glosses! if $wiktionary_glosses.nil?
+  map = $wiktionary_glosses
+  return [] unless map
+  map[word.to_s] || []
+end
+
+# Source-agnostic Wiktionary accessor: bypasses +RHYMECRIME_GLOSS_SOURCE+ entirely.
+# Used by the +wn_/wk_+ split features (+wn_gloss_match?+, +wk_sv_max+, ...) which
+# always read each source independently to study its individual contribution. The
+# regular +wiktionary_glosses_for+ above is the gate-respecting reader for the
+# combined +gloss_match?+ / +sense_vectors+ paths and the runtime hot path.
+def wiktionary_glosses_raw_for(word)
+  return [] if word.nil? || word.to_s.empty?
+  load_wiktionary_glosses! if $wiktionary_glosses.nil?
+  map = $wiktionary_glosses
+  return [] unless map
+  map[word.to_s] || []
+end
+
+# Save the headword → [gloss, ...] map as +WIKTIONARY_GLOSSES_FILENAME+. Called from
+# +rebuild_rhymecrime_dictionaries+ alongside the other generated/-msgpack writers.
+# Drops empty headword entries so the file size is bounded by the headword count that
+# actually carries gloss text.
+def save_wiktionary_glosses!(glosses_map)
+  ensure_generated_dict_dir!
+  path = generated_dict_path_under_dict_dir(WIKTIONARY_GLOSSES_FILENAME)
+  obj = {}
+  glosses_map.each do |word, glosses|
+    next if word.nil? || word.empty?
+    next if glosses.nil? || glosses.empty?
+    obj[word] = glosses
+  end
+  MessagePackUtils.pack_and_save(path, obj)
+  size_mb = (File.size(path).to_f / 1024 / 1024).round(2)
+  total_glosses = obj.each_value.sum(&:size)
+  puts "Wrote #{obj.size} headwords (#{total_glosses} glosses) to #{WIKTIONARY_GLOSSES_FILENAME} (#{size_mb} MB)"
 end
 
 # Emit the runtime +word → canonical_lemma+ msgpack consumed by +word_to_lemma+.

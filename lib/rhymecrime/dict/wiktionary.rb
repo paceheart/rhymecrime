@@ -41,7 +41,7 @@ end
 
 # Load kaikki.org filtered JSONL.
 # Returns [pron_hash, forms_map, pos_map, kaikki_verb_morph, kaikki_capitalized_only,
-#          kaikki_variant_map, kaikki_obsolete_alt_of_only]
+#          kaikki_variant_map, kaikki_obsolete_alt_of_only, kaikki_glosses_map]
 #   pron_hash: { word => [Pronunciation, ...] }  (same format as load_cmudict)
 #   forms_map: { base_word => [[inflected_form, base_word], ...] }
 #   pos_map: { word => Set<String> } union of Kaikki "pos" per lemma (Layer A ∩ WordNet in dict.rb)
@@ -58,12 +58,21 @@ end
 #     JSONL row was purely +alt-of obsolete/archaic/dated → target+. Paradigm contributions
 #     (forms_map, pron_hash, pos_map, verb_morph) are already suppressed in this loader; dict.rb
 #     additionally prunes the headword from +word_dict+ when the target survives the build.
+#   kaikki_glosses_map: { headword => [gloss_text_1, gloss_text_2, ...] } definitional glosses
+#     (one per Kaikki sense's first +glosses+ entry). Pointer senses (alt-of / form-of /
+#     misspelling) are filtered out so the map carries definitional text only — those pointer
+#     phrases ("Alternative spelling of X.", "Plural of Y.") would be noise in the gloss-token
+#     and per-sense embedding consumers (+gloss_word_token_set+ / +sense_vectors+ /
+#     +gloss_tokens_for_word+ / +bin/dump-sense-glosses+) that this map feeds. Mirrors the
+#     WordNet synset gloss surface that those consumers already use; serialized to
+#     +generated/wiktionary_glosses.msgpack+ by +dict.rb+ and read back at offline-compute
+#     time via +wiktionary_glosses_for+.
 def load_wiktionary
   path = WIKTIONARY_DATA_PATH
   unless File.exist?(path)
     puts "Wiktionary data not found at #{path}; skipping."
     m = empty_kaikki_verb_morphology
-    return [{}, {}, {}, m, Set.new, {}, {}]
+    return [{}, {}, {}, m, Set.new, {}, {}, {}]
   end
 
   pron_hash = Hash.new { |h, k| h[k] = [] }
@@ -73,6 +82,7 @@ def load_wiktionary
   kaikki_has_capitalized = Set.new
   kaikki_has_lowercase = Set.new
   variant_map = Hash.new { |h, k| h[k] = [] }
+  glosses_map = Hash.new { |h, k| h[k] = [] }
   # Kaikki splits multi-POS words across rows (e.g. +asse+ has an "Obsolete spelling of ass"
   # noun row AND a "Cape fox" rare-noun row). A word is classified obsolete-only iff _every_
   # row for it was obsolete-only. We maintain that as: +obsolete_only_candidate[word] = target+
@@ -142,6 +152,11 @@ def load_wiktionary
       # (many of the "Alternative spelling of X" stubs have no IPA of their own),
       # so we process them before the sounds gate.
       collect_variant_senses(obj, word, variant_map)
+      # Definitional glosses (per-sense, pointer senses skipped). Emitted regardless
+      # of pronunciation availability for the same reason as +collect_variant_senses+:
+      # downstream readers (+wiktionary_glosses_for+) only need the headword keyed
+      # text, and the entries with no IPA still carry useful definitional content.
+      collect_definitional_glosses(obj, word, glosses_map)
 
       sounds = obj["sounds"]
       if sounds && !sounds.empty?
@@ -187,7 +202,9 @@ def load_wiktionary
   puts "Wiktionary: #{kaikki_capitalized_only.size} headwords only ever capitalized (proper-noun signal)"
   puts "Wiktionary: #{variant_map.size} headwords with alt-spelling / variant pointers"
   puts "Wiktionary: #{obsolete_only_candidate.size} obsolete-only alt-of headwords (suppressed paradigm, queued for word_dict prune)"
-  [pron_hash, forms_map, pos_map, verb_morph, kaikki_capitalized_only, variant_map, obsolete_only_candidate]
+  total_glosses = glosses_map.each_value.sum(&:size)
+  puts "Wiktionary: #{glosses_map.size} headwords with #{total_glosses} definitional glosses"
+  [pron_hash, forms_map, pos_map, verb_morph, kaikki_capitalized_only, variant_map, obsolete_only_candidate, glosses_map]
 end
 
 # Sense-tag whitelist / blacklist for classifying +alt_of+ pointers as genuine spelling
@@ -362,6 +379,50 @@ def collect_variant_senses(obj, word, variant_map)
       add_variant_evidence(variant_map, word, target, source, synthetic_tags, seen)
       break
     end
+  end
+end
+
+# Tag classes that mark a sense as a *pointer* to another headword rather than carrying its
+# own definitional content ("Alternative spelling of X.", "Plural of Y.", "Misspelling of Z.").
+# We exclude such senses from the definitional gloss map because their gloss text is not
+# semantic content about the headword itself — it's a redirect — and it would be noise in
+# every gloss-token / per-sense embedding consumer downstream.
+DEFINITIONAL_GLOSS_REJECT_TAGS = Set.new(%w[
+  alt-of form-of misspelling abbreviation acronym initialism clipping contraction
+  ellipsis symbol pronunciation-spelling
+]).freeze
+
+# Minimum gloss length (post-strip) for inclusion in the definitional map. Glosses
+# shorter than this are dropped: empirically the <=15-char bucket is dominated by
+# tautological "Not X." / "A X." patterns and overly generic 1-word definitions
+# that add noise to gloss-containment and pooled-definition embedding signals
+# without supplying real semantic content. Default 0 (no length filter) preserves
+# pre-existing behavior; set +RHYMECRIME_KAIKKI_MIN_GLOSS_LEN+ to enable.
+DEFINITIONAL_GLOSS_MIN_LEN = (ENV["RHYMECRIME_KAIKKI_MIN_GLOSS_LEN"] || "0").to_i
+
+# Walk +obj+'s senses and append each sense's first definitional gloss to
+# +glosses_map[word]+. Pointer senses (alt-of / form-of / misspelling and the other
+# +DEFINITIONAL_GLOSS_REJECT_TAGS+ classes) are filtered out so the surviving entries
+# carry definitional text only — mirrors the WordNet synset gloss surface that the
+# downstream consumers (+gloss_word_token_set+, +sense_vectors+, +gloss_tokens_for_word+,
+# +bin/dump-sense-glosses+) already work with. Per-sense first-gloss truncation matches
+# what +bin/filter-kaikki+ has already done at corpus-filter time.
+def collect_definitional_glosses(obj, word, glosses_map)
+  senses = obj["senses"]
+  return if senses.nil? || senses.empty?
+  seen = Set.new # dedupe identical gloss texts within one headword (multi-POS rows)
+  senses.each do |s|
+    next unless s.is_a?(Hash)
+    tags = s["tags"] || []
+    next if tags.any? { |t| DEFINITIONAL_GLOSS_REJECT_TAGS.include?(t) }
+    next if (s["alt_of"] || []).any?
+    next if (s["form_of"] || []).any?
+    gloss = (s["glosses"] || []).first.to_s.strip
+    next if gloss.empty?
+    next if gloss.length < DEFINITIONAL_GLOSS_MIN_LEN
+    next if seen.include?(gloss)
+    seen.add(gloss)
+    glosses_map[word] << gloss
   end
 end
 

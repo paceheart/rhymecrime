@@ -840,13 +840,14 @@ def rebuild_rhymecrime_dictionaries()
   cmudict = load_cmudict
   original_cmudict_headwords = cmudict.keys.each_with_object(Set.new) { |k, s| s.add(k) }
   wordfreq_hash = load_wordfreq
-  wiktionary_prons, forms_map, pos_map, kaikki_verb_morph, kaikki_capitalized_only, kaikki_variant_map, kaikki_obsolete_alt_of_only = load_wiktionary
+  wiktionary_prons, forms_map, pos_map, kaikki_verb_morph, kaikki_capitalized_only, kaikki_variant_map, kaikki_obsolete_alt_of_only, kaikki_glosses_map = load_wiktionary
   varcon_variant_map = load_varcon
   wiktionary_headwords = wiktionary_prons.keys
   apply_lexical_pos_layer_a!(pos_map)
   wn_seed_pos_map_for_cmudict_gaps!(pos_map, cmudict)
   apply_lexical_pos_layer_b!(pos_map, wordfreq_hash)
   save_part_of_speech_map(pos_map)
+  save_wiktionary_glosses!(kaikki_glosses_map)
   merge_wiktionary!(cmudict, wiktionary_prons)
   wiktionary_prons.clear
   wiktionary_prons = nil

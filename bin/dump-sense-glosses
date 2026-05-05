@@ -9,16 +9,18 @@
 # Each headword contributes:
 #   - one "headword" item (+sense_idx = -1+, +text+ is just the headword itself)
 #   - one "definition" item (+sense_idx = -2+, +text+ is the headword followed by
-#     all its WordNet glosses pooled into a single sentence-transformer input,
-#     +"{word}. {gloss1}. {gloss2}. ..."+). This gives the encoder a *definition-
-#     aware* embedding that disambiguates polysemous bare words ("bear"-the-animal
-#     vs "bear"-the-verb) — feeds the +def_cos+ classifier feature. Falls back to
-#     the bare headword text when no glosses are available, so +definition[word]+
-#     is always populated for in-vocab lemmas.
-#   - up to +--max-senses+ "sense" items (+sense_idx >= 0+), one per WordNet gloss
-#     (+text+ is +"{word}: {gloss}"+).
+#     all its WordNet *and* Wiktionary glosses pooled into a single
+#     sentence-transformer input, +"{word}. {gloss1}. {gloss2}. ..."+). This gives
+#     the encoder a *definition-aware* embedding that disambiguates polysemous
+#     bare words ("bear"-the-animal vs "bear"-the-verb) — feeds the +def_cos+
+#     classifier feature. Falls back to the bare headword text when no glosses
+#     are available, so +definition[word]+ is always populated for in-vocab
+#     lemmas.
+#   - up to +--max-senses+ "sense" items (+sense_idx >= 0+), one per gloss drawn
+#     from WordNet first then Wiktionary (+text+ is +"{word}: {gloss}"+).
 # When a word has no direct WordNet senses, we try morphy-resolved inflected forms
-# (same fallback as +sense_vectors_morphy+).
+# (same fallback as +sense_vectors_morphy+); Wiktionary glosses don't need that
+# fallback because the Kaikki dump already keys by the surface form.
 #
 # Scope:
 #   +--limit-csv CSV+  only dump words referenced in the CSV's +cue+/+related+ columns.
@@ -40,7 +42,7 @@ require "set"
 
 options = {
   limit_csv: nil,
-  max_senses: 4, # mirrors SENSE_VECTOR_MAX_SENSES
+  max_senses: (ENV["RHYMECRIME_SENSE_VECTOR_CAP"] || "4").to_i, # mirrors SENSE_VECTOR_MAX_SENSES
   include_morphy: true,
   output: nil,
 }
@@ -87,6 +89,7 @@ lemmas.reject! { |l| semantically_promiscuous?(l) || l.nil? || l.empty? }
 STDERR.puts "collected #{lemmas.size} lemmas"
 
 def wordnet_glosses_for(word, max_senses, include_morphy)
+  return [] unless gloss_source_use_wordnet?
   glosses = []
   WordNet::Lemma.find_all(word).each do |lem|
     lem.synsets.each do |synset|
@@ -104,6 +107,41 @@ def wordnet_glosses_for(word, max_senses, include_morphy)
         return glosses if glosses.size >= max_senses
         glosses << synset.gloss
       end
+    end
+  end
+  glosses
+end
+
+# Combined WordNet + Wiktionary gloss list for +word+, capped at +max_senses+ entries.
+# Default ordering: WordNet first (typically more concise / hand-curated); Wiktionary
+# fills remaining slots. Flip via +RHYMECRIME_GLOSS_ORDER=wk-first+ to take Wiktionary
+# senses first instead — useful when WK has denser per-word coverage than WN. Pointer-
+# only Wiktionary senses ("Alternative spelling of X") are already excluded at build
+# time by +collect_definitional_glosses+. Dedupes case-folded gloss text so a corpus
+# that happens to repeat a definition verbatim doesn't crowd out a different sense
+# from the other corpus.
+def combined_glosses_for(word, max_senses, include_morphy)
+  if gloss_source_wk_first?
+    glosses = wiktionary_glosses_for(word).first(max_senses).dup
+    return glosses if glosses.size >= max_senses
+    seen = glosses.each_with_object(Set.new) { |g, s| s << g.to_s.downcase.strip }
+    wordnet_glosses_for(word, max_senses, include_morphy).each do |g|
+      break if glosses.size >= max_senses
+      key = g.to_s.downcase.strip
+      next if key.empty? || seen.include?(key)
+      seen << key
+      glosses << g
+    end
+  else
+    glosses = wordnet_glosses_for(word, max_senses, include_morphy)
+    return glosses if glosses.size >= max_senses
+    seen = glosses.each_with_object(Set.new) { |g, s| s << g.to_s.downcase.strip }
+    wiktionary_glosses_for(word).each do |g|
+      break if glosses.size >= max_senses
+      key = g.to_s.downcase.strip
+      next if key.empty? || seen.include?(key)
+      seen << key
+      glosses << g
     end
   end
   glosses
@@ -127,7 +165,7 @@ File.open(options[:output], "w") do |f|
     f.puts JSON.generate("word" => word, "sense_idx" => -1, "text" => word)
     written += 1
 
-    glosses = wordnet_glosses_for(word, options[:max_senses], options[:include_morphy])
+    glosses = combined_glosses_for(word, options[:max_senses], options[:include_morphy])
     headword_only += 1 if glosses.empty?
 
     # Only emit a definition embedding when there's an *actual* gloss. Otherwise
@@ -158,4 +196,4 @@ File.open(options[:output], "w") do |f|
 end
 
 STDERR.puts "wrote #{written} items to #{options[:output]}"
-STDERR.puts "#{headword_only} lemmas had no WordNet senses (headword-only)"
+STDERR.puts "#{headword_only} lemmas had no WordNet or Wiktionary senses (headword-only)"
