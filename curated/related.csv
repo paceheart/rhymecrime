@@ -59,7 +59,7 @@ brain,clouds,unrelated_ish,
 brain,dolphin,unrelated_ish,
 brain,dumb,related,
 brain,fish,unrelated_ish,
-brain,ice,related,
+brain,ice,unrelated,
 brain,smart,related,
 brain,squeamish,unrelated_ish,
 brain,think,related,
@@ -112,7 +112,7 @@ clumsy,drop,related,prereq: clumsy/drop+flop
 clumsy,excuse,related,prereq: clumsy/excuse+shoes
 clumsy,flop,related,prereq: clumsy/drop+flop
 clumsy,fumbling,related,prereq: clumsy/bumbling+fumbling
-clumsy,shoes,related,prereq: clumsy/excuse+shoes
+clumsy,shoes,unrelated_ish
 clumsy,stumbling,related,prereq: clumsy/bumbling+stumbling
 coke,anthracite,related,
 coke,beam,unrelated,
@@ -311,8 +311,8 @@ exciting,interactive,related,prereq: interactive+fiction/exciting+writing
 fandango,music,related,prereq: music/fandango+tango
 fashion,avant-garde,related,fashion prereq: avant-garde / bard (fashion music)
 feast,movable,whatever,bulk random lemma base + common preferred + rime (seed 42)
-feast,prayers,related,prereq: prayers/feast+priest
-feasts,prayers,related,prereq: prayers/feasts+priests
+feast,prayers,related_ish,prereq: prayers/feast+priest
+feasts,prayers,related_ish,prereq: prayers/feasts+priests
 feed,food,related,prereq: food+evil/feed+greed
 fiction,writing,related,prereq: interactive+fiction/exciting+writing
 fire,algebra,unrelated,
@@ -2807,7 +2807,7 @@ cat,zoological,related,active-learn cat:strong:75
 cat,cozy,related,active-learn cat:strong:84
 cat,farmer,related,active-learn cat:strong:75
 cat,cookie,related,active-learn cat:strong:98
-cat,ceramic,related,active-learn cat:strong:81
+cat,ceramic,related_ish,active-learn cat:strong:81
 cat,sock,related,active-learn cat:strong:75
 cat,ermine,whatever,active-learn cat:strong:83
 cat,seal,whatever,active-learn cat:strong:88
@@ -9145,30 +9145,29 @@ vice,evil,related_ish,symmetry-breaking sweep 2026-04-26
 vulva,gay,related_ish,symmetry-breaking sweep 2026-04-26
 wank,gay,related_ish,symmetry-breaking sweep 2026-04-26
 water,supplied,related_ish,symmetry-breaking sweep 2026-04-26
-attraction,gay,unrelated,assumed unrelated due to symmetry
+attraction,gay,related_ish,symmetry-breaking sweep 2026-04-26
 beautiful,gay,unrelated,assumed unrelated due to symmetry
 beauty,gay,unrelated,assumed unrelated due to symmetry
 boy,gay,unrelated,assumed unrelated due to symmetry
 carefree,gay,unrelated,assumed unrelated due to symmetry
 dark,ashen,related,assumed unrelated due to symmetry
 disease,gay,unrelated,assumed unrelated due to symmetry
-drab,dark,unrelated,assumed unrelated due to symmetry
+drab,dark,related,symmetry-breaking sweep 2026-04-26
 evil,abomination,related_ish,food+evil -> starvation/abomination
 evil,apocalypse,related_ish,food+evil -> chips / apocalypse
-family,gay,unrelated,assumed unrelated due to symmetry
-fantasy,gay,unrelated,assumed unrelated due to symmetry
+family,gay,unrelated_ish,assumed unrelated due to symmetry
+fantasy,gay,unrelated_ish,assumed unrelated due to symmetry
 genetic,gay,unrelated,assumed unrelated due to symmetry
-girl,gay,unrelated,assumed unrelated due to symmetry
+girl,gay,unrelated_ish,symmetry-breaking sweep 2026-04-26
 grooming,gay,unrelated,assumed unrelated due to symmetry
-handsome,gay,unrelated,assumed unrelated due to symmetry
+handsome,gay,unrelated_ish,assumed unrelated due to symmetry
 infection,gay,unrelated,assumed unrelated due to symmetry
 prayers,feast,unrelated,assumed unrelated due to symmetry
 prayers,feasts,unrelated,assumed unrelated due to symmetry
 react,carbon,unrelated,assumed unrelated due to symmetry
-safe,gay,unrelated,assumed unrelated due to symmetry
 safer,gay,unrelated,assumed unrelated due to symmetry
 shoes,clumsy,unrelated,assumed unrelated due to symmetry
-shower,gay,unrelated,assumed unrelated due to symmetry
+shower,gay,unrelated_ish,symmetry-breaking sweep 2026-04-26
 stand,gay,unrelated,assumed unrelated due to symmetry
 undeserved,evil,related,prereq: food+evil/served+undeserved
 water,turbidity,related,water prereq: humidity / turbidity
@@ -9176,7 +9175,7 @@ denial,crime,unrelated_ish,assumed unrelated due to symmetry
 dishonesty,crime,unrelated_ish,assumed unrelated due to symmetry
 excuse,clumsy,unrelated_ish,assumed unrelated due to symmetry
 extract,carbon,unrelated_ish,assumed unrelated due to symmetry
-flop,clumsy,unrelated_ish,assumed unrelated due to symmetry
+flop,clumsy,whatever,symmetry-breaking sweep 2026-04-26
 music,bow,related,music prereq: flow / bow
 sequester,carbon,unrelated_ish,assumed unrelated due to symmetry
 truth,crime,unrelated_ish,assumed unrelated due to symmetry
@@ -11560,7 +11559,6 @@ transgender,transsexual,related,
 transgender,bathroom,related,
 transgender,legislation,related,
 transgender,liberation,related,
-transgender,discrimination,related,
 transgender,dress,related,
 transgender,clothes,related,
 transgender,crossdress,related,
@@ -11580,7 +11578,6 @@ transgender,porn,related,
 transgender,pornography,related,
 transgender,polycule,related,
 transgender,polyamory,related,
-transgender,bi,related,
 transgender,bisexual,related,
 transgender,pan,related,
 transgender,pansexual,related,
