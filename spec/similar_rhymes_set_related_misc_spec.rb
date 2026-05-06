@@ -2,12 +2,12 @@
 # set_related — leftover bucket for cues with <10 examples and the cross-cue
 # +context+s (stop words / prefix / root lemmas / stress mismatch / no spelling
 # variants / non-binary). The five hottest cues live in their own files
-# (+set_related_<pirate|music|water|crime|cat>_spec.rb+) so +parallel_rspec+
-# can fan them out; this file is everything else under +describe 'SET_RELATED'+.
+# (set_related_<pirate|music|water|crime|cat>_spec.rb) so parallel_rspec
+# can fan them out; this file is everything else under describe 'SET_RELATED'.
 #
-# Renamed from +similar_rhymes_set_related_spec.rb+ when the per-cue split
-# happened (see +similar_rhymes_set_related_support.rb+ for the shared
-# +set_related_oughta_contain+ DSL + helpers).
+# Renamed from similar_rhymes_set_related_spec.rb when the per-cue split
+# happened (see similar_rhymes_set_related_support.rb for the shared
+# set_related_oughta_contain DSL + helpers).
 #
 
 require_relative "similar_rhymes_set_related_support"

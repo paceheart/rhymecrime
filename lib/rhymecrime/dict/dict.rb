@@ -16,7 +16,7 @@
 #         (build_word_dict merges pronunciations into rime_dict, strips dispreferred spellings from cohorts,
 #          prunes weak rime buckets, drops freq==0 orphans
 #          per disconnect: wordfreq TSV row ⇒ keep; strict OOV ⇒ Kaikki/SUBTLEX rescue only, not rhyme-alone)
-#          Rare headword omission for export runs in +rebuild_rhymecrime_dictionaries+ after hyphen-map keys snapshot.)
+#          Rare headword omission for export runs in rebuild_rhymecrime_dictionaries after hyphen-map keys snapshot.)
 #     this file     — rebuild_rhymecrime_dictionaries only
 #
 # Corpus inputs live under <repo>/corpora/. Invoked by bin/dict-build.
@@ -50,29 +50,29 @@ require_relative "corpus_variants"
 $inflection_base_words = {}
 
 # Per-headword frequency-propagation provenance, populated by the morph
-# inheritance / expansion / g-drop branches in +frequency.rb+ and consumed by
-# +rarity_rescore_and_dump!+ in +rarity_classifier.rb+ to fill the corresponding
-# +RaritySignals+ fields. Cleared at the top of each +load_word_dict+ rebuild (no
+# inheritance / expansion / g-drop branches in frequency.rb and consumed by
+# rarity_rescore_and_dump! in rarity_classifier.rb to fill the corresponding
+# RaritySignals fields. Cleared at the top of each load_word_dict rebuild (no
 # cross-build leakage).
 #
-# Shape: +{ surface => { phase: Symbol, donor: String, donor_anchored: Boolean } }+.
-# +phase+ ∈ +RARITY_FREQ_SOURCE_PHASES+.
+# Shape: { surface => { phase: Symbol, donor: String, donor_anchored: Boolean } }.
+# phase ∈ RARITY_FREQ_SOURCE_PHASES.
 #
-# +donor_anchored+ records whether the donor base carried independent CORPUS /
+# donor_anchored records whether the donor base carried independent CORPUS /
 # LEXICAL evidence (WordNet entry, neol membership, or Zipf ≥
-# +WORDFREQ_COMMON_ZIPF+). Membership in +common_words+ (i.e. +rarity.csv+'s
-# +common+/+common_ish+ rows) is INTENTIONALLY NOT one of the anchor predicates
+# WORDFREQ_COMMON_ZIPF). Membership in common_words (i.e. rarity.csv's
+# common/common_ish rows) is INTENTIONALLY NOT one of the anchor predicates
 # here, even though it IS one in the inheritance-gate predicates of
-# +morph_inherit_kaikki+ / +morph_expand_subtlex+ (where it controls whether
+# morph_inherit_kaikki / morph_expand_subtlex (where it controls whether
 # inheritance happens at all). Reason: the rarity-classifier feature
-# +received_donor_from_common_base_flag+ is read off this Boolean. If
-# +common_words.include?(base)+ flowed into +donor_anchored+, every inflected
-# form of every +common+ row in +rarity.csv+ would set the flag, and the
+# received_donor_from_common_base_flag is read off this Boolean. If
+# common_words.include?(base) flowed into donor_anchored, every inflected
+# form of every common row in rarity.csv would set the flag, and the
 # trainer would relearn the curated label through the lemma — exactly the kind
-# of leak that was hiding behind the 99.7% CV with +common_words_flag+ /
-# +rare_words_flag+ as direct features. See +donor_has_corpus_anchor?+ below
+# of leak that was hiding behind the 99.7% CV with common_words_flag /
+# rare_words_flag as direct features. See donor_has_corpus_anchor? below
 # for the canonical predicate; gate sites combine it with
-# +common_words.include?(base)+ for the broader "should we inherit at all"
+# common_words.include?(base) for the broader "should we inherit at all"
 # decision.
 $freq_propagation_metadata = {}
 
@@ -85,10 +85,10 @@ def record_freq_propagation!(surface, phase:, donor:, donor_anchored:)
   }
 end
 
-# Canonical leak-free anchor predicate for +donor_anchored+ (and by extension
-# the rarity-classifier feature +received_donor_from_common_base_flag+). Pure
-# corpus / lexical evidence — deliberately excludes +common_words+ membership.
-# See the long comment on +$freq_propagation_metadata+ above.
+# Canonical leak-free anchor predicate for donor_anchored (and by extension
+# the rarity-classifier feature received_donor_from_common_base_flag). Pure
+# corpus / lexical evidence — deliberately excludes common_words membership.
+# See the long comment on $freq_propagation_metadata above.
 def donor_has_corpus_anchor?(base, wordfreq_hash, neol_words)
   return true if wn_has_entry?(base)
   return true if neol_words && neol_words.include?(base)
@@ -96,7 +96,7 @@ def donor_has_corpus_anchor?(base, wordfreq_hash, neol_words)
   zipf >= WORDFREQ_COMMON_ZIPF
 end
 
-# Lazy path -> frozen Hash of 8-digit synset offset string -> full data-file line (+wn_synset_line_for_offset+).
+# Lazy path -> frozen Hash of 8-digit synset offset string -> full data-file line (wn_synset_line_for_offset).
 $wn_synset_line_index_by_path = nil
 
 def include_conceptnet_numberbatch_dict_exports?
@@ -104,7 +104,7 @@ def include_conceptnet_numberbatch_dict_exports?
   v && !v.empty? && %w[1 true yes on].include?(v.downcase)
 end
 
-# True when +word+ and +base+ share at least one WordNet synset (any POS).
+# True when word and base share at least one WordNet synset (any POS).
 def wn_share_synset?(word, base)
   word_offsets = Set.new
   [word, hyphens_to_underscores(word), word.tr("_", "-")].uniq.each do |f|
@@ -123,7 +123,7 @@ def wn_share_synset?(word, base)
 end
 
 # Same-lexeme check for dict lemmas: shared synset; cheap suffix-specific checks; then 1-hop derivation
-# (file-based, 3.1-safe). Derivation is last and walks WN data for +word+ when earlier checks fail.
+# (file-based, 3.1-safe). Derivation is last and walks WN data for word when earlier checks fail.
 def wn_accept_inflection_lemma_pair?(word, base)
   wn_share_synset?(word, base) ||
     wn_verb_stem_via_morphy?(word, base) ||
@@ -132,32 +132,32 @@ def wn_accept_inflection_lemma_pair?(word, base)
     wn_derivationally_related_to_base?(word, base)
 end
 
-# Sentinel-region cutoff for +independent_ing_adj_surface?+'s freq-differential
-# gate. Real corpus frequencies in +word_dict+ top out below ~25 (log2 of the
+# Sentinel-region cutoff for independent_ing_adj_surface?'s freq-differential
+# gate. Real corpus frequencies in word_dict top out below ~25 (log2 of the
 # SUBTLEX corpus size); anything above this is a curated structural sentinel
-# (+999999+ semantically promiscuous, +99+ +rarity.csv+ common, +98+ neol). The
+# (999999 semantically promiscuous, 99 rarity.csv common, 98 neol). The
 # differential heuristic was designed to compare CORPUS frequencies — a
 # surface sitting at the curated-common sentinel is not real evidence that the
 # adjective use dominates over the verb base. Mirrors the same separator used
-# by +RARITY_CLASSIFIER_RESCORE_MAX_FREQ+ in +rarity_classifier.rb+, kept as a
+# by RARITY_CLASSIFIER_RESCORE_MAX_FREQ in rarity_classifier.rb, kept as a
 # local constant to avoid cross-file coupling between the lemma builder and
 # the rarity rescore path.
 LEMMA_HEURISTIC_MAX_REAL_SURFACE_FREQ = 90
 
-# Suppress collapsing +-ing+ adjectives that have gained independent semantic
+# Suppress collapsing -ing adjectives that have gained independent semantic
 # weight onto their verbal base. WN often lists them as adj-only senses, but
-# the morphology-aware fallback in +compute_lemma_map+ would still happily map
-# +cloying → cloy+ and lose the adjective register at runtime. Heuristic:
-#   * surface ends in +-ing+,
+# the morphology-aware fallback in compute_lemma_map would still happily map
+# cloying → cloy and lose the adjective register at runtime. Heuristic:
+#   * surface ends in -ing,
 #   * surface has a WN entry,
-#   * none of the surface's WN POSes is +"v"+ (so adjectival sense is dominant),
+#   * none of the surface's WN POSes is "v" (so adjectival sense is dominant),
 #   * surface freq is in the corpus-realistic range (not a curated sentinel —
-#     see +LEMMA_HEURISTIC_MAX_REAL_SURFACE_FREQ+ for why),
-#   * a candidate +-ing+ base exists in word_dict and passes the WN gate,
+#     see LEMMA_HEURISTIC_MAX_REAL_SURFACE_FREQ for why),
+#   * a candidate -ing base exists in word_dict and passes the WN gate,
 #   * surface is at least 5 freq buckets below the candidate base — i.e. the
 #     adjective use is the dominant living surface (wide enough margin that
-#     pure verb-form drift like +running+/+run+ doesn't qualify).
-# Returns +true+ to short-circuit the lemma assignment (keeps surface as a
+#     pure verb-form drift like running/run doesn't qualify).
+# Returns true to short-circuit the lemma assignment (keeps surface as a
 # self-lemma).
 def independent_ing_adj_surface?(word, word_dict)
   return false unless word.end_with?("ing")
@@ -167,9 +167,9 @@ def independent_ing_adj_surface?(word, word_dict)
   surface_entry = word_dict[word]
   return false unless surface_entry
   surface_freq = surface_entry[0]
-  # +making+ (WN POSes = ["n"], +rarity.csv+ +common+ → freq=99) used to
-  # qualify here because +99 - make_freq+ trivially exceeded the +>=5+
-  # differential, suppressing +making → make+ in the lemma map. The real
+  # making (WN POSes = ["n"], rarity.csv common → freq=99) used to
+  # qualify here because 99 - make_freq trivially exceeded the >=5
+  # differential, suppressing making → make in the lemma map. The real
   # heuristic only makes sense when both sides are corpus-derived.
   return false if surface_freq > LEMMA_HEURISTIC_MAX_REAL_SURFACE_FREQ
   candidate_bases = Inflect.raw_candidate_bases_for_inflected(word).to_a
@@ -184,9 +184,9 @@ def independent_ing_adj_surface?(word, word_dict)
   end
 end
 
-# Funnel a chosen lemma target through +preferred_form+ so the on-disk lemma
+# Funnel a chosen lemma target through preferred_form so the on-disk lemma
 # map stores the canonical American spelling even when the inflectional path
-# produced a British / variant base. +fulfilled → fulfil → fulfill+ is the
+# produced a British / variant base. fulfilled → fulfil → fulfill is the
 # canonical case; without this hop the map would point users at the variant
 # spelling that may not have downstream artifacts (NB vector, CN edges).
 def canonicalize_lemma_target(base, word_dict)
@@ -200,17 +200,17 @@ end
 # Source B: Inflect.each_candidate_base_for_inflected picks the best base already in word_dict.
 # Words with a WordNet entry and an :er/:est suffix keep themselves (singer, faster are standalone).
 # For Source B, if the word has a WordNet entry then the candidate base must pass
-# +wn_accept_inflection_lemma_pair?+ (shared synset, 1-hop derivation pointers, guarded -ly/-ful,
+# wn_accept_inflection_lemma_pair? (shared synset, 1-hop derivation pointers, guarded -ly/-ful,
 # or unique verbal morphy for Inflect *-ed* / *-ing*). This blocks false stems like crew→crow when
 # no link matches.
 # Fallback: self-lemma (word is its own base).
-# Derivational suffixes used by +compute_semantic_base_map+. Each entry is
-# +{ suffix: <derived-side ending>, base_suffix: <base-side ending> }+; the
-# rule fires when +source = stem + suffix+ and +candidate = stem + base_suffix+.
-# Order matters: longer suffixes come first so +-ically+ wins over +-ly+.
+# Derivational suffixes used by compute_semantic_base_map. Each entry is
+# { suffix: <derived-side ending>, base_suffix: <base-side ending> }; the
+# rule fires when source = stem + suffix and candidate = stem + base_suffix.
+# Order matters: longer suffixes come first so -ically wins over -ly.
 #
-# Curated to cover the recurring derivational families in +word_dict+. Every
-# rule must also pass a WordNet derivation pointer (+wn_derivation_target_lemmas_for_word+)
+# Curated to cover the recurring derivational families in word_dict. Every
+# rule must also pass a WordNet derivation pointer (wn_derivation_target_lemmas_for_word)
 # at runtime, so an over-broad allowlist won't synthesize spurious mappings —
 # the WN gate is the safety net.
 SEMANTIC_BASE_SUFFIX_RULES = [
@@ -286,22 +286,22 @@ SEMANTIC_BASE_SUFFIX_RULES = [
   { suffix: "ly", base_suffix: "" },
 ].freeze
 
-# Floor on source-word length: below 6 chars the +-y+, +-ly+, +-al+, +-ic+
-# rules start firing on coincidences (+ally+ -> +all+, +ily+ -> +i+).
+# Floor on source-word length: below 6 chars the -y, -ly, -al, -ic
+# rules start firing on coincidences (ally -> all, ily -> i).
 SEMANTIC_BASE_MIN_SOURCE_LEN = 6
-# Floor on candidate-base length: stops degenerate strips like +pity+ -> +p+.
+# Floor on candidate-base length: stops degenerate strips like pity -> p.
 SEMANTIC_BASE_MIN_BASE_LEN = 3
 # Shared-prefix floor: discriminates the WN gate from accidental targets that
 # happen to be in word_dict but share no surface morphology with the source.
 SEMANTIC_BASE_MIN_SHARED_PREFIX = 3
 # Frequency guard: derived may be at most this many freq buckets MORE common
-# than the candidate base. Catches drift like +cloying+ (freq 10) vs +cloy+
+# than the candidate base. Catches drift like cloying (freq 10) vs cloy
 # (freq 2). Asymmetric — base may be arbitrarily more common than derived.
 SEMANTIC_BASE_MAX_FREQ_RISE = 4
 # Minimum Numberbatch cosine between source and base for the derivation to be
 # accepted. Catches semantic-shift cases that pass every surface filter but
 # the words have drifted apart (presentation/present, waiter/wait). Only
-# enforced when the caller passes +nb_vectors:+ to +compute_semantic_base_map+;
+# enforced when the caller passes nb_vectors: to compute_semantic_base_map;
 # if either side has no NB vector the guard is silently bypassed.
 SEMANTIC_BASE_MIN_NB_COSINE = 0.50
 
@@ -327,7 +327,7 @@ def semantic_base_classify_suffix(source, candidate)
     else
       next unless candidate == base_part + bsuf
     end
-    return bsuf.empty? ? "+#{suf}" : "-#{bsuf}/+#{suf}"
+    return bsuf.empty? ? "#{suf}" : "-#{bsuf}/#{suf}"
   end
   nil
 end
@@ -340,9 +340,9 @@ def semantic_base_safe_derivation?(source, candidate, source_freq, candidate_fre
   semantic_base_classify_suffix(source, candidate)
 end
 
-# +nb_vectors+ when non-nil maps +hyphens_to_underscores(word) -> Array<Float>+
-# (or +Numo::SFloat+; both produce a scalar dot). Returns +nil+ when either
-# side is missing — caller treats +nil+ as "guard bypassed".
+# nb_vectors when non-nil maps hyphens_to_underscores(word) -> Array<Float>
+# (or Numo::SFloat; both produce a scalar dot). Returns nil when either
+# side is missing — caller treats nil as "guard bypassed".
 def semantic_base_nb_cosine(nb_vectors, a, b)
   return nil unless nb_vectors
   va = nb_vectors[hyphens_to_underscores(a)]
@@ -388,19 +388,19 @@ def best_semantic_base_target(source, source_freq, word_dict, nb_vectors: nil)
   best
 end
 
-# Build the +word -> derivational_base+ map used by +semantic_base+ in the
-# relatedness pipeline (R3). Composes on top of +compute_lemma_map+: only
-# self-lemma headwords (+lemma(w) == w+) get an entry, since inflected
+# Build the word -> derivational_base map used by semantic_base in the
+# relatedness pipeline (R3). Composes on top of compute_lemma_map: only
+# self-lemma headwords (lemma(w) == w) get an entry, since inflected
 # surfaces resolve through the lemma layer first at runtime. Walks WordNet
-# +wn_derivation_target_lemmas_for_word+ pointers and applies the curated
+# wn_derivation_target_lemmas_for_word pointers and applies the curated
 # suffix allowlist + frequency / length / shared-prefix gates above.
 #
-# +nb_vectors:+ enables the cosine guard (see +SEMANTIC_BASE_MIN_NB_COSINE+).
-# Pass the unpacked +numberbatch_vectors.msgpack+ — keys must already be
-# +hyphens_to_underscores+'d, values may be +Array<Float>+ or +Numo::SFloat+.
+# nb_vectors: enables the cosine guard (see SEMANTIC_BASE_MIN_NB_COSINE).
+# Pass the unpacked numberbatch_vectors.msgpack — keys must already be
+# hyphens_to_underscores'd, values may be Array<Float> or Numo::SFloat.
 #
-# Returns +[map, transforms]+ where +map+ is +word -> base+ and +transforms+
-# is +word -> "+suffix"+/etc. for the audit dump.
+# Returns [map, transforms] where map is word -> base and transforms
+# is +word -> "suffix"/etc. for the audit dump.
 def compute_semantic_base_map(word_dict, lemma_map, nb_vectors: nil)
   map = {}
   transforms = {}
@@ -435,7 +435,7 @@ def compute_lemma_map(word_dict)
   lemma_map = {}
   begin
     word_dict.each_key do |word|
-      # +independent_ing_adj_surface?+ skips lemma assignment for adj-only +-ing+
+      # independent_ing_adj_surface? skips lemma assignment for adj-only -ing
       # surfaces that have drifted from their verbal root (cloying, harrowing, …)
       # — see helper docs above for the gate.
       if independent_ing_adj_surface?(word, word_dict)
@@ -443,7 +443,7 @@ def compute_lemma_map(word_dict)
       end
 
       # Source A: Kaikki-derived base (Wiktionary explicitly lists the relationship).
-      # When the word has a WN entry, require +wn_accept_inflection_lemma_pair?+ — Kaikki can link
+      # When the word has a WN entry, require wn_accept_inflection_lemma_pair? — Kaikki can link
       # archaic/dialectal inflections (crew→crow, feed→fee) that mislead the common-sense lemma.
       kaikki_base = $inflection_base_words[word]
       if kaikki_base && kaikki_base != word && word_dict.key?(kaikki_base)
@@ -477,15 +477,15 @@ def compute_lemma_map(word_dict)
 
         # If word is in WordNet, base must share a synset (crew≠crow, ring≠re, thing≠the).
         # If word is NOT in WordNet, base must at least be in WordNet (tran, sacre, etc. are not).
-        # Function-word bases (+as+, +out+, +the+, +they+, +got+, +about+, ...) need the
-        # stronger gate even when +word+ isn't in WordNet: the weak +wn_has_entry?(base)+
+        # Function-word bases (as, out, the, they, got, about, ...) need the
+        # stronger gate even when word isn't in WordNet: the weak wn_has_entry?(base)
         # check otherwise accepts every surface that orthographically peels to a stopword
-        # as that stopword's inflection (+assed → as+, +theyed → they+, +gots → got+,
-        # +abouts → about+), since stopwords all have WN entries by virtue of being valid
-        # English. Real inflectional descendants of function words (+outs → out+ as a noun
-        # plural, +outing → out+ as a verbal -ing) survive: their morphological link is
+        # as that stopword's inflection (assed → as, theyed → they, gots → got,
+        # abouts → about), since stopwords all have WN entries by virtue of being valid
+        # English. Real inflectional descendants of function words (outs → out as a noun
+        # plural, outing → out as a verbal -ing) survive: their morphological link is
         # encoded in WN's morphy / synset / derivation pointers, so
-        # +wn_accept_inflection_lemma_pair?+ returns true. Pure orthographic coincidences
+        # wn_accept_inflection_lemma_pair? returns true. Pure orthographic coincidences
         # do not, and get rejected here.
         if word_in_wn
           next unless wn_accept_inflection_lemma_pair?(word, base)
@@ -509,14 +509,14 @@ def compute_lemma_map(word_dict)
       end
     end
 
-    # Lemma-side g-drop pass — mirror of the freq-side +gdrop+ pass in
-    # +frequency.rb+ that gives +failin'+ / +makin'+ / +poopin'+ their
-    # +-ing+-base frequency. Without this, +lemma("makin'") = "makin'"+ and
-    # +lemma("poopin'") = "poopin'"+ because Sources A/B don't recognize the
-    # apostrophe variant: Kaikki has no +makin' → make+ entry, and Inflect's
-    # suffix table doesn't know +-in'+ as an inflectional ending. The dialect
-    # surface should resolve to the same lemma as its standard +-ing+ form
-    # (+poopin' → poop+, not +poopin' → pooping+) so it inherits the verb's
+    # Lemma-side g-drop pass — mirror of the freq-side gdrop pass in
+    # frequency.rb that gives failin' / makin' / poopin' their
+    # -ing-base frequency. Without this, lemma("makin'") = "makin'" and
+    # lemma("poopin'") = "poopin'" because Sources A/B don't recognize the
+    # apostrophe variant: Kaikki has no makin' → make entry, and Inflect's
+    # suffix table doesn't know -in' as an inflectional ending. The dialect
+    # surface should resolve to the same lemma as its standard -ing form
+    # (poopin' → poop, not poopin' → pooping) so it inherits the verb's
     # rarity / relatedness behavior at runtime.
     gdrop_lemmas = 0
     word_dict.each_key do |word|
@@ -539,19 +539,19 @@ def compute_lemma_map(word_dict)
   lemma_map
 end
 
-# Drop Kaikki "obsolete-only" ghost headwords (+appeare+, +blesse+, +ladie+, +maide+,
-# +cherrie+, +saile+, +wolfe+, +eate+, +businesse+, …) from +word_dict+ and +rime_dict+ when
+# Drop Kaikki "obsolete-only" ghost headwords (appeare, blesse, ladie, maide,
+# cherrie, saile, wolfe, eate, businesse, …) from word_dict and rime_dict when
 # their modern canonical target survives the build.
 #
-# These leak into +word_dict+ via +wordfreq.tsv+ Zipf rows (Project Gutenberg / KJV /
-# Shakespeare-era corpora list them in running text) even though +load_wiktionary+ now
-# suppresses their paradigm contribution. Without a post-build prune, +compute_lemma_map+
+# These leak into word_dict via wordfreq.tsv Zipf rows (Project Gutenberg / KJV /
+# Shakespeare-era corpora list them in running text) even though load_wiktionary now
+# suppresses their paradigm contribution. Without a post-build prune, compute_lemma_map
 # Source B would still consider them as valid bases for shared inflected forms, and
-# runtime +related?+ / UI paths would surface them as dict-headword suggestions.
+# runtime related? / UI paths would surface them as dict-headword suggestions.
 #
-# Safe ordering: must run after +build_word_dict+ (word_dict is frozen at that point) and
-# before +compute_lemma_map+ (so Source A's +word_dict.key?(kaikki_base)+ gate correctly
-# falls through to the modern canonical). Only drop when the +target+ is itself in word_dict;
+# Safe ordering: must run after build_word_dict (word_dict is frozen at that point) and
+# before compute_lemma_map (so Source A's word_dict.key?(kaikki_base) gate correctly
+# falls through to the modern canonical). Only drop when the target is itself in word_dict;
 # if the canonical didn't survive (e.g. a rare archaic pair whose modern form is also missing),
 # leaving the obsolete headword gives runtime _something_ to resolve to.
 def prune_obsolete_alt_of_only_headwords!(word_dict, rime_dict, obsolete_alt_of_only)
@@ -583,32 +583,32 @@ def prune_obsolete_alt_of_only_headwords!(word_dict, rime_dict, obsolete_alt_of_
   dropped
 end
 
-# Phonemes that satisfy the orthographic-+r+/rhotic-final invariant.
-# +ER0/1/2+ are kept here defensively even though +apply_shared_arphabet_phoneme_string_normalizations+
-# splits +ER+ into +AH + R+ — some inputs (Inflect-derived prons, Kaikki forms) are constructed
+# Phonemes that satisfy the orthographic-r/rhotic-final invariant.
+# ER0/1/2 are kept here defensively even though apply_shared_arphabet_phoneme_string_normalizations
+# splits ER into AH + R — some inputs (Inflect-derived prons, Kaikki forms) are constructed
 # token-by-token and bypass that string-level pass, so they may still arrive ER-final at this point.
 RHOTIC_FINAL_PHONEMES = %w[R ER0 ER1 ER2].to_set.freeze
 
-# When a headword's spelling ends in +r+ but a pronunciation's last non-boundary phoneme isn't
-# rhotic, append +R+ so the entry rhymes with its canonical-rhotic siblings (dasher / masher,
+# When a headword's spelling ends in r but a pronunciation's last non-boundary phoneme isn't
+# rhotic, append R so the entry rhymes with its canonical-rhotic siblings (dasher / masher,
 # butter / brother, bar / upbar). The mismatch is overwhelmingly imported BrE non-rhotic Wiktionary
-# transcriptions where final +-r+ surfaces as schwa (+M AE1 . SH AH0+); the codebase's convention
-# (see +phonology.rb+'s +ER0 → AH0 R+ rewrite) is +vowel + R+, so a trailing +R+ is what's missing.
+# transcriptions where final -r surfaces as schwa (M AE1 . SH AH0); the codebase's convention
+# (see phonology.rb's ER0 → AH0 R rewrite) is vowel + R, so a trailing R is what's missing.
 #
-# Mutates +pron_hash+ (a +{word => [Pronunciation]}+ map: +pronunciation_map+ before +build_rime_dict+, then
-# +word_dict+ entries +[freq, prons, ...]+ before +merge_word_dict_pronunciations_into_rime_dict!+).
+# Mutates pron_hash (a {word => [Pronunciation]} map: pronunciation_map before build_rime_dict, then
+# word_dict entries [freq, prons, ...] before merge_word_dict_pronunciations_into_rime_dict!).
 # Returns the number of pronunciations that were patched.
 def append_r_to_orthographic_r_pronunciations!(pron_hash, label:)
   fixed_words = 0
   fixed_prons = 0
   pron_hash.each do |word, entry|
     next unless word.end_with?("r")
-    # Input shape is either +pronunciation_map+ (+entry+ is +[pron1, pron2, ...]+,
-    # an Array of +Pronunciation+) or +word_dict+ (+entry+ is
-    # +[freq, prons, lemma]+ or a +BuildEntry+; +prons+ at +entry[1]+).
+    # Input shape is either pronunciation_map (entry is [pron1, pron2, ...],
+    # an Array of Pronunciation) or word_dict (entry is
+    # [freq, prons, lemma] or a BuildEntry; prons at entry[1]).
     # The first-slot-is-Pronunciation probe distinguishes; BuildEntry never
-    # looks like a bare pron list because +BuildEntry#first+ returns +freq+
-    # (an Integer), so the +else+ branch picks it up correctly via +entry[1]+.
+    # looks like a bare pron list because BuildEntry#first returns freq
+    # (an Integer), so the else branch picks it up correctly via entry[1].
     next if defined?(BuildEntry) && entry.is_a?(BuildEntry) && entry.tombstoned?
     prons = entry.is_a?(Array) && entry.first.is_a?(Pronunciation) ? entry : entry[1]
     next if prons.nil? || prons.empty?
@@ -630,23 +630,23 @@ def append_r_to_orthographic_r_pronunciations!(pron_hash, label:)
   fixed_prons
 end
 
-# Identify the +-r+/+-re+-final stem of an +-ed+/+-d+ inflection by trying three peelings in order
-# and accepting the first one whose stem is a known headword in +pron_hash+. Returns
-# +[stem, rule]+ where +rule+ is one of +:stem_a+ (peel +-ed+, e.g. +jabbered+ → +jabber+),
-# +:stem_b+ (peel +-d+, e.g. +abjured+ → +abjure+), or +:stem_c+ (peel +-Xed+ for an
-# orthographic doubled-consonant past tense, e.g. +barred+ → +bar+); +nil+ if none match.
+# Identify the -r/-re-final stem of an -ed/-d inflection by trying three peelings in order
+# and accepting the first one whose stem is a known headword in pron_hash. Returns
+# [stem, rule] where rule is one of :stem_a (peel -ed, e.g. jabbered → jabber),
+# :stem_b (peel -d, e.g. abjured → abjure), or :stem_c (peel -Xed for an
+# orthographic doubled-consonant past tense, e.g. barred → bar); nil if none match.
 # The headword-presence gate is what blocks the false-positive cohort that pure
-# orthographic +"ends in red"+ matching falls into: +bred+ / +cred+ / +shred+ / +fred+ /
-# +dred+ / +red+ / +infrared+ / +interbred+ / +purebred+ / +thoroughbred+ / +unbred+ /
-# +antired+ / +wilfred+ / +winfred+ — none of their candidate stems (+br+, +cr+, +shr+,
-# +infrar+, +wilfr+, …) appear in the lexicon, so we never mistake them for past tenses
-# of an +-r+-stem verb. The +:stem_c+ peel still admits +cor+ from +corded+ (false
-# positive: the actual stem is +cord+, not +cor+); +stem_c_pron_aligns?+ in
-# +insert_r_before_final_d_for_red_pronunciations!+ is the per-pronunciation backstop
-# that rejects those by checking the inflected pron actually decomposes as +stem-pron + D+.
-# Predicate used below to treat tombstoned +BuildEntry+ rows as absent
-# from +pron_hash+. Matches pre-refactor behavior where scrubbed / classifier-
-# forbidden rows were physically deleted from +word_dict+ before the R-insertion
+# orthographic "ends in red" matching falls into: bred / cred / shred / fred /
+# dred / red / infrared / interbred / purebred / thoroughbred / unbred /
+# antired / wilfred / winfred — none of their candidate stems (br, cr, shr,
+# infrar, wilfr, …) appear in the lexicon, so we never mistake them for past tenses
+# of an -r-stem verb. The :stem_c peel still admits cor from corded (false
+# positive: the actual stem is cord, not cor); stem_c_pron_aligns? in
+# insert_r_before_final_d_for_red_pronunciations! is the per-pronunciation backstop
+# that rejects those by checking the inflected pron actually decomposes as stem-pron + D.
+# Predicate used below to treat tombstoned BuildEntry rows as absent
+# from pron_hash. Matches pre-refactor behavior where scrubbed / classifier-
+# forbidden rows were physically deleted from word_dict before the R-insertion
 # passes ran, so their orthographic shapes couldn't accidentally anchor the
 # stem-lookup gate.
 def pron_hash_has_live_key?(pron_hash, key)
@@ -671,12 +671,12 @@ def red_inflection_r_stem(word, pron_hash)
   nil
 end
 
-# +-s+/+-es+ analog of +red_inflection_r_stem+. Returns the +-r+/+-re+-final stem of an +-s+ inflection
-# (+jabbers+ → +jabber+, +goitres+ → +goitre+, +abjures+ → +abjure+) or +nil+. No double-+r+ doubling
-# occurs before +-s+ (+stirs+ / +purrs+ inherit the doubling from their bare stems), so there's no
-# +rule-C+ peel — only +chomp("s")+ ending in +r+ or +re+. Headword-presence gate excludes loanword
-# plurals whose orthography happens to end in +rs+ but whose stem isn't lexicalized (+wilfreds+,
-# hypothetical +screds+, etc.).
+# -s/-es analog of red_inflection_r_stem. Returns the -r/-re-final stem of an -s inflection
+# (jabbers → jabber, goitres → goitre, abjures → abjure) or nil. No double-r doubling
+# occurs before -s (stirs / purrs inherit the doubling from their bare stems), so there's no
+# rule-C peel — only chomp("s") ending in r or re. Headword-presence gate excludes loanword
+# plurals whose orthography happens to end in rs but whose stem isn't lexicalized (wilfreds,
+# hypothetical screds, etc.).
 def s_plural_r_stem(word, pron_hash)
   return nil unless word.length >= 4
   return nil unless word.end_with?("s")
@@ -687,17 +687,17 @@ def s_plural_r_stem(word, pron_hash)
   nil
 end
 
-# Shared inner: locate the last non-boundary phoneme of +phs+ (must equal +final+, e.g. +"D"+ for +-ed+
-# or +%w[S Z]+ for +-s+), confirm the second-to-last is non-rhotic, AND confirm no +R+ appears in the
-# last 3 non-boundary phonemes. The K=3 +R+-lookback rejects loanword plurals like +halteres+, +flores+,
-# +mores+, +rivieres+, +torres+, +libres+, +entendres+, +oeuvres+, +louvres+ whose orthographic stem
-# ends in +-re+ but whose CMU pronunciation already exposes the stem's +R+ before a final +Z+ via an
-# unstressed vowel insertion (+R IY0 Z+, +R EY2 Z+, +R AH0 Z+); inserting another +R+ before the
-# +Z+ would produce a doubly-rhotic phoneme tail. The same guard incidentally fires on +jared+ in the
-# +-red+ helper (last 3 = +R AH0 D+), kicking out a known false positive of +red_inflection_r_stem+'s
+# Shared inner: locate the last non-boundary phoneme of phs (must equal final, e.g. "D" for -ed
+# or %w[S Z] for -s), confirm the second-to-last is non-rhotic, AND confirm no R appears in the
+# last 3 non-boundary phonemes. The K=3 R-lookback rejects loanword plurals like halteres, flores,
+# mores, rivieres, torres, libres, entendres, oeuvres, louvres whose orthographic stem
+# ends in -re but whose CMU pronunciation already exposes the stem's R before a final Z via an
+# unstressed vowel insertion (R IY0 Z, R EY2 Z, R AH0 Z); inserting another R before the
+# Z would produce a doubly-rhotic phoneme tail. The same guard incidentally fires on jared in the
+# -red helper (last 3 = R AH0 D), kicking out a known false positive of red_inflection_r_stem's
 # rule A.
 #
-# Returns the index in +phs+ where +R+ should be inserted, or +nil+ to skip.
+# Returns the index in phs where R should be inserted, or nil to skip.
 def r_insertion_index_before_final(phs, final)
   finals = final.is_a?(Array) ? final : [final]
   last_idx = nil
@@ -722,16 +722,16 @@ def r_insertion_index_before_final(phs, final)
   last_idx
 end
 
-# Per-pronunciation backstop for +red_inflection_r_stem+'s +:stem_c+ peel: confirm the inflected
-# pron actually decomposes as +stem-pron + D+, optionally with the stem's final +R+ dropped (the
+# Per-pronunciation backstop for red_inflection_r_stem's :stem_c peel: confirm the inflected
+# pron actually decomposes as stem-pron + D, optionally with the stem's final R dropped (the
 # BrE rhotic-drop case the rule exists to repair). Differentiates legitimate doubled-consonant
-# past tenses like +barred+ (+B AA1 R+ + +D+ ✓) from +corded+, where the +-Xed+ peel happens to
-# yield an +-r+-final string (+cor+) that is also a lexicon entry but is not the actual stem
-# (the real stem is +cord+ +K AO1 R D+). +corded+'s pron is +K AO1 R . D AH0 D+, whose tail
-# after +K AO1 R+ is +D AH0 D+ — three phonemes, not a valid +-ed+ suffix shape. Without this
-# gate the rule incorrectly inserts an R into +corded+'s pron and makes it rhyme with
-# +quartered+. Only applied to the +:stem_c+ branch; +:stem_a+ relies on the +-r+-final stem
-# matching by orthography + presence (+jabber+ → +jabbered+) and would reject the BrE-drop
+# past tenses like barred (B AA1 R + D ✓) from corded, where the -Xed peel happens to
+# yield an -r-final string (cor) that is also a lexicon entry but is not the actual stem
+# (the real stem is cord K AO1 R D). corded's pron is K AO1 R . D AH0 D, whose tail
+# after K AO1 R is D AH0 D — three phonemes, not a valid -ed suffix shape. Without this
+# gate the rule incorrectly inserts an R into corded's pron and makes it rhyme with
+# quartered. Only applied to the :stem_c branch; :stem_a relies on the -r-final stem
+# matching by orthography + presence (jabber → jabbered) and would reject the BrE-drop
 # inflected pron the rule exists to fix if it required the stem's R to be present.
 def stem_c_pron_aligns?(inflected_pron, stem_prons)
   return false if stem_prons.nil? || stem_prons.empty?
@@ -742,23 +742,23 @@ def stem_c_pron_aligns?(inflected_pron, stem_prons)
     last = sp_phs.last
     next false unless RHOTIC_FINAL_PHONEMES.include?(last)
     next true if inf_phs == sp_phs + ["D"]
-    # BrE rhotic-drop applies only to literal +R+; +ERn+ is itself vowel+rhotic, not droppable.
+    # BrE rhotic-drop applies only to literal R; ERn is itself vowel+rhotic, not droppable.
     next true if last == "R" && inf_phs == sp_phs[0..-2] + ["D"]
     false
   end
 end
 
-# When a headword is the +-ed+/+-d+ inflection of a known +-r+/+-re+-final stem (+jabber+ → +jabbered+,
-# +abjure+ → +abjured+, +debar+ → +debarred+) but a pronunciation lacks the rhotic right before the
-# final +D+, splice +R+ in. The mismatch comes from the same BrE / non-rhotic Wiktionary import that
-# produces +-r+-final schwa drops (+jabbered+ → +JH AE1 . B AH0 D+); the canonical past-tense form is
-# +stem-pronunciation + D+, e.g. +JH AE1 . B AH0 R D+ to match +jabber+ +(JH AE1 . B AH0 R)+.
+# When a headword is the -ed/-d inflection of a known -r/-re-final stem (jabber → jabbered,
+# abjure → abjured, debar → debarred) but a pronunciation lacks the rhotic right before the
+# final D, splice R in. The mismatch comes from the same BrE / non-rhotic Wiktionary import that
+# produces -r-final schwa drops (jabbered → JH AE1 . B AH0 D); the canonical past-tense form is
+# stem-pronunciation + D, e.g. JH AE1 . B AH0 R D to match jabber (JH AE1 . B AH0 R).
 #
-# Mutates +pron_hash+ entries +(pronunciation_map: word => [Pronunciation], word_dict: word => [freq, prons, …])+.
-# Independent of the +-r+-final pass: stem identification keys off orthography + presence in the hash,
-# not off any pron's phoneme content. The +:stem_c+ branch additionally requires per-pronunciation
-# alignment (+stem_c_pron_aligns?+) since the orthographic peel admits same-prefix lookalikes
-# like +cor+ from +corded+ where the actual stem is +cord+, not +cor+.
+# Mutates pron_hash entries (pronunciation_map: word => [Pronunciation], word_dict: word => [freq, prons, …]).
+# Independent of the -r-final pass: stem identification keys off orthography + presence in the hash,
+# not off any pron's phoneme content. The :stem_c branch additionally requires per-pronunciation
+# alignment (stem_c_pron_aligns?) since the orthographic peel admits same-prefix lookalikes
+# like cor from corded where the actual stem is cord, not cor.
 def insert_r_before_final_d_for_red_pronunciations!(pron_hash, label:)
   fixed_words = 0
   fixed_prons = 0
@@ -797,15 +797,15 @@ def insert_r_before_final_d_for_red_pronunciations!(pron_hash, label:)
   fixed_prons
 end
 
-# +-s+ counterpart of +insert_r_before_final_d_for_red_pronunciations!+. When a headword is the +-s+
-# plural / 3sg of an +-r+/+-re+-final stem (+jabber+ → +jabbers+, +goitre+ → +goitres+, +abjure+ →
-# +abjures+) but a pronunciation lacks the rhotic right before the final +S+/+Z+, splice +R+ in. The
-# canonical post-fix form is +stem-pronunciation + Z+ (e.g. +JH AE1 . B AH0 R Z+ matching +jabber+
-# +(JH AE1 . B AH0 R)+).
+# -s counterpart of insert_r_before_final_d_for_red_pronunciations!. When a headword is the -s
+# plural / 3sg of an -r/-re-final stem (jabber → jabbers, goitre → goitres, abjure →
+# abjures) but a pronunciation lacks the rhotic right before the final S/Z, splice R in. The
+# canonical post-fix form is stem-pronunciation + Z (e.g. JH AE1 . B AH0 R Z matching jabber
+# (JH AE1 . B AH0 R)).
 #
-# Same K=3 +R+-lookback as the +-red+ helper rejects internal-+R+ loanword plurals (+halteres+,
-# +flores+, +mores+, +rivieres+, +torres+, +libres+, +entendres+, +oeuvres+, +louvres+, +abares+,
-# +bures+ when its first variant is already +B EH1 R Z+).
+# Same K=3 R-lookback as the -red helper rejects internal-R loanword plurals (halteres,
+# flores, mores, rivieres, torres, libres, entendres, oeuvres, louvres, abares,
+# bures when its first variant is already B EH1 R Z).
 def insert_r_before_final_sibilant_for_s_pronunciations!(pron_hash, label:)
   fixed_words = 0
   fixed_prons = 0
@@ -883,12 +883,12 @@ def rebuild_rhymecrime_dictionaries()
   save_string_hash(rime_dict, generated_dict_path_under_dict_dir(RIME_DICT_FILENAME), RIME_DICT_HEADER)
   save_word_dict(word_dict, lemma_map)
   save_word_lemma_map!(word_dict, lemma_map)
-  # Runtime-canonical msgpack mirrors of the two +.txt+ artifacts above.
-  # +word_dict()+ / +rime_dict()+ in +crime.rb+ load these in BOTH local-dev and
-  # Lambda mode; the +.txt+ files are kept on disk for human inspection only.
-  # See the +WORD_DICT_MSGPACK_FILENAME+ doc comment in +utils_rhyme.rb+ for
-  # the storage format and the rationale behind retiring the DDB +word#+ /
-  # +rime#+ partitions.
+  # Runtime-canonical msgpack mirrors of the two .txt artifacts above.
+  # word_dict() / rime_dict() in crime.rb load these in BOTH local-dev and
+  # Lambda mode; the .txt files are kept on disk for human inspection only.
+  # See the WORD_DICT_MSGPACK_FILENAME doc comment in utils_rhyme.rb for
+  # the storage format and the rationale behind retiring the DDB word# /
+  # rime# partitions.
   save_word_dict_msgpack!(word_dict, lemma_map)
   save_rime_dict_msgpack!(rime_dict)
   save_hyphen_variant_map!(hyphen_fold_build_keys, exported_keys: word_dict.keys)
@@ -902,7 +902,7 @@ def rebuild_rhymecrime_dictionaries()
   end
 
   # Build the semantic base map AFTER Numberbatch is on disk so the cosine
-  # guard in +compute_semantic_base_map+ has data to consult. First-run
+  # guard in compute_semantic_base_map has data to consult. First-run
   # bootstrap (no prior NB msgpack) is fine: when the file is missing the
   # guard silently no-ops and we get the surface-only filtered map; the next
   # build will tighten it.

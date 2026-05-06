@@ -25,7 +25,7 @@
 # Every other field in the raw dump is dropped. A record survives iff it
 # contributes at least one of: a pronunciation, an inflectional form, an
 # alt_of/form_of pointer, or a definitional gloss. Default cutoffs for the gloss
-# side were tuned against the relatedness classifier on +curated/related.csv+;
+# side were tuned against the relatedness classifier on curated/related.csv;
 # see RHYMECRIME_KAIKKI_* env vars below for the knobs we swept and
 # notes/wiktionary-glosses-experiments.canvas for the results.
 
@@ -60,11 +60,11 @@ ARGF.each_line do |line|
   pos = obj["pos"]
   next if word.nil? || word.empty? || pos.nil? || pos.empty?
 
-  # Drop +nonstandard+-tagged transcriptions: Wiktionary editors flag stigmatized
-  # / hyper-local / reading-spelling renderings (+/məˈdam/+ for "madam",
-  # +/foʊlks/+ for "folks", +[ˈtɛt.nɪ.kl̩]+ for Southern-US "technical"). They
+  # Drop nonstandard-tagged transcriptions: Wiktionary editors flag stigmatized
+  # / hyper-local / reading-spelling renderings (/məˈdam/ for "madam",
+  # /foʊlks/ for "folks", [ˈtɛt.nɪ.kl̩] for Southern-US "technical"). They
   # add noise to rhyme buckets without giving us a broadly accepted reading we
-  # don't already have from a sibling +sounds+ row. ~0.12% of dump rows.
+  # don't already have from a sibling sounds row. ~0.12% of dump rows.
   sounds = (obj["sounds"] || []).select do |s|
     next false unless s.is_a?(Hash) && s["ipa"]
     next false if (s["tags"] || []).include?("nonstandard")

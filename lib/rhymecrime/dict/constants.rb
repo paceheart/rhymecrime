@@ -4,7 +4,7 @@ require_relative "utils_rhyme"
 require "rwordnet"
 
 # Trace headword(s) through dict-build (frequency, CMU ingest, rime, disconnect, …).
-# Comma/space/semicolon-separated lists in +DICT_TRACE_WORDS+ and/or +TRACE_WORDS+ (merged and uniq’d).
+# Comma/space/semicolon-separated lists in DICT_TRACE_WORDS and/or TRACE_WORDS (merged and uniq’d).
 #
 # Examples:
 #   TRACE_WORDS=kitchening ./bin/dict-build
@@ -18,16 +18,16 @@ def dict_trace_word?(word)
   !TRACE_WORDS.empty? && TRACE_WORDS.include?(word)
 end
 
-# Kaikki morph inheritance / common-list + SUBTLEX-anchored Inflect expansion: +base+ →
-# +infl+ inflection row touches any word in +TRACE_WORDS+.
+# Kaikki morph inheritance / common-list + SUBTLEX-anchored Inflect expansion: base →
+# infl inflection row touches any word in TRACE_WORDS.
 def dict_trace_morph?(base, infl)
   return false if TRACE_WORDS.empty?
 
   TRACE_WORDS.include?(base) || TRACE_WORDS.include?(infl)
 end
 
-# List-pivot Inflect inheritance: hash key +word+, common_words candidate +listed+,
-# morph +base+ → +infl+.
+# List-pivot Inflect inheritance: hash key word, common_words candidate listed,
+# morph base → infl.
 def dict_trace_morph_inherit_listed?(word, listed, base, infl)
   return false if TRACE_WORDS.empty?
 
@@ -41,8 +41,8 @@ def dict_trace_preprocess_line?(original_line, line)
   TRACE_WORDS.any? { |w| line.include?(w) }
 end
 
-# +body+ must not include a leading "TRACE". Pass +word+ to print +TRACE(word)+ before the message;
-# pass nil or "" for an unscoped +TRACE+ line only.
+# body must not include a leading "TRACE". Pass word to print TRACE(word) before the message;
+# pass nil or "" for an unscoped TRACE line only.
 def dict_trace_format(word, body)
   b = body.to_s
   w = word.is_a?(String) && !word.empty? ? word : nil
@@ -58,12 +58,12 @@ DICT_BUILD_VERBOSE = false
 CORPORA_ROOT = File.join(REPO_ROOT, "corpora")
 
 CMUDICT_FILENAME = File.join(CORPORA_ROOT, "cmudict", "cmudict-0.7c.txt")
-# Hand-curated inputs live under +curated/+; +CURATED_DIR+ is defined in +utils_rhyme.rb+
-# (parallel to +REPO_ROOT+ / +GENERATED_DIR+) and shared by every loader. The
-# common / rare / forbidden word sets are not surfaced as +*_FILENAME+
-# constants any more — they're consumed by kind out of +curated/rarity.csv+
-# via +rarity_csv_common_words+ / +rarity_csv_rare_words+ /
-# +rarity_csv_forbidden_words+ in +utils_rhyme.rb+.
+# Hand-curated inputs live under curated/; CURATED_DIR is defined in utils_rhyme.rb
+# (parallel to REPO_ROOT / GENERATED_DIR) and shared by every loader. The
+# common / rare / forbidden word sets are not surfaced as *_FILENAME
+# constants any more — they're consumed by kind out of curated/rarity.csv
+# via rarity_csv_common_words / rarity_csv_rare_words /
+# rarity_csv_forbidden_words in utils_rhyme.rb.
 NEOL2016_FILENAME = File.join(CORPORA_ROOT, "neol", "neol2016.txt")
 NEOL_SUPPLEMENT_FILENAME = File.join(CURATED_DIR, "neol_supplement.txt")
 
@@ -73,12 +73,12 @@ SUBTLEX_PRESENCE_BONUS = 4
 
 WORDFREQ_FILENAME = File.join(REPO_ROOT, "generated", "wordfreq.tsv")
 WORDFREQ_COMMON_ZIPF = 3.0
-# OOV headwords with weak SUBTLEX (below +SUBTLEX_OVERRIDE_PROPER_MIN+): allow wordfreq boost when Zipf is
+# OOV headwords with weak SUBTLEX (below SUBTLEX_OVERRIDE_PROPER_MIN): allow wordfreq boost when Zipf is
 # clearly conversational web, not just encyclopedic (*poly* ~3.6, *trans* ~4.4 vs surname-fragment band).
 WORDFREQ_OOV_STRONG_MODERN_ZIPF = 3.5
 WORDFREQ_RARE_ZIPF = 2.0
 # Kaikki inflections of a Wiktionary lemma: rescue at freq==0 disconnect when base Zipf is below
-# +WORDFREQ_RARE_ZIPF+ but still shows measurable corpus use (e.g. *throuple* ~1.3 → *throuples*).
+# WORDFREQ_RARE_ZIPF but still shows measurable corpus use (e.g. *throuple* ~1.3 → *throuples*).
 WORDFREQ_KAIKKI_FORM_BASE_MIN = 1.0
 # SUBTLEX FREQlow this high means sustained lowercase dialogue use — used with weak_lemma_anchor
 # and with two-letter all-proper handling below.
@@ -93,7 +93,7 @@ MORPH_CORPUS_SUBTLEX_MIN = 40
 # Plural :s only: allow WN noun-only bases below the corpus floor when still attested in subtitles
 # (e.g. gramophone SUBTLEX 15 → gramophones).
 MORPH_LEXICAL_NOUN_PLURAL_SUBTLEX_MIN = 10
-# Case-based proper-noun detection (see +likely_proper_noun_by_case?+).
+# Case-based proper-noun detection (see likely_proper_noun_by_case?).
 # SUBTLEX+Kaikki preserve headword case; wordfreq/ConceptNet/Numberbatch do not.
 # SUBTLEX FREQcount must reach this many tokens before the capitalized ratio is trusted.
 # 10 catches *Brant* 32, *Mong* 17, *Shi* 50, *Strom* 19 while ignoring *convex* (tot 9, legit

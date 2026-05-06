@@ -4,20 +4,20 @@
 # relatedness/signals.rb — offline signal gathering for the relatedness pipeline.
 #
 # Holds every knowledge-base loader and per-pair raw-feature extractor needed to
-# compute +relatedness_score+: Numberbatch vectors, ConceptNet graph, USF
+# compute relatedness_score: Numberbatch vectors, ConceptNet graph, USF
 # free-association norms, MPNet contextualized embeddings, WordNet glosses. This
-# is the *seed-time* side of the codebase: loaded by +bin/compute-relatedness+,
-# +bin/train-relatedness-classifier+, related specs, and the local-dev escape
-# hatch in +lib/rhymecrime/related.rb+ when no computed data is available.
+# is the *seed-time* side of the codebase: loaded by bin/compute-relatedness,
+# bin/train-relatedness-classifier, related specs, and the local-dev escape
+# hatch in lib/rhymecrime/related.rb when no computed data is available.
 #
 # Not required at Lambda runtime. Every offline tunable, data loader, and the
-# +PairSignals+ class live here so the runtime graph can stay free of the
+# PairSignals class live here so the runtime graph can stay free of the
 # hundreds of MB of data files these modules pull in.
 #
-# Callers are expected to have already loaded +rhymecrime/frontend+ (or
-# +rhymecrime/crime+) so helpers like +lemma+, +semantically_promiscuous?+,
-# +frequency+, +rare?+, +word_dict_includes_headword?+, and
-# +part_of_speech_tags+ are available.
+# Callers are expected to have already loaded rhymecrime/frontend (or
+# rhymecrime/crime) so helpers like lemma, semantically_promiscuous?,
+# frequency, rare?, word_dict_includes_headword?, and
+# part_of_speech_tags are available.
 #
 
 require "json"
@@ -45,9 +45,9 @@ $SENSE_VECTOR_MIN_BASE = 6
 $SENSE_VECTOR_MAX_SENSES = (ENV["RHYMECRIME_SENSE_VECTOR_CAP"] || "4").to_i
 # Asymmetric sense-vector bypass: when one direction is very strong (e.g. one word's
 # WordNet definitions clearly describe the other) the reverse direction is often
-# diluted by polysemy. Accept as related when +sv_max >= ASYMMETRIC_MAX+ and
-# +sv_min >= ASYMMETRIC_MIN+, as long as the regular +SENSE_VECTOR_MIN_BASE+ gate
-# is satisfied. The non-zero +ASYMMETRIC_MIN+ keeps pure noise out.
+# diluted by polysemy. Accept as related when sv_max >= ASYMMETRIC_MAX and
+# sv_min >= ASYMMETRIC_MIN, as long as the regular SENSE_VECTOR_MIN_BASE gate
+# is satisfied. The non-zero ASYMMETRIC_MIN keeps pure noise out.
 $SENSE_VECTOR_ASYMMETRIC_MAX = 18
 $SENSE_VECTOR_ASYMMETRIC_MIN = 1
 $USF_TWOHOP_BOOST = 10
@@ -58,11 +58,11 @@ $USF_MIN_BASE = 0
 # Co-occurrence combiner: additive contribution that fires when several weak signals
 # line up even though no single hard-gated rule is satisfied. This is the main lever
 # the 3-phase design unlocks — gates on individual rules are already tuned, but pairs
-# with (e.g.) below-threshold +base+ *and* two-sided sense-vector agreement *and* a
+# with (e.g.) below-threshold base *and* two-sided sense-vector agreement *and* a
 # validated USF bridge are clearly related despite no single gate passing. Weights
-# tuned on +curated/related.csv+ via grid search over a broad plateau (see
-# +spec/related_spec.rb+). Contribution is +base * w + sv_min * w +
-# max(0, sv_max - floor) * w + (usf ? w : 0)+, each term capped so one runaway
+# tuned on curated/related.csv via grid search over a broad plateau (see
+# spec/related_spec.rb). Contribution is base * w + sv_min * w +
+# max(0, sv_max - floor) * w + (usf ? w : 0), each term capped so one runaway
 # signal can't dominate.
 $COOCCUR_BASE_WEIGHT = 3.0
 $COOCCUR_BASE_CAP = 15
@@ -74,11 +74,11 @@ $COOCCUR_SV_MAX_CAP = 20
 $COOCCUR_USF_WEIGHT = 10
 
 # Cheap gate for the expensive MPNet sense-sense and directional-sense cosines.
-# When +model_headword_cosine+ (one 768-dim dot product, already needed for the
-# classifier's +model_cos_pct+ feature) is below this threshold, both
-# +model_sense_sense_max_cosine+ and +model_directional_sense_cosines+
+# When model_headword_cosine (one 768-dim dot product, already needed for the
+# classifier's model_cos_pct feature) is below this threshold, both
+# model_sense_sense_max_cosine and model_directional_sense_cosines
 # short-circuit to 0. Cutoff is on the raw cosine (-1..1), not the
-# +model_cos_pct+ centile.
+# model_cos_pct centile.
 #
 # Rationale: a 768-dim unit-vector dot product near 0 means the two words live
 # in nearly-orthogonal regions of the MPNet embedding space. Sense vectors are
@@ -87,14 +87,14 @@ $COOCCUR_USF_WEIGHT = 10
 # classifier's threshold and the expensive K_a*K_b*768 inner loop is wasted.
 # Pairs that would have squeaked through via a polysemous sense are rare
 # enough that the overall predicate is essentially unchanged; the retrained
-# classifier absorbs the small residual by leaning harder on +model_cos_pct+
+# classifier absorbs the small residual by leaning harder on model_cos_pct
 # (which remains uncapped).
 #
-# In the +pirate+ one-cue profile, ~41% of wall time was inside these two
-# functions (see +notes/todo.md+ perf log). Raising the gate from 0 to 0.10
+# In the pirate one-cue profile, ~41% of wall time was inside these two
+# functions (see notes/todo.md perf log). Raising the gate from 0 to 0.10
 # skips the vast majority of the ~20k-candidate scan inner loops.
 #
-# Override with +RHYMECRIME_MODEL_SENSE_GATE=0.05+ etc. Negative / blank
+# Override with RHYMECRIME_MODEL_SENSE_GATE=0.05 etc. Negative / blank
 # disables the gate.
 $MODEL_SENSE_COSINE_GATE = (ENV["RHYMECRIME_MODEL_SENSE_GATE"] || "0.10").to_f
 
@@ -118,13 +118,13 @@ def conceptnet_edges
   $conceptnet_edges
 end
 
-# Expects dictionary-lemma spellings (see +similarity+). Keys match +save_conceptnet_edge_map!+ export.
+# Expects dictionary-lemma spellings (see similarity). Keys match save_conceptnet_edge_map! export.
 def conceptnet_edge_weight(word1, word2)
   key = [hyphens_to_underscores(word1), hyphens_to_underscores(word2)].sort.join("|")
   conceptnet_edges[key] || 0.0
 end
 
-# Adjacency index over +conceptnet_edges+: +{node => Set[neighbor, ...]}+. Built once
+# Adjacency index over conceptnet_edges: {node => Set[neighbor, ...]}. Built once
 # the first time it's needed (~1s for ~300k edges). Underscore-keyed (matches the
 # edge-map keys directly).
 $conceptnet_adjacency = nil
@@ -143,22 +143,22 @@ end
 
 # Maximum shortest-path distance considered "meaningful" in the ConceptNet graph.
 # BFS is clipped here and distances >= CN_MAX_HOPS are coded in-band (see
-# +conceptnet_shortest_hops+). Exposed at top level so the source-cache helpers
-# below can reference it without forward-referring to +PairSignals+.
+# conceptnet_shortest_hops). Exposed at top level so the source-cache helpers
+# below can reference it without forward-referring to PairSignals.
 CN_MAX_HOPS = 4 unless defined?(CN_MAX_HOPS)
 
 # Source-fixed BFS cache. When a scan loop is about to evaluate thousands of pairs
-# against a single cue, it can call +prepare_cn_hops_source!(cue)+ to compute the
+# against a single cue, it can call prepare_cn_hops_source!(cue) to compute the
 # full distance table from the cue once (single-source BFS, ~50ms) and then
-# +conceptnet_shortest_hops+ short-circuits to a hash lookup for any pair where one
-# endpoint is that cue. Scoped to the current process; +clear_cn_hops_source!+ or
-# replacing with +nil+ disables the fast path.
+# conceptnet_shortest_hops short-circuits to a hash lookup for any pair where one
+# endpoint is that cue. Scoped to the current process; clear_cn_hops_source! or
+# replacing with nil disables the fast path.
 $cn_hops_source = nil
 
-# Compute and cache the shortest-path distance from +cue+ to every ConceptNet
-# node reachable within +max_hops+. Idempotent: replaces any previously cached
-# source. Safe to call when +cue+ has no ConceptNet node (the cache is cleared so
-# the fast path is skipped and the generic BFS still returns +max_hops + 2+).
+# Compute and cache the shortest-path distance from cue to every ConceptNet
+# node reachable within max_hops. Idempotent: replaces any previously cached
+# source. Safe to call when cue has no ConceptNet node (the cache is cleared so
+# the fast path is skipped and the generic BFS still returns max_hops + 2).
 def prepare_cn_hops_source!(cue, max_hops = ::CN_MAX_HOPS)
   adj = conceptnet_adjacency
   key = hyphens_to_underscores(cue)
@@ -189,13 +189,13 @@ def clear_cn_hops_source!
 end
 
 # Shortest path length in the undirected ConceptNet graph between two words, clipped
-# at +max_hops+. 1 = direct edge, 2 = one bridge, etc. +max_hops + 1+ means "not
-# reachable within +max_hops+". +max_hops + 2+ means at least one endpoint has no
+# at max_hops. 1 = direct edge, 2 = one bridge, etc. max_hops + 1 means "not
+# reachable within max_hops". max_hops + 2 means at least one endpoint has no
 # node in the graph at all — distinct from "reachable but far" so the classifier can
-# condition on data availability the way it does with +model_both_in_vocab?+.
+# condition on data availability the way it does with model_both_in_vocab?.
 # Bidirectional BFS: alternately expands the smaller frontier, so worst-case work
-# scales like +degree**(max_hops/2)+ instead of +degree**max_hops+. When a source
-# cache built by +prepare_cn_hops_source!+ is active and one endpoint matches the
+# scales like degree**(max_hops/2) instead of degree**max_hops. When a source
+# cache built by prepare_cn_hops_source! is active and one endpoint matches the
 # cached cue, the BFS is replaced by a single hash lookup.
 def conceptnet_shortest_hops(word1, word2, max_hops = 4)
   adj = conceptnet_adjacency
@@ -292,9 +292,9 @@ def usf_associations
 end
 
 # Direct (1-hop) USF forward-association strengths between a lemma pair. Returns
-# +[forward, reverse]+: +forward+ is the strength when +word1+ was the cue and
-# +word2+ appeared as a target, +reverse+ is the symmetric case. Zero in each
-# direction when no direct link exists. Complements +usf_twohop_bridge_validated?+:
+# [forward, reverse]: forward is the strength when word1 was the cue and
+# word2 appeared as a target, reverse is the symmetric case. Zero in each
+# direction when no direct link exists. Complements usf_twohop_bridge_validated?:
 # 2-hop needs validation because intermediate bridges can be spurious, but a direct
 # link from human free-association participants is unambiguous evidence of mental
 # association and typically a much stronger relatedness signal.
@@ -332,13 +332,13 @@ end
 
 # --- Numberbatch vectors (pre-normalized) ---
 
-# Numberbatch vectors are loaded once and cast to +Numo::SFloat+ at load time
-# (see +model_sense_vectors_table+ for the same treatment of MPNet vectors and
+# Numberbatch vectors are loaded once and cast to Numo::SFloat at load time
+# (see model_sense_vectors_table for the same treatment of MPNet vectors and
 # the rationale). Ruby-array dot products in the per-pair hot path scaled as
-# +O(candidates × dim)+ pure-Ruby multiplies; +Numo#dot+ delegates to native
+# O(candidates × dim) pure-Ruby multiplies; Numo#dot delegates to native
 # BLAS and collapses the 300-dim (Numberbatch) and 768-dim (MPNet) cosines into
 # a single FFI call apiece. Float32 cast is lossless for cosine purposes — the
-# +(* 100).round+ quantization at the call sites absorbs any LSB drift.
+# (* 100).round quantization at the call sites absorbs any LSB drift.
 $numberbatch = nil
 def numberbatch
   return $numberbatch unless $numberbatch.nil?
@@ -361,7 +361,7 @@ def numberbatch_table
   nb.nil? ? numberbatch : nb
 end
 
-# Expects dictionary-lemma spellings (see +similarity+). Rows match +save_numberbatch_vectors!+ export.
+# Expects dictionary-lemma spellings (see similarity). Rows match save_numberbatch_vectors! export.
 def numberbatch_cosine(word1, word2)
   nb = numberbatch_table
   v1 = nb[hyphens_to_underscores(word1)]
@@ -370,7 +370,7 @@ def numberbatch_cosine(word1, word2)
   v1.dot(v2).to_f
 end
 
-# True if +lemma(word)+ has a row in the Numberbatch export (+save_numberbatch_vectors!+ keys, underscore-normalized).
+# True if lemma(word) has a row in the Numberbatch export (save_numberbatch_vectors! keys, underscore-normalized).
 # Used to skip the O(n) relatedness scan when the cue cannot contribute a primary vector score.
 def dictionary_lemma_has_numberbatch_vector?(word)
   l = lemma(word)
@@ -378,8 +378,8 @@ def dictionary_lemma_has_numberbatch_vector?(word)
 end
 
 # --- Modern sentence-transformer embeddings ---
-# Built offline by +bin/dump-sense-glosses+ -> +bin/build-sense-vectors.py+, saved as
-# +generated/model_sense_vectors.msgpack+. Supplements (does not replace) Numberbatch:
+# Built offline by bin/dump-sense-glosses -> bin/build-sense-vectors.py, saved as
+# generated/model_sense_vectors.msgpack. Supplements (does not replace) Numberbatch:
 # Numberbatch is tiny and fast for the O(n) scan, while these contextualized vectors
 # carry richer sense distinctions for the per-pair yes/no decision. On-disk shape
 # (msgpack):
@@ -387,26 +387,26 @@ end
 #     "headword" => {lemma => [Float * dim]},
 #     "senses"   => {lemma => [[Float * dim], ...]} }
 # Vectors are pre-L2-normalized so cosine similarity is a plain dot product. Keys use
-# hyphen-form lemmas (matching +lemma()+ output), not the underscore form Numberbatch
+# hyphen-form lemmas (matching lemma() output), not the underscore form Numberbatch
 # keys use. Strict-load policy: a missing msgpack raises — the relatedness pipeline
-# was trained against +model_*+ features and the classifier doesn't know how to
+# was trained against model_* features and the classifier doesn't know how to
 # behave when those features are silently zero. Bootstrap by running
-# +bin/dump-sense-glosses+ → +bin/build-sense-vectors.py+ before retraining /
-# computing. Per-word OOV is still handled gracefully: +headword[word]+ /
-# +senses[word]+ may legitimately be +nil+ for words not in the encoder vocabulary,
-# and the in-vocab flag features (+model_both_in_vocab?+, +def_both_in_vocab?+)
+# bin/dump-sense-glosses → bin/build-sense-vectors.py before retraining /
+# computing. Per-word OOV is still handled gracefully: headword[word] /
+# senses[word] may legitimately be nil for words not in the encoder vocabulary,
+# and the in-vocab flag features (model_both_in_vocab?, def_both_in_vocab?)
 # let the classifier condition on that.
 #
-# At load time the per-word vectors get converted to +Numo::SFloat+ (32-bit float):
+# At load time the per-word vectors get converted to Numo::SFloat (32-bit float):
 #   headword:  {lemma => Numo::SFloat(dim)}               or nil if OOV
 #   senses:    {lemma => Numo::SFloat(K, dim)}            or nil if no senses
-# The cosine helpers below are then one +Numo+ +dot+ call apiece — each 768-dim
-# dot product offloads to the native BLAS shipped with +numo-narray+, giving a
-# ~12x speed-up over the previous pure-Ruby +va.size.times { |i| ... }+ loops
-# (measured: 40 kpairs/s vs 3.3 kpairs/s on the +pirate+ compute cue). The
+# The cosine helpers below are then one Numo dot call apiece — each 768-dim
+# dot product offloads to the native BLAS shipped with numo-narray, giving a
+# ~12x speed-up over the previous pure-Ruby va.size.times { |i| ... } loops
+# (measured: 40 kpairs/s vs 3.3 kpairs/s on the pirate compute cue). The
 # float32 cast is lossless for cosine purposes: vectors are already stored as
-# +Float+ in the msgpack but their dynamic range is well within float32's
-# precision, and the +(* 100).round+ quantization at the call sites hides any
+# Float in the msgpack but their dynamic range is well within float32's
+# precision, and the (* 100).round quantization at the call sites hides any
 # LSB drift.
 $model_sense_vectors = nil
 $model_sense_vectors_loaded = false
@@ -420,10 +420,10 @@ def model_sense_vectors_table
           "  ./bin/build-sense-vectors.py\n" \
           "(or ./bin/retrain-relatedness, which chains both)."
   end
-  # Stream-decode instead of +File.binread(path)+: macOS' +read(2)+ syscall caps a
-  # single read at +INT_MAX+ (2 GiB), so once the full-vocab msgpack passes that
-  # threshold (~136k headwords × 768 fp32 ≈ 2.3 GB), +File.binread+ raises
-  # +Errno::EINVAL+. +MessagePack::Unpacker+ on an open IO handles chunking.
+  # Stream-decode instead of File.binread(path): macOS' read(2) syscall caps a
+  # single read at INT_MAX (2 GiB), so once the full-vocab msgpack passes that
+  # threshold (~136k headwords × 768 fp32 ≈ 2.3 GB), File.binread raises
+  # Errno::EINVAL. MessagePack::Unpacker on an open IO handles chunking.
   raw = File.open(path, "rb") { |f| MessagePack::Unpacker.new(f).read }
   hw_raw = raw["headword"] || {}
   df_raw = raw["definition"] || {}
@@ -456,8 +456,8 @@ def model_sense_vectors_table
   $model_sense_vectors
 end
 
-# Returns the word's headword vector as a 1-D +Numo::SFloat+ of length +dim+,
-# or +nil+ when the word is out of MPNet vocabulary.
+# Returns the word's headword vector as a 1-D Numo::SFloat of length dim,
+# or nil when the word is out of MPNet vocabulary.
 def model_headword_vector(word)
   t = model_sense_vectors_table
   return nil if t.nil?
@@ -465,13 +465,13 @@ def model_headword_vector(word)
   h.nil? ? nil : h[word]
 end
 
-# Pooled-definition embedding: MPNet over +"{word}. {gloss1}. {gloss2}..."+ (see
-# +bin/dump-sense-glosses+). Disambiguates polysemous bare words ("bear",
-# "match", "bank") that the +headword+ vector — which only sees the word in
+# Pooled-definition embedding: MPNet over "{word}. {gloss1}. {gloss2}..." (see
+# bin/dump-sense-glosses). Disambiguates polysemous bare words ("bear",
+# "match", "bank") that the headword vector — which only sees the word in
 # isolation — collapses to an averaged sense the classifier has trouble using.
-# Returns 1-D +Numo::SFloat(dim)+ or +nil+ when out of vocab. Falls back at
+# Returns 1-D Numo::SFloat(dim) or nil when out of vocab. Falls back at
 # *build* time to the bare-word text when the word has no WordNet glosses, so
-# +definition[word]+ is populated whenever the word is in vocab at all.
+# definition[word] is populated whenever the word is in vocab at all.
 def model_definition_vector(word)
   t = model_sense_vectors_table
   return nil if t.nil?
@@ -480,7 +480,7 @@ def model_definition_vector(word)
 end
 
 # Definition-vs-definition cosine under the contextualized model (-1..1). Returns
-# 0.0 when either side is out-of-vocab — pair with +def_both_in_vocab?+ so the
+# 0.0 when either side is out-of-vocab — pair with def_both_in_vocab? so the
 # classifier can distinguish "low similarity" from "no data".
 def model_definition_cosine(word1, word2)
   v1 = model_definition_vector(word1)
@@ -489,9 +489,9 @@ def model_definition_cosine(word1, word2)
   v1.dot(v2).to_f
 end
 
-# Returns the word's sense vectors as a 2-D +Numo::SFloat+ of shape +[K, dim]+,
-# or +nil+ when the word has no sense vectors. Callers that need a count use
-# +.shape[0]+; presence is +.nil? == false+.
+# Returns the word's sense vectors as a 2-D Numo::SFloat of shape [K, dim],
+# or nil when the word has no sense vectors. Callers that need a count use
+# .shape[0]; presence is .nil? == false.
 def model_sense_vectors_of(word)
   t = model_sense_vectors_table
   return nil if t.nil?
@@ -501,7 +501,7 @@ def model_sense_vectors_of(word)
 end
 
 # Headword-headword cosine under the contextualized model (-1..1). Returns 0.0 when
-# either side is out-of-vocab — pair with +model_both_in_vocab?+ so the classifier
+# either side is out-of-vocab — pair with model_both_in_vocab? so the classifier
 # can distinguish "low similarity" from "no data".
 def model_headword_cosine(word1, word2)
   v1 = model_headword_vector(word1)
@@ -511,16 +511,16 @@ def model_headword_cosine(word1, word2)
 end
 
 # Directional sense-vs-headword cosines under the contextualized model (each 0..100
-# centile). Analogous to +directional_sense_cosines+ but end-to-end in the model's
+# centile). Analogous to directional_sense_cosines but end-to-end in the model's
 # embedding space: for each sense vector of word1, the cosine against word2's headword
 # vector (and symmetrically). Lets a specific sense of a polysemous word rescue the
 # pair even when the averaged headword embedding doesn't match.
 #
-# Gated by +$MODEL_SENSE_COSINE_GATE+ on the raw headword-headword cosine: when the
+# Gated by $MODEL_SENSE_COSINE_GATE on the raw headword-headword cosine: when the
 # two words are near-orthogonal in MPNet space, none of their per-sense cosines are
 # going to cross the classifier's decision threshold either, so we skip the K_a + K_b
-# vector-matrix products entirely. Accepts an optional computed +headword_cos+ to
-# avoid recomputing what +PairSignals+ already cached.
+# vector-matrix products entirely. Accepts an optional computed headword_cos to
+# avoid recomputing what PairSignals already cached.
 def model_directional_sense_cosines(word1, word2, headword_cos = nil)
   v2_head = model_headword_vector(word2)
   v1_head = model_headword_vector(word1)
@@ -535,8 +535,8 @@ def model_directional_sense_cosines(word1, word2, headword_cos = nil)
   sa = model_sense_vectors_of(word1)
   sb = model_sense_vectors_of(word2)
 
-  # +sa.dot(v2_head)+ is a +(K_a, dim) . (dim)+ product: one BLAS call returns a
-  # +K_a+-length vector of sense-vs-head cosines; +.max+ picks the best sense.
+  # sa.dot(v2_head) is a (K_a, dim) . (dim) product: one BLAS call returns a
+  # K_a-length vector of sense-vs-head cosines; .max picks the best sense.
   best_1to2 = (v2_head && sa) ? (sa.dot(v2_head).max * 100).round : 0
   best_1to2 = 0 if best_1to2 < 0
   best_2to1 = (v1_head && sb) ? (sb.dot(v1_head).max * 100).round : 0
@@ -549,7 +549,7 @@ end
 # where a specific sense of A matches a specific sense of B more tightly than either
 # matches the other's headword — i.e. polysemy on *both* sides. Small O(senses_a *
 # senses_b); capped at SENSE_VECTOR_MAX_SENSES^2 = 16 comparisons in practice. Same
-# headword-cosine gate as +model_directional_sense_cosines+ (see rationale there).
+# headword-cosine gate as model_directional_sense_cosines (see rationale there).
 def model_sense_sense_max_cosine(word1, word2, headword_cos = nil)
   sa = model_sense_vectors_of(word1)
   sb = model_sense_vectors_of(word2)
@@ -565,8 +565,8 @@ def model_sense_sense_max_cosine(word1, word2, headword_cos = nil)
     end
   end
 
-  # +sa.dot(sb.transpose)+ is a +(K_a, dim) . (dim, K_b) = (K_a, K_b)+ matmul:
-  # one BLAS call gives every sense-pair cosine; +.max+ picks the best cell.
+  # sa.dot(sb.transpose) is a (K_a, dim) . (dim, K_b) = (K_a, K_b) matmul:
+  # one BLAS call gives every sense-pair cosine; .max picks the best cell.
   ((sa.dot(sb.transpose)).max * 100).round
 end
 
@@ -578,7 +578,7 @@ end
 # slang / neologisms / domain terms WordNet lacks; WordNet has classical
 # definitions Wiktionary phrases differently). Pointer-only Wiktionary senses
 # ("Alternative spelling of X") are filtered out at build time in
-# +collect_definitional_glosses+, so the gloss text contributed here is
+# collect_definitional_glosses, so the gloss text contributed here is
 # definitional on both sides.
 
 $gloss_derivation_cache = {}
@@ -605,9 +605,9 @@ def gloss_word_token_set(lemma_word)
   end
 end
 
-# Source-restricted variants used by the +wn_/wk_+ split features in PairSignals.
-# These bypass +RHYMECRIME_GLOSS_SOURCE+ — the split features always study each
-# source independently regardless of the runtime gate, which is what the +D+
+# Source-restricted variants used by the wn_/wk_ split features in PairSignals.
+# These bypass RHYMECRIME_GLOSS_SOURCE — the split features always study each
+# source independently regardless of the runtime gate, which is what the D
 # experiment (separate features) measures.
 $gloss_token_set_cache_wn = {}
 def gloss_word_token_set_wn_only(lemma_word)
@@ -667,8 +667,8 @@ def bidirectional_gloss_contains?(word1, word2)
   hit
 end
 
-# Source-restricted +bidirectional_gloss_contains?+ variants for the +wn_/wk_+
-# split features. Use their own negative caches so a +false+ under one source
+# Source-restricted bidirectional_gloss_contains? variants for the wn_/wk_
+# split features. Use their own negative caches so a false under one source
 # doesn't poison the other (a pair with no WN signal can still match through WK).
 $gloss_negative_pair_cache_wn = Set.new
 $gloss_negative_pair_cache_wk = Set.new
@@ -702,7 +702,7 @@ end
 # Numberbatch vectors of content words in the definition to create a
 # sense-specific embedding. Handles polysemy by finding the best-matching
 # sense pair. WordNet senses are walked first so that under a tight
-# +max_senses+ cap the (usually shorter, hand-curated) WN glosses are picked
+# max_senses cap the (usually shorter, hand-curated) WN glosses are picked
 # first; Wiktionary senses fill the remaining slots when the cap permits.
 
 GLOSS_STOP_WORDS = Set.new(%w[
@@ -715,10 +715,10 @@ GLOSS_STOP_WORDS = Set.new(%w[
 ]).freeze
 
 # Embed a single gloss text as the L2-normalized average of Numberbatch vectors of
-# its content words (gloss tokens minus +GLOSS_STOP_WORDS+, mapped through +lemma+
-# when the headword is in the dict). Returns a +Numo::SFloat(dim)+ row vector or
-# +nil+ when fewer than 2 content words are in vocabulary or the average vanishes.
-# Shared by +sense_vectors+ (WordNet path) and the Wiktionary extension path so the
+# its content words (gloss tokens minus GLOSS_STOP_WORDS, mapped through lemma
+# when the headword is in the dict). Returns a Numo::SFloat(dim) row vector or
+# nil when fewer than 2 content words are in vocabulary or the average vanishes.
+# Shared by sense_vectors (WordNet path) and the Wiktionary extension path so the
 # two corpora produce comparable rows that stack into a single matrix.
 def gloss_text_to_sense_vector(gloss_text, nb)
   content_words = gloss_text.to_s.downcase.scan(/[a-z]+/) - GLOSS_STOP_WORDS.to_a
@@ -734,13 +734,13 @@ def gloss_text_to_sense_vector(gloss_text, nb)
   avg / mag
 end
 
-# Cached per-word sense-vector matrix: either a +Numo::SFloat(K, dim)+ of K
+# Cached per-word sense-vector matrix: either a Numo::SFloat(K, dim) of K
 # L2-normalized sense vectors (one row per WordNet synset *and* one row per
 # Wiktionary definitional sense whose gloss contained at least 2 Numberbatch-
-# indexed content words, capped at +max_senses+ rows total) or +nil+ when the
+# indexed content words, capped at max_senses rows total) or nil when the
 # word has no qualifying senses in either corpus. Returning a single 2-D matrix
-# lets callers fuse K per-sense cosines into one BLAS +dot+ call instead of a
-# Ruby +each+ + scalar-loop dot per sense (see +directional_sense_cosines+).
+# lets callers fuse K per-sense cosines into one BLAS dot call instead of a
+# Ruby each + scalar-loop dot per sense (see directional_sense_cosines).
 $sense_vectors_cache = {}
 def sense_vectors(word, max_senses = $SENSE_VECTOR_MAX_SENSES)
   key = [word, max_senses]
@@ -807,10 +807,10 @@ def directional_sense_cosines(word1, word2)
   [best_1to2, best_2to1]
 end
 
-# Source-restricted +sense_vectors+ variants for the +wn_/wk_+ split features.
-# Same +max_senses+ cap as +sense_vectors+ but only walks one source. Bypasses
-# +RHYMECRIME_GLOSS_SOURCE+ so the split features measure each source's signal
-# regardless of the runtime gate (parallel to +gloss_word_token_set_wn_only+ etc).
+# Source-restricted sense_vectors variants for the wn_/wk_ split features.
+# Same max_senses cap as sense_vectors but only walks one source. Bypasses
+# RHYMECRIME_GLOSS_SOURCE so the split features measure each source's signal
+# regardless of the runtime gate (parallel to gloss_word_token_set_wn_only etc).
 $sense_vectors_cache_wn = {}
 def sense_vectors_wn_only(word, max_senses = $SENSE_VECTOR_MAX_SENSES)
   key = [word, max_senses]
@@ -847,8 +847,8 @@ def sense_vectors_wk_only(word, max_senses = $SENSE_VECTOR_MAX_SENSES)
 end
 
 # Source-restricted directional sense-vector cosines (parallel to
-# +directional_sense_cosines+). Returns +[cue→related, related→cue]+ centiles
-# 0..100. Used by +PairSignals#wn_sv_*+ / +#wk_sv_*+.
+# directional_sense_cosines). Returns [cue→related, related→cue] centiles
+# 0..100. Used by PairSignals#wn_sv_* / #wk_sv_*.
 def directional_sense_cosines_for_source(word1, word2, source_loader)
   nb = numberbatch_table
   best_1to2 = 0
@@ -876,10 +876,10 @@ def directional_sense_cosines_for_source(word1, word2, source_loader)
   [best_1to2, best_2to1]
 end
 
-# Morphy-derived sense-vector matrix (or +nil+), analogous to +sense_vectors+
+# Morphy-derived sense-vector matrix (or nil), analogous to sense_vectors
 # but resolves inflected forms (plurals, verb conjugations) through WordNet's
 # morphy and also consults Wiktionary glosses for the morphy-resolved forms.
-# Same return shape so both feed the same +directional_sense_cosines+
+# Same return shape so both feed the same directional_sense_cosines
 # matrix-dot fast path.
 $morphy_sv_cache = {}
 def sense_vectors_morphy(word, max_senses = $SENSE_VECTOR_MAX_SENSES)
@@ -953,8 +953,8 @@ def morphy_directional_sense_cosines(word1, word2)
 end
 
 # Numberbatch + ConceptNet centile score for two dictionary lemmas. Compute-time
-# input to +PairSignals#base_similarity+. Not used at Lambda runtime (the runtime
-# +similarity+ reads the stored +relatedness_score+ directly from DynamoDB).
+# input to PairSignals#base_similarity. Not used at Lambda runtime (the runtime
+# similarity reads the stored relatedness_score directly from DynamoDB).
 def lemmilarity(l1, l2)
   return 0 if semantically_promiscuous?(l1) || semantically_promiscuous?(l2)
 
@@ -967,22 +967,22 @@ end
 
 # --- Relatedness signal gathering ---
 #
-# +PairSignals+ bundles every relatedness signal for a given dictionary-lemma pair
-# +(a, b)+. Each feature is returned in its natural type/range (booleans for yes/no
+# PairSignals bundles every relatedness signal for a given dictionary-lemma pair
+# (a, b). Each feature is returned in its natural type/range (booleans for yes/no
 # rescues, 0..100 integers for cosine-derived scores, raw weights for ConceptNet edges,
 # counts for sense-vector availability) — no scaling to the composite 0..100 scale
 # happens here. Accessors memoize on the instance so diagnostics, scoring, and any
 # future callers can read the same signal multiple times without recomputation.
 #
-# Relatedness score combination (+relatedness_score+) is the only place feature weights
+# Relatedness score combination (relatedness_score) is the only place feature weights
 # / scaling live.
 # --- Unigram feature registry ---
-# Each entry here yields one column per pair reduction in +PAIR_REDUCTIONS+
-# (+min+ / +max+ / +diff+, which behave as AND / OR / XOR for 0/1-valued booleans
-# and as the obvious aggregates for numerics; plus +cue+ / +related+ — the raw
+# Each entry here yields one column per pair reduction in PAIR_REDUCTIONS
+# (min / max / diff, which behave as AND / OR / XOR for 0/1-valued booleans
+# and as the obvious aggregates for numerics; plus cue / related — the raw
 # directional values, kept alongside the symmetric reductions so the classifier
-# can split on per-side priors when the +(cue, related)+ orientation matters).
-# Add a new signal by extending +word_unigram_features+ and +UNIGRAM_FEATURE_NAMES+;
+# can split on per-side priors when the (cue, related) orientation matters).
+# Add a new signal by extending word_unigram_features and UNIGRAM_FEATURE_NAMES;
 # the classifier will pick it up on the next retrain and prune it implicitly if
 # it can't split on it usefully.
 
@@ -1000,23 +1000,23 @@ UNIGRAM_FEATURE_NAMES = %w[
   pos_count
 ].freeze
 
-# +min+ / +max+ / +diff+ are symmetric reductions that pre-date the directional
+# min / max / diff are symmetric reductions that pre-date the directional
 # split (and stay in place so the existing classifier file's feature-name guard
 # only flags the *new* directional columns as added, not the old slots as moved).
-# +cue+ / +related+ unfold the pair into its raw orientation: +cue+ is +word_a+'s
-# value, +related+ is +word_b+'s value. Distinct from +min+ / +max+ because the
-# classifier can now learn that, e.g., +cue+'s +log_freq+ matters more than the
-# candidate's, or that +cue cn_degree+ has a different shape than +related
-# cn_degree+ — patterns that the symmetric reductions deliberately erase.
+# cue / related unfold the pair into its raw orientation: cue is word_a's
+# value, related is word_b's value. Distinct from min / max because the
+# classifier can now learn that, e.g., cue's log_freq matters more than the
+# candidate's, or that cue cn_degree has a different shape than related
+# cn_degree — patterns that the symmetric reductions deliberately erase.
 PAIR_REDUCTIONS = %i[min max diff cue related].freeze
 
 # Env-var ablation hook: comma-separated list of unigram names whose
-# +_min/_max/_diff+ reductions should be excluded from the learned feature
+# _min/_max/_diff reductions should be excluded from the learned feature
 # vector entirely. Read once at first call and cached so training and
 # inference see the same filter (both consult this method when assembling
-# +LEARNED_FEATURE_NAMES+ and +learned_feature_vector+). Used to A/B test
+# LEARNED_FEATURE_NAMES and learned_feature_vector). Used to A/B test
 # whether confounder-y unigram features (length, cn_degree, usf_out_degree,
-# is_rare) are helping or hurting the GBT — see +bin/_compare_feature_ablations+.
+# is_rare) are helping or hurting the GBT — see bin/_compare_feature_ablations.
 def dropped_unigram_set
   @dropped_unigram_set ||= begin
     raw = ENV["RELATED_DROP_UNIGRAMS"].to_s.strip
@@ -1039,10 +1039,10 @@ end
 
 # Memoized per-word: the same word usually appears in many pairs (O(n) scans, cue
 # broadcasts, etc.) so we compute the unigram bundle once per word. Retained in
-# Hash form (keyed by +UNIGRAM_FEATURE_NAMES+) so callers / diagnostics that want
-# a labelled bundle still have one. The hot +unigram_pair_feature_values+ path
-# goes through +word_unigram_feature_values+ below, which caches the same data
-# as a parallel +Array<Float>+ indexed by position — no string-key hash lookups
+# Hash form (keyed by UNIGRAM_FEATURE_NAMES) so callers / diagnostics that want
+# a labelled bundle still have one. The hot unigram_pair_feature_values path
+# goes through word_unigram_feature_values below, which caches the same data
+# as a parallel Array<Float> indexed by position — no string-key hash lookups
 # per pair.
 $word_unigram_features_cache = {}
 def word_unigram_features(word)
@@ -1065,10 +1065,10 @@ def word_unigram_features(word)
   end
 end
 
-# Parallel-array view of +word_unigram_features+: positions match
-# +UNIGRAM_FEATURE_NAMES+, values are pre-cast to Float. Avoids 11 string-key
-# +Hash+ lookups and an +Integer#to_f+ boxing per (word, pair) inside the hot
-# +unigram_pair_feature_values+ path. Cached per word, so the 36k-pair scan
+# Parallel-array view of word_unigram_features: positions match
+# UNIGRAM_FEATURE_NAMES, values are pre-cast to Float. Avoids 11 string-key
+# Hash lookups and an Integer#to_f boxing per (word, pair) inside the hot
+# unigram_pair_feature_values path. Cached per word, so the 36k-pair scan
 # loop pays the conversion once per cue and once per candidate (2×N total).
 $word_unigram_feature_values_cache = {}
 def word_unigram_feature_values(word)
@@ -1078,12 +1078,12 @@ def word_unigram_feature_values(word)
   end
 end
 
-# Mechanical +(min, max, diff, cue, related)+ expansion of every unigram for a
+# Mechanical (min, max, diff, cue, related) expansion of every unigram for a
 # pair; appended to the learned feature vector in the same order as
-# +unigram_pair_feature_names+. +cue+ / +related+ are the raw directional values
-# (+word_a+ is the cue, +word_b+ is the related candidate) so the classifier can
-# learn cue-vs-candidate priors that the symmetric +min+ / +max+ / +diff+ collapse
-# erases. Writes into a pre-sized output array (vs. a +flat_map+ that allocates
+# unigram_pair_feature_names. cue / related are the raw directional values
+# (word_a is the cue, word_b is the related candidate) so the classifier can
+# learn cue-vs-candidate priors that the symmetric min / max / diff collapse
+# erases. Writes into a pre-sized output array (vs. a flat_map that allocates
 # intermediate per-feature arrays plus the concatenated result per call).
 def unigram_pair_feature_values(word_a, word_b)
   fa = word_unigram_feature_values(word_a)
@@ -1144,8 +1144,8 @@ class PairSignals
   end
 
   # Direct (1-hop) USF forward-association strengths, asymmetric.
-  # +usf_direct_max+ catches "at least one direction has a human-reported link"
-  # (the usual "are these associated?" question). +usf_direct_min+ is non-zero only
+  # usf_direct_max catches "at least one direction has a human-reported link"
+  # (the usual "are these associated?" question). usf_direct_min is non-zero only
   # when *both* directions fired, i.e. mutual association — a stronger signal.
   def usf_direct_strengths
     @usf_direct_strengths ||= usf_direct_association_strengths(@cue, @related)
@@ -1160,7 +1160,7 @@ class PairSignals
   end
 
   # Directional unfolds: raw cue→related and related→cue forward-association
-  # strengths (+usf_direct_max+ / +usf_direct_min+ above are the symmetric
+  # strengths (usf_direct_max / usf_direct_min above are the symmetric
   # reductions). Useful because USF is asymmetric in human data — "cat" cues
   # "dog" much more strongly than "dog" cues "cat" in free-association — and
   # collapsing to max/min discards exactly the orientation signal that
@@ -1199,15 +1199,15 @@ class PairSignals
   end
 
   # Base similarity score: Numberbatch centile + fixed ConceptNet edge bonus when an
-  # edge exists. Same formula as +lemmilarity+; kept here for independent memoization.
+  # edge exists. Same formula as lemmilarity; kept here for independent memoization.
   def base_similarity
     @base_similarity ||= cos_pct + (edge_present? ? $CONCEPTNET_EDGE_BONUS : 0)
   end
 
-  # Directional sense-vector cosines (0..100 centiles): +sv_directional.first+ is
+  # Directional sense-vector cosines (0..100 centiles): sv_directional.first is
   # the cue's sense embeddings vs. the related candidate's Numberbatch vector;
-  # +sv_directional.last+ is the reverse. +sv_max+ / +sv_min+ are the symmetric
-  # reductions; +sv_cue_to_related+ / +sv_related_to_cue+ expose the raw
+  # sv_directional.last is the reverse. sv_max / sv_min are the symmetric
+  # reductions; sv_cue_to_related / sv_related_to_cue expose the raw
   # directional cosines so the classifier can split on which orientation
   # matched.
   def sv_directional
@@ -1231,7 +1231,7 @@ class PairSignals
   end
 
   # Count of WordNet senses that produced a usable gloss-average embedding.
-  # +sense_vectors+ returns a +Numo::SFloat(K, dim)+ matrix or +nil+; we want
+  # sense_vectors returns a Numo::SFloat(K, dim) matrix or nil; we want
   # K (the per-word sense count), not total element count.
   def sv_cue_count
     return @sv_cue_count if defined?(@sv_cue_count)
@@ -1245,13 +1245,13 @@ class PairSignals
     @sv_related_count = sv ? sv.shape[0] : 0
   end
 
-  # --- Source-split features for the +D+ experiment (separate +wn_/wk_+ features) ---
-  # These always read each source independently regardless of +RHYMECRIME_GLOSS_SOURCE+,
+  # --- Source-split features for the D experiment (separate wn_/wk_ features) ---
+  # These always read each source independently regardless of RHYMECRIME_GLOSS_SOURCE,
   # so the GBT can learn per-source weights when the trainer presents both as features.
   # Default-zero / default-false when the relevant source has no data for the pair —
-  # the existing +both_sv+ / +sv_count_*+ gates teach the GBT to discount missing-data
-  # rows; the same pattern works for the source-split versions through the +wn_both_sv+
-  # / +wk_both_sv+ availability flags below.
+  # the existing both_sv / sv_count_* gates teach the GBT to discount missing-data
+  # rows; the same pattern works for the source-split versions through the wn_both_sv
+  # / wk_both_sv availability flags below.
 
   def wn_gloss_match?
     return @wn_gloss_match if defined?(@wn_gloss_match)
@@ -1312,7 +1312,7 @@ class PairSignals
     wk_sv_cue_count > 0 && wk_sv_related_count > 0
   end
 
-  # Morphy-resolved directional cosines (0..100), or +nil+ when neither side needed
+  # Morphy-resolved directional cosines (0..100), or nil when neither side needed
   # morphy (both had direct WordNet lemma entries) or no morphy form produced a
   # usable sense vector.
   def morphy_sv_directional
@@ -1330,9 +1330,9 @@ class PairSignals
     m ? m.min : 0
   end
 
-  # Directional unfolds of the morphy-resolved sense-vector cosines; +0+ when
+  # Directional unfolds of the morphy-resolved sense-vector cosines; 0 when
   # neither side needed morphy fallback. Matching index convention with
-  # +sv_directional+: +[0]+ is cue→related, +[1]+ is related→cue.
+  # sv_directional: [0] is cue→related, [1] is related→cue.
   def morphy_sv_cue_to_related
     m = morphy_sv_directional
     m ? m[0] : 0
@@ -1345,7 +1345,7 @@ class PairSignals
 
   # --- Modern sentence-transformer signals ---
   # Mirror the Numberbatch-based signals above but use contextualized MPNet embeddings
-  # (see +model_sense_vectors_table+). +model_both_in_vocab?+ lets the combiner treat
+  # (see model_sense_vectors_table). model_both_in_vocab? lets the combiner treat
   # "0 because out-of-vocab" differently from "0 because actually unrelated".
 
   def model_both_in_vocab?
@@ -1354,8 +1354,8 @@ class PairSignals
   end
 
   # Raw headword-headword cosine in [-1, 1]. Computed once per pair and reused by
-  # +model_cos_pct+ as well as the gate inside +model_directional_sense_cosines+ /
-  # +model_sense_sense_max_cosine+ — a tiny +Numo#dot+ but nice to only do once.
+  # model_cos_pct as well as the gate inside model_directional_sense_cosines /
+  # model_sense_sense_max_cosine — a tiny Numo#dot but nice to only do once.
   def model_headword_cos
     return @model_headword_cos if defined?(@model_headword_cos)
     @model_headword_cos = model_headword_cosine(@cue, @related)
@@ -1378,9 +1378,9 @@ class PairSignals
   end
 
   # Directional unfolds of the contextualized-model directional cosines;
-  # +[0]+ is cue's sense vectors vs. related's headword embedding, +[1]+ is
-  # the reverse. Same +0+-when-out-of-vocab semantics as +model_sv_max+ /
-  # +model_sv_min+ — pair with +model_both_in_vocab?+ if you want to
+  # [0] is cue's sense vectors vs. related's headword embedding, [1] is
+  # the reverse. Same 0-when-out-of-vocab semantics as model_sv_max /
+  # model_sv_min — pair with model_both_in_vocab? if you want to
   # distinguish "low cosine" from "no data".
   def model_sv_cue_to_related
     model_sv_directional[0]
@@ -1400,12 +1400,12 @@ class PairSignals
   end
 
   # --- Pooled-definition (cross-encoder) signals ---
-  # +model_headword_*+ above embeds bare words ("bear") and so collapses polysemy
+  # model_headword_* above embeds bare words ("bear") and so collapses polysemy
   # into one averaged sense the classifier struggles to use as a negative-evidence
-  # signal. The definition vector is MPNet over +"{word}. {gloss1}. {gloss2}..."+
+  # signal. The definition vector is MPNet over "{word}. {gloss1}. {gloss2}..."
   # — the concatenation of WordNet glosses — which the encoder can attend across,
-  # producing a definition-aware embedding. +def_both_in_vocab?+ lets the
-  # classifier condition on data availability the same way +model_both_in_vocab?+
+  # producing a definition-aware embedding. def_both_in_vocab? lets the
+  # classifier condition on data availability the same way model_both_in_vocab?
   # does. Falls back at build time to the bare-word text when no glosses exist,
   # so populated whenever the word is in vocab at all.
   def def_both_in_vocab?
@@ -1418,12 +1418,12 @@ class PairSignals
   end
 
   # --- ConceptNet graph-structure signals ---
-  # +edge_weight+/+edge_present?+ already capture 1-hop presence. These add:
+  # edge_weight/edge_present? already capture 1-hop presence. These add:
   # (a) the shortest path length (capped and distinct "unreachable" / "no-node"
   # codings so GBT can split on each independently), and (b) the count of nodes
   # adjacent to *both* sides (a Jaccard-style corroboration signal).
 
-  # Legacy alias for +::CN_MAX_HOPS+; kept for existing +PairSignals::CN_MAX_HOPS+
+  # Legacy alias for ::CN_MAX_HOPS; kept for existing PairSignals::CN_MAX_HOPS
   # call sites outside this file.
   CN_MAX_HOPS = ::CN_MAX_HOPS
 

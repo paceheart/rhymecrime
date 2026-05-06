@@ -1,7 +1,7 @@
 # Regression: when Sinatra/Puma serves multiple requests concurrently, each request's HTML
-# output buffer must be thread-local. With a process-wide +$html_output_buffer+, one request's
-# +cgi_print+ / +emit_line+ output leaks into the other request's response body (the bug that
-# caused a +fidget+ query's rhyming-word-sets to appear inside a +pirate+ query's HTML).
+# output buffer must be thread-local. With a process-wide $html_output_buffer, one request's
+# cgi_print / emit_line output leaks into the other request's response body (the bug that
+# caused a fidget query's rhyming-word-sets to appear inside a pirate query's HTML).
 
 require "rhymecrime/frontend"
 

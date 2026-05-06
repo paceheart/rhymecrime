@@ -1,8 +1,8 @@
 #
-# set_related — +crime+ cue (15 examples). Split off as one of the >=10-case
-# per-cue files so +parallel_rspec+ can run it in parallel with pirate /
-# music / water / cat. See companions +set_related_<cue>_spec.rb+ and
-# +set_related_misc_spec.rb+.
+# set_related — crime cue (15 examples). Split off as one of the >=10-case
+# per-cue files so parallel_rspec can run it in parallel with pirate /
+# music / water / cat. See companions set_related_<cue>_spec.rb and
+# set_related_misc_spec.rb.
 #
 
 require_relative "similar_rhymes_set_related_support"

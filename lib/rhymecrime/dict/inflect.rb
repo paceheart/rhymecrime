@@ -61,16 +61,16 @@ module Inflect
     Pronunciation.new(new_phonemes)
   end
 
-  # True if +inflected+ matches one of the English suffix patterns handled by +derive+
-  # (+s+/+es+, +ed+, +ing+, +er+, +est+, y→ies, doubled consonant, etc.) for this +base+.
+  # True if inflected matches one of the English suffix patterns handled by derive
+  # (s/es, ed, ing, er, est, y→ies, doubled consonant, etc.) for this base.
   def self.inflection_of_base?(base, inflected)
     return false if base.nil? || inflected.nil?
     return false if inflected.length < base.length
     !match_suffix_kind(base, inflected).nil?
   end
 
-  # Possible morphological bases for +inflected+ before +inflection_of_base?+ filtering (small set).
-  # Empty when no English suffix pattern applies — skips expensive WordNet work in +compute_lemma_map+.
+  # Possible morphological bases for inflected before inflection_of_base? filtering (small set).
+  # Empty when no English suffix pattern applies — skips expensive WordNet work in compute_lemma_map.
   def self.raw_candidate_bases_for_inflected(inflected)
     il = inflected.bytesize
     return Set.new if il < 2
@@ -171,19 +171,19 @@ module Inflect
       add_cand.call(inflected.byteslice(0, il - 3))
     end
 
-    # Hebrew-derived plurals: +-im+ → ∅. Surfaces +seraphim+→+seraph+,
-    # +kibbutzim+→+kibbutz+, +cherubim+→+cherub+ (cherubim works without this
-    # rule because Wiktionary's +forms_map+ already links it; the rule fills in
+    # Hebrew-derived plurals: -im → ∅. Surfaces seraphim→seraph,
+    # kibbutzim→kibbutz, cherubim→cherub (cherubim works without this
+    # rule because Wiktionary's forms_map already links it; the rule fills in
     # the same coverage for less-attested cognates). Min length 4 keeps it from
-    # touching short coincidences (+aim+, +dim+, +rim+).
+    # touching short coincidences (aim, dim, rim).
     if inflected.end_with?("im") && il >= 4
       add_cand.call(inflected.byteslice(0, il - 2))
     end
 
-    # Colloquial g-drop: +fooin'+/+gluin'+/+stoppin'+/+tryin'+ share a base with
-    # +fooing+/+gluing+/+stopping+/+trying+. Mirror the surface rule by recursing on
-    # the reconstituted +-ing+ form (one level deep — the +-ing+ form no longer ends
-    # in +in'+) and merging the candidates the +-ing+ case would have produced. Kept
+    # Colloquial g-drop: fooin'/gluin'/stoppin'/tryin' share a base with
+    # fooing/gluing/stopping/trying. Mirror the surface rule by recursing on
+    # the reconstituted -ing form (one level deep — the -ing form no longer ends
+    # in in') and merging the candidates the -ing case would have produced. Kept
     # as a recursion rather than copy-pasted case analysis so the silent-e / y-stem /
     # consonant-doubling branches stay authoritative in one place.
     if inflected.end_with?("in'") && il >= 4
@@ -194,11 +194,11 @@ module Inflect
     cands
   end
 
-  # Yields spellings derivable from +base+ by the same surface rules as +match_suffix_kind+
+  # Yields spellings derivable from base by the same surface rules as match_suffix_kind
   # (forward direction only). Used to propagate frequency from high-frequency bases without
   # O(n²) “every rare word × every base” scans.
-  # Yields base spellings +b+ such that +inflection_of_base?(b, inflected)+ (inverse of
-  # +each_derivable_form+). Bounded small set per word; used to avoid the list-pivot Inflect
+  # Yields base spellings b such that inflection_of_base?(b, inflected) (inverse of
+  # each_derivable_form). Bounded small set per word; used to avoid the list-pivot Inflect
   # inheritance pass becoming O(|hash|×|common|).
   def self.each_candidate_base_for_inflected(inflected)
     return enum_for(__method__, inflected) unless block_given?
@@ -375,8 +375,8 @@ module Inflect
     nil
   end
 
-  # Colloquial g-dropped spelling *…in'* from verbal *…ing* and the same +base+ as +match_suffix_kind+.
-  # Returns nil unless +ing_w+ is the canonical Inflect participle of +base+ (same cases as +:ing+).
+  # Colloquial g-dropped spelling *…in'* from verbal *…ing* and the same base as match_suffix_kind.
+  # Returns nil unless ing_w is the canonical Inflect participle of base (same cases as :ing).
   def self.gdropped_in_apostrophe_spelling(base, ing_w)
     return nil unless inflection_of_base?(base, ing_w)
     return nil unless match_suffix_kind(base, ing_w) == :ing
@@ -453,7 +453,7 @@ module Inflect
     !!(base =~ ENGLISH_CARDINAL_ONE_TO_TEN)
   end
 
-  # Adjective morphy roots for +word+ (empty when WordNet has no adj analysis). Used to gate *-er/-est* doubling and *y→ier*.
+  # Adjective morphy roots for word (empty when WordNet has no adj analysis). Used to gate *-er/-est* doubling and *y→ier*.
   def self.wn_adj_morphy_list(word)
     configure_wordnet_db_path!
     return [] unless defined?(WordNet::Synset)
@@ -468,7 +468,7 @@ module Inflect
 
   private
 
-  # Returns :s, :ed, :ing, :er, :est, :ly, :ful, or nil. Shared by +derive+ and +inflection_of_base?+.
+  # Returns :s, :ed, :ing, :er, :est, :ly, :ful, or nil. Shared by derive and inflection_of_base?.
   # Ordered for cheap rejects: length, y/silent-e, then byte-wise rest (avoid stem+suffix string temps).
   def self.match_suffix_kind(base, inflected)
     bl = base.bytesize
@@ -518,9 +518,9 @@ module Inflect
     case rest_len
     when 1
       return :s if inflected.getbyte(bl) == 115 # "s"
-      # +-ee+ verbs take past tense via bare +d+ (+agree+→+agreed+, +free+→+freed+,
-      # +flee+→+fleed+). The silent-e branch above excludes +-ee+ to avoid fake
-      # +free→fred+ stems, so handle the genuine +d+ suffix here.
+      # -ee verbs take past tense via bare d (agree→agreed, free→freed,
+      # flee→fleed). The silent-e branch above excludes -ee to avoid fake
+      # free→fred stems, so handle the genuine d suffix here.
       return :ed if inflected.getbyte(bl) == 100 && base.end_with?("ee") # "d"
     when 2
       b0 = inflected.getbyte(bl)
@@ -531,9 +531,9 @@ module Inflect
       return :ed if b0 == 101 && b1 == 100
       return :er if b0 == 101 && b1 == 114
       return :ly if b0 == 108 && b1 == 121 # "ly"
-      # Hebrew-derived plural +-im+ (+seraph+→+seraphim+). Distinct from +:s+ on
-      # purpose: forward-direction callers in +morphology+ / +frequency+ never
-      # synthesize +-im+ surfaces from a base, and +Inflect.derive+ has no English
+      # Hebrew-derived plural -im (seraph→seraphim). Distinct from :s on
+      # purpose: forward-direction callers in morphology / frequency never
+      # synthesize -im surfaces from a base, and Inflect.derive has no English
       # phonology rule for it, so we only want backward lemma resolution to fire.
       return :im if b0 == 105 && b1 == 109 && bl >= 2 # "im"
     when 3

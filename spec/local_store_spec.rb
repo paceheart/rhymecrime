@@ -1,10 +1,10 @@
 # frozen_string_literal: true
 
-# Coverage for the +Rhymecrime::LocalStore+ schema split: words live in
-# +related+ and scores live in +related_scores+, so the cheap read path
-# (+fetch_related_words+) doesn't pay for a JSON parse it doesn't need and
-# a row that has words but no +related_scores+ row falls back cleanly to
-# +RELATEDNESS_SCORE_THRESHOLD+. The DDB backend does the same thing in
+# Coverage for the Rhymecrime::LocalStore schema split: words live in
+# related and scores live in related_scores, so the cheap read path
+# (fetch_related_words) doesn't pay for a JSON parse it doesn't need and
+# a row that has words but no related_scores row falls back cleanly to
+# RELATEDNESS_SCORE_THRESHOLD. The DDB backend does the same thing in
 # its own read path; testing the SQLite mirror exercises the same
 # threshold-fallback contract without needing AWS credentials.
 
@@ -23,7 +23,7 @@ RSpec.describe Rhymecrime::LocalStore do
   end
 
   describe "Writer schema split" do
-    it "creates separate +related+ and +related_scores+ tables" do
+    it "creates separate related and related_scores tables" do
       described_class.open_for_write(db_path) do |writer|
         writer.upsert_related("cat", %w[dog mouse], [80, 60])
       end
@@ -39,7 +39,7 @@ RSpec.describe Rhymecrime::LocalStore do
       raw.close
     end
 
-    it "writes scores only when non-empty and drops a stale +related_scores+ row when scores are cleared" do
+    it "writes scores only when non-empty and drops a stale related_scores row when scores are cleared" do
       described_class.open_for_write(db_path) do |writer|
         writer.upsert_related("cat", %w[dog mouse], [80, 60])
         writer.upsert_related("dog", %w[bone], nil)
@@ -58,7 +58,7 @@ RSpec.describe Rhymecrime::LocalStore do
   describe "Reader path" do
     # Singleton instance is process-wide, so reset it between examples that
     # point at distinct on-disk fixtures to keep the row caches honest. The
-    # +after+ block reopens any subsequent same-process read against the real
+    # after block reopens any subsequent same-process read against the real
     # path by re-stubbing — instance.@db memoization is also cleared so we
     # don't leak a tmpdir handle across examples.
     before do
@@ -80,7 +80,7 @@ RSpec.describe Rhymecrime::LocalStore do
       expect(described_class.fetch_related_words("cat")).to eq(%w[dog mouse])
     end
 
-    it "zips parallel scores when +related_scores+ has a row" do
+    it "zips parallel scores when related_scores has a row" do
       described_class.open_for_write(db_path) do |writer|
         writer.upsert_related("cat", %w[dog mouse], [80, 60])
       end
@@ -88,7 +88,7 @@ RSpec.describe Rhymecrime::LocalStore do
       expect(described_class.fetch_related_tuples("cat")).to eq([["dog", 80], ["mouse", 60]])
     end
 
-    it "falls back to RELATEDNESS_SCORE_THRESHOLD when the +related_scores+ row is missing" do
+    it "falls back to RELATEDNESS_SCORE_THRESHOLD when the related_scores row is missing" do
       described_class.open_for_write(db_path) do |writer|
         writer.upsert_related("cat", %w[dog mouse], nil)
       end
@@ -99,7 +99,7 @@ RSpec.describe Rhymecrime::LocalStore do
     end
 
     it "falls back to the threshold for individual indices the scores array does not cover" do
-      # Simulate a length mismatch between +words+ and +scores+ — defensive
+      # Simulate a length mismatch between words and scores — defensive
       # path that protects the runtime from a shorter-than-words score row.
       described_class.open_for_write(db_path) do |writer|
         writer.upsert_related("cat", %w[dog mouse rat], [80])
@@ -113,7 +113,7 @@ RSpec.describe Rhymecrime::LocalStore do
       ])
     end
 
-    it "returns +[]+ when the cue is absent from both tables" do
+    it "returns [] when the cue is absent from both tables" do
       described_class.open_for_write(db_path) do |writer|
         writer.upsert_related("cat", %w[dog], [80])
       end
@@ -124,13 +124,13 @@ RSpec.describe Rhymecrime::LocalStore do
   end
 
   describe ".delete_database_file!" do
-    # Regression: +bin/compute-relatedness+ used to do a bare
-    # +File.delete(shard_path)+ on the shard mains between runs and leave the
-    # +-shm+ / +-wal+ sidecars on disk. SQLite then re-opened the freshly
+    # Regression: bin/compute-relatedness used to do a bare
+    # File.delete(shard_path) on the shard mains between runs and leave the
+    # -shm / -wal sidecars on disk. SQLite then re-opened the freshly
     # created shard, found a WAL pair whose header counters didn't match the
-    # new (empty) main, and faulted the very first +execute_batch+ with a
-    # +disk I/O error+ (+SQLITE_IOERR+). +delete_database_file!+ exists to
-    # take the WAL pair down with the main file so the next +open_for_write+
+    # new (empty) main, and faulted the very first execute_batch with a
+    # disk I/O error (SQLITE_IOERR). delete_database_file! exists to
+    # take the WAL pair down with the main file so the next open_for_write
     # always sees a clean slate.
     it "removes the main file alongside its WAL sidecars" do
       described_class.open_for_write(db_path) do |writer|
@@ -154,7 +154,7 @@ RSpec.describe Rhymecrime::LocalStore do
     it "is a no-op on missing paths and tolerates a partial sidecar set" do
       # Pre-fork cleanup runs unconditionally before every shard, so the
       # common case is "nothing exists yet"; it must not raise. Likewise a
-      # crash that left only the +-shm+ behind (no main) should still get
+      # crash that left only the -shm behind (no main) should still get
       # cleaned up so the next open starts fresh.
       missing = File.join(tmpdir, "never_existed.sqlite3")
       expect { described_class.delete_database_file!(missing) }.not_to raise_error
@@ -164,12 +164,12 @@ RSpec.describe Rhymecrime::LocalStore do
       expect(File.exist?("#{missing}-shm")).to be false
     end
 
-    it "lets a fresh +open_for_write+ on the same path succeed even when stale sidecars were present" do
+    it "lets a fresh open_for_write on the same path succeed even when stale sidecars were present" do
       # Direct reproduction of the failure mode. Simulate a previous-run
       # crash by writing a sidecar then dropping the main file the way the
       # old cleanup did, and confirm the new helper unblocks the next
-      # +open_for_write+ where a bare +File.delete+ would have left the
-      # +SQLITE_IOERR+ landmine in place.
+      # open_for_write where a bare File.delete would have left the
+      # SQLITE_IOERR landmine in place.
       described_class.open_for_write(db_path) do |writer|
         writer.upsert_related("cat", %w[dog], [80])
       end
@@ -218,14 +218,14 @@ RSpec.describe Rhymecrime::LocalStore do
   end
 
   describe "set_related table" do
-    # +set_related#<lemma>+ is the computed post-prune rhyming-tuple list
-    # the runtime hot path reads (see +Rhymecrime::Store.fetch_set_related_
-    # tuples+). Schema lives in its own table so a missing-row miss
-    # (+fetch_set_related_tuples+ returns +nil+) cleanly distinguishes
+    # set_related#<lemma> is the computed post-prune rhyming-tuple list
+    # the runtime hot path reads (see Rhymecrime::Store.fetch_set_related_
+    # tuples). Schema lives in its own table so a missing-row miss
+    # (fetch_set_related_tuples returns nil) cleanly distinguishes
     # "this cue isn't in our universe — show the friendly bad_input
     # message" from "this cue exists but happened to have no rhyming
     # friends — render an empty result list."
-    it "creates a +set_related+ table with the documented schema" do
+    it "creates a set_related table with the documented schema" do
       described_class.open_for_write(db_path) do |writer|
         writer.upsert_set_related("cat", [%w[bat hat], %w[mouse louse]])
       end
@@ -259,9 +259,9 @@ RSpec.describe Rhymecrime::LocalStore do
         expect(described_class.has_set_related?("cat")).to be true
       end
 
-      it "round-trips an empty tuples list as +[]+ (computed-but-no-rhymes contract)" do
+      it "round-trips an empty tuples list as [] (computed-but-no-rhymes contract)" do
         # Empty arrays are valid: the runtime renders them as a
-        # computed hit with no tuples, distinct from the +nil+ "unknown
+        # computed hit with no tuples, distinct from the nil "unknown
         # cue" fallback that triggers the friendly message.
         described_class.open_for_write(db_path) do |writer|
           writer.upsert_set_related("lonely_cue", [])
@@ -271,7 +271,7 @@ RSpec.describe Rhymecrime::LocalStore do
         expect(described_class.has_set_related?("lonely_cue")).to be true
       end
 
-      it "returns +nil+ when the cue is absent (signal for the friendly-message branch)" do
+      it "returns nil when the cue is absent (signal for the friendly-message branch)" do
         described_class.open_for_write(db_path) do |writer|
           writer.upsert_set_related("cat", [%w[bat hat]])
         end

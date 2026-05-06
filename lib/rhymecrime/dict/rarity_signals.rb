@@ -4,21 +4,21 @@
 # feature the downstream classifier / rule-based combiner reads is produced here once and
 # never recomputed.
 #
-# Rarity scoring (stage 2: +rarity_classifier.predict+ or the legacy rules in
-# +compute_frequency+ / Wiktionary existence floor / +filter_word_dict_disconnected!+ rescue)
-# consumes the +RaritySignals+ struct only — it must not reach back into the raw corpora.
+# Rarity scoring (stage 2: rarity_classifier.predict or the legacy rules in
+# compute_frequency / Wiktionary existence floor / filter_word_dict_disconnected! rescue)
+# consumes the RaritySignals struct only — it must not reach back into the raw corpora.
 #
-# Rarity gate (stage 3: +rare? / allowed?+ in +crime.rb+) compares final freq against
-# +RARE_FREQ_MAX+; it's a pure threshold.
+# Rarity gate (stage 3: rare? / allowed? in crime.rb) compares final freq against
+# RARE_FREQ_MAX; it's a pure threshold.
 #
 # Feature surface intentionally kept small: raw corpus scalars, WordNet presence /
 # synset count / coarse POS, surface shape / case, POS tag coverage, and the
 # post-propagation legacy freq (classifier's most useful non-Zipf signal per the
-# ablation in +bin/train-rarity-classifier --ablate-group+). Hand-engineered
+# ablation in bin/train-rarity-classifier --ablate-group). Hand-engineered
 # Kaikki / morphology / WordNet-subtyping flags were dropped in the ablation study
-# (cost ≈ 0.1 pp on 5-fold CV vs +1 pp cost of dropping +post_propagation_freq+).
-# If you need a new feature, add it here + in +LEARNED_RARITY_FEATURE_NAMES+ +
-# +learned_rarity_feature_vector+ and retrain.
+# (cost ≈ 0.1 pp on 5-fold CV vs +1 pp cost of dropping post_propagation_freq).
+# If you need a new feature, add it here + in LEARNED_RARITY_FEATURE_NAMES +
+# learned_rarity_feature_vector and retrain.
 #
 # Usage:
 #
@@ -63,12 +63,12 @@ RarityContext = Struct.new(
 end
 
 # Flat bag of features for one headword. Flags are 0.0/1.0 floats so
-# +learned_rarity_feature_vector+ can append them to the model input without
+# learned_rarity_feature_vector can append them to the model input without
 # coercion. Non-flag scalars are raw (Zipf, SUBTLEX count, synset count) — the
 # classifier standardizes (logreg) or splits (GBT) on them.
 #
 # Ordering here is not significant for the struct itself; see
-# +LEARNED_RARITY_FEATURE_NAMES+ in +rarity_classifier.rb+ for the classifier's
+# LEARNED_RARITY_FEATURE_NAMES in rarity_classifier.rb for the classifier's
 # feature vector order.
 RaritySignals = Struct.new(
   :word,
@@ -97,7 +97,7 @@ RaritySignals = Struct.new(
   :wn_has_verb_flag,
   :wn_has_adj_flag,
 
-  # --- Graph-degree signals (richer than the binary +_flag+ versions above) ---
+  # --- Graph-degree signals (richer than the binary _flag versions above) ---
   :usf_out_degree,                        # size of usf_associations[word] (0 when no cue row)
   :cn_degree,                             # ConceptNet adjacency size (0 when unknown)
   :cn_adjacency_loaded_flag,              # 1 iff the edges file was present when signals were extracted
@@ -122,10 +122,10 @@ RaritySignals = Struct.new(
   :received_donor_from_common_base_flag
 )
 
-# Order is part of the trained-classifier ABI: +rarity_freq_source_to_index+
+# Order is part of the trained-classifier ABI: rarity_freq_source_to_index
 # returns the array index, which is what the model sees as a feature value.
 # Append new sources at the end; renaming a symbol is safe (model doesn't see
-# the symbol name), but reordering invalidates +generated/rarity_classifier.json+.
+# the symbol name), but reordering invalidates generated/rarity_classifier.json.
 RARITY_FREQ_SOURCE_PHASES = [
   :unknown, :pronunciation_map_seed, :subtlex, :common_list, :neol,
   :wiktionary_floor, :morph_inherit_kaikki, :morph_inherit_listed,
@@ -137,9 +137,9 @@ def rarity_freq_source_to_index(phase)
   i.nil? ? 0 : i
 end
 
-# +word+: lowercase surface. +ctx+: +RarityContext+ bag.
-# Returns a fully-populated +RaritySignals+ (minus post-propagation fields, which
-# default to +nil+ / +0+ / +false+ and are filled in by the classifier pass).
+# word: lowercase surface. ctx: RarityContext bag.
+# Returns a fully-populated RaritySignals (minus post-propagation fields, which
+# default to nil / 0 / false and are filled in by the classifier pass).
 def extract_rarity_signals(word, ctx)
   sub_raw = (ctx.subtlex_hash && ctx.subtlex_hash[word]) || 0
   sub_tot = (ctx.subtlex_total_hash && ctx.subtlex_total_hash[word]) || 0

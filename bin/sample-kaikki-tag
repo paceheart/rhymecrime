@@ -2,8 +2,8 @@
 # encoding: utf-8
 # frozen_string_literal: true
 
-# Random sample of Kaikki +sounds+ entries whose +tags+ include a given tag.
-# Helps decide whether +bin/filter-kaikki+ / +pick_ga_sounds+ should drop a
+# Random sample of Kaikki sounds entries whose tags include a given tag.
+# Helps decide whether bin/filter-kaikki / pick_ga_sounds should drop a
 # class of transcription across the board.
 #
 # Usage:
@@ -11,7 +11,7 @@
 #   bin/sample-kaikki-tag uncommon
 #   SAMPLE=50 SEED=42 bin/sample-kaikki-tag rare
 #
-# Tag match is case-insensitive against the raw +sounds.tags+ values Kaikki ships.
+# Tag match is case-insensitive against the raw sounds.tags values Kaikki ships.
 
 require "json"
 require "set"
@@ -51,7 +51,7 @@ rng = Random.new(SEED)
 sample = rows.sample(SAMPLE_SIZE, random: rng)
 
 puts "Kaikki sound rows scanned:                  #{total_rows}"
-puts "  rows tagged +#{target_tag}+:              #{rows.size}"
+puts "  rows tagged #{target_tag}:              #{rows.size}"
 puts "  distinct words with such a row:           #{total_words}"
 puts ""
 puts "Random sample (#{sample.size} rows, seed=#{SEED}):"

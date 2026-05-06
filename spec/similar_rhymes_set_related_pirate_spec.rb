@@ -1,12 +1,12 @@
 #
-# set_related — +pirate+ cue (56 examples; the single biggest bucket in the
-# original +set_related+ describe). Split from +set_related_misc_spec.rb+
-# (formerly +similar_rhymes_set_related_spec.rb+) so +parallel_rspec+ can run
+# set_related — pirate cue (56 examples; the single biggest bucket in the
+# original set_related describe). Split from set_related_misc_spec.rb
+# (formerly similar_rhymes_set_related_spec.rb) so parallel_rspec can run
 # this cue on its own worker rather than serializing it behind the rest.
 #
-# Cues with <10 examples are bundled into +set_related_misc_spec.rb+; the
-# >=10-case clubhouse is +pirate+ / +music+ / +water+ / +crime+ / +cat+, each
-# in its own +set_related_<cue>_spec.rb+.
+# Cues with <10 examples are bundled into set_related_misc_spec.rb; the
+# >=10-case clubhouse is pirate / music / water / crime / cat, each
+# in its own set_related_<cue>_spec.rb.
 #
 
 require_relative "similar_rhymes_set_related_support"

@@ -3,7 +3,7 @@ require_relative "phoneme.rb"
 class Pronunciation
   attr_reader :phonemes
 
-  # IH not dwimmed when followed by these (after syllable dots); see +with_dwimmed_schwas+.
+  # IH not dwimmed when followed by these (after syllable dots); see with_dwimmed_schwas.
   DWIMMED_SCHWA_PROTECTED_NEXT = %w[R NG SH].freeze
 
   def initialize(phonemes)
@@ -32,7 +32,7 @@ class Pronunciation
 
   # Conflate unstressed IH0 with AH0 (CMU/Wikt/Inflect policy): illicit/solicit, yeeted/defeated.
   # Skips IH0 before R, NG, or SH (beer, selfish/shellfish). If a change would remove all
-  # primary/secondary stress from the pronunciation, returns +self+ unchanged.
+  # primary/secondary stress from the pronunciation, returns self unchanged.
   #
   # Post-tonic *IH* before word-final *N* (IH0, IH1, or IH2): map to AH0 when primary stress (1)
   # already appeared earlier — *takin'*/*taken*, *puffin* (bird IH2), *puffin'*, etc. Skips *begin*
@@ -104,7 +104,7 @@ class Pronunciation
   # GA intervocalic flapping: singleton T between a sonorant (vowel / R) and a
   # *reduced* vowel merges with D. Pre-nasal T (kitten, tighten) is excluded
   # because it surfaces as a glottal stop, not a flap. Both this full-pron pass
-  # and the rime-level pass below share +flap_t_target?+ — the linguistic rule.
+  # and the rime-level pass below share flap_t_target? — the linguistic rule.
   def with_flapped_t
     return self if empty?
     out = @phonemes.dup
@@ -128,9 +128,9 @@ class Pronunciation
   # etc.), so words like botox, retail, and latex are not flapped …"
   FLAP_T_REDUCIBLE_BASES = %w[AH IH IY OW].to_set.freeze
 
-  # Should the +T+ at +phonemes[i]+ flap to +D+? Operates on stress-bearing
-  # phonemes (no syllable dots) — both +with_flapped_t+ (flat pron) and
-  # +flap_t_in_rime+ (rime with stress preserved) feed it the right shape.
+  # Should the T at phonemes[i] flap to D? Operates on stress-bearing
+  # phonemes (no syllable dots) — both with_flapped_t (flat pron) and
+  # flap_t_in_rime (rime with stress preserved) feed it the right shape.
   def self.flap_t_target?(phonemes, i)
     return false unless phonemes[i] == "T"
     prev = (i > 0) ? phonemes[i - 1] : nil
@@ -172,10 +172,10 @@ class Pronunciation
   ARPABET_VOWELS = %w[AA AE AH AO AW AY EH EY IH IY OW OY UH UW].to_set
 
   # T→D in the rime, applied while stress digits are still attached so we can
-  # honor the reducibility rule (see +flap_t_target?+). +rime_array+ strips
+  # honor the reducibility rule (see flap_t_target?). rime_array strips
   # stress after this pass. AY+T+AH0 still merges here for recital/suicidal
   # because AH0 is reducible; UW1+T+UW2 in tutu correctly does not, so the
-  # rime is +UW_T_UW+ rather than collapsing into voodoo's +UW_D_UW+.
+  # rime is UW_T_UW rather than collapsing into voodoo's UW_D_UW.
   def flap_t_in_rime(rime)
     out = rime.dup
     out.each_with_index do |phoneme, i|
@@ -188,7 +188,7 @@ class Pronunciation
     rime = Array.new
     @phonemes.reverse.each { |phoneme|
       unless(phoneme.syllable_boundary?)
-        rime.unshift(phoneme) # stress digits stay; +rime_array+ strips after the flap pass
+        rime.unshift(phoneme) # stress digits stay; rime_array strips after the flap pass
         if(phoneme.include?(stress))
           return rime # we found the phoneme with stress STRESS, we can stop now
         end
@@ -266,14 +266,14 @@ class Pronunciation
     rich_rime_array.join(" ")
   end
 
-  # +rich_rime+ starts at the beginning of the primary-stress syllable while
-  # +rime+ starts at the primary-stress vowel itself. When that syllable has
-  # no onset consonant, the two cover identical spans and +rich_rime+ carries
-  # zero information beyond +rime+. Call that a +trivially_rich_rime?+: any
-  # cross-word match on +rich_rime+ in this case is equivalent to a plain
+  # rich_rime starts at the beginning of the primary-stress syllable while
+  # rime starts at the primary-stress vowel itself. When that syllable has
+  # no onset consonant, the two cover identical spans and rich_rime carries
+  # zero information beyond rime. Call that a trivially_rich_rime?: any
+  # cross-word match on rich_rime in this case is equivalent to a plain
   # rime match, not a true rich rhyme (which requires the onset to match
   # too). Length-compares the underlying arrays — flap-T normalization in
-  # +rime_array+ shifts phoneme identity (T → D) but preserves length, and
+  # rime_array shifts phoneme identity (T → D) but preserves length, and
   # both arrays share the same end and the same stress-digit stripping.
   def trivially_rich_rime?
     rich_rime_array.length == rime_array.length
@@ -283,7 +283,7 @@ class Pronunciation
     !trivially_rich_rime?
   end
 
-  # Split +@phonemes+ on +.+ tokens into per-syllable arrays. Cheap; used by
+  # Split @phonemes on . tokens into per-syllable arrays. Cheap; used by
   # the vowel-count invariant and any caller that needs a structural view of
   # an already-syllabified pronunciation.
   def syllables
@@ -305,14 +305,14 @@ class Pronunciation
   # vowel symbol (AA/AE/AH/AO/AW/AY/EH/ER/EY/IH/IY/OW/OY/UH/UW with a stress
   # digit), including syllabic consonants (rhythm = R IH1 DH AH0 M, with the
   # syllabic /m/ rendered as schwa AH0). Under that convention every well-
-  # formed syllable has exactly one vowel — the +syllable_vowel_invariant+
+  # formed syllable has exactly one vowel — the syllable_vowel_invariant
   # check exploits this.
   def syllable_vowel_counts
     syllables.map { |syl| syl.count(&:vowel?) }
   end
 
-  # Invariant: every syllable has exactly one vowel. Returns +true+ if so,
-  # +false+ for an empty pronunciation or any syllable with 0 / >=2 vowels.
+  # Invariant: every syllable has exactly one vowel. Returns true if so,
+  # false for an empty pronunciation or any syllable with 0 / >=2 vowels.
   # Empty pron is treated as a violation so callers don't have to special-
   # case it; all real call sites operate on non-empty prons.
   def syllable_vowel_invariant_ok?
@@ -322,7 +322,7 @@ class Pronunciation
 
   # Human-readable description of the first vowel-count violation in this
   # pronunciation (e.g. "syllable 2 has 0 vowels: L AH0 JH IH1 D AH0 M AH0 T").
-  # Returns +nil+ when the invariant holds. Used by build-time warnings and
+  # Returns nil when the invariant holds. Used by build-time warnings and
   # by the standalone audit tool to point at the offending syllable.
   def syllable_vowel_invariant_violation
     counts = syllable_vowel_counts
@@ -375,10 +375,10 @@ class Pronunciation
     }
     # tack on whatever was left over when we ran out of phonemes. If the leftover
     # has no vowel — non-English initial clusters that aren't in
-    # +WORD_INITIAL_CONSONANT_CLUSTERS+ (sbarro/SB, schneider/SHN, svelte/SV,
+    # WORD_INITIAL_CONSONANT_CLUSTERS (sbarro/SB, schneider/SHN, svelte/SV,
     # tsunami/TS, voila/VW, vroom/VR) — merge it onto the front of the first
     # vowel-bearing syllable instead of letting it stand as a vowelless syllable
-    # of its own (which would violate +syllable_vowel_invariant_ok?+).
+    # of its own (which would violate syllable_vowel_invariant_ok?).
     unless this_syllable.empty?
       if this_syllable.any?(&:vowel?) || syls.empty?
         syls.unshift(this_syllable)

@@ -49,7 +49,7 @@ if [[ $REBUILD_VECTORS -eq 1 ]]; then
   # The .venv (sentence-transformers + msgpack for MPNet encoding) is
   # provisioned by setup.sh / bin/setup-python-venv. Hard-assert it's healthy
   # here so a missing or broken venv fails fast with a single clear pointer
-  # rather than later inside +.venv/bin/python bin/build-sense-vectors.py+.
+  # rather than later inside .venv/bin/python bin/build-sense-vectors.py.
   if [[ ! -x .venv/bin/python ]] || \
      ! .venv/bin/python -c 'import sentence_transformers, msgpack' >/dev/null 2>&1; then
     echo "error: .venv is missing or its dependencies aren't importable." >&2

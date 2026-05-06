@@ -6,23 +6,23 @@
 # signal: where Wiktionary says "X is an alternative form of Y" we additionally get VarCon's
 # explicit regional preference direction and variant-strength markers.
 #
-# Input file: +corpora/varcon/varcon.txt+ (see setup.sh; BSD-style license per varcon-readme).
+# Input file: corpora/varcon/varcon.txt (see setup.sh; BSD-style license per varcon-readme).
 #
-# Output shape (returned by +load_varcon+):
+# Output shape (returned by load_varcon):
 #
 #   { variant_word => [
 #       { target: <other_spelling>,
 #         preferred: <:self | :target>,   # which side of the pair this file says is canonical
-#         self_strength: <int>,           # preference score for +variant_word+ (lower = more preferred)
-#         target_strength: <int>,         # preference score for +target+
+#         self_strength: <int>,           # preference score for variant_word (lower = more preferred)
+#         target_strength: <int>,         # preference score for target
 #         scowl_level: <int | nil>,       # SCOWL rarity band; nil for entries without a cluster header
 #         cluster_headword: <String>,     # headword of the cluster this row belongs to (for debugging)
 #       }, ...
 #     ]
 #   }
 #
-# Shape mirrors +kaikki_variant_map+ so +corpus_variants.rb+ can merge the two signals cleanly.
-# The +self_strength+/+target_strength+ scores encode VarCon's preference direction without
+# Shape mirrors kaikki_variant_map so corpus_variants.rb can merge the two signals cleanly.
+# The self_strength/target_strength scores encode VarCon's preference direction without
 # requiring callers to re-parse the tag syntax.
 
 require "set"
@@ -31,9 +31,9 @@ VARCON_DATA_PATH = File.expand_path("../../../corpora/varcon/varcon.txt", __dir_
 
 # Preference score per VarCon tag. Lower = more preferred for display. We bias toward American
 # English because that's the app's assumed default (no regional-preference setting in the UI).
-# Ranks inside each spelling category: bare > +.+ (equal-variant) > +v+ (variant) > +V+ (seldom)
-# > +-+ (avoid-but-attested). Category-level ordering: American → British (either -ise or -ize) →
-# Canadian → Australian → neutral/other. The +x+ ("improper variant") tag filters a spelling
+# Ranks inside each spelling category: bare > . (equal-variant) > v (variant) > V (seldom)
+# > - (avoid-but-attested). Category-level ordering: American → British (either -ise or -ize) →
+# Canadian → Australian → neutral/other. The x ("improper variant") tag filters a spelling
 # out entirely: VarCon uses it for attested misspellings kept in the file for completeness.
 VARCON_TAG_SCORES = {
   "A" => 0,
@@ -77,7 +77,7 @@ VARCON_MAX_SCOWL_LEVEL = 80
 
 VARCON_CLUSTER_HEADER_RE = /\A#\s*(\S+)\s*(?:<(\w+)>\s*)?(?:\(level\s+(\d+)\))?/.freeze
 
-# Return the variant map described above, or +{}+ if the file is missing (keeps builds running
+# Return the variant map described above, or {} if the file is missing (keeps builds running
 # on machines that haven't pulled VarCon yet).
 def load_varcon
   variant_map = Hash.new { |h, k| h[k] = [] }
@@ -89,8 +89,8 @@ def load_varcon
   skipped_improper = 0
   pair_seen = Set.new
 
-  # VarCon has a handful of Latin-1-encoded headwords (+fuehrer/führer+, +Roentgen/Röntgen+).
-  # Our dict only carries ASCII headwords, so we transcode with +:replace+ to swallow the bad
+  # VarCon has a handful of Latin-1-encoded headwords (fuehrer/führer, Roentgen/Röntgen).
+  # Our dict only carries ASCII headwords, so we transcode with :replace to swallow the bad
   # bytes and then skip any spelling that still contains non-ASCII below.
   File.foreach(VARCON_DATA_PATH, chomp: true, encoding: "ISO-8859-1:UTF-8",
                invalid: :replace, undef: :replace) do |line|
@@ -110,20 +110,20 @@ def load_varcon
       next
     end
 
-    # Drop the trailing +| <POS>+ / +| sense+ / +| -- pl+ annotations. Our app has no POS or sense
+    # Drop the trailing | <POS> / | sense / | -- pl annotations. Our app has no POS or sense
     # context at display time, so we conservatively merge the POS-qualified groups into a single
     # pair-set per cluster; voting across those rows aggregates the preference correctly for
-    # cases like +practice/practise+ (noun-preferred +practice+ in US English across both POS).
+    # cases like practice/practise (noun-preferred practice in US English across both POS).
     body = stripped.split(" | ", 2).first
 
     entries = body.split(" / ").map { |e| parse_varcon_entry(e) }.compact
     next if entries.size < 2
 
-    # Skip possessive rows (+acknowledgment's / acknowledgement's+) — our dict doesn't carry
-    # +'s+ headwords, so emitting these pairs would be dead weight.
+    # Skip possessive rows (acknowledgment's / acknowledgement's) — our dict doesn't carry
+    # 's headwords, so emitting these pairs would be dead weight.
     next if entries.any? { |e| e[:spelling].include?("'") }
 
-    # Filter spellings whose only tags are improper-variant markers +x+.
+    # Filter spellings whose only tags are improper-variant markers x.
     entries.reject! do |e|
       if e[:tags].all? { |t| VARCON_IMPROPER_TAGS.include?(t) }
         skipped_improper += 1
@@ -135,7 +135,7 @@ def load_varcon
     next if entries.size < 2
 
     # Emit each unordered pair of spellings on this row, with VarCon's preference direction
-    # captured via +self_strength+ / +target_strength+.
+    # captured via self_strength / target_strength.
     entries.each_with_index do |e1, i|
       entries.each_with_index do |e2, j|
         next if i >= j
@@ -172,8 +172,8 @@ def load_varcon
   variant_map
 end
 
-# Parse a single +A Bv C: acknowledgment+ entry into +{ spelling:, tags: }+. Column numbers
-# (+A B 1: aerie+) are treated as opaque and dropped: they link rows within a cluster that share
+# Parse a single A Bv C: acknowledgment entry into { spelling:, tags: }. Column numbers
+# (A B 1: aerie) are treated as opaque and dropped: they link rows within a cluster that share
 # the same column assignment, but our pair-emission logic already iterates every row, so we don't
 # need them.
 def parse_varcon_entry(raw)
@@ -181,7 +181,7 @@ def parse_varcon_entry(raw)
   return nil if spelling.nil? || spelling.empty?
   spelling = spelling.strip.downcase
   return nil if spelling.empty?
-  # Skip non-ASCII headwords (+führer+, +röntgen+) — our dict can't represent them anyway.
+  # Skip non-ASCII headwords (führer, röntgen) — our dict can't represent them anyway.
   return nil unless spelling.ascii_only?
   tags = tag_part.split(/\s+/).reject { |t| t.empty? || t =~ /\A\d+\z/ }
   { spelling: spelling, tags: tags }

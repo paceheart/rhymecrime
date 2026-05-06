@@ -1,14 +1,14 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 
-# build-semantic-base-map — rebuild +word_semantic_base_map.{msgpack,txt}+
-# from the existing +word_dict.txt+ + +word_lemma_map.msgpack+ without
-# re-running the full +bin/dict-build+ pipeline.
+# build-semantic-base-map — rebuild word_semantic_base_map.{msgpack,txt}
+# from the existing word_dict.txt + word_lemma_map.msgpack without
+# re-running the full bin/dict-build pipeline.
 #
-# Useful for iterating on +SEMANTIC_BASE_SUFFIX_RULES+ / the gates in
-# +lib/rhymecrime/dict/dict.rb+: edit, run this, +diff+ the .txt against the
-# previous version, repeat. The full +bin/dict-build+ regenerates the same
-# artefacts as a side-effect of +rebuild_rhymecrime_dictionaries+ — this is a
+# Useful for iterating on SEMANTIC_BASE_SUFFIX_RULES / the gates in
+# lib/rhymecrime/dict/dict.rb: edit, run this, diff the .txt against the
+# previous version, repeat. The full bin/dict-build regenerates the same
+# artefacts as a side-effect of rebuild_rhymecrime_dictionaries — this is a
 # fast path that skips ConceptNet / Numberbatch / SUBTLEX I/O.
 #
 # Usage:
@@ -48,7 +48,7 @@ unless no_cosine_guard
     nb_vectors = raw
     puts "Loaded #{nb_vectors.size} Numberbatch vectors for cosine guard from #{nb_path}"
   else
-    puts "WARN: #{nb_path} not present — skipping NB cosine guard. Run +bin/dict-build+ once first."
+    puts "WARN: #{nb_path} not present — skipping NB cosine guard. Run bin/dict-build once first."
   end
 end
 

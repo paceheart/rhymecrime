@@ -10,7 +10,7 @@
 # runtime by lib/rhymecrime/relatedness/signals.rb for direct (1-hop) and
 # Numberbatch-validated 2-hop association evidence.
 #
-# Output schema (consumed by signals.rb's +usf_associations+ loader):
+# Output schema (consumed by signals.rb's usf_associations loader):
 #   { "<cue>": { "<target>": <fsg float>, ... }, ... }
 # Lemmas are lowercase single-token (matching dict.rb's headword shape);
 # multi-word targets like "PINK PANTHER" are dropped since they can't be

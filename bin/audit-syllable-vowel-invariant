@@ -1,16 +1,16 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 #
-# Audit +generated/word_dict.txt+ for the "every syllable has exactly one
-# vowel" invariant (see +Pronunciation#syllable_vowel_invariant_ok?+ in
-# +lib/rhymecrime/dict/pronunciation.rb+). CMU encodes syllabic consonants
+# Audit generated/word_dict.txt for the "every syllable has exactly one
+# vowel" invariant (see Pronunciation#syllable_vowel_invariant_ok? in
+# lib/rhymecrime/dict/pronunciation.rb). CMU encodes syllabic consonants
 # as a vowel symbol, so any well-formed syllabification — whether produced
-# by +Pronunciation#syllabify+ or assembled by +syllabify_with_common_prefix_split+ —
+# by Pronunciation#syllabify or assembled by syllabify_with_common_prefix_split —
 # satisfies this. Violations indicate a build-time bug: the canonical example
-# is +illegitimate+ being stored as +IH2 . L AH0 JH IH1 D AH0 M AH0 T+, where
+# is illegitimate being stored as IH2 . L AH0 JH IH1 D AH0 M AH0 T, where
 # the body has lost its interior syllable boundaries because
-# +syllabify_with_common_prefix_split+ concatenated a flat (un-syllabified)
-# stem onto the prefix without re-running +syllabify+.
+# syllabify_with_common_prefix_split concatenated a flat (un-syllabified)
+# stem onto the prefix without re-running syllabify.
 #
 # Usage:
 #   bin/audit-syllable-vowel-invariant                        # full report

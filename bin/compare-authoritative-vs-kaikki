@@ -2,10 +2,10 @@
 # encoding: utf-8
 # frozen_string_literal: true
 
-# Compare every entry in +curated/authoritative_pronunciations.txt+ against
+# Compare every entry in curated/authoritative_pronunciations.txt against
 # Kaikki/Wiktionary's pronunciation for the same headword. Both sides are
-# normalized through +normalize_flat_arphabet_pronunciation+ so the comparison
-# matches what +merge_wiktionary!+ ultimately sees in dict-build.
+# normalized through normalize_flat_arphabet_pronunciation so the comparison
+# matches what merge_wiktionary! ultimately sees in dict-build.
 #
 # STATUS (one per authoritative headword):
 #   match    - every authoritative pron has at least one Kaikki match
@@ -16,14 +16,14 @@
 #
 # Output: aligned table to stdout, plus a short summary at the end.
 #
-# +--md PATH+ also writes a markdown worklist to +PATH+ for the rows that warrant
+# --md PATH also writes a markdown worklist to PATH for the rows that warrant
 # an upstream Wiktionary edit (status differs / partial / missing). Each entry
 # includes the direct Wiktionary URL, raw Kaikki IPA (with sound tags so the
 # editor knows GA / RP / etc.), the authoritative ARPAbet, and a proposed GA
 # IPA derived from the *raw* (pre-normalization) authoritative phones via
-# +ArpabetToIpa+. The proposed IPA is a starting point — flapping is preserved
-# (intervocalic +D+ stays +d+) so editors should restore phonemic +/t/+ for
-# words like +keto+ / +whiteout+ / +tutti-frutti+.
+# ArpabetToIpa. The proposed IPA is a starting point — flapping is preserved
+# (intervocalic D stays d) so editors should restore phonemic /t/ for
+# words like keto / whiteout / tutti-frutti.
 
 require "json"
 require "optparse"
@@ -62,21 +62,21 @@ def load_authoritative_pron_lines
 end
 
 # Stream the Kaikki dump for every authoritative headword, with a
-# *trampoline* second pass: when a Kaikki record has no +sounds+ but its
-# +senses+ contain +alt_of+ links to a canonical entry (e.g. +mafioso+ →
-# +Mafioso+, +papier-mache+ → +papier-mâché+), follow the link and adopt the
-# canonical's pronunciations. We deliberately ignore +form_of+ (plurals, past
+# *trampoline* second pass: when a Kaikki record has no sounds but its
+# senses contain alt_of links to a canonical entry (e.g. mafioso →
+# Mafioso, papier-mache → papier-mâché), follow the link and adopt the
+# canonical's pronunciations. We deliberately ignore form_of (plurals, past
 # tenses, comparatives, etc.) since inflected forms have legitimately
-# different pronunciations from the lemma — a +don'ts+ Wiktionary entry
-# wouldn't share its IPA with +don't+. The returned record carries
-# +trampoline+ metadata so the markdown can point editors at the canonical
+# different pronunciations from the lemma — a don'ts Wiktionary entry
+# wouldn't share its IPA with don't. The returned record carries
+# trampoline metadata so the markdown can point editors at the canonical
 # Wiktionary page rather than the alt-of stub.
 def stream_kaikki_records_for(words)
   remaining = Set.new(words)
   collected = {}
 
   # Classification keyed by *exact* Kaikki word (Wiktionary case-distinguishes
-  # +Mafioso+ from +mafioso+; we want to read +mafioso+ as a pure stub even
+  # Mafioso from mafioso; we want to read mafioso as a pure stub even
   # though its capitalized canonical lowercases to the same key). For each
   # exact word we track: the lowercase auth-key it serves, whether any record
   # has a real (non-alt-of) sense, and the alt-of targets contributed by
@@ -119,11 +119,11 @@ def stream_kaikki_records_for(words)
   # sounds are already non-empty. For trampoline candidacy we look at the
   # set of *exact* Kaikki words that lowercase to this auth key: if at least
   # one of them is a pure-stub spelling (no real records, has alt-of
-  # targets), use that stub's targets. This lets +mafioso+ (pure stub)
-  # trampoline to +Mafioso+ even though +Mafioso+ also exists as a real
-  # entry under the same lowercased key, while still blocking +cache+ (which
+  # targets), use that stub's targets. This lets mafioso (pure stub)
+  # trampoline to Mafioso even though Mafioso also exists as a real
+  # entry under the same lowercased key, while still blocking cache (which
   # has real noun + verb records alongside a misspelling stub) from
-  # trampolining to +cachet+.
+  # trampolining to cachet.
   pending = {}
   by_key = word_classification.values.group_by { |cls| cls[:key] }
   by_key.each do |key, classes|
@@ -139,7 +139,7 @@ def stream_kaikki_records_for(words)
   return collected if pending.empty?
 
   # Second pass: collect sounds for each target. Wiktionary case-distinguishes
-  # +Mafioso+ from +mafioso+, so we keep entries grouped by exact +word+ and
+  # Mafioso from mafioso, so we keep entries grouped by exact word and
   # prefer the exact-case match later. Also record whether each target was
   # *seen* at all in the dump (with or without sounds), so we can still point
   # editors at the canonical page when the canonical itself lacks IPA.
@@ -203,9 +203,9 @@ end
 
 def pron_strings(prons) = prons.map { |p| p.phonemes.reject { |ph| ph == "." }.join(" ") }
 
-# Treat secondary stress (+2+) as unstressed (+0+) when deciding whether two
+# Treat secondary stress (2) as unstressed (0) when deciding whether two
 # pronunciations match. Wiktionary editors don't transcribe secondary stress
-# consistently, so an +AY2+ vs +AY0+ vs unmarked-but-after-primary difference
+# consistently, so an AY2 vs AY0 vs unmarked-but-after-primary difference
 # isn't worth filing an upstream edit for.
 def comparison_key(pron_str)
   pron_str.gsub(/\b([A-Z]+)2\b/) { "#{Regexp.last_match(1)}0" }
@@ -231,7 +231,7 @@ def status_for(auth_strs, kaikki_strs, kaikki_record)
 end
 
 def wiktionary_url(word)
-  # +en.wiktionary.org+ uses MediaWiki page titles, where spaces map to
+  # en.wiktionary.org uses MediaWiki page titles, where spaces map to
   # underscores. Apostrophes, hyphens, and most diacritics survive in the URL
   # without percent-encoding (browsers handle UTF-8 byte sequences).
   "https://en.wiktionary.org/wiki/#{word.tr(' ', '_')}"
@@ -240,7 +240,7 @@ end
 # Build the markdown lines for a single edit candidate. When the row was
 # resolved via alt-of / form-of trampolining, the section header links to the
 # *canonical* Wiktionary page (where the editor needs to make changes) and a
-# +Trampolined via …+ line tells them the original stub's name.
+# Trampolined via … line tells them the original stub's name.
 def render_edit_entry(r, ipa_block)
   out = []
   if r[:trampoline]

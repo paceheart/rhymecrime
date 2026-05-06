@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Run RhymeCrime locally via Puma. Thin wrapper around +bundle exec puma+:
+# Run RhymeCrime locally via Puma. Thin wrapper around bundle exec puma:
 # all arguments pass through to puma unchanged.
 #
 # Usage:

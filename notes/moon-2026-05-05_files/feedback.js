@@ -53,7 +53,7 @@
     sessionStorage.removeItem(storageKey(cue, related));
   }
 
-  // After an undo, the cursor is still on top of the button, so the +:hover+
+  // After an undo, the cursor is still on top of the button, so the :hover
   // rule would keep the just-retracted thumb at full opacity — making the
   // undo invisible until you move the mouse. We tag the button with a class
   // that overrides the hover rule and tear the tag off the next time the

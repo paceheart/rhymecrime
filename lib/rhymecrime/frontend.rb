@@ -13,20 +13,20 @@ DEBUG_MODE = false
 require "set"
 require_relative "crime"
 
-# Per-request debug flag, set true iff +?debug=1+ was on the URL. Two behaviors
+# Per-request debug flag, set true iff ?debug=1 was on the URL. Two behaviors
 # are gated on this global because both fire deep inside the render path where
 # threading a kwarg through would touch dozens of call sites:
 #
-#   1. Pruning visualizer: +prune_suffix_redundant_rhyming_tuples+ retains
-#      (rather than drops) its victims and records them in +$debug_pruned_
-#      tuples+; +print_tuple+ then renders them inline with kept tuples but
-#      tagged with the +output_tuple_pruned+ CSS class.
-#   2. set_related coloring: +tuple_focal_word_for_goal+ returns +nil+ in
+#   1. Pruning visualizer: prune_suffix_redundant_rhyming_tuples retains
+#      (rather than drops) its victims and records them in $debug_pruned_
+#      tuples; print_tuple then renders them inline with kept tuples but
+#      tagged with the output_tuple_pruned CSS class.
+#   2. set_related coloring: tuple_focal_word_for_goal returns nil in
 #      production so set_related slots render in the default text color, and
-#      returns +word1+ under debug so each slot is tinted by its stored
-#      relatedness_score vs +word1+ (the diagnostic view).
+#      returns word1 under debug so each slot is tinted by its stored
+#      relatedness_score vs word1 (the diagnostic view).
 #
-# Name is +$debug_pruning+ (rather than +$debug_request+) for git-blame
+# Name is $debug_pruning (rather than $debug_request) for git-blame
 # stability — pruning was the original behavior; coloring piggybacked.
 $debug_pruning = false
 $debug_pruned_tuples = nil
@@ -107,29 +107,29 @@ end
 
 # Per-column dispatch: short-circuits with a "semantically promiscuous"
 # message when the goal's relatedness cue is promiscuous, otherwise calls
-# the normal +rhymecrime+ pipeline.
+# the normal rhymecrime pipeline.
 #
-# Why per-column rather than at the top of +compute_and_print_html_middle+:
-# the +rhymes+ goal has no relatedness cue (+feedback_cue_for_goal → nil+),
-# so a promiscuous +word1+ doesn't impair it — "perhaps" really does rhyme
+# Why per-column rather than at the top of compute_and_print_html_middle:
+# the rhymes goal has no relatedness cue (feedback_cue_for_goal → nil),
+# so a promiscuous word1 doesn't impair it — "perhaps" really does rhyme
 # with "lapse", and we want that column to keep working. Only the
-# relatedness-bearing goals (+related+, +set_related+, +related_rhymes+,
-# +pair_related+) need to bail out, and the cue-mapping table that says
-# *which* word matters per goal is exactly +feedback_cue_for_goal+ — the
+# relatedness-bearing goals (related, set_related, related_rhymes,
+# pair_related) need to bail out, and the cue-mapping table that says
+# *which* word matters per goal is exactly feedback_cue_for_goal — the
 # same one that drives the thumbs-feedback widget. Reusing it keeps the
 # "what's the cue here" definition single-sourced.
 #
-# Returning a synthetic +(:bad_input, header)+ tuple piggybacks on
-# +print_html_column_data+'s existing +emit_line header+ branch — no new
+# Returning a synthetic (:bad_input, header) tuple piggybacks on
+# print_html_column_data's existing emit_line header branch — no new
 # render path needed.
 #
-# Linking parity: promiscuous words are also stripped of their +<a href=...>+
-# in +print_word+ (see +link_word+), so a user who somehow lands on a
+# Linking parity: promiscuous words are also stripped of their <a href=...>
+# in print_word (see link_word), so a user who somehow lands on a
 # promiscuous word through search or a typed URL doesn't get tempted by
 # clickable rhymes that would only land them back on this same dead-end
-# message. (Unrhymable stop words like "the" are deleted from +word_dict+ at
-# build time, so this dispatch never sees them.) Color: +.stop-word+ (+#bbb+)
-# in +assets/crimestyle.css+ wraps those surfaces in +print_word+.
+# message. (Unrhymable stop words like "the" are deleted from word_dict at
+# build time, so this dispatch never sees them.) Color: .stop-word (#bbb)
+# in assets/crimestyle.css wraps those surfaces in print_word.
 def compute_column_for_goal(goal, word1, word2)
   cue = feedback_cue_for_goal(goal, word1, word2)
   promiscuous = promiscuous_words_in_cue(cue)
@@ -140,18 +140,18 @@ def compute_column_for_goal(goal, word1, word2)
 end
 
 # Returns the unique semantically promiscuous words in the goal's relatedness
-# cue. +cue+ is whatever +feedback_cue_for_goal+ returned: nil (no cue), a
-# String, or an Array of Strings (+pair_related+). +Array(cue)+ flattens all
-# three to a uniform iterable; +uniq+ keeps the message stable when the same
-# promiscuous word fills both slots of a +pair_related+ query
-# (+perhaps / perhaps+). Empty / blank cue components are pre-filtered so a
-# vacuous query (+word1=""+) doesn't accidentally trigger the message.
+# cue. cue is whatever feedback_cue_for_goal returned: nil (no cue), a
+# String, or an Array of Strings (pair_related). Array(cue) flattens all
+# three to a uniform iterable; uniq keeps the message stable when the same
+# promiscuous word fills both slots of a pair_related query
+# (perhaps / perhaps). Empty / blank cue components are pre-filtered so a
+# vacuous query (word1="") doesn't accidentally trigger the message.
 def promiscuous_words_in_cue(cue)
   Array(cue).reject { |c| c.nil? || c.to_s.empty? }.uniq.select { |c| semantically_promiscuous?(c) }
 end
 
 # Format the abort message. Always singular: when both slots of a
-# +pair_related+ query are promiscuous (+perhaps / however+), pluralizing
+# pair_related query are promiscuous (perhaps / however), pluralizing
 # inline produces awkward English, so we just name the first offender.
 # Loses a bit of info in that rare case, but the user can see the full query
 # in the form/URL anyway.
@@ -159,32 +159,32 @@ def promiscuous_message(promiscuous_words)
   "\"#{promiscuous_words.first}\" is semantically promiscuous; can't compute related words"
 end
 
-# Per-column focal word for tuple coloring. Every slot in a +set_related+ tuple
-# is meant to be topically related to +word1+, so under debug we color each by
-# its stored relatedness_score vs +word1+ to make the relatedness model legible.
+# Per-column focal word for tuple coloring. Every slot in a set_related tuple
+# is meant to be topically related to word1, so under debug we color each by
+# its stored relatedness_score vs word1 to make the relatedness model legible.
 # Pair-rhyme goals don't have a single focal (the two slots target different
 # focals), so we skip coloring there.
 #
-# Production default returns +nil+ for every goal — set_related slots render in
+# Production default returns nil for every goal — set_related slots render in
 # the page's default text color so the visual hierarchy of the page (headers,
-# links, body text) reads cleanly without per-word color noise. Pass +?debug=1+
-# on the URL to flip back to the diagnostic view; see +$debug_pruning+'s
+# links, body text) reads cleanly without per-word color noise. Pass ?debug=1
+# on the URL to flip back to the diagnostic view; see $debug_pruning's
 # doc comment above for why this gate is shared with the pruning visualizer.
 def tuple_focal_word_for_goal(goal, word1)
   return nil unless $debug_pruning
   goal == "set_related" ? word1 : nil
 end
 
-# Feedback cue per goal. Determines what +cue+ the rendered word is being
+# Feedback cue per goal. Determines what cue the rendered word is being
 # claimed related to, so the thumbs widget can POST a (cue, related, verdict)
-# triple matching the +curated/related.csv+ schema:
+# triple matching the curated/related.csv schema:
 #
-#   * +rhymes+         → nil (plain rhymes; no relatedness claim being made)
-#   * +related+        → word1 (debug column: "words related to word1")
-#   * +set_related+    → word1 (every tuple slot related to word1)
-#   * +related_rhymes+ → word2 (rhymes for word1, related to word2)
-#   * +pair_related+   → +[word1, word2]+ (slot 0 related to word1, slot 1 to
-#     word2). +print_tuples+ accepts this Array form natively.
+#   * rhymes         → nil (plain rhymes; no relatedness claim being made)
+#   * related        → word1 (debug column: "words related to word1")
+#   * set_related    → word1 (every tuple slot related to word1)
+#   * related_rhymes → word2 (rhymes for word1, related to word2)
+#   * pair_related   → [word1, word2] (slot 0 related to word1, slot 1 to
+#     word2). print_tuples accepts this Array form natively.
 def feedback_cue_for_goal(goal, word1, word2)
   case goal
   when "set_related", "related"
@@ -241,8 +241,8 @@ end
 def print_output(output, input_word1, output_type, tuple_focal_word = nil, feedback_cue = nil)
   case output_type
   when :words
-    # +feedback_cue+ for :words is always a String (per +feedback_cue_for_goal+:
-    # only +pair_related+ — a :tuples goal — returns an Array).
+    # feedback_cue for :words is always a String (per feedback_cue_for_goal:
+    # only pair_related — a :tuples goal — returns an Array).
     print_words(output, false, cue: feedback_cue)
   when :tuples
     print_tuples(output, tuple_focal_word, cues: feedback_cue)
@@ -255,30 +255,30 @@ def print_html_footer
   cgi_puts IO.read(File.join(REPO_ROOT, "assets", "footer.html"), encoding: "UTF-8")
 end
 
-# Full HTML page (Sinatra / Lambda). Uses a thread-local buffer so +cgi_print+ / +emit_*+ accumulate
+# Full HTML page (Sinatra / Lambda). Uses a thread-local buffer so cgi_print / emit_* accumulate
 # without contaminating concurrent requests on other Puma threads.
 #
-# +debug:+ true (passed from the +debug=1+ URL param) turns on +$debug_pruning+,
+# debug: true (passed from the debug=1 URL param) turns on $debug_pruning,
 # the catch-all per-request debug gate. Two behaviors fire from it: (1) suffix-
 # redundant tuples are rendered inline with kept tuples (greyed out via
-# +output_tuple_pruned+) instead of being silently dropped, and (2) set_related
-# slots are colored by stored relatedness_score vs +word1+ instead of rendering
-# in the default text color. See the +$debug_pruning+ doc comment for the full
+# output_tuple_pruned) instead of being silently dropped, and (2) set_related
+# slots are colored by stored relatedness_score vs word1 instead of rendering
+# in the default text color. See the $debug_pruning doc comment for the full
 # list of behaviors gated on this flag.
 #
-# Cache lifetime: we deliberately do NOT call +Rhymecrime::DynamoRuntime
-# .clear_session_cache!+ or +RelatedWords.reset_caches!+ on entry. The
-# +word#+ / +rime#+ rows backing the DDB cache and the per-cue +@related_
-# word_cache+ / +$rhyming_tuple_word_bases_cache+ are pure functions of the
-# upstream data deploy (frozen until the next +bin/upload-to-dynamodb+),
+# Cache lifetime: we deliberately do NOT call Rhymecrime::DynamoRuntime
+# .clear_session_cache! or RelatedWords.reset_caches! on entry. The
+# word# / rime# rows backing the DDB cache and the per-cue @related_
+# word_cache / $rhyming_tuple_word_bases_cache are pure functions of the
+# upstream data deploy (frozen until the next bin/upload-to-dynamodb),
 # so warm Lambda containers benefit from keeping them across requests —
 # the prefetch+find_related DDB phases collapse from ~5s to single-digit
 # milliseconds whenever the cohort overlaps a previously-served cue. The
-# DDB caches are FIFO-bounded by +DDB_WORD_CACHE_CAP+ / +DDB_RIME_CACHE_CAP+
+# DDB caches are FIFO-bounded by DDB_WORD_CACHE_CAP / DDB_RIME_CACHE_CAP
 # so even a long-lived container that has cumulatively touched every cue
 # can't grow them past the dictionary size.
 #
-# +bin/compute-relatedness+ still calls +reset_caches!+ between shards
+# bin/compute-relatedness still calls reset_caches! between shards
 # to bound worker RSS — that's a different access pattern (sequential
 # distinct-cue scan) where retention has no upside.
 def build_rhymecrime_page(word1, word2, debug: false)
@@ -298,7 +298,7 @@ ensure
 end
 
 # CGI: reads params from environment, prints to stdout.
-# See +build_rhymecrime_page+ for why we don't reset caches here.
+# See build_rhymecrime_page for why we don't reset caches here.
 def compute_and_print_html
   word1, word2 = parse_cgi_input
   puts build_rhymecrime_page(word1, word2)

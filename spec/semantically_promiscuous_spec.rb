@@ -1,7 +1,7 @@
-# Unit tests for +semantically_promiscuous?+: the predicate that flags content-empty
+# Unit tests for semantically_promiscuous?: the predicate that flags content-empty
 # words ("could", "perhaps", "henceforth") whose relatedness short-circuits to "related
-# to everything" in scoring / display. See the long-form comment in +utils_rhyme.rb+
-# alongside +SEMANTICALLY_PROMISCUOUS_FILENAME+ for the curation policy.
+# to everything" in scoring / display. See the long-form comment in utils_rhyme.rb
+# alongside SEMANTICALLY_PROMISCUOUS_FILENAME for the curation policy.
 
 def oughta_be_promiscuous(word)
   it "promiscuous: #{word.inspect}" do
@@ -21,12 +21,12 @@ def ought_not_be_promiscuous(word)
   end
 end
 
-# Sister predicate to +oughta_be_promiscuous+: function words and contractions
+# Sister predicate to oughta_be_promiscuous: function words and contractions
 # ("the", "a", "you'll") that are valid English but make poor rhyme targets, so
-# we delete them from +word_dict+ at build time. Curated in
-# +unrhymable_stop_words.txt+, disjoint-in-spirit from the promiscuous list (see
-# the long-form comment near +SEMANTICALLY_PROMISCUOUS_FILENAME+ in
-# +utils_rhyme.rb+ for the why).
+# we delete them from word_dict at build time. Curated in
+# unrhymable_stop_words.txt, disjoint-in-spirit from the promiscuous list (see
+# the long-form comment near SEMANTICALLY_PROMISCUOUS_FILENAME in
+# utils_rhyme.rb for the why).
 def oughta_be_unrhymable(word)
   it "unrhymable: #{word.inspect}" do
     expect(unrhymable_stop_word?(word)).to(

@@ -7,39 +7,39 @@
 #   ./bin/deploy-aws
 #
 # Prereqs (one-time):
-#   - +./setup.sh+ has run (the +generated/+ artifacts +stage-lambda+ copies
+#   - ./setup.sh has run (the generated/ artifacts stage-lambda copies
 #     into the deploy bundle exist).
-#   - Docker is running (+--use-container+ runs +bundle install+ inside the
-#     +public.ecr.aws/sam/build-ruby3.4+ image so native gems compile for
+#   - Docker is running (--use-container runs bundle install inside the
+#     public.ecr.aws/sam/build-ruby3.4 image so native gems compile for
 #     arm64-linux instead of the build host's arm64-darwin).
-#   - +samconfig.toml+ exists with +profile = "paceheart"+ pinned (created
-#     by the first +sam deploy --guided+; never accidentally hits the work
-#     account again). Override with +RHYMECRIME_AWS_PROFILE=…+ in your shell
-#     rc — this script passes +--profile+ on the CLI, which beats the toml
+#   - samconfig.toml exists with profile = "paceheart" pinned (created
+#     by the first sam deploy --guided; never accidentally hits the work
+#     account again). Override with RHYMECRIME_AWS_PROFILE=… in your shell
+#     rc — this script passes --profile on the CLI, which beats the toml
 #     pin (CLI > config file in SAM's resolution order).
 #
-# Data uploads are a *separate* step: see +bin/upload-to-dynamodb+ /
-# +bin/deploy-data+. Lambda + DynamoDB tables get provisioned here, but the
+# Data uploads are a *separate* step: see bin/upload-to-dynamodb /
+# bin/deploy-data. Lambda + DynamoDB tables get provisioned here, but the
 # tables ship empty until you upload.
 
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-# Resolve which AWS profile to deploy with. Default is +paceheart+ (matching
-# +samconfig.toml+'s pin), but +RHYMECRIME_AWS_PROFILE+ in the developer's
-# shell rc wins when set — same convention as +bin/_aws_preflight.rb+ uses
-# for the data-side scripts, so a single +export RHYMECRIME_AWS_PROFILE=…+
+# Resolve which AWS profile to deploy with. Default is paceheart (matching
+# samconfig.toml's pin), but RHYMECRIME_AWS_PROFILE in the developer's
+# shell rc wins when set — same convention as bin/_aws_preflight.rb uses
+# for the data-side scripts, so a single export RHYMECRIME_AWS_PROFILE=…
 # steers both halves of the deploy (Lambda/CFN here, DynamoDB/STS there) at
 # the same account.
 #
-# We pass +--profile "$aws_profile"+ explicitly to +sam deploy+ and the
-# +aws+ CLI rather than letting them read +AWS_PROFILE+ out of env, for two
+# We pass --profile "$aws_profile" explicitly to sam deploy and the
+# aws CLI rather than letting them read AWS_PROFILE out of env, for two
 # reasons:
-#   1. +sam deploy+ otherwise resolves +profile+ from +samconfig.toml+ first,
-#      so an env-var alone would lose to the +paceheart+ pin there.
-#   2. A stray +AWS_PROFILE=production-admin+ leaked in from an earlier
+#   1. sam deploy otherwise resolves profile from samconfig.toml first,
+#      so an env-var alone would lose to the paceheart pin there.
+#   2. A stray AWS_PROFILE=production-admin leaked in from an earlier
 #      work-account session can't beat us — same wrong-account trap that
-#      +bin/_aws_preflight.rb+ guards against on the data side.
+#      bin/_aws_preflight.rb guards against on the data side.
 aws_profile="${RHYMECRIME_AWS_PROFILE:-paceheart}"
 if [[ -n "${RHYMECRIME_AWS_PROFILE:-}" && "$RHYMECRIME_AWS_PROFILE" != "paceheart" ]]; then
   echo "==> RHYMECRIME_AWS_PROFILE=$RHYMECRIME_AWS_PROFILE: deploying with --profile=$aws_profile (overrides samconfig.toml)"
@@ -48,10 +48,10 @@ fi
 echo "==> [1/3] staging Lambda bundle"
 ./bin/stage-lambda
 
-# +sam build+ is a local Docker step (compiles native gems inside
-# +public.ecr.aws/sam/build-ruby3.4+) and doesn't touch AWS, so no
-# +--profile+ needed here. +sam deploy+ does, and overrides the
-# +samconfig.toml+ pin via the CLI flag (CLI > config file in SAM's
+# sam build is a local Docker step (compiles native gems inside
+# public.ecr.aws/sam/build-ruby3.4) and doesn't touch AWS, so no
+# --profile needed here. sam deploy does, and overrides the
+# samconfig.toml pin via the CLI flag (CLI > config file in SAM's
 # resolution order).
 echo "==> [2/3] sam build (inside build-ruby3.4 arm64 container)"
 sam build --use-container
@@ -61,14 +61,14 @@ sam deploy --profile "$aws_profile"
 
 echo
 echo "==> deployed. URLs:"
-# +--profile "$aws_profile"+ matches the +sam deploy+ above. Without an
+# --profile "$aws_profile" matches the sam deploy above. Without an
 # explicit flag, the AWS CLI uses whichever profile the shell happens to
 # have active, which is exactly the trap that landed our first deploy in
 # the work account.
 #
-# Pulls +HttpApiUrl+ (always present) plus +CustomDomainUrl+ /
-# +WwwCustomDomainUrl+ (only present when +HasCustomDomain+ is on — see
-# +template.yaml+ +Conditions+). +OutputKey+ +OutputValue+ in a single +query+
+# Pulls HttpApiUrl (always present) plus CustomDomainUrl /
+# WwwCustomDomainUrl (only present when HasCustomDomain is on — see
+# template.yaml Conditions). OutputKey OutputValue in a single query
 # keeps the table compact whether one, two, or all three are populated;
 # missing outputs are silently skipped by JMESPath.
 aws cloudformation describe-stacks \

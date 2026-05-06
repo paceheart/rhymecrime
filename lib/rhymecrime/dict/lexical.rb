@@ -105,8 +105,8 @@ def wn_dict_data_path(pos_char)
   File.join(WordNet::DB.path, "dict", fn)
 end
 
-# One full scan per WordNet data file, then O(1) lookup. Global +$wn_synset_line_index_by_path+
-# is cleared in +clear_wordnet_lemma_cache!+ and after +compute_lemma_map+ (see dict.rb).
+# One full scan per WordNet data file, then O(1) lookup. Global $wn_synset_line_index_by_path
+# is cleared in clear_wordnet_lemma_cache! and after compute_lemma_map (see dict.rb).
 
 def build_wn_synset_line_index(path)
   idx = {}
@@ -125,7 +125,7 @@ def wn_synset_line_index_for_path(path)
   ($wn_synset_line_index_by_path ||= {})[path] ||= build_wn_synset_line_index(path)
 end
 
-# Full synset line (header + gloss) for 8-digit +synset_offset+ in the data file for +pos_char+.
+# Full synset line (header + gloss) for 8-digit synset_offset in the data file for pos_char.
 def wn_synset_line_for_offset(pos_char, synset_offset)
   path = wn_dict_data_path(pos_char)
   return nil unless path && File.file?(path)
@@ -159,7 +159,7 @@ def wn_parse_synset_header_fields(header)
   { words: words, ptrs: ptrs }
 end
 
-# All member lemmas (lowercase) in synsets reached by 1-hop derivation pointers from any sense of +word+.
+# All member lemmas (lowercase) in synsets reached by 1-hop derivation pointers from any sense of word.
 def wn_derivation_target_lemmas_for_word(word)
   names = Set.new
   w = word.to_s
@@ -204,8 +204,8 @@ def wn_derivation_target_hit?(targets, base)
   want.any? { |x| targets.include?(x) }
 end
 
-# 1-hop derivation / participle / derived-from-adj pointers from any sense of +word+ to a synset
-# that lists +base+ as a member lemma.
+# 1-hop derivation / participle / derived-from-adj pointers from any sense of word to a synset
+# that lists base as a member lemma.
 def wn_derivationally_related_to_base?(word, base)
   w = word.to_s
   b = base.to_s
@@ -215,7 +215,7 @@ def wn_derivationally_related_to_base?(word, base)
   wn_derivation_target_hit?(targets, b)
 end
 
-# Productive English -ly / -ful spelled per +Inflect+, with WordNet POS shape guards so *early*≠*ear*,
+# Productive English -ly / -ful spelled per Inflect, with WordNet POS shape guards so *early*≠*ear*,
 # *only*≠*on*, *friendly* (noun)≠*friend*, etc.
 def wn_productive_affix_lemma_pair?(word, base)
   kind = Inflect.send(:match_suffix_kind, base, word)
@@ -236,16 +236,16 @@ def wn_productive_affix_lemma_pair?(word, base)
   true
 end
 
-# Regular verbal *-ed* / *-ing* / *-s* surfaces whose unique verbal morphy stem matches +base+
-# and +Inflect+ agrees on the suffix shape (+deafened+→+deafen+, +bumbling+→+bumble+,
-# +needs+ adv→+need+ verb). Rescues cases where WordNet lists the inflected form as its own
-# adj/gerund/adverb head (so +wn_share_synset?+ / +wn_derivationally_related_to_base?+ return
+# Regular verbal *-ed* / *-ing* / *-s* surfaces whose unique verbal morphy stem matches base
+# and Inflect agrees on the suffix shape (deafened→deafen, bumbling→bumble,
+# needs adv→need verb). Rescues cases where WordNet lists the inflected form as its own
+# adj/gerund/adverb head (so wn_share_synset? / wn_derivationally_related_to_base? return
 # false) but the verbal relationship is still sound.
 #
-# Stems are deduped by spelling-variant +preferred_form+ before the unique-base check: WordNet's
-# morphy returns both spellings of a single lexeme (+morphy(fulfilled,verb)=[fulfil,fulfill]+,
-# +morphy(travelled,verb)=[travel,travelled]+) which would otherwise look like an ambiguous stem.
-# Genuine ambiguity (+feed+→{+feed+,+fee+}, +singing+→{+sing+,+singe+}) still blocks because the
+# Stems are deduped by spelling-variant preferred_form before the unique-base check: WordNet's
+# morphy returns both spellings of a single lexeme (morphy(fulfilled,verb)=[fulfil,fulfill],
+# morphy(travelled,verb)=[travel,travelled]) which would otherwise look like an ambiguous stem.
+# Genuine ambiguity (feed→{feed,fee}, singing→{sing,singe}) still blocks because the
 # stems map to different preferred forms.
 def wn_verb_stem_via_morphy?(word, base)
   kind = Inflect.send(:match_suffix_kind, base, word)
@@ -262,35 +262,35 @@ def wn_verb_stem_via_morphy?(word, base)
   canonical_stems.first == base_canonical
 end
 
-# Regular *-s* noun plurals whose WordNet noun-morphy result includes +base+.
+# Regular *-s* noun plurals whose WordNet noun-morphy result includes base.
 # Rescues lemma collapse for surfaces that have their own WN noun synset because
-# of a pluralia-tantum-derivative sense (+communications+ "telecommunications",
-# +glasses+ "spectacles", +arms+ "weapons") — +wn_share_synset?+ correctly says
+# of a pluralia-tantum-derivative sense (communications "telecommunications",
+# glasses "spectacles", arms "weapons") — wn_share_synset? correctly says
 # no but the morphological plural relationship is still real and Kaikki/morphy
-# both attest it. Distinguishes these from genuine standalone nouns whose +-s+
-# ending is coincidental (+alias+, +atlas+, +basis+, +assess+, +caress+ —
+# both attest it. Distinguishes these from genuine standalone nouns whose -s
+# ending is coincidental (alias, atlas, basis, assess, caress —
 # morphy returns only the surface or an unrelated stem so the gate stays shut),
-# and from pluralia-tantum that aren't really plurals (+aerobatics+,
-# +binoculars+, +bahamas+ — morphy returns only the surface).
+# and from pluralia-tantum that aren't really plurals (aerobatics,
+# binoculars, bahamas — morphy returns only the surface).
 #
-# +base+ is matched after +preferred_form+ canonicalization so spelling-variant
-# pairs (+colors+/+colour+) still match through.
+# base is matched after preferred_form canonicalization so spelling-variant
+# pairs (colors/colour) still match through.
 def wn_noun_plural_via_morphy?(word, base)
   kind = Inflect.send(:match_suffix_kind, base, word)
   return false unless kind == :s
   return false unless wn_base_has_noun?(base)
 
-  # Reject morphy's opportunistic +-ss+ → +-s+ chops (+ass+→+as+, +boss+→+bos+,
-  # +pass+→+pas+, +buss+→+bus+). +morphy(word, "noun")+ tries stripping a
-  # single +s+ from any +-ss+ surface and returns the result whenever WordNet
+  # Reject morphy's opportunistic -ss → -s chops (ass→as, boss→bos,
+  # pass→pas, buss→bus). morphy(word, "noun") tries stripping a
+  # single s from any -ss surface and returns the result whenever WordNet
   # happens to have a noun entry for it, regardless of whether the two are
-  # semantically related. English doesn't pluralize +s+-final bases by adding
-  # another +s+ — the real plural inflection of +as+/+bos+/+pas+/+bus+ is
-  # +-es+ (+asses+/+boses+/+pases+/+buses+). So a +kind == :s+ shape where
-  # +word+ ends in +-ss+ and +base+ ends in +-s+ is virtually always the
+  # semantically related. English doesn't pluralize s-final bases by adding
+  # another s — the real plural inflection of as/bos/pas/bus is
+  # -es (asses/boses/pases/buses). So a kind == :s shape where
+  # word ends in -ss and base ends in -s is virtually always the
   # opportunistic chop, never a real plural. Doc-preserved pluralia-tantum
-  # (+glasses+→+glass+, +arms+→+arm+, +communications+→+communication+,
-  # +kisses+→+kiss+) end in +-sses+/+-ms+/+-tions+, never +-ss+ over +-s+, so
+  # (glasses→glass, arms→arm, communications→communication,
+  # kisses→kiss) end in -sses/-ms/-tions, never -ss over -s, so
   # this guard doesn't touch them.
   return false if word.end_with?("ss") && base.end_with?("s")
 
@@ -325,8 +325,8 @@ end
 
 # WordNet noun lexicographer files used for “mass-dominant” plural policy. *noun.attribute* alone
 # mixes count and mass (*indifference*/*indifferences*); we only treat attribute lemmas as mass-locked
-# when some sense is also in +WN_NOUN_LEXNAME_HARD_MASS+ (*goodwill*: possession + attribute + feeling).
-# *noun.person* synsets are ignored (+Chaos+ the deity vs *chaos* the mass noun).
+# when some sense is also in WN_NOUN_LEXNAME_HARD_MASS (*goodwill*: possession + attribute + feeling).
+# *noun.person* synsets are ignored (Chaos the deity vs *chaos* the mass noun).
 WN_NOUN_LEXNAME_MASS_DOMINANT = Set.new(%w[
   noun.attribute
   noun.cognition
@@ -349,14 +349,14 @@ WN_NOUN_LEXNAME_HARD_MASS = Set.new(%w[
   noun.substance
 ]).freeze
 
-# Bases whose usual plural is not *+s* (*deer*, *sheep*, …). WordNet 3.1 +noun.exc+ often omits
+# Bases whose usual plural is not *+s* (*deer*, *sheep*, …). WordNet 3.1 noun.exc often omits
 # identity pairs like *deer* → *deer*, so we merge this list after loading the file.
 WN_INVARIANT_PLURAL_BASES_FALLBACK = Set.new(%w[
   bison cod deer moose sheep swine trout
 ]).freeze
 
-# Princeton WordNet 3.x +lexnames+ table: two-digit file id → lexicographer file name (see lexnames(5WN)).
-# Used when +dict/lexnames+ is missing or unreadable so +wn_synset_noun_lexname+ still works.
+# Princeton WordNet 3.x lexnames table: two-digit file id → lexicographer file name (see lexnames(5WN)).
+# Used when dict/lexnames is missing or unreadable so wn_synset_noun_lexname still works.
 WN_LEX_FILENUM_TO_LEXNAME = {
   "00" => "adj.all", "01" => "adj.pert", "02" => "adv.all", "03" => "noun.Tops", "04" => "noun.act",
   "05" => "noun.animal", "06" => "noun.artifact", "07" => "noun.attribute", "08" => "noun.body",
@@ -371,8 +371,8 @@ WN_LEX_FILENUM_TO_LEXNAME = {
   "41" => "verb.social", "42" => "verb.stative", "43" => "verb.weather", "44" => "adj.ppl",
 }.freeze
 
-# Map data.* +lex_filenum+ (two-digit id) → lexicographer name. File format (Princeton): tab-separated
-# +filenum+, +lexname+, +syntactic_category+ (1=noun …) — not +lexname pos filenum+.
+# Map data.* lex_filenum (two-digit id) → lexicographer name. File format (Princeton): tab-separated
+# filenum, lexname, syntactic_category (1=noun …) — not lexname pos filenum.
 def wn_noun_lex_filenum_to_lexname
   @wn_noun_lex_filenum_to_lexname ||= begin
     m = {}
@@ -410,7 +410,7 @@ def wn_synset_noun_lexname(synset)
   map[fn.rjust(2, "0")] || map[fn]
 end
 
-# Lemma bases that WordNet’s +noun.exc+ marks with the same surface as singular and plural (*deer deer*,
+# Lemma bases that WordNet’s noun.exc marks with the same surface as singular and plural (*deer deer*,
 # *sheep sheep*, …). A bare *…+s+* spelling (*deers*, *sheeps*) is then a spurious regular plural for
 # frequency and morph inheritance unless handled elsewhere.
 def wn_noun_exc_invariant_plural_bases
@@ -436,7 +436,7 @@ def wn_noun_exc_invariant_plural_bases
 end
 
 # Small, conservative list of noun-only irregular plurals where +base+s+ / +base+es+ is spurious
-# and the base doesn't double as a common verb lemma. Drawn from WordNet +noun.exc+ but hand-filtered
+# and the base doesn't double as a common verb lemma. Drawn from WordNet noun.exc but hand-filtered
 # to avoid blocking verb 3rd-person-singulars (*knifes*, *leafs*, *wifes*) and legitimate nominal
 # alternates (*mouses* for computer mice, *appendixes* in medical usage).
 WN_NOUN_IRREGULAR_NON_S_PLURAL_BASES = Set.new(%w[
@@ -447,32 +447,32 @@ WN_NOUN_IRREGULAR_NON_S_PLURAL_BASES = Set.new(%w[
 # rather than conversational English (Latin botanical anatomy, foreign numeric units, clan /
 # gens group labels). When a single-synset WN lemma sits in one of these categories and has
 # almost no SUBTLEX dialogue trickle, it's an encyclopedic token even though WordNet / wordfreq
-# give it headword-level anchors (+anther+, +gens+, +lakh+). Noun.animal and noun.communication
-# are intentionally excluded: they collide with common animal names (+tapir+ / +axolotl+ /
-# +puffin+) and idiom commons (+skulduggery+ / +malware+).
+# give it headword-level anchors (anther, gens, lakh). Noun.animal and noun.communication
+# are intentionally excluded: they collide with common animal names (tapir / axolotl /
+# puffin) and idiom commons (skulduggery / malware).
 WN_ENCYCLOPEDIC_SINGLE_SYNSET_LEXNAMES = Set.new(%w[
   noun.plant noun.quantity noun.group
 ]).freeze
 
 # Kaikki POS tags that designate closed-class function words. An OOV headword tagged
-# exclusively with these is nonstandard (+hisself+) or foreign-closed-class (+hor+ particle,
-# +raison+ fragments); genuine function-word commons (+of+, +his+, +yours+) are
-# +unrhymable_stop_word?+ entries that get deleted from +word_dict+ at build time.
+# exclusively with these is nonstandard (hisself) or foreign-closed-class (hor particle,
+# raison fragments); genuine function-word commons (of, his, yours) are
+# unrhymable_stop_word? entries that get deleted from word_dict at build time.
 OOV_FUNCTION_WORD_POS_TAGS = Set.new(%w[
   pron particle det conj prep num article postp
 ]).freeze
 
-# WordNet noun lex-categories covering biological taxonomy. Used with +wn_all_proper+ and
-# +syn_n == 1+ to demote Latin scientific binomials whose SUBTLEX FREQlow is a 1–4 count
-# fragment rather than sustained dialogue. +cajun+ (noun.person) has the same all_proper +
-# single-synset + low-sub profile but is a conversational demonym, so +noun.person+ stays out.
+# WordNet noun lex-categories covering biological taxonomy. Used with wn_all_proper and
+# syn_n == 1 to demote Latin scientific binomials whose SUBTLEX FREQlow is a 1–4 count
+# fragment rather than sustained dialogue. cajun (noun.person) has the same all_proper +
+# single-synset + low-sub profile but is a conversational demonym, so noun.person stays out.
 WN_ALL_PROPER_BIOLOGY_LEXNAMES = Set.new(%w[
   noun.animal noun.plant
 ]).freeze
 
-# True when +word+ matches the WN single-synset + specialized-lex + thin-SUBTLEX profile that
-# +compute_frequency+ proactively demotes to rare. Used by Kaikki morph inheritance to refuse
-# plural/inflection inheritance that would undo the demotion (e.g. +gens+ → +gen+ base inherit).
+# True when word matches the WN single-synset + specialized-lex + thin-SUBTLEX profile that
+# compute_frequency proactively demotes to rare. Used by Kaikki morph inheritance to refuse
+# plural/inflection inheritance that would undo the demotion (e.g. gens → gen base inherit).
 def wn_encyclopedic_single_synset_demoted?(word, subtlex_hash, wordfreq_hash)
   return false unless wn_has_entry?(word)
   return false unless wn_synset_count(word) == 1
@@ -488,7 +488,7 @@ def wn_noun_exc_irregular_non_s_plural_bases
   WN_NOUN_IRREGULAR_NON_S_PLURAL_BASES
 end
 
-# All noun synsets for +word+, deduped, across WN spelling variants (hyphen / underscore).
+# All noun synsets for word, deduped, across WN spelling variants (hyphen / underscore).
 def wn_noun_synsets_unified(word)
   forms = [word, hyphens_to_underscores(word), word.tr("_", "-")].uniq
   seen = {}
@@ -507,7 +507,7 @@ def wn_noun_synsets_unified(word)
   seen.values
 end
 
-# True when every WordNet noun sense of +base+ sits in a mass-leaning lexicographer file, so Inflect *+s*
+# True when every WordNet noun sense of base sits in a mass-leaning lexicographer file, so Inflect *+s*
 # should not inherit via corpus alone (blocks *nostalgias* while keeping *apples*).
 def wn_noun_base_mass_dominant_for_productive_plural?(base)
   return false unless wn_has_entry?(base)
@@ -516,7 +516,7 @@ def wn_noun_base_mass_dominant_for_productive_plural?(base)
   syns = wn_noun_synsets_unified(base)
   return false if syns.empty?
 
-  # Mythology / named-entity senses (*Chaos*) live in +noun.person+; they should not prevent treating
+  # Mythology / named-entity senses (*Chaos*) live in noun.person; they should not prevent treating
   # the everyday mass noun as mass-dominant for plural policy.
   syns.reject! { |s| wn_synset_noun_lexname(s) == "noun.person" }
   return false if syns.empty?
@@ -555,8 +555,8 @@ def wn_noun_base_feeling_plus_attribute_plural_needs_own_corpus?(base)
   uniq_lex.include?("noun.feeling") && uniq_lex.include?("noun.attribute")
 end
 
-# +word+ has no WordNet lemma but is an Inflect surface of a WordNet lemma. Used to skip the OOV
-# low-SUBTLEX +subtlex_freq+ ceiling when Zipf is strong (*successors*) without helping bare fragments
+# word has no WordNet lemma but is an Inflect surface of a WordNet lemma. Used to skip the OOV
+# low-SUBTLEX subtlex_freq ceiling when Zipf is strong (*successors*) without helping bare fragments
 # that are not morphologically tied to a lexicon head (*anders* has no such base).
 def wn_oov_subtlex_cap_skip_via_inflection_anchor?(word)
   return false if wn_has_entry?(word)
@@ -582,7 +582,7 @@ def wn_oov_subtlex_cap_skip_via_inflection_anchor?(word)
   false
 end
 
-# WordNet lemma +pos+ codes → strings stored with Kaikki data (part_of_speech.json).
+# WordNet lemma pos codes → strings stored with Kaikki data (part_of_speech.json).
 WN_POS_TO_LEXICAL_POS = {
   "n" => "noun",
   "v" => "verb",
@@ -605,7 +605,7 @@ end
 
 # Layer A: intersect Kaikki’s POS union with WordNet’s coarse POS for the same surface form.
 # Words with no WordNet lemmas keep the full Kaikki set (OOV / neologisms). Morph phases use the
-# same +pos_map+ after this pass.
+# same pos_map after this pass.
 def apply_lexical_pos_layer_a!(pos_map)
   pos_map.each do |word, kaikki_set|
     next if kaikki_set.nil? || kaikki_set.empty?
@@ -627,7 +627,7 @@ def wn_seed_pos_map_for_pronunciation_map_gaps!(pos_map, pronunciation_map)
   nil
 end
 
-# Max Wordfreq Zipf among Inflect :ed / :ing surfaces derived from +base+.
+# Max Wordfreq Zipf among Inflect :ed / :ing surfaces derived from base.
 def max_inflect_ed_ing_zipf(base, wordfreq_hash)
   max_z = 0.0
   Inflect.each_derivable_form(base) do |w|
@@ -639,7 +639,7 @@ def max_inflect_ed_ing_zipf(base, wordfreq_hash)
   max_z
 end
 
-# Max Zipf among plural :s surfaces Inflect derives from +base+ (boxes, foxes, …).
+# Max Zipf among plural :s surfaces Inflect derives from base (boxes, foxes, …).
 def max_inflect_plural_zipf(base, wordfreq_hash)
   max_z = 0.0
   Inflect.each_derivable_form(base) do |w|
@@ -652,7 +652,7 @@ def max_inflect_plural_zipf(base, wordfreq_hash)
 end
 
 # Layer B: prune marginal WordNet POS using Wordfreq on inflected surfaces (experiment).
-# Homographs like +downtown+ (WN noun+adj+adv, no Kaikki row) are deferred to Layer C — not handled here.
+# Homographs like downtown (WN noun+adj+adv, no Kaikki row) are deferred to Layer C — not handled here.
 def apply_lexical_pos_layer_b!(pos_map, wordfreq_hash)
   pos_map.each do |word, set|
     next if set.nil? || set.empty?
@@ -682,8 +682,8 @@ def apply_lexical_pos_layer_b!(pos_map, wordfreq_hash)
       end
     end
 
-    # Noun + verb (no adj): drop noun when ed/ing is common but the bare +s+ token is still low Zipf
-    # (gobble: gobbles). Skip high-+s+ lemmas (dances, jogs) where -s is productive 3sg, not a weak plural.
+    # Noun + verb (no adj): drop noun when ed/ing is common but the bare s token is still low Zipf
+    # (gobble: gobbles). Skip high-s lemmas (dances, jogs) where -s is productive 3sg, not a weak plural.
     if s.include?("noun") && s.include?("verb") && !s.include?("adj") && s.size == 2
       vzip = max_inflect_ed_ing_zipf(word, wordfreq_hash)
       szip = (wordfreq_hash[word + "s"] || 0).to_f

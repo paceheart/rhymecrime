@@ -2,15 +2,15 @@
 #
 # Two layers of coverage live in this file:
 #
-#   1. A handful of hand-curated spot checks (the +oughta_be_*+ helpers below)
+#   1. A handful of hand-curated spot checks (the oughta_be_* helpers below)
 #      — each generates a named rspec example so a regression on a specific
 #      well-known word fails loudly with a self-explanatory test name.
 #
 #   2. A full sweep over every evaluable row in curated/rarity.csv, run inline
-#      at file load (NOT as per-row rspec examples) — we +puts+ a one-line
-#      +FAIL+ diagnostic per mismatch, then a single aggregate rspec example
+#      at file load (NOT as per-row rspec examples) — we puts a one-line
+#      FAIL diagnostic per mismatch, then a single aggregate rspec example
 #      gates the suite on the coverage floor + weighted-pass-rate floor. Same
-#      shape as +spec/semantic_base_spec.rb+.
+#      shape as spec/semantic_base_spec.rb.
 #
 # Scoring (partial credit on mismatches; symmetric — false positives and
 # false negatives are penalized equally):
@@ -19,9 +19,9 @@
 #   :common vs :rare      (either direction)            -> 0.1
 #   :common vs :forbidden (either direction)            -> 0.0
 #
-# Weights: +common+ / +rare+ / +forbidden+ rows weigh 3; +*_ish+ rows weigh 1
+# Weights: common / rare / forbidden rows weigh 3; *_ish rows weigh 1
 # (so a strong row counts 3x an ish row toward the aggregate). Rows skipped:
-# +uncommon+, +*_no_rhymes+, +have_rhymes+ (no rarity-family expectation).
+# uncommon, *_no_rhymes, have_rhymes (no rarity-family expectation).
 
 require_relative "test_utils"
 
@@ -115,9 +115,9 @@ def expected_category_for_kind(kind)
   end
 end
 
-# Coarse +rarity family+ for contradiction detection. +foo+ and +foo_ish+ (and
-# +foo_no_rhymes+) all collapse to the same family, so listing a word as both
-# +common+ and +common_ish+ is fine. +have_rhymes+ is orthogonal to commonness
+# Coarse rarity family for contradiction detection. foo and foo_ish (and
+# foo_no_rhymes) all collapse to the same family, so listing a word as both
+# common and common_ish is fine. have_rhymes is orthogonal to commonness
 # (returns nil) and is excluded from the contradiction check.
 def rarity_kind_family(kind)
   case kind.to_s.strip
@@ -129,10 +129,10 @@ def rarity_kind_family(kind)
   end
 end
 
-# Group rarity.csv rows by +word+ and return only those words whose rows
-# disagree about the rarity family (e.g. +ok+ listed as both +forbidden+ and
-# +rare+). Returns +[[word, [{kind:, family:, line:, context:}, ...]], ...]+
-# sorted by word. +foo+/+foo_ish+ pairs are NOT contradictions.
+# Group rarity.csv rows by word and return only those words whose rows
+# disagree about the rarity family (e.g. ok listed as both forbidden and
+# rare). Returns [[word, [{kind:, family:, line:, context:}, ...]], ...]
+# sorted by word. foo/foo_ish pairs are NOT contradictions.
 def find_contradictory_rarity_rows
   rows = load_rarity_csv_rows
   by_word = Hash.new { |h, k| h[k] = [] }
@@ -151,11 +151,11 @@ def find_contradictory_rarity_rows
     .sort_by { |word, _| word }
 end
 
-# Group rarity.csv rows by +word+ and return only those words that appear in
-# more than one row. Returns +[[word, [{kind:, line:, context:}, ...]], ...]+
-# sorted by word. Stricter than +find_contradictory_rarity_rows+: this also
-# catches same-family multi-rows (e.g. a word listed both +common+ and
-# +common_ish+, or two +forbidden+ rows under different contexts), which are
+# Group rarity.csv rows by word and return only those words that appear in
+# more than one row. Returns [[word, [{kind:, line:, context:}, ...]], ...]
+# sorted by word. Stricter than find_contradictory_rarity_rows: this also
+# catches same-family multi-rows (e.g. a word listed both common and
+# common_ish, or two forbidden rows under different contexts), which are
 # bookkeeping noise rather than informative redundancy.
 def find_redundant_rarity_rows
   rows = load_rarity_csv_rows
@@ -172,13 +172,13 @@ def find_redundant_rarity_rows
     .sort_by { |word, _| word }
 end
 
-# Words that appear in BOTH +curated/rarity.csv+ and the curated word-set file
-# +curated/<filename>+. Returns +[[word, [{kind:, line:, context:}, ...]], ...]+
-# sorted by word. Used to flag overlap with +unrhymable_stop_words.txt+ /
-# +semantically_promiscuous.txt+: those files have the final say at build /
+# Words that appear in BOTH curated/rarity.csv and the curated word-set file
+# curated/<filename>. Returns [[word, [{kind:, line:, context:}, ...]], ...]
+# sorted by word. Used to flag overlap with unrhymable_stop_words.txt /
+# semantically_promiscuous.txt: those files have the final say at build /
 # runtime, so any rarity.csv row for the same word is unreachable noise (and,
-# in the +common+ case, mints a stillborn pron-less +BuildEntry+ in the
-# common-list pass before +unrhymable_scrub+ tombstones it).
+# in the common case, mints a stillborn pron-less BuildEntry in the
+# common-list pass before unrhymable_scrub tombstones it).
 def find_rarity_rows_overlapping_curated_set(filename)
   members = load_curated_word_set(filename)
   rows = load_rarity_csv_rows
@@ -215,9 +215,9 @@ def rarity_row_weight(kind)
   kind.to_s.strip.end_with?("_ish") ? 1 : 3
 end
 
-# Sweep curated/rarity.csv against live +rarity_category+. Returns
-# +[evaluated, total_weight, weighted_score]+ over rows we actually evaluated.
-# Side effects: +puts+ a one-line +FAIL+ diagnostic per mismatch and a summary
+# Sweep curated/rarity.csv against live rarity_category. Returns
+# [evaluated, total_weight, weighted_score] over rows we actually evaluated.
+# Side effects: puts a one-line FAIL diagnostic per mismatch and a summary
 # line.
 def evaluate_rarity_csv
   rows = load_rarity_csv_rows
@@ -318,12 +318,12 @@ describe "RARITY" do
     oughta_be_rare 'doubtfire'
   end
 
-  # Wiktionary/Kaikki paradigm-table overgenerates +-s+ rows for every
-  # gerund-as-noun lemma, so the dict gets +bannings+, +pricings+,
-  # +addressings+, +marketings+ etc. — none real corpus surfaces. The
-  # +wiktionary_overgenerated_gerund_plural?+ predicate in +utils_rhyme.rb+
-  # demotes the shape to +:rare+ at runtime; concrete bases (+morning+
-  # noun.time, +meeting+ noun.group, +saving+ surface in WN) survive via the
+  # Wiktionary/Kaikki paradigm-table overgenerates -s rows for every
+  # gerund-as-noun lemma, so the dict gets bannings, pricings,
+  # addressings, marketings etc. — none real corpus surfaces. The
+  # wiktionary_overgenerated_gerund_plural? predicate in utils_rhyme.rb
+  # demotes the shape to :rare at runtime; concrete bases (morning
+  # noun.time, meeting noun.group, saving surface in WN) survive via the
   # gates inside that predicate.
   context 'wiktionary -ings overgeneration' do
     oughta_be_rare 'addressings'
@@ -335,11 +335,11 @@ describe "RARITY" do
     oughta_be_common 'upswings' # explicit common override in rarity.csv
   end
 
-  # Wiktionary also pluralizes abstract +-ness+ nominalizations
-  # (+abruptnesses+, +stiffnesses+, +goodnesses+) — paradigm-table noise that
-  # English never produces. +wiktionary_overgenerated_abstract_nesses_plural?+
-  # in +utils_rhyme.rb+ forbids these via +explicitly_forbidden?+; concrete
-  # +-ness+ surfaces (+baronesses+, base +baroness+ noun.person) survive via
+  # Wiktionary also pluralizes abstract -ness nominalizations
+  # (abruptnesses, stiffnesses, goodnesses) — paradigm-table noise that
+  # English never produces. wiktionary_overgenerated_abstract_nesses_plural?
+  # in utils_rhyme.rb forbids these via explicitly_forbidden?; concrete
+  # -ness surfaces (baronesses, base baroness noun.person) survive via
   # the WN concreteness gate.
   context 'wiktionary -nesses overgeneration' do
     oughta_be_forbidden 'abruptnesses'

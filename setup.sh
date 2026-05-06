@@ -15,13 +15,13 @@
 #   ./setup.sh             # everything above, in order — fully turnkey
 #   bundle exec rspec      # validate against the trained classifiers
 #
-# Prereqs on the host: ruby (matching +template.yaml+'s Lambda runtime),
-# bundler, curl, gunzip. Python 3 is *not* a prereq — +bin/setup-python-venv+
+# Prereqs on the host: ruby (matching template.yaml's Lambda runtime),
+# bundler, curl, gunzip. Python 3 is *not* a prereq — bin/setup-python-venv
 # uses uv (https://astral.sh/uv) to provision a managed CPython 3.12 when no
 # GIL-enabled Python is found on PATH.
 #
 # End-to-end runtime is ~60 min on a fresh clone, dominated by Build Stage
-# 1/4 of +bin/build+ (Numberbatch I/O, ~25 min) and Build Stage 3/4 (MPNet
+# 1/4 of bin/build (Numberbatch I/O, ~25 min) and Build Stage 3/4 (MPNet
 # encoding on CPU, ~20 min). Re-runs are much cheaper since each step
 # short-circuits when its outputs are already on disk and current.
 

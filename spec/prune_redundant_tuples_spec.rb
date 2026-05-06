@@ -1,30 +1,30 @@
-# Unit tests for +prune_suffix_redundant_rhyming_tuples+: a redundant-inflection pruner that
-# collapses rhyming tuples related by a single consistent +Inflect+ suffix kind. Covers the three
+# Unit tests for prune_suffix_redundant_rhyming_tuples: a redundant-inflection pruner that
+# collapses rhyming tuples related by a single consistent Inflect suffix kind. Covers the three
 # decision regimes the pruner has to get right:
 #
 #   1. same-length base vs. inflected: keep the base
 #   2. one tuple strictly richer (extra member whose base doesn't rhyme): keep the richer one
 #   3. disjoint / irregular tuples: keep both
 #
-# These cases have historically been fragile because +tuples.sort+ does not reliably front-load
-# base forms (e.g. +artilleries+ < +artillery+ because +'i' < 'y'+), so the pruner must be
+# These cases have historically been fragile because tuples.sort does not reliably front-load
+# base forms (e.g. artilleries < artillery because 'i' < 'y'), so the pruner must be
 # symmetric in both directions regardless of sort order.
 
-# Slash-delimited tuple literal. Spaces around the +/+ are optional.
+# Slash-delimited tuple literal. Spaces around the / are optional.
 def parse_tuple_literal(s)
   s.to_s.split('/').map(&:strip).reject(&:empty?)
 end
 
-# Nil / empty / whitespace-only +not_working_reason+ means "working"; any other string marks the
+# Nil / empty / whitespace-only not_working_reason means "working"; any other string marks the
 # example as deferred and skips it with that reason as the pending message. Centralized here so
 # the two helpers below stay in sync.
 def prune_rhyming_tuple_not_working?(reason)
   !reason.nil? && !reason.to_s.strip.empty?
 end
 
-# Assert the pruner drops +prune_spec+ and keeps +keep_spec+ when given both as input.
-# Each spec is a slash-joined literal, e.g. +prune_rhyming_tuple 'cat / rat', 'cats / rats'+.
-# Pass a non-empty +not_working_reason+ to defer the case; the example is skipped with the
+# Assert the pruner drops prune_spec and keeps keep_spec when given both as input.
+# Each spec is a slash-joined literal, e.g. prune_rhyming_tuple 'cat / rat', 'cats / rats'.
+# Pass a non-empty not_working_reason to defer the case; the example is skipped with the
 # reason as its pending message.
 def prune_rhyming_tuple(keep_spec, prune_spec, not_working_reason = nil)
   it "prune: #{prune_spec}  (keep: #{keep_spec})" do
@@ -39,10 +39,10 @@ def prune_rhyming_tuple(keep_spec, prune_spec, not_working_reason = nil)
   end
 end
 
-# Assert the pruner drops +spec+ entirely (output has zero tuples). Use for inputs whose members
+# Assert the pruner drops spec entirely (output has zero tuples). Use for inputs whose members
 # are spelling variants of each other — the tuple carries no information the non-redundant forms
-# don't already convey, so it should never be shown. See +prune_rhyming_tuple+ for
-# +not_working_reason+ semantics.
+# don't already convey, so it should never be shown. See prune_rhyming_tuple for
+# not_working_reason semantics.
 def prune_entire_rhyming_tuple(spec, not_working_reason = nil)
   it "prune entire tuple: #{spec}" do
     skip_if_not_working(not_working_reason) if prune_rhyming_tuple_not_working?(not_working_reason)
@@ -55,7 +55,7 @@ def prune_entire_rhyming_tuple(spec, not_working_reason = nil)
   end
 end
 
-# Assert the pruner allows +spec+. Inverse of prune_entire_rhyming_tuple.
+# Assert the pruner allows spec. Inverse of prune_entire_rhyming_tuple.
 def allow_entire_rhyming_tuple(spec, not_working_reason = nil)
   it "prune entire tuple: #{spec}" do
     skip_if_not_working(not_working_reason) if prune_rhyming_tuple_not_working?(not_working_reason)
@@ -68,13 +68,13 @@ def allow_entire_rhyming_tuple(spec, not_working_reason = nil)
   end
 end
 
-# Assert the pruner condenses +input_spec+ (given as the lone input tuple) down to a single
-# tuple matching +expected_spec+ — typically a strict subset of +input_spec+ whose members are
+# Assert the pruner condenses input_spec (given as the lone input tuple) down to a single
+# tuple matching expected_spec — typically a strict subset of input_spec whose members are
 # the "non-redundant core" after every suffix-related member has been pruned away. Distinct
-# from +prune_rhyming_tuple+: that one pits two sibling tuples against each other and keeps the
+# from prune_rhyming_tuple: that one pits two sibling tuples against each other and keeps the
 # winner intact; this one shows that a single tuple can itself be shrunk (members dropped in
-# place) when most of it is suffix-redundant with a few survivors. See +prune_rhyming_tuple+
-# for +not_working_reason+ semantics.
+# place) when most of it is suffix-redundant with a few survivors. See prune_rhyming_tuple
+# for not_working_reason semantics.
 def condense_rhyming_tuple(input_spec, expected_spec, not_working_reason = nil)
   it "condense: #{input_spec}  ->  #{expected_spec}" do
     skip_if_not_working(not_working_reason) if prune_rhyming_tuple_not_working?(not_working_reason)
@@ -89,7 +89,7 @@ def condense_rhyming_tuple(input_spec, expected_spec, not_working_reason = nil)
 end
 
 # Assert the pruner keeps both tuples (i.e. neither is redundant with the other). See
-# +prune_rhyming_tuple+ for +not_working_reason+ semantics.
+# prune_rhyming_tuple for not_working_reason semantics.
 def dont_prune_rhyming_tuple(a_spec, b_spec, not_working_reason = nil)
   it "don't prune: #{a_spec}  |  #{b_spec}" do
     skip_if_not_working(not_working_reason) if prune_rhyming_tuple_not_working?(not_working_reason)

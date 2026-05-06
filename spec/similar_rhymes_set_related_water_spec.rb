@@ -1,7 +1,7 @@
 #
-# set_related — +water+ cue (20 examples). Split from +set_related_misc_spec.rb+
-# alongside the other >=10-example cues so +parallel_rspec+ can fan them out.
-# See +set_related_<cue>_spec.rb+ companions and +set_related_misc_spec.rb+.
+# set_related — water cue (20 examples). Split from set_related_misc_spec.rb
+# alongside the other >=10-example cues so parallel_rspec can fan them out.
+# See set_related_<cue>_spec.rb companions and set_related_misc_spec.rb.
 #
 
 require_relative "similar_rhymes_set_related_support"

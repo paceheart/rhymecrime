@@ -1,8 +1,8 @@
 #
-# set_related — +cat+ cue (12 examples). Smallest of the >=10-case per-cue
-# splits; lives in its own file so +parallel_rspec+ can fan it out alongside
-# pirate / music / water / crime. See companions +set_related_<cue>_spec.rb+
-# and +set_related_misc_spec.rb+.
+# set_related — cat cue (12 examples). Smallest of the >=10-case per-cue
+# splits; lives in its own file so parallel_rspec can fan it out alongside
+# pirate / music / water / crime. See companions set_related_<cue>_spec.rb
+# and set_related_misc_spec.rb.
 #
 
 require_relative "similar_rhymes_set_related_support"

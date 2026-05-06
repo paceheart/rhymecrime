@@ -2,10 +2,10 @@
 #
 # Faster sibling of bin/deploy-data for the curated-CSV iteration loop. Skips
 # the hours-long full compute-relatedness scan by recomputing only the cues
-# whose +curated/related.csv+ rows actually changed since HEAD (auto-detected
-# via +git diff+, overridable with +--cues=W,W,W+). +bin/dict-build+ always
-# runs, since +curated/rarity.csv+ overrides are folded in there during the
-# rarity-classifier rescore (see +lib/rhymecrime/dict/rarity_curated_overrides.rb+).
+# whose curated/related.csv rows actually changed since HEAD (auto-detected
+# via git diff, overridable with --cues=W,W,W). bin/dict-build always
+# runs, since curated/rarity.csv overrides are folded in there during the
+# rarity-classifier rescore (see lib/rhymecrime/dict/rarity_curated_overrides.rb).
 #
 # What runs:
 #   0. AWS pre-flight              — sts:GetCallerIdentity round-trip (fails
@@ -22,7 +22,7 @@
 #   4. bin/upload-to-dynamodb      — pushes related# / set_related# / score#
 #       --cues=<changed cues>        rows from generated/rhymecrime_local.sqlite3
 #                                    to DDB, restricted to the same cues
-#                                    +compute-relatedness+ recomputed (so the
+#                                    compute-relatedness recomputed (so the
 #                                    upload phase doesn't re-stream the entire
 #                                    ~1.5GB local store on every iteration).
 #                                    Falls back to a full upload when no cues
@@ -36,7 +36,7 @@
 #
 # Usage:
 #   ./bin/deploy-new-data                       # auto-detect changed cues
-#                                                via +git diff HEAD curated/related.csv+
+#                                                via git diff HEAD curated/related.csv
 #   ./bin/deploy-new-data --cues=music,prayers  # explicit cue list (e.g. when
 #                                                changes are already committed
 #                                                beyond HEAD or you want to
@@ -49,7 +49,7 @@
 #     required because every cue's classifier output may have changed).
 #   * After widening word_dict's cueniverse (new common headwords need a full
 #     compute-relatedness pass to populate their related# rows). Use
-#     +bin/compute-relatedness --incremental+ for that.
+#     bin/compute-relatedness --incremental for that.
 
 set -euo pipefail
 
@@ -68,16 +68,16 @@ for arg in "$@"; do
 done
 
 # Up-front AWS pre-flight: cheap STS round-trip to surface unset/expired
-# +AWS_PROFILE+ before we burn ~30s on +dict-build+ + +compute-relatedness+ +
-# +compute-set-related+. Without this, an SSO token that expired overnight
-# would only fail at the +upload-to-dynamodb+ step at the *end* of the run,
-# wasting the entire compute pass. Skipped when +--skip-upload+ is set
+# AWS_PROFILE before we burn ~30s on dict-build + compute-relatedness +
+# compute-set-related. Without this, an SSO token that expired overnight
+# would only fail at the upload-to-dynamodb step at the *end* of the run,
+# wasting the entire compute pass. Skipped when --skip-upload is set
 # (local-SQLite-only invocations don't need credentials at all). Reuses
-# +AwsPreflight.preflight!+ from +bin/_aws_preflight+ so the abort messaging
-# (suggested +aws sso login+, profile-list hint, etc.) stays in lock-step
-# with what +bin/upload-to-dynamodb+ would print on its own. The +-- "$@"+
-# tail forwards the user's original CLI flags into Ruby's +ARGV+ so the
-# +require_profile!+ abort can echo back a copy-pasteable re-run command.
+# AwsPreflight.preflight! from bin/_aws_preflight so the abort messaging
+# (suggested aws sso login, profile-list hint, etc.) stays in lock-step
+# with what bin/upload-to-dynamodb would print on its own. The -- "$@"
+# tail forwards the user's original CLI flags into Ruby's ARGV so the
+# require_profile! abort can echo back a copy-pasteable re-run command.
 if [[ "$skip_upload" != "1" ]]; then
   echo "==> aws preflight (sts:GetCallerIdentity — fail fast before dict-build/compute spend)"
   bundle exec ruby -e '
@@ -95,11 +95,11 @@ if [[ -n "$explicit_cues" ]]; then
   cue_source="explicit (--cues)"
 else
   # Pull cues from added/removed lines in curated/related.csv since HEAD. The
-  # +awk+ filter skips diff headers ("+++" / "---") via the +[^+-]+ second-
+  # awk filter skips diff headers ("+++" / "---") via the [^-]+ second-
   # character anchor, then takes the first comma-separated field as the cue.
   changed_cues=$(
     git diff HEAD -- curated/related.csv 2>/dev/null \
-      | awk '/^[+-][^+-]/ { line=substr($0,2); split(line, parts, ","); if (parts[1] != "") print parts[1] }' \
+      | awk '/^[-][^-]/ { line=substr($0,2); split(line, parts, ","); if (parts[1] != "") print parts[1] }' \
       | sort -u \
       | paste -sd, -
   ) || changed_cues=""
@@ -124,14 +124,14 @@ if [[ "$skip_upload" == "1" ]]; then
 else
   # Mirror the cue scope into the upload phase so we don't re-stream the
   # ~1.5GB local SQLite store and re-PutItem ~hundreds of thousands of
-  # unchanged DDB rows on every iteration. +upload-to-dynamodb+ does the
-  # same +lemma()+ resolution as +compute-relatedness --only+, so passing
+  # unchanged DDB rows on every iteration. upload-to-dynamodb does the
+  # same lemma() resolution as compute-relatedness --only, so passing
   # the raw cue list through unchanged keeps the contract symmetric.
-  # +"${upload_args[@]+"${upload_args[@]}"}"+ expands to nothing when the
+  # "${upload_args[@]"${upload_args[@]}"}"+ expands to nothing when the
   # array is unset or empty (the common case — no extra flags after our own).
-  # Plain +"${upload_args[@]}"+ trips +set -u+ on macOS bash 3.2, which treats
-  # an unset/empty array reference as an unbound variable; the +${arr[@]+...}+
-  # alt-value guard sidesteps that without disabling +set -u+.
+  # Plain "${upload_args[@]}" trips set -u on macOS bash 3.2, which treats
+  # an unset/empty array reference as an unbound variable; the ${arr[@]...}+
+  # alt-value guard sidesteps that without disabling set -u.
   if [[ -n "$changed_cues" ]]; then
     echo "==> upload-to-dynamodb --cues=$changed_cues"
     bundle exec ruby bin/upload-to-dynamodb --cues="$changed_cues" ${upload_args[@]+"${upload_args[@]}"}

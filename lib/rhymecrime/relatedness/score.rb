@@ -4,21 +4,21 @@
 # relatedness/score.rb — offline relatedness scoring (the score-combination and
 # threshold-gate stages of the pipeline).
 #
-# Requires +relatedness/signals+ first (for +PairSignals+, +learned_feature_vector+'s
+# Requires relatedness/signals first (for PairSignals, learned_feature_vector's
 # unigram helpers, and every knowledge base the rules consult). Provides:
 #
-#   - +learned_feature_vector+ + +LEARNED_FEATURE_NAMES+ — the classifier's input.
-#   - +relatedness_classifier+ + +learned_relatedness_{probability,score}+ — GBT /
+#   - learned_feature_vector + LEARNED_FEATURE_NAMES — the classifier's input.
+#   - relatedness_classifier + learned_relatedness_{probability,score} — GBT /
 #     logistic regression over the gathered signals, loaded from
-#     +generated/relatedness_classifier.json+.
-#   - +relatedness_contributions+ + +relatedness_score+ — hand-tuned rule bundle
-#     (plus the learned score in +additive+ / +replace+ modes) that composes the
+#     generated/relatedness_classifier.json.
+#   - relatedness_contributions + relatedness_score — hand-tuned rule bundle
+#     (plus the learned score in additive / replace modes) that composes the
 #     gathered signals into an integer 0..100.
-#   - +thematically_related_pair_uncached?+ + +..._memoized?+ — the predicate at
-#     +RELATEDNESS_SCORE_THRESHOLD+, directional in +(cue, related)+, memoized by
+#   - thematically_related_pair_uncached? + ..._memoized? — the predicate at
+#     RELATEDNESS_SCORE_THRESHOLD, directional in (cue, related), memoized by
 #     ordered lemma pair (callers must not pre-canonicalize).
 #
-# Not required at Lambda runtime. The runtime shim in +lib/rhymecrime/related.rb+
+# Not required at Lambda runtime. The runtime shim in lib/rhymecrime/related.rb
 # lazy-requires this file only when neither DynamoDB nor the compute JSONL has
 # an answer for the pair — the local-dev fallback path.
 #
@@ -27,8 +27,8 @@ require_relative "signals"
 
 RELATEDNESS_CLASSIFIER_PATH = generated_dict_path(RELATEDNESS_CLASSIFIER_FILENAME) unless defined?(RELATEDNESS_CLASSIFIER_PATH)
 
-# On-disk GBT tree format this loader understands. When +bin/train-relatedness-classifier+
-# emits a different +tree_format+, the classifier is rejected at load time (loud
+# On-disk GBT tree format this loader understands. When bin/train-relatedness-classifier
+# emits a different tree_format, the classifier is rejected at load time (loud
 # raise) rather than silently misbehaving. Bump in lock-step with the trainer
 # whenever the node layout changes.
 SUPPORTED_GBT_TREE_FORMAT = "parallel_v1" unless defined?(SUPPORTED_GBT_TREE_FORMAT)
@@ -37,17 +37,17 @@ def related_trace_memo?
   ENV["RELATED_TRACE_MEMO"].to_s == "1"
 end
 
-# Ordered feature vector pulled from +PairSignals+, shared by the learned-classifier
-# trainer (+bin/train-relatedness-classifier+) and runtime scorer
-# (+learned_relatedness_score+). Carries BOTH symmetric reductions of every
-# directional signal (+sv_max+/+sv_min+, +morphy_sv_max+/+min+, +model_sv_max+/+min+,
-# +usf_direct_max+/+min+) AND the underlying +cue→related+ / +related→cue+ unfolds
-# (+sv_cue_to_related+ / +sv_related_to_cue+ etc.), so the classifier sees orientation-
+# Ordered feature vector pulled from PairSignals, shared by the learned-classifier
+# trainer (bin/train-relatedness-classifier) and runtime scorer
+# (learned_relatedness_score). Carries BOTH symmetric reductions of every
+# directional signal (sv_max/sv_min, morphy_sv_max/min, model_sv_max/min,
+# usf_direct_max/min) AND the underlying cue→related / related→cue unfolds
+# (sv_cue_to_related / sv_related_to_cue etc.), so the classifier sees orientation-
 # aware features in addition to the order-independent ones. The relatedness predicate
-# is directional in +(cue, related)+, and so is this vector — feature order matters.
+# is directional in (cue, related), and so is this vector — feature order matters.
 #
 # NOTE: keep this list and its order in lock-step with the weights file
-# (+generated/relatedness_classifier.json+). When retraining, the file stores its own
+# (generated/relatedness_classifier.json). When retraining, the file stores its own
 # feature names to fail loud on mismatch.
 LEARNED_FEATURE_NAMES = (
   %w[
@@ -107,7 +107,7 @@ def learned_feature_vector(signals)
   cue_count = signals.sv_cue_count
   related_count = signals.sv_related_count
 
-  # Contextualized-model signals. Gated on +model_both_in_vocab?+ so out-of-vocab
+  # Contextualized-model signals. Gated on model_both_in_vocab? so out-of-vocab
   # pairs don't inject a misleading "cos = 0" into the linear combination — the
   # gate feature lets the learner condition on data availability.
   m_in = signals.model_both_in_vocab?
@@ -118,20 +118,20 @@ def learned_feature_vector(signals)
   m_ss_max = m_both_sv ? signals.model_sense_sense_max : 0
 
   # Pooled-definition (cross-encoder) cosine. Same in-vocab gating pattern as
-  # +model_*+: feed 0 when out-of-vocab and let the +def_in_vocab+ flag
-  # condition the learner. See +PairSignals#def_cos_pct+.
+  # model_*: feed 0 when out-of-vocab and let the def_in_vocab flag
+  # condition the learner. See PairSignals#def_cos_pct.
   d_in = signals.def_both_in_vocab?
   d_cos = d_in ? signals.def_cos_pct : 0
 
-  # Directional unfolds. The +sv_max+ / +sv_min+ / +morphy_sv_*+ / +model_sv_*+ /
-  # +usf_direct_*+ pairs above fold each directional signal through a symmetric
-  # +max+/+min+ reduction; here we feed the raw cue→related and related→cue values
+  # Directional unfolds. The sv_max / sv_min / morphy_sv_* / model_sv_* /
+  # usf_direct_* pairs above fold each directional signal through a symmetric
+  # max/min reduction; here we feed the raw cue→related and related→cue values
   # alongside so the classifier can split on which orientation matches. None of
-  # the directional unfolds carry the +both_sv+ / +model_both_in_vocab?+ /
-  # +def_in_vocab+ gating that the symmetric reductions get — the underlying
-  # +*_directional+ helpers already return 0 for the missing-data side, and the
+  # the directional unfolds carry the both_sv / model_both_in_vocab? /
+  # def_in_vocab gating that the symmetric reductions get — the underlying
+  # *_directional helpers already return 0 for the missing-data side, and the
   # in-vocab booleans are already in the feature vector for the learner to gate
-  # on. For +morphy_sv_*+ the gate is +morphy_available?+.
+  # on. For morphy_sv_* the gate is morphy_available?.
   sv_c2r = signals.sv_cue_to_related
   sv_r2c = signals.sv_related_to_cue
   msv_c2r = signals.morphy_sv_cue_to_related
@@ -191,36 +191,36 @@ end
 
 # --- Learned score-combiner ---
 #
-# Logistic regression / gradient-boosted-trees over +learned_feature_vector+,
-# trained by +bin/train-relatedness-classifier+ and written to
-# +generated/relatedness_classifier.json+. Strict-load policy: a missing or
+# Logistic regression / gradient-boosted-trees over learned_feature_vector,
+# trained by bin/train-relatedness-classifier and written to
+# generated/relatedness_classifier.json. Strict-load policy: a missing or
 # format-incompatible weights file is a hard error. Set
-# +RELATED_LEARNED_MODE=off+ to explicitly bypass the classifier (rule-based
+# RELATED_LEARNED_MODE=off to explicitly bypass the classifier (rule-based
 # combiner runs alone — strictly worse: see the FP comparison below).
 #
-# Mode controlled by +$RELATED_LEARNED_MODE+ / env +RELATED_LEARNED_MODE+:
-#   +replace+   (default) learned score is the *only* rule (except stop-word short-circuit).
-#   +additive+            learned score joins the max-over-rules — can only add TPs.
-#   +off+                 explicit bypass; classifier weights are not consulted even if present.
+# Mode controlled by $RELATED_LEARNED_MODE / env RELATED_LEARNED_MODE:
+#   replace   (default) learned score is the *only* rule (except stop-word short-circuit).
+#   additive            learned score joins the max-over-rules — can only add TPs.
+#   off                 explicit bypass; classifier weights are not consulted even if present.
 #
-# +replace+ is the default because the hand rules composed via max-over-contributions
-# overgenerate: +cooccurrence+ + +sense_vectors+ + +similarity+ between them produced
-# ~330 of the ~380 strong FPs on the live pipeline (2026-04 eval on +curated/related.csv+),
+# replace is the default because the hand rules composed via max-over-contributions
+# overgenerate: cooccurrence + sense_vectors + similarity between them produced
+# ~330 of the ~380 strong FPs on the live pipeline (2026-04 eval on curated/related.csv),
 # compared to 80 strong FPs with the classifier alone. The learned combiner sees all
 # 67 gathered signals (gloss_match, usf_twohop, sv_max/min, edge_present, cn_hops,
 # contextualized-model signals, per-word priors) and composes them coherently under
-# a class-balanced training objective (+--fn-weight 1 --fn-penalty 1+ — equal
-# treatment of related vs. unrelated rows; orthogonal to the +(cue, related)+
+# a class-balanced training objective (--fn-weight 1 --fn-penalty 1 — equal
+# treatment of related vs. unrelated rows; orthogonal to the (cue, related)
 # directionality, which the feature vector exposes via dedicated unfolds), so it
 # doesn't need the hand rules to catch genuine positives.
 #
-# +additive+ and +off+ remain available for debugging: +additive+ to compare the
-# combined score with the learned component, +off+ to isolate the rule bundle.
+# additive and off remain available for debugging: additive to compare the
+# combined score with the learned component, off to isolate the rule bundle.
 #
 # NOTE: flipping the default only affects live compute (local-dev fallback, spec
-# eval with +RELATED_BYPASS_STORE=1+, +bin/compute-relatedness+). Runtime lookups
-# via +Rhymecrime::Store+ still read whatever scores the most recent compute
-# wrote — rebuild the store with +bin/compute-relatedness+ to materialize the
+# eval with RELATED_BYPASS_STORE=1, bin/compute-relatedness). Runtime lookups
+# via Rhymecrime::Store still read whatever scores the most recent compute
+# wrote — rebuild the store with bin/compute-relatedness to materialize the
 # replace-mode scores for production.
 
 $RELATED_LEARNED_MODE = ENV["RELATED_LEARNED_MODE"] || "replace"
@@ -276,9 +276,9 @@ def learned_sigmoid(z)
   end
 end
 
-# Walk a parallel-array tree (trainer emits one +{f, t, l, r}+ hash per tree).
-# +f[i] == -1+ marks a leaf and +t[i]+ carries the leaf value (threshold and leaf
-# value share the slot — an internal node's +t+ is a threshold, a leaf's +t+ is
+# Walk a parallel-array tree (trainer emits one {f, t, l, r} hash per tree).
+# f[i] == -1 marks a leaf and t[i] carries the leaf value (threshold and leaf
+# value share the slot — an internal node's t is a threshold, a leaf's t is
 # its return value). Hoist all four arrays once per tree so the hot loop is pure
 # integer indexing. Left branch = <=, right branch = >.
 def learned_tree_predict(tree, row)
@@ -294,10 +294,10 @@ def learned_tree_predict(tree, row)
   end
 end
 
-# Classifier probability in 0..1. Returns +nil+ only when the classifier is
-# explicitly disabled (+RELATED_LEARNED_MODE=off+) — a missing or malformed
-# weights file raises out of +relatedness_classifier+. Dispatches on
-# +model_type+: "logreg" (linear, with standardization) or "gbt"
+# Classifier probability in 0..1. Returns nil only when the classifier is
+# explicitly disabled (RELATED_LEARNED_MODE=off) — a missing or malformed
+# weights file raises out of relatedness_classifier. Dispatches on
+# model_type: "logreg" (linear, with standardization) or "gbt"
 # (gradient-boosted tree ensemble over raw features); any other value raises.
 def learned_relatedness_probability(signals)
   clf = relatedness_classifier
@@ -325,12 +325,12 @@ def learned_relatedness_probability(signals)
   end
 end
 
-# Piecewise-linear map from classifier probability in +[0, 1]+ to the public
-# 0..100 relatedness score. Calibrated so +p == threshold+ maps to
-# +RELATEDNESS_SCORE_THRESHOLD+ exactly — that way changing the classifier's
-# operating point (its +threshold+ field) moves only the confidence-to-score
+# Piecewise-linear map from classifier probability in [0, 1] to the public
+# 0..100 relatedness score. Calibrated so p == threshold maps to
+# RELATEDNESS_SCORE_THRESHOLD exactly — that way changing the classifier's
+# operating point (its threshold field) moves only the confidence-to-score
 # curve, never the cross-over between "related" and "not related". Extracted
-# into its own helper so callers that already have +p+ in hand don't have to
+# into its own helper so callers that already have p in hand don't have to
 # re-invoke the 200-tree GBT just to compute the display score.
 def probability_to_learned_score(p)
   clf = $relatedness_classifier
@@ -343,8 +343,8 @@ def probability_to_learned_score(p)
   end
 end
 
-# Classifier probability → 0..100 score, calibrated so that +p == threshold+ maps
-# to +RELATEDNESS_SCORE_THRESHOLD+ exactly. Piecewise linear in +p+; avoids wasting
+# Classifier probability → 0..100 score, calibrated so that p == threshold maps
+# to RELATEDNESS_SCORE_THRESHOLD exactly. Piecewise linear in p; avoids wasting
 # dynamic range on the mostly-empty tail above/below the decision boundary.
 def learned_relatedness_score(signals)
   p = learned_relatedness_probability(signals)
@@ -352,8 +352,8 @@ def learned_relatedness_score(signals)
   probability_to_learned_score(p)
 end
 
-# Returns an array of +[score, reason]+ tuples: one per rule whose preconditions are
-# satisfied by +signals+. May be empty when no signal passes its gate.
+# Returns an array of [score, reason] tuples: one per rule whose preconditions are
+# satisfied by signals. May be empty when no signal passes its gate.
 def relatedness_contributions(signals)
   # Semantically promiscuous words are contentless glue: related to every
   # other word. Fully saturates the composite score so no other signal is
@@ -367,8 +367,8 @@ def relatedness_contributions(signals)
   # signals is the *only* contribution (except the promiscuous-word short-circuit above).
   #
   # Score and reason both need the classifier probability, but the GBT is the
-  # hot-path bottleneck in +bin/compute-relatedness+ (~70% of per-cue scan
-  # time). Compute +p+ once and derive the display score from it rather than
+  # hot-path bottleneck in bin/compute-relatedness (~70% of per-cue scan
+  # time). Compute p once and derive the display score from it rather than
   # calling the classifier twice.
   if $RELATED_LEARNED_MODE == "replace"
     p = learned_relatedness_probability(signals)
@@ -381,7 +381,7 @@ def relatedness_contributions(signals)
   contributions = []
   base = signals.base_similarity
 
-  # Primary: Numberbatch cosine + ConceptNet edge bonus. Above +$SIMILARITY_THRESHOLD+
+  # Primary: Numberbatch cosine + ConceptNet edge bonus. Above $SIMILARITY_THRESHOLD
   # we map linearly into [50, 95]; below threshold we still emit a weak partial score
   # so the composite reflects how close we came (always < 50, so never flips the
   # predicate on its own).
@@ -396,7 +396,7 @@ def relatedness_contributions(signals)
   contributions << [90, "gloss: bidirectional WordNet gloss/derivation containment"] if signals.gloss_match?
 
   # Sense-vector rescue (polysemy aware): only meaningful when the base signal is
-  # non-trivial (+$SENSE_VECTOR_MIN_BASE+) so we don't fire on noise.
+  # non-trivial ($SENSE_VECTOR_MIN_BASE) so we don't fire on noise.
   if base >= $SENSE_VECTOR_MIN_BASE
     if signals.both_have_sense_vectors?
       sv_max = signals.sv_max
@@ -417,7 +417,7 @@ def relatedness_contributions(signals)
   end
 
   # USF 2-hop: validated human-association bridge. Equivalent to the old
-  # +base + $USF_TWOHOP_BOOST >= $SIMILARITY_THRESHOLD+ gate, with the boosted
+  # base + $USF_TWOHOP_BOOST >= $SIMILARITY_THRESHOLD gate, with the boosted
   # score mapped just over the relatedness threshold.
   if $USF_TWOHOP_BOOST > 0 &&
      base >= $USF_MIN_BASE &&
@@ -431,7 +431,7 @@ def relatedness_contributions(signals)
   # signal can't carry the rule alone — the point is to catch pairs where several
   # weak signals reinforce each other. Sense-vector terms require both sides to
   # have WordNet senses (no asymmetric bypass here — that's what
-  # +sense_vectors_asymmetric+ is for).
+  # sense_vectors_asymmetric is for).
   cooccur = 0.0
   cooccur += [[base, 0].max, $COOCCUR_BASE_CAP].min * $COOCCUR_BASE_WEIGHT
   if signals.both_have_sense_vectors?
@@ -460,7 +460,7 @@ def relatedness_contributions(signals)
 end
 
 # Integer 0..100: 0 = definitely unrelated, 100 = maximally related. See
-# +relatedness_contributions+ for the rule-by-rule decomposition.
+# relatedness_contributions for the rule-by-rule decomposition.
 def relatedness_score(signals)
   c = relatedness_contributions(signals)
   return 0 if c.empty?
@@ -469,23 +469,23 @@ end
 
 # --- Relatedness threshold gate (boolean predicate) ---
 
-# Memo keyed by the ordered +(cue_lemma, related_lemma)+ pair (see
-# +thematically_related?+). Now that the predicate is directional, +(cue, related)+
-# and +(related, cue)+ are distinct keys with potentially distinct answers — both
-# orientations are computed and cached independently. Cleared when +load_word_dict+
+# Memo keyed by the ordered (cue_lemma, related_lemma) pair (see
+# thematically_related?). Now that the predicate is directional, (cue, related)
+# and (related, cue) are distinct keys with potentially distinct answers — both
+# orientations are computed and cached independently. Cleared when load_word_dict
 # runs.
 $thematically_related_memo = nil
 
-# Uncached predicate on two dictionary lemmas. Directional in +(cue, related)+: the
-# pair is fed to +PairSignals+ in the caller-supplied order and any directional
-# signals downstream see them as +PairSignals#cue+ and +PairSignals#related+.
+# Uncached predicate on two dictionary lemmas. Directional in (cue, related): the
+# pair is fed to PairSignals in the caller-supplied order and any directional
+# signals downstream see them as PairSignals#cue and PairSignals#related.
 def thematically_related_pair_uncached?(cue, related)
   puts "related? #{cue} -> #{related}" if related_trace_memo?
   relatedness_score(PairSignals.new(cue, related)) >= RELATEDNESS_SCORE_THRESHOLD
 end
 
-# +cue+ and +related+ are dictionary lemmas in caller-supplied order — *not*
-# canonicalized. See +thematically_related?+.
+# cue and related are dictionary lemmas in caller-supplied order — *not*
+# canonicalized. See thematically_related?.
 def thematically_related_pair_memoized?(cue, related)
   memo = ($thematically_related_memo ||= {})
   key = [cue, related]
@@ -499,11 +499,11 @@ def thematically_related_pair_memoized?(cue, related)
 end
 
 # Full-pipeline thematic relatedness predicate. Used by the local-dev / spec fallback
-# in +lib/rhymecrime/related.rb+ when no computed data (DynamoDB or JSONL) is
+# in lib/rhymecrime/related.rb when no computed data (DynamoDB or JSONL) is
 # available. At Lambda runtime the runtime shim's DDB lookup handles this path.
 #
-# Directional: +cue+ is the input word, +related+ is the candidate output word. No
-# lex-order canonicalization — see +thematically_related_pair_memoized?+.
+# Directional: cue is the input word, related is the candidate output word. No
+# lex-order canonicalization — see thematically_related_pair_memoized?.
 def thematically_related_full?(cue, related, include_self = false)
   return true if include_self && (cue == related || lemma(cue) == lemma(related))
   return true if semantically_promiscuous?(cue) || semantically_promiscuous?(related)
@@ -513,11 +513,11 @@ def thematically_related_full?(cue, related, include_self = false)
   thematically_related_pair_memoized?(cue_lemma, related_lemma)
 end
 
-# Same decision as +thematically_related_full?+, but returns a short reason string
-# when true (the highest-scoring rule from +relatedness_contributions+), or +nil+
+# Same decision as thematically_related_full?, but returns a short reason string
+# when true (the highest-scoring rule from relatedness_contributions), or nil
 # when false. Used at seed-time (compute + spec diagnostics) and by the local-dev
-# fallback in +lib/rhymecrime/related.rb+. Directional in +(cue, related)+ — see
-# +thematically_related_full?+.
+# fallback in lib/rhymecrime/related.rb. Directional in (cue, related) — see
+# thematically_related_full?.
 def why_thematically_related_full?(cue, related, include_self = false)
   return "self: same headword" if include_self && cue == related
   return "self: same lexeme (lemma)" if include_self && lemma(cue) == lemma(related)

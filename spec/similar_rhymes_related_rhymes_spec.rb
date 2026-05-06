@@ -1,9 +1,9 @@
 #
 # related_rhymes — describes "for cue X (rhyme axis) and cue Y (related-to axis),
 # return words that rhyme with X and are topically related to Y". Smallest of the
-# three +similar_rhymes_*+ describe blocks (1 example currently); split into its
-# own file from +similar_rhymes_spec.rb+ for symmetry with the SET_RELATED /
-# PAIR_RELATED splits and to give +parallel_rspec+ a third schedulable unit.
+# three similar_rhymes_* describe blocks (1 example currently); split into its
+# own file from similar_rhymes_spec.rb for symmetry with the SET_RELATED /
+# PAIR_RELATED splits and to give parallel_rspec a third schedulable unit.
 #
 
 require_relative "similar_rhymes_support"

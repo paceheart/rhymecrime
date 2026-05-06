@@ -1,25 +1,25 @@
 #
-# Helpers + DSL shared by every +set_related_*_spec.rb+: a cue-specific spec
-# (e.g. +set_related_pirate_spec.rb+) only needs +require_relative+ this file
-# (it transitively pulls in +similar_rhymes_support+ for +summarize_for_failure+
-# / the head/involving sample limits) and the per-cue +describe 'SET_RELATED'+
-# block can use +set_related_oughta_contain+ etc. directly.
+# Helpers + DSL shared by every set_related_*_spec.rb: a cue-specific spec
+# (e.g. set_related_pirate_spec.rb) only needs require_relative this file
+# (it transitively pulls in similar_rhymes_support for summarize_for_failure
+# / the head/involving sample limits) and the per-cue describe 'SET_RELATED'
+# block can use set_related_oughta_contain etc. directly.
 #
-# Used to live alongside the +describe 'SET_RELATED'+ block in
-# +spec/similar_rhymes_set_related_spec.rb+. Split into per-cue files so
-# +parallel_rspec+ can fan the (formerly ~210-example, ~170s pre-LocalStore-warm)
+# Used to live alongside the describe 'SET_RELATED' block in
+# spec/similar_rhymes_set_related_spec.rb. Split into per-cue files so
+# parallel_rspec can fan the (formerly ~210-example, ~170s pre-LocalStore-warm)
 # cue across workers — pirate / music / water / crime / cat each in their own
-# file (>=10 examples), everything else in +set_related_misc_spec.rb+.
+# file (>=10 examples), everything else in set_related_misc_spec.rb.
 #
 
 require_relative "similar_rhymes_support"
 
-# Prefer the production-shaped path (+find_rhyming_tuples+ with cross-tuple
-# pruning enabled) so SQLite +set_related#+ and the LRU hit first — fast runs.
+# Prefer the production-shaped path (find_rhyming_tuples with cross-tuple
+# pruning enabled) so SQLite set_related# and the LRU hit first — fast runs.
 #
-# Disable the cross-tuple redundancy pruner (+$disable_cross_tuple_redundancy_pruning+) only when
-# a pair is absent there but still needed for an assertion (+set_related_oughta_contain 'pirate', 'deck', 'wreck'+
-# when sibling +[decked, wrecked]+ masks +[deck, wreck]+ — see +prune_suffix_redundant_rhyming_tuples+).
+# Disable the cross-tuple redundancy pruner ($disable_cross_tuple_redundancy_pruning) only when
+# a pair is absent there but still needed for an assertion (set_related_oughta_contain 'pirate', 'deck', 'wreck'
+# when sibling [decked, wrecked] masks [deck, wreck] — see prune_suffix_redundant_rhyming_tuples).
 def with_similar_spec_pruning_fallback(input, common_only, fallback_unpruned: true)
   was = $disable_cross_tuple_redundancy_pruning
   begin
@@ -50,9 +50,9 @@ def summarize_tuples_for_failure(tuples, *expected_words)
 end
 
 # Returns [hit_boolean, tuples_from_last_attempt] for diagnostics.
-# Negatives (+set_related_ought_not_contain+) disable the unpruned fallback via
-# +similar_spec_pair_contains_detail(..., fallback_unpruned: false)+ (see +negative_expectation:+ on
-# +set_related_contains?+) so we only inspect production-shaped tuples: SQLite set_related#/LRU with
+# Negatives (set_related_ought_not_contain) disable the unpruned fallback via
+# similar_spec_pair_contains_detail(..., fallback_unpruned: false) (see negative_expectation: on
+# set_related_contains?) so we only inspect production-shaped tuples: SQLite set_related#/LRU with
 # cross-tuple redundancy pruning—the same cue a user sees.
 def similar_spec_pair_contains_detail(input, output1, output2, common_only = false, fallback_unpruned: true)
   with_similar_spec_pruning_fallback(input, common_only, fallback_unpruned: fallback_unpruned) do |tuples, _mode|
@@ -69,8 +69,8 @@ def set_related_contains?(input, output1, output2, common_only = false, negative
   hit
 end
 
-# Permissive sibling of +set_related_contains?+: pass if any inflected form sharing +base1+'s lemma
-# co-occurs with any inflected form sharing +base2+'s lemma in some rhyming tuple. Use when the
+# Permissive sibling of set_related_contains?: pass if any inflected form sharing base1's lemma
+# co-occurs with any inflected form sharing base2's lemma in some rhyming tuple. Use when the
 # suffix-redundancy pruner collapses base/-s/-ed/-ing/-er siblings into a single emitted tuple and
 # we don't care which inflectional surface survives — only that *a* member of each lemma family
 # rhymes with the other in context.

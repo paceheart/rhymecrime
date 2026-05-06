@@ -18,10 +18,10 @@ def delete_explicitly_forbidden_keys_from_hash(pronunciation_map)
   puts "Removed #{count} explicitly_forbidden words from the dictionary"
 end
 
-# Sibling of +delete_explicitly_forbidden_keys_from_hash+ that drops every
-# entry in +curated/unrhymable_stop_words.txt+ from +hash+. Same shape, same
-# call sites: the early scrub on raw pronunciation_map in +dict.rb+ and the late
-# +forbidden_scrub+ pass in +frequency.rb+. Two scrubs because SUBTLEX /
+# Sibling of delete_explicitly_forbidden_keys_from_hash that drops every
+# entry in curated/unrhymable_stop_words.txt from hash. Same shape, same
+# call sites: the early scrub on raw pronunciation_map in dict.rb and the late
+# forbidden_scrub pass in frequency.rb. Two scrubs because SUBTLEX /
 # wiktionary expansion can re-introduce a word like "the" between the two
 # passes; the late scrub catches anything that snuck back in.
 def delete_unrhymable_stop_words_from_hash(hash)
@@ -33,12 +33,12 @@ def delete_unrhymable_stop_words_from_hash(hash)
 end
 
 # Incomplete / artifact headwords (e.g. truncated compounds); not useful as lookup keys.
-# Called twice: early on raw +pronunciation_map+ (values are pron arrays — hash.delete
-# removes the row outright) and late on +word_dict+ mid-build, where values
-# are +BuildEntry+ instances and deletion is deferred to the terminal reducer.
-# The +BuildEntry+ branch calls +mark_tombstoned!+ so the entry stays
-# in the map (skipped by subsequent phases via +tombstoned?+) until
-# +finalize_build_entries!+ drops it.
+# Called twice: early on raw pronunciation_map (values are pron arrays — hash.delete
+# removes the row outright) and late on word_dict mid-build, where values
+# are BuildEntry instances and deletion is deferred to the terminal reducer.
+# The BuildEntry branch calls mark_tombstoned! so the entry stays
+# in the map (skipped by subsequent phases via tombstoned?) until
+# finalize_build_entries! drops it.
 def delete_headwords_with_edge_hyphen!(hash)
   n = 0
   hash.keys.each do |w|
@@ -70,7 +70,7 @@ end
 def preprocess_cmudict_line(line)
   # Step 1.1: Tweak the given pronunciation to deal with quirks of cmudict.
   # Phoneme-level rules are shared with Wiktionary/kaikki and Inflect-derived prons
-  # (+normalize_flat_arphabet_pronunciation+).
+  # (normalize_flat_arphabet_pronunciation).
   line = line.chomp
   original_line = line.clone
   parts = line.split
@@ -142,13 +142,13 @@ def apply_shared_arphabet_phoneme_string_normalizations(phoneme_space_string)
   # affricate's fricative release (cajun, lodge) under different ARPAbet
   # symbols, but for imperfect rhymes users expect them in the same cohort
   # (cajun / occasion). Normalizing here keeps CMU ingest, Wikt IPA→ARPAbet,
-  # and +word_dict+ exports aligned — no ZH tokens survive into rime keys.
+  # and word_dict exports aligned — no ZH tokens survive into rime keys.
   line.gsub!(/\bZH\b/, "JH")
 
   line
 end
 
-# Suffix replacements for imperfect-rhyme conflation; order must match +conflate_imperfect_rhyme_phoneme_string+.
+# Suffix replacements for imperfect-rhyme conflation; order must match conflate_imperfect_rhyme_phoneme_string.
 CONFLATE_IMPERFECT_RHYME_SUFFIX_RULES = [
   [%w[L S], %w[L T S]], # else / melts
   [%w[M T], %w[M P T]], # dreamt / tempt
@@ -185,16 +185,16 @@ def normalize_flat_arphabet_pronunciation(pron)
   Pronunciation.new(tok).with_flapped_t
 end
 
-# Flat phoneme lists for +stem+ (each stored pronunciation, dots stripped).
+# Flat phoneme lists for stem (each stored pronunciation, dots stripped).
 def flat_pron_sequences_for_word(flat_by_word, stem)
   (flat_by_word[stem] || []).map { |p| p.phonemes.reject { |ph| ph == "." } }
 end
 
-# If +word+ starts with a +COMMON_PREFIXES+ string and the stem exists in +flat_by_word+ with a
-# flat pronunciation equal to the tail of +word+'s phones, insert one syllable boundary between
+# If word starts with a COMMON_PREFIXES string and the stem exists in flat_by_word with a
+# flat pronunciation equal to the tail of word's phones, insert one syllable boundary between
 # prefix and stem. MOP alone often merges the last consonant of the prefix into the stem syllable
-# (e.g. AH0 P EH1 N D → ə|ˈpend instead of ʌp|ˈɛnd). Do not call +syllabify+ on the merged string
-# (avoids re-splitting and double dots). If no prefix+stem tail match, fall back to +syllabify+.
+# (e.g. AH0 P EH1 N D → ə|ˈpend instead of ʌp|ˈɛnd). Do not call syllabify on the merged string
+# (avoids re-splitting and double dots). If no prefix+stem tail match, fall back to syllabify.
 def syllabify_with_common_prefix_split(word, normalized_flat_pron, flat_by_word)
   flat = normalized_flat_pron.phonemes.reject { |ph| ph == "." }
   COMMON_PREFIXES.sort_by(&:length).reverse.each do |prefix|
@@ -209,17 +209,17 @@ def syllabify_with_common_prefix_split(word, normalized_flat_pron, flat_by_word)
       next if prefix_flat.empty?
       # A morphological prefix must carry its own vowel — otherwise inserting a
       # syllable boundary right after it produces a vowelless "syllable" (beau =
-      # +be+ + +au+ flat-prons as +B . OW1+, leaving +B+ as syllable 1; +cooperate+'s
-      # alt pron +K W AA1 P AH0 R EY2 T+ similarly leaves +K W+ standing alone).
+      # be + au flat-prons as B . OW1, leaving B as syllable 1; cooperate's
+      # alt pron K W AA1 P AH0 R EY2 T similarly leaves K W standing alone).
       # When that happens we're not really seeing a prefix derivation at the
-      # phonological level — fall through to plain +syllabify+.
+      # phonological level — fall through to plain syllabify.
       next unless prefix_flat.any?(&:vowel?)
-      # Re-syllabify both halves: +stem_flat+ comes from +flat_pron_sequences_for_word+
-      # which strips +.+ from the stem's stored pron, so without this the stem half
+      # Re-syllabify both halves: stem_flat comes from flat_pron_sequences_for_word
+      # which strips . from the stem's stored pron, so without this the stem half
       # collapses into one giant vowel-stuffed syllable (illegitimate → IH2 . L AH0 JH
       # IH1 D AH0 M AH0 T, four vowels in syllable 2). The prefix half is short enough
-      # that +syllabify+ is a no-op for native prefixes, but doing it symmetrically
-      # also handles +tele+/+supe+/+inte+ etc.
+      # that syllabify is a no-op for native prefixes, but doing it symmetrically
+      # also handles tele/supe/inte etc.
       prefix_syl = Pronunciation.new(prefix_flat).syllabify.phonemes
       stem_syl   = Pronunciation.new(stem_flat).syllabify.phonemes
       result = Pronunciation.new(prefix_syl + ["."] + stem_syl)
@@ -234,17 +234,17 @@ end
 
 # Build-time invariant: a well-syllabified ARPAbet pronunciation has exactly
 # one vowel per syllable (CMU encodes syllabic consonants as a vowel symbol,
-# so this is universal — see +Pronunciation#syllable_vowel_invariant_ok?+).
+# so this is universal — see Pronunciation#syllable_vowel_invariant_ok?).
 # Violations indicate a bug in whatever produced the syllabification (e.g.
 # concatenating an un-syllabified stem onto a prefix without re-running
-# +syllabify+, the historical +illegitimate+ → +IH2 . L AH0 JH IH1 D AH0 M
-# AH0 T+ regression).
+# syllabify, the historical illegitimate → IH2 . L AH0 JH IH1 D AH0 M
+# AH0 T regression).
 #
-# Default mode is +raise+ — the dict has been audited clean (see
-# +bin/audit-syllable-vowel-invariant+), so any new violation is a bug we
-# want to surface loudly during +bin/dict-build+. Set
-# +RHYMECRIME_SYLL_INVARIANT=warn+ to demote to a stderr warning while
-# debugging, +=off+ to silence entirely.
+# Default mode is raise — the dict has been audited clean (see
+# bin/audit-syllable-vowel-invariant), so any new violation is a bug we
+# want to surface loudly during bin/dict-build. Set
+# RHYMECRIME_SYLL_INVARIANT=warn to demote to a stderr warning while
+# debugging, =off to silence entirely.
 def check_syllable_vowel_invariant!(pron, word, source)
   return if pron.nil? || pron.empty?
   return if pron.syllable_vowel_invariant_ok?
@@ -267,10 +267,10 @@ def conflate_imperfect_rhyme_phoneme_string(phoneme_space_string)
 end
 
 # CMUDict sometimes lists an abbreviation's *expanded* form as an alternate pronunciation:
-# e.g. +TV(1) = T EH2 L AH0 V IH1 JH AH0 N+ (the pronunciation of "television") or
-# +CORP(1) = K AO1 R P ER0 EY1 SH AH0 N+ (pronunciation of "corporation"). These bogus
+# e.g. TV(1) = T EH2 L AH0 V IH1 JH AH0 N (the pronunciation of "television") or
+# CORP(1) = K AO1 R P ER0 EY1 SH AH0 N (pronunciation of "corporation"). These bogus
 # alternates cause abbreviations to rhyme with words they don't actually sound like
-# (e.g. +tv+ sharing a rime with +vision+).
+# (e.g. tv sharing a rime with vision).
 #
 # We detect them with a tight, conservative heuristic: an alternate is dropped only if
 #   (a) its phoneme count is at least 2x the primary's AND at least 3 more phonemes, AND
@@ -320,19 +320,19 @@ AUTHORITATIVE_PRONUNCIATIONS_PATH = File.join(CURATED_DIR, "authoritative_pronun
 #
 # Contract: for any word listed here, the downstream loaders skip adding
 # pronunciations from any other source:
-#   * +load_cmudict+                          — early +next+ on authoritative hit
-#   * +merge_wiktionary!+                     — +next if pronunciation_map.key?(word)+
-#   * +merge_inflected_forms!+                — +next if pronunciation_map.key?(inflected_word)+
-#   * +merge_gdropped_in_apostrophe_forms!+   — +next if pronunciation_map.key?(in_prime)+
-# (The last three already guard on +pronunciation_map.key?+, which is now true for
-# authoritative words because we populate +hash+ ahead of the CMUdict load.)
+#   * load_cmudict                          — early next on authoritative hit
+#   * merge_wiktionary!                     — next if pronunciation_map.key?(word)
+#   * merge_inflected_forms!                — next if pronunciation_map.key?(inflected_word)
+#   * merge_gdropped_in_apostrophe_forms!   — next if pronunciation_map.key?(in_prime)
+# (The last three already guard on pronunciation_map.key?, which is now true for
+# authoritative words because we populate hash ahead of the CMUdict load.)
 #
 # Cluster / consonant filters are *not* applied to authoritative entries: they
 # are user-vetted by definition.
 #
-# Returns a +Set+ of the authoritative words (used by +load_cmudict+ to skip
-# CMU rows) and mutates +hash+ in place. Also memoizes the set into
-# +$authoritative_pronunciation_words+ so downstream phases (the rarity
+# Returns a Set of the authoritative words (used by load_cmudict to skip
+# CMU rows) and mutates hash in place. Also memoizes the set into
+# $authoritative_pronunciation_words so downstream phases (the rarity
 # classifier in particular) can consult it without re-parsing the file.
 def load_authoritative_pronunciations!(hash)
   words = Set.new
@@ -350,7 +350,7 @@ def load_authoritative_pronunciations!(hash)
     next if tokens.length < 2
 
     word = tokens.shift.downcase.desanitize
-    # CMUdict-style +WORD(2)+ alternate-pron suffix — strip it so multiple
+    # CMUdict-style WORD(2) alternate-pron suffix — strip it so multiple
     # authoritative prons for the same word stack cleanly.
     word = word[0...-3] if word =~ /\([0-9]\)\Z/
     pron = Pronunciation.new(tokens)
@@ -363,14 +363,14 @@ def load_authoritative_pronunciations!(hash)
   words
 end
 
-# Memoized set of headwords listed in +authoritative_pronunciations.txt+.
-# Populated as a side effect of +load_authoritative_pronunciations!+ during
-# +load_cmudict+; if no build has run yet (e.g. an early consumer) we lazy-load
+# Memoized set of headwords listed in authoritative_pronunciations.txt.
+# Populated as a side effect of load_authoritative_pronunciations! during
+# load_cmudict; if no build has run yet (e.g. an early consumer) we lazy-load
 # headwords-only without mutating any pron hash. The set is the canonical
 # answer to "did a curator hand-add this word?" — used by the rarity
-# classifier to veto +:forbidden+ verdicts on curator-added headwords (so they
+# classifier to veto :forbidden verdicts on curator-added headwords (so they
 # survive long enough for the auto spelling-variant detectors in
-# +corpus_variants.rb+ to pair them with sibling forms).
+# corpus_variants.rb to pair them with sibling forms).
 def authoritative_pronunciation_words
   return $authoritative_pronunciation_words if $authoritative_pronunciation_words
   words = Set.new

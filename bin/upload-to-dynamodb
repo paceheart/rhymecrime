@@ -3,32 +3,32 @@
 
 # Batch-write into DynamoDB (single-table design, pk partition key). Only the
 # compute output ships to DDB now. Phases run in decreasing-criticality order so
-# a +Ctrl-C+ part-way leaves the most-needed rows already uploaded:
+# a Ctrl-C part-way leaves the most-needed rows already uploaded:
 #   1. rhymecrime_local.sqlite3 (from bin/compute-relatedness):
 #        + related table       → related#…     (cheap path, words only — the
 #                                                runtime "related to X?" answer)
 #   2. rhymecrime_local.sqlite3 (from bin/compute-set-related):
 #        + set_related table   → set_related#… (post-prune rhyming-tuple list,
 #                                                runtime hot-path answer for the
-#                                                +set_related+ goal — collapses a
+#                                                set_related goal — collapses a
 #                                                4-phase live compute into one
-#                                                +GetItem+; see +crime.rb+'s
-#                                                +find_rhyming_tuples+)
+#                                                GetItem; see crime.rb's
+#                                                find_rhyming_tuples)
 #   3. rhymecrime_local.sqlite3 (from bin/compute-relatedness):
 #        + related_scores table → score#…      (lazy parallel scores; runtime
 #                                                tolerates a missing row and
 #                                                falls back to
-#                                                +RELATEDNESS_SCORE_THRESHOLD+,
+#                                                RELATEDNESS_SCORE_THRESHOLD,
 #                                                so this phase is the cheapest
 #                                                to lose to a partial run)
 #
-# The lexicon (+word_dict+) and rime cohort (+rime_dict+) live entirely in the
-# Lambda deploy bundle as +word_dict.msgpack+ / +rime_dict.msgpack+ — see
-# +bin/stage-lambda+ and +lib/rhymecrime/dict/utils_rhyme.rb+'s
-# +WORD_DICT_MSGPACK_FILENAME+ / +RIME_DICT_MSGPACK_FILENAME+ constants.
-# Eliminating the +word#+ / +rime#+ partitions cuts ~217K DDB rows from the
-# data deploy and removes the per-request +BatchGetItem+ fan-out that
-# previously dominated +set_related+ latency on cold cues.
+# The lexicon (word_dict) and rime cohort (rime_dict) live entirely in the
+# Lambda deploy bundle as word_dict.msgpack / rime_dict.msgpack — see
+# bin/stage-lambda and lib/rhymecrime/dict/utils_rhyme.rb's
+# WORD_DICT_MSGPACK_FILENAME / RIME_DICT_MSGPACK_FILENAME constants.
+# Eliminating the word# / rime# partitions cuts ~217K DDB rows from the
+# data deploy and removes the per-request BatchGetItem fan-out that
+# previously dominated set_related latency on cold cues.
 #
 #   AWS_PROFILE=paceheart RHYMECRIME_TABLE_NAME=rhymecrime AWS_REGION=us-east-1 \
 #     ruby bin/upload-to-dynamodb
@@ -37,21 +37,21 @@
 #   --related=PATH     Override path to the local SQLite store
 #                      (default: generated/rhymecrime_local.sqlite3)
 #   --cues=W[,W...]    Restrict the upload to rows whose lemma matches one of
-#                      the given cues (resolved through +lemma()+, same as
-#                      +bin/compute-relatedness --only+). Filters all three
-#                      streams (+related#+, +set_related#+, +score#+) so the
+#                      the given cues (resolved through lemma(), same as
+#                      bin/compute-relatedness --only). Filters all three
+#                      streams (related#, set_related#, score#) so the
 #                      partial deploy stays internally consistent. Used by
-#                      +bin/deploy-new-data+ to skip the multi-tens-of-minutes
+#                      bin/deploy-new-data to skip the multi-tens-of-minutes
 #                      full-table re-upload when only a handful of curated
 #                      rows changed. Cues that don't resolve to any stored row
-#                      are silently dropped (the SQL +IN+ filter just returns
+#                      are silently dropped (the SQL IN filter just returns
 #                      no match), which is the expected case for cues that
 #                      didn't actually have a row in the local store.
 #
-# +AWS_PROFILE+ is required, not optional: an unset profile lets the AWS SDK
+# AWS_PROFILE is required, not optional: an unset profile lets the AWS SDK
 # fall through its default credential chain (env vars, instance metadata, the
-# +[default]+ profile, whichever active SSO session it sees first), which is
-# exactly how the first +sam deploy+ for this stack landed in the wrong AWS
+# [default] profile, whichever active SSO session it sees first), which is
+# exactly how the first sam deploy for this stack landed in the wrong AWS
 # account. Forcing an explicit profile + an STS pre-flight makes wrong-account
 # uploads loud (caller-identity mismatch surfaces before the first BatchWrite)
 # and gives us a fingerprint to grep for in shell history when debugging.
@@ -70,8 +70,8 @@ skip_related = false
 related_path = generated_dict_path(LOCAL_STORE_FILENAME)
 cues_filter = nil
 
-# Snapshot before +parse!+ mutates ARGV so the AWS_PROFILE abort below can
-# echo back the flags the user actually typed (otherwise +--skip-related+
+# Snapshot before parse! mutates ARGV so the AWS_PROFILE abort below can
+# echo back the flags the user actually typed (otherwise --skip-related
 # silently drops out of the suggested re-run command).
 original_argv = ARGV.dup
 
@@ -83,12 +83,12 @@ OptionParser.new do |o|
        "Filters related#, set_related#, and score# in lock-step so the partial deploy stays consistent.") { |list| cues_filter = list }
 end.parse!
 
-# Resolve +--cues+ to lemma-prefixed +pk+ filter sets used by the SQL +IN+
-# clauses below. Lemma resolution mirrors +bin/compute-relatedness --only+ so
-# +bin/deploy-new-data+ can pass the same +--cues=+ value through unchanged
-# (e.g. the curator wrote +cats,fur,related+ → cue lemma +cat+ → pk
-# +related#cat+, and the upload phase needs to look under that key, not under
-# +related#cats+). Falls back to the surface form when +lemma()+ doesn't know
+# Resolve --cues to lemma-prefixed pk filter sets used by the SQL IN
+# clauses below. Lemma resolution mirrors bin/compute-relatedness --only so
+# bin/deploy-new-data can pass the same --cues= value through unchanged
+# (e.g. the curator wrote cats,fur,related → cue lemma cat → pk
+# related#cat, and the upload phase needs to look under that key, not under
+# related#cats). Falls back to the surface form when lemma() doesn't know
 # the word, which keeps non-dict cues uploadable rather than silently dropped.
 related_pk_filter = nil
 set_related_pk_filter = nil
@@ -97,9 +97,9 @@ if cues_filter && !cues_filter.empty?
   resolved_lemmas = cues_filter.map { |c| (lemma(c) || c).to_s.strip }.reject(&:empty?).uniq
   related_pk_filter = resolved_lemmas.map { |l| "related##{l}" }
   set_related_pk_filter = resolved_lemmas.map { |l| "set_related##{l}" }
-  # +related_scores+ rows are keyed by +related#<lemma>+ (the score# pk is
+  # related_scores rows are keyed by related#<lemma> (the score# pk is
   # synthesized from that on upload below), so the score filter reuses the
-  # +related_pk_filter+ set rather than introducing a separate +score#+ list.
+  # related_pk_filter set rather than introducing a separate score# list.
   score_pk_filter = related_pk_filter
   puts "Cue filter: #{resolved_lemmas.size} lemmas (from #{cues_filter.size} requested): #{resolved_lemmas.first(10).inspect}#{resolved_lemmas.size > 10 ? '…' : ''}"
 end
@@ -119,7 +119,7 @@ client = Aws::DynamoDB::Client.new(region: region, profile: profile)
 # Throttled progress meter shared by both related# upload phases. Two output
 # modes:
 #   - Interactive ($stderr.tty?): a single line redrawn in place every
-#     +throttle_seconds+ via CR + ANSI clear-to-end-of-line. Avoids spamming
+#     throttle_seconds via CR + ANSI clear-to-end-of-line. Avoids spamming
 #     scrollback while still giving the user real-time feedback through what's
 #     a multi-minute (often multi-tens-of-minutes for related#) run.
 #   - Non-interactive (CI logs, file capture, `tee`): line-per-update so the
@@ -181,7 +181,7 @@ class ProgressMeter
 end
 
 # Yields the slice size to the optional block after each successful 25-item
-# +BatchWriteItem+, so callers can drive a +ProgressMeter+ without having to
+# BatchWriteItem, so callers can drive a ProgressMeter without having to
 # care about DynamoDB's 25-item batch limit themselves. No block = silent
 # (matches the previous signature).
 def put_batch(client, table, items)
@@ -205,18 +205,18 @@ else
 
   puts "Uploading related entries from #{related_path}..."
   # Stream rows out of SQLite in batches so we don't hold the full ~1.5 GB
-  # local store in memory just to feed +batch_write_item+ (which batches 25
+  # local store in memory just to feed batch_write_item (which batches 25
   # at a time anyway). The schema lives in two tables:
-  #   * +related+         → +related#<lemma>+ items (cheap path, words only)
-  #   * +related_scores+  → +score#<lemma>+ items   (lazy parallel scores)
-  # The runtime tolerates a missing +score#<lemma>+ row and falls back to
-  # +RELATEDNESS_SCORE_THRESHOLD+ for every entry, so we only upload score
+  #   * related         → related#<lemma> items (cheap path, words only)
+  #   * related_scores  → score#<lemma> items   (lazy parallel scores)
+  # The runtime tolerates a missing score#<lemma> row and falls back to
+  # RELATEDNESS_SCORE_THRESHOLD for every entry, so we only upload score
   # items for cues that actually have scores in the local store — keeps the
-  # +score#+ table from materializing rows that round-trip back to the
+  # score# table from materializing rows that round-trip back to the
   # default in the runtime anyway.
   db = SQLite3::Database.new(related_path, readonly: true)
   begin
-    # Build the +WHERE pk IN (?, ?, ...)+ clause once per phase so the SQL
+    # Build the WHERE pk IN (?, ?, ...) clause once per phase so the SQL
     # bind list and the COUNT/SELECT pair stay in sync. Empty filter ⇒ no
     # WHERE clause ⇒ full table scan (the original behavior).
     related_where, related_binds =
@@ -248,18 +248,18 @@ else
     puts "  #{n_related} related# items"
 
     # Set_related#<lemma> stream — uploaded second because it's the runtime
-    # hot path: the +set_related+ goal in +crime.rb+ collapses a multi-phase
-    # live compute into a single +GetItem+ on this row, so it's the one we
+    # hot path: the set_related goal in crime.rb collapses a multi-phase
+    # live compute into a single GetItem on this row, so it's the one we
     # most want already in DDB by the time anything reads from the table.
-    # Independent loop (rather than a JOIN) so the +related#+ phase isn't
-    # held back by the second table scan. Empty +tuples+ values are legal:
+    # Independent loop (rather than a JOIN) so the related# phase isn't
+    # held back by the second table scan. Empty tuples values are legal:
     # the runtime treats a missing row as the friendly "Oops, I don't
-    # know..." / "I don't like that word." bad_input branch (in +crime.rb+'s
-    # +set_related+ goal dispatch), so we want every cue computed by
-    # +bin/compute-set-related+ to land in DDB — including the empty-tuples
+    # know..." / "I don't like that word." bad_input branch (in crime.rb's
+    # set_related goal dispatch), so we want every cue computed by
+    # bin/compute-set-related to land in DDB — including the empty-tuples
     # rows that mean "we know this cue but nothing rhymes among its
     # relateds." DDB stores empty as an empty List, and
-    # +DynamoRuntime#parse_tuples_attr+ returns +[]+ (computed hit, not the
+    # DynamoRuntime#parse_tuples_attr returns [] (computed hit, not the
     # "unknown cue" fallback).
     set_related_where, set_related_binds =
       if set_related_pk_filter
@@ -290,17 +290,17 @@ else
     puts "  #{n_set_related} set_related# items"
 
     # Score#<lemma> stream — uploaded last because it's the least critical:
-    # the runtime tolerates a missing +score#<lemma>+ row and falls back to
-    # +RELATEDNESS_SCORE_THRESHOLD+ for every entry, so a +Ctrl-C+ during
+    # the runtime tolerates a missing score#<lemma> row and falls back to
+    # RELATEDNESS_SCORE_THRESHOLD for every entry, so a Ctrl-C during
     # this phase still leaves a fully-functional table (only similarity
     # scores degrade to the threshold floor; the related word lists and
     # the set_related hot path are already in DDB). Independent loop
-    # (rather than a JOIN with +related+) so a row with words but no
-    # scores doesn't waste a DDB write on a missing +scores+ payload.
-    # +related_scores+ rows are keyed by +related#<lemma>+ in SQLite (the
-    # +score#<lemma>+ pk is synthesized below for DDB), so the cue filter
-    # reuses +related_pk_filter+ rather than introducing a separate
-    # +score#+ key list.
+    # (rather than a JOIN with related) so a row with words but no
+    # scores doesn't waste a DDB write on a missing scores payload.
+    # related_scores rows are keyed by related#<lemma> in SQLite (the
+    # score#<lemma> pk is synthesized below for DDB), so the cue filter
+    # reuses related_pk_filter rather than introducing a separate
+    # score# key list.
     scores_where, scores_binds =
       if score_pk_filter
         ["WHERE pk IN (#{(["?"] * score_pk_filter.size).join(',')})", score_pk_filter]

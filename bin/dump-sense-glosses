@@ -2,28 +2,28 @@
 # frozen_string_literal: true
 #
 # Dump (lemma, sense_idx, text) triples as JSONL for external sentence-transformer
-# encoding (+bin/build-sense-vectors.py+). Output feeds into
-# +generated/model_sense_vectors.msgpack+ which supplies the modern-embedding
-# signals in +PairSignals+ (see +MODEL_SENSE_VECTORS_FILENAME+, +related.rb+).
+# encoding (bin/build-sense-vectors.py). Output feeds into
+# generated/model_sense_vectors.msgpack which supplies the modern-embedding
+# signals in PairSignals (see MODEL_SENSE_VECTORS_FILENAME, related.rb).
 #
 # Each headword contributes:
-#   - one "headword" item (+sense_idx = -1+, +text+ is just the headword itself)
-#   - one "definition" item (+sense_idx = -2+, +text+ is the headword followed by
+#   - one "headword" item (sense_idx = -1, text is just the headword itself)
+#   - one "definition" item (sense_idx = -2, text is the headword followed by
 #     all its WordNet *and* Wiktionary glosses pooled into a single
-#     sentence-transformer input, +"{word}. {gloss1}. {gloss2}. ..."+). This gives
+#     sentence-transformer input, "{word}. {gloss1}. {gloss2}. ..."). This gives
 #     the encoder a *definition-aware* embedding that disambiguates polysemous
-#     bare words ("bear"-the-animal vs "bear"-the-verb) — feeds the +def_cos+
+#     bare words ("bear"-the-animal vs "bear"-the-verb) — feeds the def_cos
 #     classifier feature. Falls back to the bare headword text when no glosses
-#     are available, so +definition[word]+ is always populated for in-vocab
+#     are available, so definition[word] is always populated for in-vocab
 #     lemmas.
-#   - up to +--max-senses+ "sense" items (+sense_idx >= 0+), one per gloss drawn
-#     from WordNet first then Wiktionary (+text+ is +"{word}: {gloss}"+).
+#   - up to --max-senses "sense" items (sense_idx >= 0), one per gloss drawn
+#     from WordNet first then Wiktionary (text is "{word}: {gloss}").
 # When a word has no direct WordNet senses, we try morphy-resolved inflected forms
-# (same fallback as +sense_vectors_morphy+); Wiktionary glosses don't need that
+# (same fallback as sense_vectors_morphy); Wiktionary glosses don't need that
 # fallback because the Kaikki dump already keys by the surface form.
 #
 # Scope:
-#   +--limit-csv CSV+  only dump words referenced in the CSV's +cue+/+related+ columns.
+#   --limit-csv CSV  only dump words referenced in the CSV's cue/related columns.
 #                      Useful for iterating on curated/related.csv fast.
 #   default            all dictionary base lemmas with Numberbatch vectors (~65k; Python
 #                      encoding this many at MPNet pace is ~30 min on Apple Silicon MPS).
@@ -59,7 +59,7 @@ Dir.chdir(repo)
 
 require "rhymecrime/crime"
 # Numberbatch loader + WordNet setup live in relatedness/signals (they're not
-# pulled in by +rhymecrime/crime+ anymore); this script iterates Numberbatch
+# pulled in by rhymecrime/crime anymore); this script iterates Numberbatch
 # keys and WordNet lemmas/morphy, so require them explicitly.
 require "rhymecrime/relatedness/signals"
 require "rwordnet"
@@ -112,12 +112,12 @@ def wordnet_glosses_for(word, max_senses, include_morphy)
   glosses
 end
 
-# Combined WordNet + Wiktionary gloss list for +word+, capped at +max_senses+ entries.
+# Combined WordNet + Wiktionary gloss list for word, capped at max_senses entries.
 # Default ordering: WordNet first (typically more concise / hand-curated); Wiktionary
-# fills remaining slots. Flip via +RHYMECRIME_GLOSS_ORDER=wk-first+ to take Wiktionary
+# fills remaining slots. Flip via RHYMECRIME_GLOSS_ORDER=wk-first to take Wiktionary
 # senses first instead — useful when WK has denser per-word coverage than WN. Pointer-
 # only Wiktionary senses ("Alternative spelling of X") are already excluded at build
-# time by +collect_definitional_glosses+. Dedupes case-folded gloss text so a corpus
+# time by collect_definitional_glosses. Dedupes case-folded gloss text so a corpus
 # that happens to repeat a definition verbatim doesn't crowd out a different sense
 # from the other corpus.
 def combined_glosses_for(word, max_senses, include_morphy)
@@ -169,11 +169,11 @@ File.open(options[:output], "w") do |f|
     headword_only += 1 if glosses.empty?
 
     # Only emit a definition embedding when there's an *actual* gloss. Otherwise
-    # +pooled_definition_text+ would fall back to the bare headword, producing a
-    # vector ~identical to the +sense_idx=-1+ headword embedding — making
-    # +def_cos+ effectively redundant with +model_cos+ for senseless words and
-    # destroying the +def_in_vocab+ gate's signal value. Senseless words now get
-    # +definition[word] = nil+ in the encoded msgpack, so +def_both_in_vocab?+
+    # pooled_definition_text would fall back to the bare headword, producing a
+    # vector ~identical to the sense_idx=-1 headword embedding — making
+    # def_cos effectively redundant with model_cos for senseless words and
+    # destroying the def_in_vocab gate's signal value. Senseless words now get
+    # definition[word] = nil in the encoded msgpack, so def_both_in_vocab?
     # correctly returns false for any pair touching them.
     unless glosses.empty?
       f.puts JSON.generate(

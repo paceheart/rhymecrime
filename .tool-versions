@@ -1,6 +1,6 @@
-# Pins for asdf / rbenv / mise. Ruby tracks AWS Lambda's +ruby3.4+ managed
-# runtime (see +template.yaml+); 3.4.9 is the latest 3.4 patch (Mar 11 2026,
+# Pins for asdf / rbenv / mise. Ruby tracks AWS Lambda's ruby3.4 managed
+# runtime (see template.yaml); 3.4.9 is the latest 3.4 patch (Mar 11 2026,
 # includes zlib CVE-2026-27820 fix). Adjust the python patch to one you have
-# installed (+asdf list python+).
+# installed (asdf list python).
 ruby 3.4.9
 python 3.13.5t

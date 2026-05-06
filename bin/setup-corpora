@@ -1,17 +1,17 @@
 #!/usr/bin/env bash
 #
-# Fetch (and lightly pre-aggregate) every external corpus that +bin/dict-build+
+# Fetch (and lightly pre-aggregate) every external corpus that bin/dict-build
 # consumes. Idempotent — downloads are skipped if the destination file is
 # already present and non-empty, so re-running this during pipeline testing
 # only re-does the cheap derivations.
 #
-# Normally invoked via +./setup.sh+, which runs +bundle install+ first and
-# +./bin/dict-build+ after. You can also run +./bin/setup-corpora+ directly if
+# Normally invoked via ./setup.sh, which runs bundle install first and
+# ./bin/dict-build after. You can also run ./bin/setup-corpora directly if
 # gems are already installed and you only want to refresh the inputs (e.g. to
 # pick up a new Wiktionary dump without re-resolving the Gemfile).
 #
-# Prereqs on the host: ruby + bundler (for +bin/build-usf-associations+ and
-# +bin/preprocess-conceptnet+), python3, curl, gunzip.
+# Prereqs on the host: ruby + bundler (for bin/build-usf-associations and
+# bin/preprocess-conceptnet), python3, curl, gunzip.
 
 set -euo pipefail
 
@@ -20,7 +20,7 @@ cd "$REPO"
 
 # --- Wiktionary (kaikki.org / wiktextract) → corpora/wiktionary/ ------------
 # Pronunciation + POS + forms + alt/form-of senses. The streaming filter logic
-# lives in +bin/filter-kaikki+ so it's easy to re-run when we want to pick up
+# lives in bin/filter-kaikki so it's easy to re-run when we want to pick up
 # additional fields from the raw dump.
 mkdir -p corpora/wiktionary
 if [ ! -s corpora/wiktionary/kaikki-english-filtered.jsonl.gz ]; then
@@ -30,13 +30,13 @@ if [ ! -s corpora/wiktionary/kaikki-english-filtered.jsonl.gz ]; then
 fi
 
 # NOTE: VarCon (corpora/varcon/) and SUBTLEX-US (corpora/subtlex/) are vendored
-# directly in the repo (force-added past +corpora/*+ in +.gitignore+) — see
-# +THIRD_PARTY_NOTICES.md+ for attribution. They aren't fetched here.
+# directly in the repo (force-added past corpora/* in .gitignore) — see
+# THIRD_PARTY_NOTICES.md for attribution. They aren't fetched here.
 
 # --- Wordfreq Zipf export → generated/wordfreq.tsv --------------------------
 # (gitignored; used by dict.rb / dict-build)
-# Use +python3 -m pip+ so wordfreq installs for the same interpreter as
-# +python3+ (asdf/pyenv).
+# Use python3 -m pip so wordfreq installs for the same interpreter as
+# python3 (asdf/pyenv).
 python3 -m pip install --user -r lib/rhymecrime/dict/wordfreq/requirements.txt
 mkdir -p generated
 python3 lib/rhymecrime/dict/wordfreq/export_wordfreq_tsv.py

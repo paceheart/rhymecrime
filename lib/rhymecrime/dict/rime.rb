@@ -6,12 +6,12 @@ require_relative "pronunciation.rb"
 require_relative "constants"
 
 def build_rime_dict(pronunciation_map)
-  # +RimeDict+ subclasses +Hash+ and adds a per-instance pruning-active flag
-  # consulted by its read methods; the +filter_word_dict_disconnected!+
+  # RimeDict subclasses Hash and adds a per-instance pruning-active flag
+  # consulted by its read methods; the filter_word_dict_disconnected!
   # fixed-point loop flips the flag during its inner rounds so a naive
-  # +rime_dict[rime]+ call from a new contributor inside the window raises with
+  # rime_dict[rime] call from a new contributor inside the window raises with
   # the caller location. Outside the window the guard is inert — a single
-  # boolean check per read. See +build_entry.rb+ for the full class.
+  # boolean check per read. See build_entry.rb for the full class.
   rime_dict = RimeDict.new {|h,k| h[k] = [] } # hash of arrays, each element of which is a Pronunciation
   i = 0;
   for word, prons in pronunciation_map
@@ -33,26 +33,26 @@ def build_rime_dict(pronunciation_map)
   return rime_dict
 end
 
-# Tombstoned-aware predicate: returns true for +word_dict+ entries that
+# Tombstoned-aware predicate: returns true for word_dict entries that
 # the pipeline has marked for terminal pruning (scrubs, classifier, disconnect).
 # Kept as a small helper so downstream rime_dict / spelling-variant / rime-bucket
 # passes can consistently treat pending-deleted rows as "gone" for the
 # purpose of their decisions, even though the row physically lives in
-# +word_dict+ until +finalize_build_entries!+ runs at the end of
-# +build_word_dict+.
+# word_dict until finalize_build_entries! runs at the end of
+# build_word_dict.
 def word_dict_entry_tombstoned?(entry)
   return false unless entry
   return false unless defined?(BuildEntry) && entry.is_a?(BuildEntry)
   entry.tombstoned?
 end
 
-# True when +word_dict+ has a row for +key+ AND that row is not marked for
+# True when word_dict has a row for key AND that row is not marked for
 # tombstoned. This is the "baseline-parity" replacement for
-# +word_dict.key?(key)+ in later build phases (spelling-variant emission,
-# disconnect filter, rime pruners) that used to run against a +word_dict+
-# whose scrubbed rows had been physically removed by +hash.delete+. After the
-# defer-losses refactor, scrubbed rows linger with +tombstoned+ set
-# until +finalize_build_entries!+, so raw +key?+ would see rows the baseline
+# word_dict.key?(key) in later build phases (spelling-variant emission,
+# disconnect filter, rime pruners) that used to run against a word_dict
+# whose scrubbed rows had been physically removed by hash.delete. After the
+# defer-losses refactor, scrubbed rows linger with tombstoned set
+# until finalize_build_entries!, so raw key? would see rows the baseline
 # treated as absent; this helper restores that "absent from the live lexicon"
 # semantics without forcing callers to write the two-part check inline.
 def word_dict_live?(word_dict, key)
@@ -65,14 +65,14 @@ end
 # pronunciation_map; runtime rhyme lookup uses rime_dict, so those words must be indexed here too.
 #
 # Tombstoned entries are intentionally INCLUDED in rime_dict here (and kept
-# by +strip_dispreferred_headwords_from_rime_dict!+ below) so that downstream
-# bucket-level decisions (+rime_bucket_one_common_preferred_with_any_rare?+,
-# +all_common_headwords_rich_rhyme_for_rime?+) see the same bucket
+# by strip_dispreferred_headwords_from_rime_dict! below) so that downstream
+# bucket-level decisions (rime_bucket_one_common_preferred_with_any_rare?,
+# all_common_headwords_rich_rhyme_for_rime?) see the same bucket
 # membership they saw in the pre-refactor build, where scrubbed / classifier-
 # forbidden rows lingered in rime_dict as stale pronunciation_map references until the
-# disconnect filter's +prune_rime_dict_to_headwords!+ pass at the end. Since
-# +word_dict_frequency_for_rime_bucket+ returns 0 for pending-deleted entries
-# (matching the baseline's +entry.nil?+ → 0 semantics), those bucket members
+# disconnect filter's prune_rime_dict_to_headwords! pass at the end. Since
+# word_dict_frequency_for_rime_bucket returns 0 for pending-deleted entries
+# (matching the baseline's entry.nil? → 0 semantics), those bucket members
 # contribute as "rare" for the rare-only prune but keep the count right for
 # the one-common-preferred-with-any-rare check.
 def merge_word_dict_pronunciations_into_rime_dict!(rime_dict, word_dict)
@@ -96,24 +96,24 @@ end
 
 # When the preferred form of a hyphen / spelling variant has no prons but its
 # dispreferred sibling does, copy the prons from the dispreferred form into the
-# preferred form's +word_dict+ entry. The typical case is the hyphen-preferred
-# canonicalization (+up-end+ from +upend+, +hand-held+ from +handheld+,
-# +on-screen+ from +onscreen+, +best-seller+ from +bestseller+, …): CMU and
+# preferred form's word_dict entry. The typical case is the hyphen-preferred
+# canonicalization (up-end from upend, hand-held from handheld,
+# on-screen from onscreen, best-seller from bestseller, …): CMU and
 # Kaikki list only the unhyphenated surface, so the hyphenated entry gets a
-# +word_dict+ row from spelling-variant resolution but never receives a
+# word_dict row from spelling-variant resolution but never receives a
 # pronunciation from any source.
 #
-# Without this inheritance, +strip_dispreferred_headwords_from_rime_dict!+ removes
+# Without this inheritance, strip_dispreferred_headwords_from_rime_dict! removes
 # the dispreferred surface from its rime bucket, but the preferred form was
-# never added (the prior +merge_word_dict_pronunciations_into_rime_dict!+ pass
+# never added (the prior merge_word_dict_pronunciations_into_rime_dict! pass
 # skips empty-pron entries) — the bucket loses both surfaces, so a query like
-# +find_rhyming_words('pend')+ misses +up-end+/+upend+ entirely. Copying the
-# prons fixes both runtime +pronunciations(preferred)+ lookup and the rime_dict
-# membership (after a follow-up +merge_word_dict_pronunciations_into_rime_dict!+).
+# find_rhyming_words('pend') misses up-end/upend entirely. Copying the
+# prons fixes both runtime pronunciations(preferred) lookup and the rime_dict
+# membership (after a follow-up merge_word_dict_pronunciations_into_rime_dict!).
 #
-# Run after +emit_spelling_variants_auto!+ so the latest auto-emitted variant
-# pairs are visible to +preferred_form_in_build_lexicon+, and before
-# +strip_dispreferred_headwords_from_rime_dict!+ so the rime-bucket stripper sees
+# Run after emit_spelling_variants_auto! so the latest auto-emitted variant
+# pairs are visible to preferred_form_in_build_lexicon, and before
+# strip_dispreferred_headwords_from_rime_dict! so the rime-bucket stripper sees
 # the preferred form populated.
 def inherit_prons_from_dispreferred_to_preferred!(word_dict, log: true)
   inherited = 0
@@ -141,11 +141,11 @@ def inherit_prons_from_dispreferred_to_preferred!(word_dict, log: true)
   inherited
 end
 
-# Drop alternate spellings / US–UK / hyphen dispreferred surfaces so +rime_dict+ lists only
-# +preferred_form_in_build_lexicon+ headwords (matches runtime +preferred_form+ policy).
+# Drop alternate spellings / US–UK / hyphen dispreferred surfaces so rime_dict lists only
+# preferred_form_in_build_lexicon headwords (matches runtime preferred_form policy).
 #
-# Tombstoned entries are intentionally kept (same as +nil+ entries) —
-# the disconnect filter's +prune_rime_dict_to_headwords!+ pass filters rime_dict
+# Tombstoned entries are intentionally kept (same as nil entries) —
+# the disconnect filter's prune_rime_dict_to_headwords! pass filters rime_dict
 # down to live word_dict keys at the end, matching the pre-refactor behavior
 # where scrubbed / classifier-forbidden rows lingered as stale pronunciation_map
 # references in rime_dict until that final pass.
@@ -189,8 +189,8 @@ def word_common_preferred_headword?(word, word_dict)
   preferred_form_in_build_lexicon(word, word_dict) == word
 end
 
-# True when the bucket has exactly one **common preferred** headword (+preferred_form+ / spelling variants /
-# US-UK / hyphen policy, frequency > +RARE_FREQ_MAX+). Mirrors the old “exactly one common” prune but
+# True when the bucket has exactly one **common preferred** headword (preferred_form / spelling variants /
+# US-UK / hyphen policy, frequency > RARE_FREQ_MAX). Mirrors the old “exactly one common” prune but
 # ignores alternate spellings that map to another headword as preferred (e.g. *colour* when *color* is preferred).
 # Buckets with two or more common preferred rhymes are kept (*yum* / *plum*).
 def rime_bucket_one_common_preferred_with_any_rare?(words, word_dict)
@@ -203,14 +203,14 @@ def rime_bucket_one_common_preferred_with_any_rare?(words, word_dict)
   common_pref == 1
 end
 
-# Drop rime buckets where **every** headword is rare (frequency ≤ +RARE_FREQ_MAX+), or where there is
+# Drop rime buckets where **every** headword is rare (frequency ≤ RARE_FREQ_MAX), or where there is
 # exactly **one** common **preferred** headword (artifact size / avoid one strong anchor + clutter).
 #
-# When called inside the +filter_word_dict_disconnected!+ pruning window, the
-# +with_reads_during_prune+ wrapper authorizes this function's rime_dict reads
-# (length, the iteration inside +rime_dict.delete_if+ implicitly, and per-trace
+# When called inside the filter_word_dict_disconnected! pruning window, the
+# with_reads_during_prune wrapper authorizes this function's rime_dict reads
+# (length, the iteration inside rime_dict.delete_if implicitly, and per-trace
 # partner-loss lookups below). Outside the pruning window the wrapper is a
-# no-op (+RimeDict+'s guard is inert when +pruning_active?+ is false).
+# no-op (RimeDict's guard is inert when pruning_active? is false).
 def delete_rare_only_rime_buckets!(rime_dict, word_dict, log: true)
   rime_dict_with_reads_during_prune(rime_dict) do
     removed = 0
@@ -238,7 +238,7 @@ def rime_bucket_common_headwords(words, word_dict)
   words.select { |w| word_dict_frequency_for_rime_bucket(word_dict, w) > RARE_FREQ_MAX }
 end
 
-# True if +a+ and +b+ have some pairing of pronunciations for +rime+ that counts as a non-rich rhyme.
+# True if a and b have some pairing of pronunciations for rime that counts as a non-rich rhyme.
 def non_rich_rime_pair_exists_for_rime?(a, b, rime, word_dict)
   ea = word_dict[a]
   eb = word_dict[b]
@@ -259,7 +259,7 @@ def non_rich_rime_pair_exists_for_rime?(a, b, rime, word_dict)
   false
 end
 
-# True when there are ≥2 common headwords and every unordered pair is a rich rhyme for this +rime+.
+# True when there are ≥2 common headwords and every unordered pair is a rich rhyme for this rime.
 def all_common_headwords_rich_rhyme_for_rime?(rime, words, word_dict)
   common = rime_bucket_common_headwords(words, word_dict)
   return false if common.size < 2
@@ -270,9 +270,9 @@ def all_common_headwords_rich_rhyme_for_rime?(rime, words, word_dict)
   true
 end
 
-# After rare/mixed pruning: drop buckets where all common–common rhyme links are rich rhymes (+homophone_ok=false+
-# would find no partner within the common subset). Skipped when +INCLUDE_RICH_RHYMES+ is true.
-# Same rime_dict-reads-during-prune wrap as +delete_rare_only_rime_buckets!+.
+# After rare/mixed pruning: drop buckets where all common–common rhyme links are rich rhymes (homophone_ok=false
+# would find no partner within the common subset). Skipped when INCLUDE_RICH_RHYMES is true.
+# Same rime_dict-reads-during-prune wrap as delete_rare_only_rime_buckets!.
 def delete_common_rich_only_rime_buckets!(rime_dict, word_dict, log: true)
   return 0 if INCLUDE_RICH_RHYMES
 
@@ -317,7 +317,7 @@ def filter_pronunciation_map(pronunciation_map, rime_dict)
   return filtered_pronunciation_map
 end
 
-# Parallels +homophone_rhyme?+ in crime.rb (with rich-rime-only matching, not full-phoneme): true when every +target_rime+ pronunciation of +rhyme_word+ matches +target_rich_rime_array+,
+# Parallels homophone_rhyme? in crime.rb (with rich-rime-only matching, not full-phoneme): true when every target_rime pronunciation of rhyme_word matches target_rich_rime_array,
 # or when there is no such pronunciation (vacuous; candidate is filtered out for homophone_ok=false).
 def headword_rich_rhyme?(rhyme_word, target_rich_rime_array, target_rime, word_dict)
   entry = word_dict[rhyme_word]
@@ -330,8 +330,8 @@ def headword_rich_rhyme?(rhyme_word, target_rich_rime_array, target_rime, word_d
   true
 end
 
-# True if +word+ has at least one rime-bucket partner treated as a non-rich rhyme (+find_rhyming_words(..., false)+).
-# Wraps its rime_dict reads in +with_reads_during_prune+ so it's an authorized
+# True if word has at least one rime-bucket partner treated as a non-rich rhyme (find_rhyming_words(..., false)).
+# Wraps its rime_dict reads in with_reads_during_prune so it's an authorized
 # reader inside the disconnect-filter pruning window. Outside the window the
 # wrapper is inert.
 def headword_has_non_rich_rhyme_partner?(word, prons, rime_dict, word_dict)
@@ -358,16 +358,16 @@ def headword_has_non_rich_rhyme_partner?(word, prons, rime_dict, word_dict)
   end
 end
 
-# Logical predicate: is +word+ eligible to be a compute/DDB cue (the PK of a
-# +related#<lemma>+ row)?
+# Logical predicate: is word eligible to be a compute/DDB cue (the PK of a
+# related#<lemma> row)?
 #
-# Broader than +relatedness_target_word?+: cue coverage must include every
+# Broader than relatedness_target_word?: cue coverage must include every
 # lemma a user might ask about at runtime (or a spec fixture references), even
-# rhymeless ones (+music+, +concerto+, +algebra+, +quarterback+). Those lemmas
+# rhymeless ones (music, concerto, algebra, quarterback). Those lemmas
 # can't appear as a _related_ in another cue's row (no rhyme to attach to),
 # but they're perfectly valid questions on the cue side.
 #
-# Physical implementation today: +word_common_preferred_headword?+. Keep this
+# Physical implementation today: word_common_preferred_headword?. Keep this
 # wrapper so compute, eval scripts, and build-time stats all agree on what
 # "cue" means — and so widening the cue set later (e.g. to include dispreferred
 # forms a user might type) only requires a change here.
@@ -375,12 +375,12 @@ def cue_word?(word, word_dict)
   word_common_preferred_headword?(word, word_dict)
 end
 
-# Logical predicate: is +word+ eligible to appear as a related in another cue's
+# Logical predicate: is word eligible to appear as a related in another cue's
 # row, or to be returned in a related-words response to the UI?
 #
-# Strict superset of +cue_word?+: every relatedness target is a valid cue, but
+# Strict superset of cue_word?: every relatedness target is a valid cue, but
 # some cues (rhymeless lemmas) are not targets. The extra criterion is a
-# non-rich rhyme partner in +rime_dict+ — without one the word would never
+# non-rich rhyme partner in rime_dict — without one the word would never
 # surface in the UI even if it were included in a list.
 def relatedness_target_word?(word, word_dict, rime_dict)
   return false unless cue_word?(word, word_dict)
@@ -388,10 +388,10 @@ def relatedness_target_word?(word, word_dict, rime_dict)
   headword_has_non_rich_rhyme_partner?(word, prons, rime_dict, word_dict)
 end
 
-# Drop rime-bucket members not in +allowed+; remove singleton buckets (same invariant as +merge_word_dict_pronunciations_into_rime_dict!+).
-# Runs inside the +filter_word_dict_disconnected!+ pruning window on every
-# fixed-point round, so its +rime_dict.each+ iteration is wrapped in
-# +with_reads_during_prune+ (no-op outside the window).
+# Drop rime-bucket members not in allowed; remove singleton buckets (same invariant as merge_word_dict_pronunciations_into_rime_dict!).
+# Runs inside the filter_word_dict_disconnected! pruning window on every
+# fixed-point round, so its rime_dict.each iteration is wrapped in
+# with_reads_during_prune (no-op outside the window).
 def prune_rime_dict_to_headwords!(rime_dict, allowed)
   allowed = allowed.to_set if allowed.is_a?(Array)
   rime_dict_with_reads_during_prune(rime_dict) do
@@ -417,8 +417,8 @@ def prune_rime_dict_to_headwords!(rime_dict, allowed)
   end
 end
 
-# Small helper: invoke +rime_dict.with_reads_during_prune { block }+ when +rime_dict+
-# is a +RimeDict+; otherwise just yield. Called by every authorized reader
+# Small helper: invoke rime_dict.with_reads_during_prune { block } when rime_dict
+# is a RimeDict; otherwise just yield. Called by every authorized reader
 # of rime_dict during the disconnect-filter window. Keeps the read-guard plumbing
 # out of the hot-path code bodies.
 def rime_dict_with_reads_during_prune(rime_dict)
@@ -429,18 +429,18 @@ def rime_dict_with_reads_during_prune(rime_dict)
   end
 end
 
-# True iff +words+ (a rime-bucket array) contains at least one +dict_trace_word?+.
+# True iff words (a rime-bucket array) contains at least one dict_trace_word?.
 # Used by the pruners below to gate per-round partner-loss logging: logging
 # costs the corpus at large nothing (short-circuit on non-trace-words), and
 # a contributor debugging a specific trace word gets round-by-round
-# attribution of bucket changes "for free" when the word is in +DICT_TRACE_WORDS+.
+# attribution of bucket changes "for free" when the word is in DICT_TRACE_WORDS.
 def rime_dict_bucket_has_trace_word?(words)
   return false if words.nil?
   words.any? { |w| dict_trace_word?(w) }
 end
 
-# Emit a +dict_trace_puts+ line describing a per-round rime_dict bucket change
-# (partner +y+ removed from bucket +rime+, or +y+=nil when the whole bucket
+# Emit a dict_trace_puts line describing a per-round rime_dict bucket change
+# (partner y removed from bucket rime, or y=nil when the whole bucket
 # was dropped). No-op when the bucket has no trace words in it.
 def rime_dict_trace_partner_loss!(_rime_dict, rime, words, y, reason:, round:)
   return unless rime_dict_bucket_has_trace_word?(words)

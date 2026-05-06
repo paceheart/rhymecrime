@@ -23,7 +23,7 @@ SOFTWARE.
 ---
 
 Note on third-party data: this license applies to RhymeCrime's original code
-under +bin/+, +lib/+, +spec/+, and the repo's other source files. Bundled
-corpora under +corpora/+ and +curated/+, and any +generated/+ artifacts
+under bin/, lib/, spec/, and the repo's other source files. Bundled
+corpora under corpora/ and curated/, and any generated/ artifacts
 derived from them, retain their upstream licenses — see THIRD_PARTY_NOTICES.md
 for the full inventory and the CC-BY-SA inheritance map.

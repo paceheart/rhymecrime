@@ -1,8 +1,8 @@
 #
-# set_related — +music+ cue (50 examples). Second-largest bucket; split off
-# from +set_related_misc_spec.rb+ so +parallel_rspec+ can run music in
+# set_related — music cue (50 examples). Second-largest bucket; split off
+# from set_related_misc_spec.rb so parallel_rspec can run music in
 # parallel with pirate / water / crime / cat. See the per-cue companions
-# +set_related_<cue>_spec.rb+ and +set_related_misc_spec.rb+ for the rest.
+# set_related_<cue>_spec.rb and set_related_misc_spec.rb for the rest.
 #
 
 require_relative "similar_rhymes_set_related_support"

@@ -2,9 +2,9 @@
 # encoding: utf-8
 # frozen_string_literal: true
 
-# Sample Kaikki +sounds.ipa+ entries whose ARPAbet conversion differs between the
-# pre- and post- "(ɹ) is required" behavior of +IpaToArpabet.convert+. The "old"
-# behavior is reproduced inline by stripping +(...)+ before calling the lib; the
+# Sample Kaikki sounds.ipa entries whose ARPAbet conversion differs between the
+# pre- and post- "(ɹ) is required" behavior of IpaToArpabet.convert. The "old"
+# behavior is reproduced inline by stripping (...) before calling the lib; the
 # "new" behavior is whatever the current lib does.
 
 require "json"

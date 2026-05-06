@@ -1,9 +1,9 @@
 require 'csv'
 require "rhymecrime/pace_utils"
 
-# True when +RHYMECRIME_VERBOSE_CSV_SWEEP+ is set to a truthy value (1/true/yes/on,
-# case-insensitive). Gates the per-row +puts "FAIL ..."+ diagnostics emitted by the
-# +evaluate_*_csv+ sweeps in +related_spec.rb+, +rarity_spec.rb+, and +semantic_base_spec.rb+.
+# True when RHYMECRIME_VERBOSE_CSV_SWEEP is set to a truthy value (1/true/yes/on,
+# case-insensitive). Gates the per-row puts "FAIL ..." diagnostics emitted by the
+# evaluate_*_csv sweeps in related_spec.rb, rarity_spec.rb, and semantic_base_spec.rb.
 # Off by default so the rspec failure summary at the end of a run isn't drowned in
 # 1k+ lines of expected-but-not-yet-passing rows; the per-CSV summary line still
 # always prints (with the FAIL count), so you know whether to flip this on.
@@ -14,9 +14,9 @@ def csv_sweep_verbose?
   !v.empty? && %w[1 true yes on].include?(v)
 end
 
-# Valid values for the +oughta be related?+ column in curated/related.csv. Rows marked +whatever+ are
+# Valid values for the oughta be related? column in curated/related.csv. Rows marked whatever are
 # ignored by the spec / weighted accuracy script because either answer is acceptable. Rows marked
-# +*_ish+ represent weak-signal cases (originally encoded as a +ish+ marker in the +notes+ column).
+# *_ish represent weak-signal cases (originally encoded as a ish marker in the notes column).
 RELATEDNESS_KINDS = %w[related related_ish unrelated unrelated_ish whatever].freeze
 
 def relatedness_expected_boolean(kind)
@@ -168,8 +168,8 @@ def apply_rarity_csv_row(row)
   end
 end
 
-# Loads curated/rarity.csv and defines nested RSpec contexts + examples. Requires +oughta_be_*+ helpers from
-# +rarity_spec.rb+ (same pattern as +related_spec.rb+ / +related.csv+).
+# Loads curated/rarity.csv and defines nested RSpec contexts + examples. Requires oughta_be_* helpers from
+# rarity_spec.rb (same pattern as related_spec.rb / related.csv).
 def load_and_define_rarity_test_cases_from_csv
   rows = load_rarity_csv_rows
   rows.each_with_index do |row, i|

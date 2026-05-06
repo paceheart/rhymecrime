@@ -1,35 +1,35 @@
 # Thematic relatedness expectations against the live directional predicate.
 # Examples live in curated/related.csv: (cue, related, oughta be related?, notes).
 #
-# +thematically_related?(cue, related)+ is **directional** — "is +related+ a
-# thematic associate of +cue+?". The Store path (+RelatedWords.pair_in_store?+)
-# and the live compute path (+PairSignals+ → learned classifier + rules) both
-# respect that orientation; the spec evaluates rows in the labeled +(cue, related)+
-# direction, not symmetrized. Set +RELATED_BYPASS_STORE=1+ to skip the Store and
+# thematically_related?(cue, related) is **directional** — "is related a
+# thematic associate of cue?". The Store path (RelatedWords.pair_in_store?)
+# and the live compute path (PairSignals → learned classifier + rules) both
+# respect that orientation; the spec evaluates rows in the labeled (cue, related)
+# direction, not symmetrized. Set RELATED_BYPASS_STORE=1 to skip the Store and
 # always run the live compute pipeline (e.g. after retraining when the Store
 # might be stale).
 #
 # Two layers of coverage live in this file:
 #
-#   1. Hand-curated spot checks (the +oughta_be_related+ / +ought_not_be_related+
-#      / +related_words_ought_not_include+ helpers below) — each generates a
+#   1. Hand-curated spot checks (the oughta_be_related / ought_not_be_related
+#      / related_words_ought_not_include helpers below) — each generates a
 #      named rspec example so a regression on a specific well-known pair fails
 #      loudly with a self-explanatory test name.
 #
 #   2. A full sweep over every evaluable row in curated/related.csv, run inline
-#      at file load (NOT as per-row rspec examples) — we +puts+ a one-line +FAIL+
+#      at file load (NOT as per-row rspec examples) — we puts a one-line FAIL
 #      diagnostic per mismatch, then a single aggregate rspec example gates the
 #      suite on the coverage floor + weighted-pass-rate floor. Same shape as
-#      +spec/semantic_base_spec.rb+ and +spec/rarity_spec.rb+.
+#      spec/semantic_base_spec.rb and spec/rarity_spec.rb.
 #
-# Scoring: each row contributes +weight+ when the predicate matches and 0 when
-# it doesn't. Weights: +related+ / +unrelated+ rows weigh 3; +related_ish+ /
-# +unrelated_ish+ rows weigh 1 (so a strong row counts 3× an ish row toward
+# Scoring: each row contributes weight when the predicate matches and 0 when
+# it doesn't. Weights: related / unrelated rows weigh 3; related_ish /
+# unrelated_ish rows weigh 1 (so a strong row counts 3× an ish row toward
 # the aggregate). False positives and false negatives are treated equally
 # within each weight tier — class-balanced (this is independent of the
-# +(cue, related)+ orientation, which is asymmetric and preserved per row).
-# Rows skipped: +whatever+ and pairs where either side is a stop word
-# (+thematically_related?+ short-circuits stop-word pairs to +true+, so they
+# (cue, related) orientation, which is asymmetric and preserved per row).
+# Rows skipped: whatever and pairs where either side is a stop word
+# (thematically_related? short-circuits stop-word pairs to true, so they
 # would be unavoidable FPs that say nothing about the classifier).
 
 require_relative 'test_utils'
@@ -74,8 +74,8 @@ def relatedness_row_weight(kind)
   relatedness_kind_ish?(kind) ? 1 : 3
 end
 
-# +true+ iff either side of the pair (surface or lemma) is semantically
-# promiscuous — +thematically_related?+ short-circuits those pairs to +true+
+# true iff either side of the pair (surface or lemma) is semantically
+# promiscuous — thematically_related? short-circuits those pairs to true
 # regardless of what the classifier would say, so they tell us nothing about
 # predicate quality. Mirrors the trainer's load-time filter.
 def relatedness_row_promiscuous_filtered?(row)
@@ -85,13 +85,13 @@ def relatedness_row_promiscuous_filtered?(row)
   semantically_promiscuous?(cue) || semantically_promiscuous?(rel) || semantically_promiscuous?(lemma(cue)) || semantically_promiscuous?(lemma(rel))
 end
 
-# Sweep curated/related.csv against the live directional +thematically_related?+
-# predicate. Returns +[evaluated, total_weight, weighted_correct]+ over rows we
-# actually evaluated. Side effects: +puts+ a one-line +FAIL+ diagnostic per
+# Sweep curated/related.csv against the live directional thematically_related?
+# predicate. Returns [evaluated, total_weight, weighted_correct] over rows we
+# actually evaluated. Side effects: puts a one-line FAIL diagnostic per
 # mismatch and a summary line.
 #
-# Skipped: +whatever+ rows (either answer acceptable), stop-word pairs (predicate
-# short-circuits them to +true+), and the rare row with empty cue/related cells.
+# Skipped: whatever rows (either answer acceptable), stop-word pairs (predicate
+# short-circuits them to true), and the rare row with empty cue/related cells.
 def evaluate_relatedness_csv
   rows = load_relatedness_test_cases
 
@@ -146,11 +146,11 @@ def evaluate_relatedness_csv
   [evaluated, total_weight, weighted_correct]
 end
 
-# Memoized accessor for +evaluate_relatedness_csv+. Lazy + per-process so
-# +rspec+ runs that don't touch the +csv sweep+ context (e.g. +rspec
-# spec/rhyme_spec.rb+, which still loads this file because of the default
-# +spec/**/*_spec.rb+ pattern) skip the 10k-row +thematically_related?+ sweep
-# entirely. Used to be assigned to +RELATED_*+ module constants at file load,
+# Memoized accessor for evaluate_relatedness_csv. Lazy + per-process so
+# rspec runs that don't touch the csv sweep context (e.g. rspec
+# spec/rhyme_spec.rb, which still loads this file because of the default
+# spec/**/*_spec.rb pattern) skip the 10k-row thematically_related? sweep
+# entirely. Used to be assigned to RELATED_* module constants at file load,
 # which made every rspec invocation in the repo pay the ~10s sweep cost.
 $related_csv_sweep_results = nil
 def related_csv_sweep_results
@@ -170,9 +170,9 @@ describe 'RELATED' do
       related_words_ought_not_include 'romanian', 'gypsies'
     end
 
-    # Underlying directional +thematically_related?(cue, related)+ assertions for
-    # every currently-failing +set_related+ / +pair_related+ example in
-    # +spec/similar_rhymes_spec.rb+. Each subcontext here mirrors one
+    # Underlying directional thematically_related?(cue, related) assertions for
+    # every currently-failing set_related / pair_related example in
+    # spec/similar_rhymes_spec.rb. Each subcontext here mirrors one
     # similar_rhymes failure and adds the two prereq pairs the spec depends on,
     # so a relatedness regression fails loudly *here* (named, focused) instead
     # of as opaque tuple-search misses in the much-slower similar_rhymes spec.
@@ -222,7 +222,7 @@ describe 'RELATED' do
       end
       # Negative similar_rhymes assertion. Both halves *are* music-related — the
       # exclusion is a downstream filter (likely homophone-like coda overlap),
-      # not a relatedness call. These predicates ought to return +true+.
+      # not a relatedness call. These predicates ought to return true.
       context 'set_related: music !-> bass / brass' do
         oughta_be_related 'music', 'bass'
         oughta_be_related 'music', 'brass'
@@ -263,10 +263,10 @@ describe 'RELATED' do
         oughta_be_related 'carbon', 'extract'
         oughta_be_related 'carbon', 'react'
       end
-      # Negative similar_rhymes assertion. The inflected forms +extracted+ /
-      # +reacted+ remain chemistry-relevant and ought to be related to +carbon+
-      # — the exclusion is lemma-collapse vs. the +extract+ / +react+ pair,
-      # not relatedness. These predicates ought to return +true+.
+      # Negative similar_rhymes assertion. The inflected forms extracted /
+      # reacted remain chemistry-relevant and ought to be related to carbon
+      # — the exclusion is lemma-collapse vs. the extract / react pair,
+      # not relatedness. These predicates ought to return true.
       context 'set_related: carbon !-> extracted / reacted' do
         oughta_be_related 'carbon', 'extracted'
         oughta_be_related 'carbon', 'reacted'
@@ -287,7 +287,7 @@ describe 'RELATED' do
         oughta_be_related 'food', 'starvation'
         oughta_be_related 'evil', 'abomination'
       end
-      # Negative similar_rhymes assertion. +produce+ (noun) is food and +abuse+
+      # Negative similar_rhymes assertion. produce (noun) is food and abuse
       # is evil-adjacent — the exclusion is most likely a noun/verb stress
       # mismatch in the homograph pronunciations, not a relatedness call.
       context 'pair_related: food / evil !-> produce / abuse' do

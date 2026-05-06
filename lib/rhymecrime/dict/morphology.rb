@@ -12,8 +12,8 @@ def morph_part_of_speech_tags(pos_map, base)
   s.to_a
 end
 
-# *Deers* / *sheeps*: Inflect treats *base+s* as :s, but WordNet marks *deer*, *sheep*, … as invariant in +noun.exc+.
-# Extended to cover bases whose noun.exc plural is irregular and non-+s+ (*ox* → *oxen*, *child* → *children*,
+# *Deers* / *sheeps*: Inflect treats *base+s* as :s, but WordNet marks *deer*, *sheep*, … as invariant in noun.exc.
+# Extended to cover bases whose noun.exc plural is irregular and non-s (*ox* → *oxen*, *child* → *children*,
 # *goose* → *geese*): *oxes* / *childs* / *gooses* are spurious regular plurals in that case.
 def morph_spurious_plural_s_on_invariant_noun?(plural_word)
   invariant = wn_noun_exc_invariant_plural_bases
@@ -30,14 +30,14 @@ def morph_spurious_plural_s_on_invariant_noun?(plural_word)
   false
 end
 
-# Kaikki listed this exact surface as an inflected form of +base+ (+collect_inflected_forms+).
+# Kaikki listed this exact surface as an inflected form of base (collect_inflected_forms).
 def wiktionary_surface_form_attested?(forms_map, base, inflected)
   pairs = forms_map[base]
   return false if pairs.nil? || pairs.empty?
   pairs.any? { |form, b| form == inflected && b == base }
 end
 
-# True if Kaikki lists any surface for +base+ whose Inflect suffix kind matches +suffix_kind+ (:ed, :ing, …).
+# True if Kaikki lists any surface for base whose Inflect suffix kind matches suffix_kind (:ed, :ing, …).
 # Spelling variants (e.g. cataloging vs catalogging) share the same kind, so a listed participle
 # attests Inflect’s preferred -ing spelling for WN verb lemmas.
 def wiktionary_derivation_suffix_attested?(forms_map, base, suffix_kind)
@@ -50,8 +50,8 @@ def wiktionary_derivation_suffix_attested?(forms_map, base, suffix_kind)
   end
 end
 
-# True if some Inflect-derived surface for +base+ with suffix +suffix_kind+ reaches RARE Zipf in Wordfreq.
-# With +morph_base_allows_verb_forms?+, lexeme-level allowance still requires per-surface Kaikki or Zipf
+# True if some Inflect-derived surface for base with suffix suffix_kind reaches RARE Zipf in Wordfreq.
+# With morph_base_allows_verb_forms?, lexeme-level allowance still requires per-surface Kaikki or Zipf
 # on the exact spelling (so *cataloging* in corpus does not promote *catalogging*).
 def corpus_inflection_suffix_zipf_attested?(wordfreq_hash, base, suffix_kind)
   return false if suffix_kind.nil? || wordfreq_hash.nil?
@@ -75,7 +75,7 @@ def morph_inflect_ck_double_k_junk?(base, inflected)
 end
 
 # True when Inflect *-ed* or *-ing* duplicates a role Kaikki already fills for the verb lexeme
-# (+kaikki_verb_morph+ from +load_wiktionary+).
+# (kaikki_verb_morph from load_wiktionary).
 def morph_kaikki_redundant_verb_inflection_blocked?(base, suffix_kind, kaikki_verb_morph)
   return false if kaikki_verb_morph.nil?
 
@@ -89,17 +89,17 @@ def morph_kaikki_redundant_verb_inflection_blocked?(base, suffix_kind, kaikki_ve
   end
 end
 
-# -ed/-ing: Kaikki +verb+ when present; cross-check WordNet so noun-only lemmas do not inherit
+# -ed/-ing: Kaikki verb when present; cross-check WordNet so noun-only lemmas do not inherit
 # verbal junk (FP-4). When both Kaikki and WordNet agree the base is a verb, require a Kaikki
-# surface row. If Kaikki also lists +adj+ on the lemma, require Wordfreq Zipf on the inflected
+# surface row. If Kaikki also lists adj on the lemma, require Wordfreq Zipf on the inflected
 # surface so lexicon rows for marginal verbs (e.g. *taboo*) do not promote rare *tabooed* when
 # corpus use is negligible. OOV bases (no WordNet entry) keep the legacy open policy.
 #
-# When +list_authoritative_base+ is true (list-pivot Inflect inheritance only), skip
+# When list_authoritative_base is true (list-pivot Inflect inheritance only), skip
 # Kaikki/corpus verb attestation: entries tagged common/common_ish in curated/rarity.csv are curated list headwords
 # (*finesse*→*finessed* must inherit).
 #
-# +kaikki_verb_morph+ (from +load_wiktionary+): blocks Inflect *-ed*/*-ing* when Kaikki already documents
+# kaikki_verb_morph (from load_wiktionary): blocks Inflect *-ed*/*-ing* when Kaikki already documents
 # the corresponding verb slot in the lexeme (*snuck* is a past surface of *sneak*; do not add *snucked*;
 # *sneaking* is the present participle; do not add *snucking* from *snuck*).
 def morph_base_allows_verb_forms?(base, inflected, pos_map, forms_map, zipf_inf, wordfreq_hash = nil, list_authoritative_base: false, kaikki_verb_morph: nil)
@@ -144,7 +144,7 @@ def morph_base_allows_verb_forms?(base, inflected, pos_map, forms_map, zipf_inf,
   end
 
   # *presentss*: Inflect accepts *presents*+*s*; block *-ed/-ing* when one *s* peeler yields a known
-  # headword that already inflects to +base+ (*harness*→*harnes* is not lexical, so it passes).
+  # headword that already inflects to base (*harness*→*harnes* is not lexical, so it passes).
   if (inflection_suffix_kind == :ed || inflection_suffix_kind == :ing) && base.end_with?("ss") && base.bytesize >= 6 && wordfreq_hash
     chop = base.byteslice(0, base.bytesize - 1)
     if chop.bytesize >= 4 && Inflect.inflection_of_base?(chop, base)
@@ -211,7 +211,7 @@ def silent_e_stem_plus_est?(base, w)
   w == base.byteslice(0, bl - 1) + "est"
 end
 
-# Blocks *happyer; allows *happier. Non-+y+: adjective (Kaikki or WN) with phonological / attestation
+# Blocks *happyer; allows *happier. Non-y: adjective (Kaikki or WN) with phonological / attestation
 # rules. Silent-e stem+*er* (*service*→*servicer*) is allowed when the base is verbal and the
 # derived form has independent Zipf (blocks *oranger*-style junk while keeping attested agents).
 def morph_base_allows_comparative_er_est?(base, w, pos_map, base_first_pron, forms_map, zipf_w)
@@ -245,8 +245,8 @@ def morph_base_allows_comparative_er_est?(base, w, pos_map, base_first_pron, for
       # Kaikki adj tag without WordNet confirmation (base is OOV in WN, or WN has the base
       # without an adj sense): the adj sense is typically dialectal/marginal and Kaikki
       # sometimes lists dialectal comparatives (*thingy*→*thingier*) with no corpus footprint.
-      # +wn_base_has_adjective?+ is default-lenient (returns true for OOV bases) so we use
-      # +wn_has_entry?+ to gate it. Require BOTH Kaikki attestation AND surface Zipf.
+      # wn_base_has_adjective? is default-lenient (returns true for OOV bases) so we use
+      # wn_has_entry? to gate it. Require BOTH Kaikki attestation AND surface Zipf.
       kaikki_adj_unconfirmed = tags_y.include?("adj") &&
         !(wn_has_entry?(base) && wn_base_has_adjective?(base))
       if tags_y.any? && kaikki_adj_unconfirmed
@@ -317,17 +317,17 @@ def morph_base_allows_comparative_er_est?(base, w, pos_map, base_first_pron, for
   end
 end
 
-# Plural *:s*: Kaikki +noun+ when present; WordNet noun cross-check. When Kaikki lists both +adj+
-# and +noun+ on the same lemma, require a Kaikki form row for that plural (blocks *impromptus*).
+# Plural *:s*: Kaikki noun when present; WordNet noun cross-check. When Kaikki lists both adj
+# and noun on the same lemma, require a Kaikki form row for that plural (blocks *impromptus*).
 #
 # Pure noun lemmas: Inflect *+s* alone is not enough — require Kaikki listing for this plural **or**
-# dialogue presence (SUBTLEX FREQlow>0) **or** strong wordfreq (Zipf ≥ +WORDFREQ_COMMON_ZIPF+).
+# dialogue presence (SUBTLEX FREQlow>0) **or** strong wordfreq (Zipf ≥ WORDFREQ_COMMON_ZIPF).
 #
-# We do **not** use +WORDFREQ_RARE_ZIPF+ alone here: erroneous *+s* plurals (*sheeps* ~2.2) sit in the
+# We do **not** use WORDFREQ_RARE_ZIPF alone here: erroneous *+s* plurals (*sheeps* ~2.2) sit in the
 # 2.0–2.9 band from web text but lack subtitle use; SUBTLEX or common Zipf separates them from real plurals.
 #
-# WordNet **mass-dominant** nouns (+wn_noun_base_mass_dominant_for_productive_plural?+) and **feeling+attribute**
-# lemmas (+wn_noun_base_feeling_plus_attribute_plural_needs_own_corpus?+, e.g. *indifference*): Inflect *+s* is
+# WordNet **mass-dominant** nouns (wn_noun_base_mass_dominant_for_productive_plural?) and **feeling+attribute**
+# lemmas (wn_noun_base_feeling_plus_attribute_plural_needs_own_corpus?, e.g. *indifference*): Inflect *+s* is
 # allowed only when the **plural surface** itself is dialogue- or Zipf-strong — not when Kaikki merely lists
 # the form. That blocks *nostalgias* / *chaoses* / *goodwills* and keeps *indifferences* from inheriting a
 # common base tier while *apples* (noun.plant) still promotes via Wiktionary / SUBTLEX / Zipf as before.
@@ -385,8 +385,8 @@ def morph_base_allows_plural_s?(base, pos_map, forms_map, plural_word, wordfreq_
   !morph_spurious_plural_s_on_invariant_noun?(plural_word)
 end
 
-# +$inflection_base_words+ (filled in +dict.rb+) maps Wiktionary/Kaikki surfaces to their lemma.
-# When +surface+ is recorded as an inflected form of a *different* headword, the list-pivot
+# $inflection_base_words (filled in dict.rb) maps Wiktionary/Kaikki surfaces to their lemma.
+# When surface is recorded as an inflected form of a *different* headword, the list-pivot
 # Inflect inheritance and common-list Inflect expansion passes must not treat it as an
 # Inflect *stem* — forward rules would stack suffixes on participles
 # (*cataloging*→*catalogings*).
@@ -395,15 +395,15 @@ def morph_kaikki_lists_surface_as_inflected_nonlemma?(surface)
   lex && lex != surface
 end
 
-# True when +base+ is itself a plural surface form of an anchored singular: ends in +s+
-# and a candidate singular (Inflect's plural-strip — drop +-s+, drop +-es+, +-ies+ → +-y+,
-# silent-e restoration) is in +hash+, +neol_words+, +common_words+, or has wordfreq-attested
+# True when base is itself a plural surface form of an anchored singular: ends in s
+# and a candidate singular (Inflect's plural-strip — drop -s, drop -es, -ies → -y,
+# silent-e restoration) is in hash, neol_words, common_words, or has wordfreq-attested
 # real-word use. Used by the Inflect-expansion passes to suppress spurious double plurals
 # (*parasailingses* from neol-listed *parasailings* whose singular *parasailing* is also in
 # neol). Targets the case where the lemma never makes it into Kaikki's
-# +$inflection_base_words+ but the morphology is still transparent — Kaikki-attested
+# $inflection_base_words but the morphology is still transparent — Kaikki-attested
 # inflected surfaces are already caught upstream by
-# +morph_kaikki_lists_surface_as_inflected_nonlemma?+.
+# morph_kaikki_lists_surface_as_inflected_nonlemma?.
 def morph_base_is_already_plural_form?(base, hash, neol_words, common_words, wordfreq_hash)
   return false if base.nil? || base.bytesize <= 2
   return false unless base.end_with?("s")
@@ -416,7 +416,7 @@ def morph_base_is_already_plural_form?(base, hash, neol_words, common_words, wor
   end
 end
 
-# Syllabified pronunciation for +inflected_word+ from +base_word+'s first CMU pron, or nil.
+# Syllabified pronunciation for inflected_word from base_word's first CMU pron, or nil.
 # Same final-cluster whitelist gate as merge_inflected_forms! (common-list / SUBTLEX-anchored Inflect expansion).
 def morph_derived_syllabified_pronunciation(base_pron, base_word, inflected_word)
   derived = Inflect.derive(base_pron, base_word, inflected_word)
@@ -438,7 +438,7 @@ end
 
 # Pronunciation for colloquial *…in'* from the syllabified *…ing* form: final NG → N, and the vowel
 # immediately before that NG is set to AH0 (schwa) so the rime aligns with *taken*/*waken* without
-# +with_dwimmed_schwas+ on the whole word.
+# with_dwimmed_schwas on the whole word.
 def morph_gdropped_in_apostrophe_syllabified_pronunciation(ing_syll, in_prime_word)
   return nil if ing_syll.nil? || ing_syll.empty?
 
@@ -460,7 +460,7 @@ def morph_gdropped_in_apostrophe_syllabified_pronunciation(ing_syll, in_prime_wo
   syllabified
 end
 
-# Kaikki-attested verbal *…ing* → colloquial *…in'* (not in CMU); same attestation gate as +merge_inflected_forms!+.
+# Kaikki-attested verbal *…ing* → colloquial *…in'* (not in CMU); same attestation gate as merge_inflected_forms!.
 def merge_gdropped_in_apostrophe_forms!(pronunciation_map, forms_map)
   added = 0
   forms_map.each do |base_word, form_pairs|

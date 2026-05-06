@@ -1,46 +1,46 @@
 # encoding: utf-8
 #
-# Rarity scoring (rarity-pipeline stage 2): machine-learned scorer over +RaritySignals+.
+# Rarity scoring (rarity-pipeline stage 2): machine-learned scorer over RaritySignals.
 #
-# Reads +generated/rarity_classifier.json+ (produced by +bin/train-rarity-classifier+)
-# and maps a signals struct to one of +:common / :rare / :forbidden+ plus an integer
+# Reads generated/rarity_classifier.json (produced by bin/train-rarity-classifier)
+# and maps a signals struct to one of :common / :rare / :forbidden plus an integer
 # freq in {0, 2, 10} that downstream preference-ordering code compares.
 #
 # Strict-load policy: when the classifier JSON is missing or its feature-name list
-# disagrees with +LEARNED_RARITY_FEATURE_NAMES+, +rarity_classifier+ raises rather
+# disagrees with LEARNED_RARITY_FEATURE_NAMES, rarity_classifier raises rather
 # than silently no-op'ing. A degraded build is worse than a loud failure — the
 # rule-based combiner that used to take over had ~3% lower top-line accuracy on
-# +curated/rarity.csv+ and quietly shipped that delta.
+# curated/rarity.csv and quietly shipped that delta.
 #
 # Two explicit bootstrap escapes for the chicken-and-egg case (the trainer reads a
-# classifier dump that +./bin/dict-build+ produces, so the very first build can't
+# classifier dump that ./bin/dict-build produces, so the very first build can't
 # have a classifier yet):
 #
 #   RHYMECRIME_RARITY_CLASSIFIER=off       no rescore (rule-based path runs)
 #   RHYMECRIME_RARITY_DUMP_SIGNALS=PATH    same, plus emit a feature dump for the
 #                                          trainer to consume
 #
-# Either one fires +rarity_classifier_disabled?+, which short-circuits the load
+# Either one fires rarity_classifier_disabled?, which short-circuits the load
 # before the file-existence check; any other invocation against a missing classifier
 # is a hard error with a remediation hint. The standard end-to-end build script
-# (+bin/build+) sets +RHYMECRIME_RARITY_DUMP_SIGNALS+ for Build Stage 1/4 and
-# then runs +bin/train-rarity-classifier+ as Build Stage 2/4, so a fresh
+# (bin/build) sets RHYMECRIME_RARITY_DUMP_SIGNALS for Build Stage 1/4 and
+# then runs bin/train-rarity-classifier as Build Stage 2/4, so a fresh
 # checkout reaches steady state without the operator having to think about
 # either env var.
 #
 # Two supported training targets (selected at train time and stored in the JSON
-# as +target+):
+# as target):
 #
 #   3class     — 3-way softmax over {common, rare, forbidden}; one-vs-rest
 #                binary classifiers per class (logreg or GBT), softmax over
 #                logits at inference, argmax is the label.
 #   regressor  — single scalar target (0=forbidden, 2=rare, 10=common); two
-#                thresholds +t_forbidden_rare+ and +t_rare_common+ partition
+#                thresholds t_forbidden_rare and t_rare_common partition
 #                the predicted score. GBT-only (logreg has been ablated; it
 #                consistently lost to 3class on cross-validated weighted
 #                accuracy and isn't worth the inference path).
 #
-# +learned_rarity_feature_vector+ / +LEARNED_RARITY_FEATURE_NAMES+ are the same
+# learned_rarity_feature_vector / LEARNED_RARITY_FEATURE_NAMES are the same
 # ordered list of feature names the trainer emits to the JSON.
 
 require "json"
@@ -50,15 +50,15 @@ require_relative "rarity_curated_overrides"
 require_relative "utils_rhyme"
 require_relative "constants"
 
-# Keep in lock-step with +bin/train-rarity-classifier+. The JSON records its own
+# Keep in lock-step with bin/train-rarity-classifier. The JSON records its own
 # feature-name list so mismatches are detected at load.
 #
-# +common_words_flag+ and +rare_words_flag+ are intentionally NOT in this list
-# even though +RaritySignals+ still computes them: they're sourced from the same
-# +curated/rarity.csv+ rows the trainer turns into labels, so feeding them as
+# common_words_flag and rare_words_flag are intentionally NOT in this list
+# even though RaritySignals still computes them: they're sourced from the same
+# curated/rarity.csv rows the trainer turns into labels, so feeding them as
 # features made the classifier a label-leak lookup table (5-fold CV at 99.7%
 # with GBT and logreg posting byte-identical fold scores). The flags remain on
-# +RaritySignals+ for any non-classifier consumers; the trainer just doesn't
+# RaritySignals for any non-classifier consumers; the trainer just doesn't
 # get to see them.
 LEARNED_RARITY_FEATURE_NAMES = %w[
   bias
@@ -212,17 +212,17 @@ def _rarity_tree_predict(nodes, row)
 end
 
 # Compiled representation of one GBT tree: a single flat Array with 4 slots per node,
-# laid out contiguously at +base = node_index * 4+:
-#   [base+0] feature index (Integer), or +-1+ to mark a leaf
+# laid out contiguously at base = node_index * 4:
+#   [base+0] feature index (Integer), or -1 to mark a leaf
 #   [base+1] threshold (Float), OR leaf value when +[base+0] == -1+
 #   [base+2] pre-multiplied base offset of the left child  (child_index * 4)
 #   [base+3] pre-multiplied base offset of the right child (child_index * 4)
 #
 # The JSON-on-disk form is an Array of Hashes with string keys — fine for the trainer but
-# the per-node hot-loop cost in +dict-build+ was 5 hash probes per traversal step, and
-# stackprof showed +_rarity_tree_predict+ at ~46% of total CPU on a full build. Collapsing
+# the per-node hot-loop cost in dict-build was 5 hash probes per traversal step, and
+# stackprof showed _rarity_tree_predict at ~46% of total CPU on a full build. Collapsing
 # each tree to one flat Array with pre-multiplied child offsets means every node traversal
-# does at most 3 +Array#[]+ lookups and 1 +row#[]+ lookup (no hash probes, no multiplies,
+# does at most 3 Array#[] lookups and 1 row#[] lookup (no hash probes, no multiplies,
 # no per-call destructuring).
 def _rarity_compile_tree(nodes)
   n = nodes.length
@@ -253,8 +253,8 @@ def _rarity_tree_predict_compiled(flat, row)
   end
 end
 
-# Replace +model["trees"]+ with a compiled form (+model["trees_c"]+) and cache bias/lr as
-# floats (+model["bias_f"]+ / +model["lr_f"]+). Idempotent. Leaves the original +"trees"+
+# Replace model["trees"] with a compiled form (model["trees_c"]) and cache bias/lr as
+# floats (model["bias_f"] / model["lr_f"]). Idempotent. Leaves the original "trees"
 # intact so introspection / re-serialization still works.
 def _rarity_maybe_compile_gbt_model!(model)
   return unless model.is_a?(Hash)
@@ -325,8 +325,8 @@ def _rarity_gbt_regression(feats, model)
   end
 end
 
-# Multiclass: one-vs-rest binary classifiers per class. +probs+ is the softmax over the
-# per-class raw logits; class label order matches +clf["classes"]+ (canonical:
+# Multiclass: one-vs-rest binary classifiers per class. probs is the softmax over the
+# per-class raw logits; class label order matches clf["classes"] (canonical:
 # ["forbidden", "rare", "common"]).
 def _rarity_multiclass_probs(feats, clf)
   classes = clf["classes"]
@@ -348,12 +348,12 @@ def _rarity_multiclass_probs(feats, clf)
   exps.map { |e| e / sum }
 end
 
-# Returns +[category_symbol, integer_freq]+ for +sig+. Integer freq in {0, 2, 10}
+# Returns [category_symbol, integer_freq] for sig. Integer freq in {0, 2, 10}
 # so downstream preference code that compares integer freqs keeps working.
 #
-# +:forbidden => 0+ (the rarity gate +rare?+ in +crime.rb+ treats freq <=
-# +RARE_FREQ_MAX+ as rare, so 0 is "rare but deletable"; the caller deletes the
-# headword). +:rare => 2+ (below +RARE_FREQ_MAX+=4). +:common => 10+ (above the
+# :forbidden => 0 (the rarity gate rare? in crime.rb treats freq <=
+# RARE_FREQ_MAX as rare, so 0 is "rare but deletable"; the caller deletes the
+# headword). :rare => 2 (below RARE_FREQ_MAX=4). :common => 10 (above the
 # cutoff). Extend this mapping if the build needs more resolution in the common
 # band.
 def rarity_classify(sig)
@@ -399,21 +399,21 @@ end
 # still get rescored.
 RARITY_CLASSIFIER_RESCORE_MAX_FREQ = 90
 
-# Phase symbols that only fire when the donor base is in +common_words+ (i.e.
-# +rarity.csv+'s +common+ / +common_ish+ rows): +morph_inherit_listed+ comes
-# from +morph_inherit_listed+ in +frequency.rb+ and +morph_expand_listed+ from
-# +morph_expand_listed+ — both branches gate on +common_words.include?(base)+
+# Phase symbols that only fire when the donor base is in common_words (i.e.
+# rarity.csv's common / common_ish rows): morph_inherit_listed comes
+# from morph_inherit_listed in frequency.rb and morph_expand_listed from
+# morph_expand_listed — both branches gate on common_words.include?(base)
 # before recording propagation. Encoding either as a categorical feature
-# (+freq_source_phase_index+) lets the classifier back-derive the curated
-# label from the lemma's CSV row, same shape of leak the +common_words_flag+ /
-# +rare_words_flag+ direct features used to introduce. We mask them to
-# +:unknown+ on the dump side only — the runtime rescore path in
-# +rarity_rescore_and_dump!+ keeps the precise phase symbol on +sig+ so
-# +dict_trace+ output and downstream consumers stay informative; we only mask
-# the parallel +dump_sig+ used to write the JSONL training rows. Train/test
+# (freq_source_phase_index) lets the classifier back-derive the curated
+# label from the lemma's CSV row, same shape of leak the common_words_flag /
+# rare_words_flag direct features used to introduce. We mask them to
+# :unknown on the dump side only — the runtime rescore path in
+# rarity_rescore_and_dump! keeps the precise phase symbol on sig so
+# dict_trace output and downstream consumers stay informative; we only mask
+# the parallel dump_sig used to write the JSONL training rows. Train/test
 # asymmetry on these two phases is small in practice because both listed
-# branches push +entry[0]+ to the +99+ sentinel, which the runtime rescore
-# already short-circuits via +RARITY_CLASSIFIER_RESCORE_MAX_FREQ+ before the
+# branches push entry[0] to the 99 sentinel, which the runtime rescore
+# already short-circuits via RARITY_CLASSIFIER_RESCORE_MAX_FREQ before the
 # classifier even sees the row.
 RARITY_DUMP_LEAKY_FREQ_SOURCE_PHASES = Set[
   :morph_inherit_listed,
@@ -434,7 +434,7 @@ end
 
 # Build ConceptNet adjacency for the rarity signal pass from the PREVIOUS build's
 # edges file. First-ever build of a fresh clone: file is absent,
-# +conceptnet_adjacency_loaded+ is false so the classifier can condition on
+# conceptnet_adjacency_loaded is false so the classifier can condition on
 # "data not available" rather than "0 degree". Steady-state builds use the prior
 # build's edges — degrees drift until the classifier converges.
 $rarity_cn_adjacency = nil
@@ -461,9 +461,9 @@ def rarity_conceptnet_adjacency_for_build
 end
 
 # Mark a word for tombstoned (BuildEntry) or delete it outright
-# (legacy +[freq, prons]+ array). Used by +rarity_rescore_and_dump!+ so the
-# classifier's +:forbidden+ verdicts become deferred tags that
-# +finalize_build_entries!+ drops in one terminal pass, alongside a recorded
+# (legacy [freq, prons] array). Used by rarity_rescore_and_dump! so the
+# classifier's :forbidden verdicts become deferred tags that
+# finalize_build_entries! drops in one terminal pass, alongside a recorded
 # classifier score for the audit log.
 def classifier_mark_or_delete!(hash, word, entry, phase:, reason:, detail: nil)
   if entry.is_a?(BuildEntry)
@@ -475,8 +475,8 @@ def classifier_mark_or_delete!(hash, word, entry, phase:, reason:, detail: nil)
 end
 
 # Set a new freq on the entry from a classifier decision. Appends a
-# FreqTag (+phase: :classifier+) so provenance stays attached; for legacy
-# +[freq, prons]+ entries falls back to the direct +entry[0] = freq+ write.
+# FreqTag (phase: :classifier) so provenance stays attached; for legacy
+# [freq, prons] entries falls back to the direct entry[0] = freq write.
 def classifier_set_freq!(entry, new_freq:, verdict:, reason:)
   if entry.is_a?(BuildEntry)
     entry.append_freq_tag!(
@@ -492,11 +492,11 @@ end
 def rarity_rescore_and_dump!(hash, **ctx_kwargs)
   dump_path = ENV["RHYMECRIME_RARITY_DUMP_SIGNALS"]
   dump_enabled = !dump_path.nil? && !dump_path.empty?
-  # +bin/dict-build+ +Dir.chdir+'s into +lib/rhymecrime/dict/+ before invoking
-  # us, so a relative +RHYMECRIME_RARITY_DUMP_SIGNALS+ would land under
-  # +lib/rhymecrime/dict/generated/+ instead of the repo's +generated/+. Anchor
-  # to +REPO_ROOT+ so the path the operator passes (and the path the trainer
-  # later reads — see +bin/train-rarity-classifier+) line up.
+  # bin/dict-build Dir.chdir's into lib/rhymecrime/dict/ before invoking
+  # us, so a relative RHYMECRIME_RARITY_DUMP_SIGNALS would land under
+  # lib/rhymecrime/dict/generated/ instead of the repo's generated/. Anchor
+  # to REPO_ROOT so the path the operator passes (and the path the trainer
+  # later reads — see bin/train-rarity-classifier) line up.
   dump_path = File.expand_path(dump_path, REPO_ROOT) if dump_enabled
   clf = rarity_classifier
   return if clf.nil? && !dump_enabled
@@ -525,25 +525,25 @@ def rarity_rescore_and_dump!(hash, **ctx_kwargs)
   dump_main = 0
   dump_forbidden = 0
 
-  # +dump_file+ has to be declared BEFORE the +write_dump_row+ lambda below or
-  # Ruby parses the +dump_file+ inside the closure body as a method call on
-  # +main+ (local-variable scoping is fixed at parse time, so a later
-  # assignment doesn't promote the name to a captured local). +nil+ here is
+  # dump_file has to be declared BEFORE the write_dump_row lambda below or
+  # Ruby parses the dump_file inside the closure body as a method call on
+  # main (local-variable scoping is fixed at parse time, so a later
+  # assignment doesn't promote the name to a captured local). nil here is
   # just a placeholder; the actual handle is assigned a few lines down when
-  # +dump_enabled+ is true.
+  # dump_enabled is true.
   dump_file = nil
   if dump_enabled
     FileUtils.mkdir_p(File.dirname(dump_path))
     dump_file = File.open(dump_path, "w", encoding: "UTF-8")
   end
 
-  # The dump path replaces the seeded/propagated +entry[0]+ with a corpus-only
-  # +compute_frequency+ result so +post_propagation_freq+ can't read the
-  # curated-list label off its own input. Without this, +common_words+ rows
-  # land at the +freq=99+ sentinel set in +add_frequency_info+'s seed loop and
-  # +rare_words+ rows at +freq=0+ — both downstream of the very same CSV that
+  # The dump path replaces the seeded/propagated entry[0] with a corpus-only
+  # compute_frequency result so post_propagation_freq can't read the
+  # curated-list label off its own input. Without this, common_words rows
+  # land at the freq=99 sentinel set in add_frequency_info's seed loop and
+  # rare_words rows at freq=0 — both downstream of the very same CSV that
   # the trainer turns into labels. Runtime rescore still uses the live
-  # +entry[0]+; only the JSONL dump shifts to corpus-only.
+  # entry[0]; only the JSONL dump shifts to corpus-only.
   kaikki_cap_only = ctx_kwargs[:kaikki_capitalized_only]
   dump_corpus_only_freq = lambda do |word|
     compute_frequency(
@@ -567,15 +567,15 @@ def rarity_rescore_and_dump!(hash, **ctx_kwargs)
     hash.keys.each do |word|
       entry = hash[word]
       next unless entry
-      # Scrubs earlier in +add_frequency_info+ now mark rows with
-      # +mark_tombstoned!+ instead of +hash.delete+; skip those so the
+      # Scrubs earlier in add_frequency_info now mark rows with
+      # mark_tombstoned! instead of hash.delete; skip those so the
       # classifier doesn't rescore them (their verdict is already sealed by
-      # the scrub and would just be overwritten by +finalize_build_entries!+).
+      # the scrub and would just be overwritten by finalize_build_entries!).
       next if entry.is_a?(BuildEntry) && entry.tombstoned?
 
       # Prefer the accumulated signals carried on the BuildEntry (the pipeline
       # now builds them incrementally rather than re-deriving from raw corpora
-      # at the last minute). Fall back to +extract_rarity_signals+ for the
+      # at the last minute). Fall back to extract_rarity_signals for the
       # initial migration window where the accumulator isn't populated yet
       # — functional parity: both code paths read from the same corpora.
       sig = (entry.is_a?(BuildEntry) && entry.rarity_signals) || extract_rarity_signals(word, ctx)
@@ -600,7 +600,7 @@ def rarity_rescore_and_dump!(hash, **ctx_kwargs)
       if dump_file
         # Build a parallel dump-only signals struct so we don't disturb the
         # rescore path's view of the same word (which still wants the seeded
-        # +entry[0]+ for its sentinel-skip and rescore decisions).
+        # entry[0] for its sentinel-skip and rescore decisions).
         dump_sig = sig.dup
         dump_sig.post_propagation_freq = dump_corpus_only_freq.call(word)
         if RARITY_DUMP_LEAKY_FREQ_SOURCE_PHASES.include?(dump_sig.freq_source_phase)
@@ -613,10 +613,10 @@ def rarity_rescore_and_dump!(hash, **ctx_kwargs)
       next if clf.nil?
 
       # Curated override: short-circuit the classifier when the word has an
-      # unambiguous verdict in +curated/rarity.csv+ (see
-      # +rarity_curated_overrides.rb+). Bypasses both the sentinel-freq skip
+      # unambiguous verdict in curated/rarity.csv (see
+      # rarity_curated_overrides.rb). Bypasses both the sentinel-freq skip
       # (the CSV is authoritative — if a curator marked a sentinel-freq word
-      # +rare+, we trust that more than the +99+ floor that put it there) and
+      # rare, we trust that more than the 99 floor that put it there) and
       # the classifier itself.
       if (verdict = overrides[word])
         override_applied += 1
@@ -652,15 +652,15 @@ def rarity_rescore_and_dump!(hash, **ctx_kwargs)
       new_cat, new_freq = result
 
       # Auth-pron protection: a hand-curated entry in
-      # +authoritative_pronunciations.txt+ is explicit curator intent that the
-      # word should be reachable. Veto a +:forbidden+ verdict by clamping to
-      # +:rare+ so the headword survives the rescore. The auto spelling-variant
-      # detectors in +corpus_variants.rb+ (e.g. +silent_e_drop_corpus_pairs+
-      # for +rueing/ruing+ via the +rue+ base, +us_uk_er_re_pair+ for
-      # +megameter/megametre+) gate on +word_dict_includes_pronounced_headword?+
+      # authoritative_pronunciations.txt is explicit curator intent that the
+      # word should be reachable. Veto a :forbidden verdict by clamping to
+      # :rare so the headword survives the rescore. The auto spelling-variant
+      # detectors in corpus_variants.rb (e.g. silent_e_drop_corpus_pairs
+      # for rueing/ruing via the rue base, us_uk_er_re_pair for
+      # megameter/megametre) gate on word_dict_includes_pronounced_headword?
       # for both halves of a pair, so silently deleting the auth-pron half
-      # would prevent the pair from being detected at all. Only +:forbidden+
-      # gets vetoed — +:rare+ / +:common+ classifier verdicts are honored.
+      # would prevent the pair from being detected at all. Only :forbidden
+      # gets vetoed — :rare / :common classifier verdicts are honored.
       if new_cat == :forbidden && authoritative_pronunciation_words.include?(word)
         dict_trace_puts(word, "rarity_classifier_rescore: VETO :forbidden -> :rare (auth pron, was freq=#{entry[0]})") if dict_trace_word?(word)
         new_cat = :rare
@@ -680,9 +680,9 @@ def rarity_rescore_and_dump!(hash, **ctx_kwargs)
       end
     end
 
-    # Forbidden-list pass (dump only). +explicitly_forbidden+ words have already
-    # been removed from +word_dict+ by the +forbidden_scrub+ in
-    # +add_frequency_info+ before we get here, so the main loop never sees
+    # Forbidden-list pass (dump only). explicitly_forbidden words have already
+    # been removed from word_dict by the forbidden_scrub in
+    # add_frequency_info before we get here, so the main loop never sees
     # them. Without an explicit dump for these rows, the trainer hits its
     # "missing from dump → all-zero features" branch, which fingerprints
     # forbidden labels as "every feature is exactly 0" — a perfect predictor
@@ -690,9 +690,9 @@ def rarity_rescore_and_dump!(hash, **ctx_kwargs)
     # forces the model to learn the actual forbidden ↔ corpus-feature
     # relationship.
     if dump_file
-      # Scrubs defer deletion via +mark_tombstoned!+, so +hash.key?(word)+
-      # is no longer the right "already dumped" test: a +forbidden_scrub+ entry
-      # is still in +hash+ but already in the dump loop above. Honor that by
+      # Scrubs defer deletion via mark_tombstoned!, so hash.key?(word)
+      # is no longer the right "already dumped" test: a forbidden_scrub entry
+      # is still in hash but already in the dump loop above. Honor that by
       # treating pending-deleted entries as "already dumped" here too — the
       # dump row we wrote up top carries the real rescore signals.
       rarity_csv_forbidden_words.each do |word|

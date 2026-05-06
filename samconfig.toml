@@ -1,19 +1,19 @@
 version = 0.1
 
-# Pin every +sam+ subcommand from this repo to the +paceheart+ AWS profile.
-# Without this pin, +sam+ falls back to whichever credentials the shell
+# Pin every sam subcommand from this repo to the paceheart AWS profile.
+# Without this pin, sam falls back to whichever credentials the shell
 # environment last latched onto — which the first deploy attempt did, landing
-# the stack in the work-Later account before +iam:CreateRole+ bounced it. The
-# pin is at +global.parameters+ so it covers +sam build+, +sam deploy+,
-# +sam logs+, +sam delete+, etc. — every entry point that resolves AWS creds.
+# the stack in the work-Later account before iam:CreateRole bounced it. The
+# pin is at global.parameters so it covers sam build, sam deploy,
+# sam logs, sam delete, etc. — every entry point that resolves AWS creds.
 #
-# Overriding the pin: +bin/deploy-aws+ resolves +RHYMECRIME_AWS_PROFILE+
-# (falling back to +paceheart+) and passes +--profile $resolved+ to
-# +sam deploy+, which beats this toml setting (SAM's resolution order is
+# Overriding the pin: bin/deploy-aws resolves RHYMECRIME_AWS_PROFILE
+# (falling back to paceheart) and passes --profile $resolved to
+# sam deploy, which beats this toml setting (SAM's resolution order is
 # CLI > samconfig > env). So a developer with
-# +export RHYMECRIME_AWS_PROFILE=…+ in their shell rc steers the deploy
-# without editing this file — and a fresh clone or anyone running +sam+
-# subcommands directly still defaults safely to +paceheart+. SAM does not
+# export RHYMECRIME_AWS_PROFILE=… in their shell rc steers the deploy
+# without editing this file — and a fresh clone or anyone running sam
+# subcommands directly still defaults safely to paceheart. SAM does not
 # expand env vars in this file, which is why the literal stays.
 [default.global.parameters]
 region = "us-east-1"
@@ -27,16 +27,16 @@ region = "us-east-1"
 profile = "paceheart"
 confirm_changeset = true
 capabilities = "CAPABILITY_IAM"
-# +DomainName+ + +HostedZoneId+ flip on the +HasCustomDomain+ condition in
-# +template.yaml+ — leaves the +Certificate+, +ApiCustomDomain+, +ApiMapping+,
-# and +ApexAliasRecord+ resources off entirely when both are empty (deploy
+# DomainName + HostedZoneId flip on the HasCustomDomain condition in
+# template.yaml — leaves the Certificate, ApiCustomDomain, ApiMapping,
+# and ApexAliasRecord resources off entirely when both are empty (deploy
 # stays a pure HTTP-API-only stack), or creates them in dependency order
 # when both are set.
 #
-# Set +DomainName+ to the apex (no +https://+, no path), and +HostedZoneId+
+# Set DomainName to the apex (no https://, no path), and HostedZoneId
 # to the Route 53 zone ID (find via
-# +aws route53 list-hosted-zones --profile paceheart+; it looks like
-# +Z01234ABCDEFGH+). The first deploy after these are populated blocks for
+# aws route53 list-hosted-zones --profile paceheart; it looks like
+# Z01234ABCDEFGH). The first deploy after these are populated blocks for
 # ~5 minutes while ACM validates the certificate via the Route-53-managed
 # CNAME — subsequent deploys are no-ops on the cert.
 parameter_overrides = "TableName=\"rhymecrime\" FeedbackTableName=\"rhymecrime-feedback\" DomainName=\"rhymecrime.com\" HostedZoneId=\"Z02956823GWDA5OHTZ6YT\""

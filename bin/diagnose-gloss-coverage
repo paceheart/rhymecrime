@@ -2,13 +2,13 @@
 # frozen_string_literal: true
 #
 # Coverage + delta diagnostic for the WordNet ↔ Wiktionary gloss-source ablation.
-# Scans +curated/related.csv+ and reports, per relatedness label class:
+# Scans curated/related.csv and reports, per relatedness label class:
 #
 #   * Per-headword coverage of WN glosses, WK glosses, both, neither.
-#   * Per-pair +gloss_match?+ flip statistics under each source — how often does
-#     adding Wiktionary turn a +false+ into a +true+, and how often is that flip
+#   * Per-pair gloss_match? flip statistics under each source — how often does
+#     adding Wiktionary turn a false into a true, and how often is that flip
 #     on a positive (good) row vs a negative (false-positive) row.
-#   * Per-pair sense-vector cosine deltas: +sv_max+/+sv_min+ under WN-only vs
+#   * Per-pair sense-vector cosine deltas: sv_max/sv_min under WN-only vs
 #     WK-only vs both, mean/median + count of pairs where one source produced
 #     a higher cosine than the other.
 #
@@ -54,8 +54,8 @@ OptionParser.new do |opt|
 end.parse!
 
 # --- Source-scoped cache clear --------------------------------------------------
-# +bidirectional_gloss_contains?+, +gloss_word_token_set+, +sense_vectors+, and
-# +sense_vectors_morphy+ all memoize globally — and the cache keys do not include
+# bidirectional_gloss_contains?, gloss_word_token_set, sense_vectors, and
+# sense_vectors_morphy all memoize globally — and the cache keys do not include
 # the gloss-source flag, because under normal operation that flag is set once at
 # process start. The diagnostic flips the source for each scenario, so every
 # cache that holds gloss-derived data must be invalidated before the next pass.
@@ -68,7 +68,7 @@ def reset_gloss_caches!
   $morphy_sv_cache = {}
 end
 
-# Force the +RHYMECRIME_GLOSS_SOURCE+ memoization to re-read the env var.
+# Force the RHYMECRIME_GLOSS_SOURCE memoization to re-read the env var.
 def reset_gloss_source_memo!
   # gloss_source_set memoizes on @gloss_source_set in the top-level singleton
   # context where it was first called. main has its own @gloss_source_set; some
@@ -153,7 +153,7 @@ rows = rows.first(options[:max_pairs]) if options[:max_pairs]
 puts "loaded #{rows.size} evaluable pairs from #{options[:csv_path]}"
 
 # --- Per-source word-level coverage (independent of pairs) --------------------
-# Touches the word-set in +rows+, not the full lexicon, so it stays cheap.
+# Touches the word-set in rows, not the full lexicon, so it stays cheap.
 
 unique_words = rows.flat_map { |r| [r[:cue], r[:rel]] }.uniq
 puts "unique words touched: #{unique_words.size}"
@@ -212,7 +212,7 @@ def fmt_pct(num, denom)
   denom.zero? ? "  n/a " : format("%5.1f%%", 100.0 * num / denom)
 end
 
-# +gloss_match?+ flip stats: BOTH vs WN-only.
+# gloss_match? flip stats: BOTH vs WN-only.
 puts ""
 puts "=== gloss_match? deltas: BOTH vs WN-only (the ship-it diff) ==="
 buckets = Hash.new { |h, k| h[k] = { flip_to_true: 0, flip_to_false: 0, stay_true: 0, stay_false: 0 } }
@@ -261,7 +261,7 @@ if new_flip_pos + new_flip_neg < new_flip_total
   puts "  on other:       #{other}  (#{fmt_pct(other, new_flip_total)})"
 end
 
-# +gloss_match?+ stats under WK-only (sanity check that WK alone has signal —
+# gloss_match? stats under WK-only (sanity check that WK alone has signal —
 # tells us if WK is just adding noise on top of WN or carries real information).
 puts ""
 puts "=== gloss_match? rate by source (sanity) ==="

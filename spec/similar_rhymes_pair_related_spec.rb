@@ -1,8 +1,8 @@
 #
 # pair_related — describes "for cues X and Y, what cross-rhyming pairs of related
-# words should appear?". Mid-sized of the three +similar_rhymes_*+ describe blocks
+# words should appear?". Mid-sized of the three similar_rhymes_* describe blocks
 # (~50 examples, ~50s pre-LocalStore-warmup); split into its own file from
-# +similar_rhymes_spec.rb+ so +parallel_rspec+ can run it concurrently with the
+# similar_rhymes_spec.rb so parallel_rspec can run it concurrently with the
 # larger SET_RELATED file.
 #
 

@@ -1,23 +1,23 @@
 # frozen_string_literal: true
 
-# Coverage for the +Rhymecrime::FeedbackStore+ "uncomputed cue" path —
-# the runtime call site in +crime.rb+'s +set_related+ goal dispatch logs
-# a feedback row whenever +Store.fetch_set_related_tuples+ misses on an
+# Coverage for the Rhymecrime::FeedbackStore "uncomputed cue" path —
+# the runtime call site in crime.rb's set_related goal dispatch logs
+# a feedback row whenever Store.fetch_set_related_tuples misses on an
 # authoritative store, so a follow-up export step can surface the most-
 # asked-about cues outside the computed universe and feed them to
-# the next +bin/compute-set-related+ run.
+# the next bin/compute-set-related run.
 #
-# The user-driven thumbs-feedback path (+up+/+down+/+undo+) goes through
-# the same +record!+ entry point and is exercised end-to-end by the
+# The user-driven thumbs-feedback path (up/down/undo) goes through
+# the same record! entry point and is exercised end-to-end by the
 # Sinatra / Lambda integration; this spec focuses on the verdict shape
-# and the +UNCOMPUTED_RELATED_TOKEN+ sentinel that distinguishes
+# and the UNCOMPUTED_RELATED_TOKEN sentinel that distinguishes
 # uncomputed rows from real votes.
 
 require_relative "spec_helper"
 require "rhymecrime/feedback_store"
 
 RSpec.describe Rhymecrime::FeedbackStore do
-  # Fake backend with the same +record!(record)+ shape as +Csv+/
+  # Fake backend with the same record!(record) shape as Csv/
   # +Dynamo+FeedbackStore+. Captures everything written to it for
   # assertion. Reset_backend! brings the real one back after each
   # example so we don't leak the fake into a later run.
@@ -87,9 +87,9 @@ RSpec.describe Rhymecrime::FeedbackStore do
 
   describe "VALID_VERDICTS" do
     it "includes the uncomputed verdict alongside the user-driven ones" do
-      # Order/contents matter for the +record!+ guard — adding +uncomputed+
+      # Order/contents matter for the record! guard — adding uncomputed
       # without listing it here would silently drop every uncomputed-cue
-      # log to the +unless VALID_VERDICTS.include?(verdict)+ check.
+      # log to the unless VALID_VERDICTS.include?(verdict) check.
       expect(described_class::VALID_VERDICTS).to include("up", "down", "undo", "uncomputed")
     end
   end

@@ -16,8 +16,8 @@
 $LOAD_PATH.unshift File.expand_path("../lib", __dir__)
 require "rhymecrime/crime"
 
-# Skip an example when +not_working_reason+ is truthy (except +false+).
-# Use +true+ or +""+ for the default reason "not working"; use a String for a custom skip message.
+# Skip an example when not_working_reason is truthy (except false).
+# Use true or "" for the default reason "not working"; use a String for a custom skip message.
 #
 # To actually run those examples (see if fixes made them pass):
 #   RHYMECRIME_RUN_SKIPPED=1 rspec spec/rhyme_spec.rb
@@ -46,10 +46,10 @@ end
 # examples:  rspec spec/rarity_spec.rb --tag ~rarity_ish
 
 RSpec.configure do |config|
-  # Persist per-example pass/fail status across runs so +--only-failures+ and
-  # +--next-failure+ can replay just the red examples. The whole suite takes
+  # Persist per-example pass/fail status across runs so --only-failures and
+  # --next-failure can replay just the red examples. The whole suite takes
   # ~5 minutes; iterating on a fix is ~10s per cycle through this file. The
-  # path is gitignored — see +.gitignore+. RSpec writes it on every run.
+  # path is gitignored — see .gitignore. RSpec writes it on every run.
   config.example_status_persistence_file_path = "spec/examples.txt"
 
   # Per-file timing log used by `parallel_rspec --group-by runtime --runtime-log

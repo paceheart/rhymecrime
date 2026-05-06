@@ -2,64 +2,64 @@
 # frozen_string_literal: true
 # encoding: UTF-8
 #
-# Importer: fold thumbs-up/down feedback into +curated/related.csv+ as new
-# hand-tag rows. **Default:** scan the prod +rhymecrime-feedback+ DynamoDB table
-# into +generated/feedback-from-ddb.csv+ (or +--ddb-out+), then import from
-# that file — the full loop from +lib/rhymecrime/feedback_store.rb+ in one
-# command. Use +--from-file+ to read the local-dev sink (+generated/feedback.csv+
-# or +FEEDBACK_CSV+) instead, without touching AWS.
+# Importer: fold thumbs-up/down feedback into curated/related.csv as new
+# hand-tag rows. **Default:** scan the prod rhymecrime-feedback DynamoDB table
+# into generated/feedback-from-ddb.csv (or --ddb-out), then import from
+# that file — the full loop from lib/rhymecrime/feedback_store.rb in one
+# command. Use --from-file to read the local-dev sink (generated/feedback.csv
+# or FEEDBACK_CSV) instead, without touching AWS.
 #
 # Aggregation (file path, local or exported):
 #   1. Replay each session's events in timestamp order through a tiny state
-#      machine — +up+ / +down+ set the active verdict, +undo+ clears it. The
-#      retained-but-meaningful +undo+ rows in the audit trail (per the
-#      +VALID_VERDICTS+ comment in +feedback_store.rb+) are what makes the
-#      replay accurate: a +down+ that was later +undo+'d does not count as a
+#      machine — up / down set the active verdict, undo clears it. The
+#      retained-but-meaningful undo rows in the audit trail (per the
+#      VALID_VERDICTS comment in feedback_store.rb) are what makes the
+#      replay accurate: a down that was later undo'd does not count as a
 #      negative vote.
 #   2. After the replay, each (session, cue, related) cell ends in {up, down,
 #      none}. Tally the up/down sessions per pair across sessions.
-#   3. Map the tally to the +oughta be related?+ column:
+#   3. Map the tally to the oughta be related? column:
 #        up_sessions > down_sessions   → "related"
 #        down_sessions > up_sessions   → "unrelated"
 #        tie / zero / pure-undo        → skipped (left untagged; a human can
 #                                        sweep them later)
-#      We intentionally never emit +related_ish+ — that label captures human
+#      We intentionally never emit related_ish — that label captures human
 #      nuance the thumbs UI can't express, and inferring it would silently
 #      degrade the training signal.
 #
-# DynamoDB scan (default unless +--from-file+):
-#   +pk+ is +"feedback#<cue>#<related>"+. +String#split("#", 2)+ after stripping
-#   the prefix keeps a hypothetical +#+ inside +related+ from mis-splitting.
-#   Pagination: +Scan+ loops on +LastEvaluatedKey+ until exhausted.
-#   +AWS_PROFILE+ is required (see +bin/_aws_preflight.rb+): wrong-account scans
+# DynamoDB scan (default unless --from-file):
+#   pk is "feedback#<cue>#<related>". String#split("#", 2) after stripping
+#   the prefix keeps a hypothetical # inside related from mis-splitting.
+#   Pagination: Scan loops on LastEvaluatedKey until exhausted.
+#   AWS_PROFILE is required (see bin/_aws_preflight.rb): wrong-account scans
 #   would silently return zero items.
 #
-# Knobs (env vars, +--from-file+ path only):
+# Knobs (env vars, --from-file path only):
 #   FEEDBACK_CSV   path     (default: generated/feedback.csv; with default
-#                            DynamoDB mode, use +--ddb-out+ instead)
+#                            DynamoDB mode, use --ddb-out instead)
 #   RELATED_CSV    path     (default: curated/related.csv)
 #   DRY_RUN        truthy   if set, print the planned diff and exit without
-#                           appending to +RELATED_CSV+. Equivalent to +--dry-run+.
+#                           appending to RELATED_CSV. Equivalent to --dry-run.
 #
 # CLI flags:
-#   --from-file             Read +FEEDBACK_CSV+ / generated/feedback.csv only
+#   --from-file             Read FEEDBACK_CSV / generated/feedback.csv only
 #                           (no DynamoDB scan).
 #   --from-dynamodb         Scan DynamoDB then import (this is the default;
 #                           flag kept for explicit scripts).
-#   --export-only           After DDB scan: write +--ddb-out+ CSV + summary
-#                           only; do not append +RELATED_CSV+. (+--from-file+
+#   --export-only           After DDB scan: write --ddb-out CSV + summary
+#                           only; do not append RELATED_CSV. (--from-file
 #                           incompatible.)
 #   --ddb-out=PATH          DDB scan output (default: generated/feedback-from-ddb.csv)
 #   --table=NAME            Override feedback table name
-#   --region=REGION         AWS region (default: us-east-1 or +AWS_REGION+)
-#   --no-geo                Skip the +ip-api.com+ geo lookup that annotates
+#   --region=REGION         AWS region (default: us-east-1 or AWS_REGION)
+#   --no-geo                Skip the ip-api.com geo lookup that annotates
 #                           each per-pair click in the summary with
-#                           +City, Region, Country+. Useful offline or when
-#                           outbound HTTP to +ip-api.com+ is blocked. The
+#                           City, Region, Country. Useful offline or when
+#                           outbound HTTP to ip-api.com is blocked. The
 #                           lookup also degrades silently on failure, so the
 #                           flag is mostly a politeness toggle.
 #   -y, --yes               Skip the interactive confirmation prompt
-#   -n, --dry-run           Print proposed rows; do not append to +RELATED_CSV+
+#   -n, --dry-run           Print proposed rows; do not append to RELATED_CSV
 #   -h, --help
 #
 # Usage:
@@ -219,8 +219,8 @@ module FeedbackDynamoExport
     # of related words for the same cue in one sitting), so suppressing
     # repeated headers across pair boundaries collapses the common "same
     # person voted on N pairs" case into a single ip/ua block followed by
-    # bare timestamps. First event always prints both since +prev_*+ start
-    # +nil+ and no real value matches.
+    # bare timestamps. First event always prints both since prev_* start
+    # nil and no real value matches.
     prev_ip = nil
     prev_ua = nil
     per_pair.sort.each do |(cue, rel), c|
@@ -250,12 +250,12 @@ module FeedbackDynamoExport
   end
 end
 
-# Geolocate IPs via +ip-api.com+'s free batch endpoint: no API key, HTTP only,
+# Geolocate IPs via ip-api.com's free batch endpoint: no API key, HTTP only,
 # 45 req/min, up to 100 IPs per request. Each response object echoes the
-# +query+ field so we can match results back to the input IPs. Failures (no
+# query field so we can match results back to the input IPs. Failures (no
 # network, rate-limited, blocked egress) degrade to "just print the bare IP" —
 # the geo annotation is observability sugar, not part of the contract. Pass
-# +--no-geo+ to skip the lookup entirely.
+# --no-geo to skip the lookup entirely.
 module IpGeoLookup
   module_function
 

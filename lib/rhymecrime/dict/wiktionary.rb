@@ -27,7 +27,7 @@ INFLECTION_TAGS = {
   "adj" => [["comparative"], ["superlative"]],
 }
 
-# Empty Kaikki verb morphology (see +load_wiktionary+ fourth return value).
+# Empty Kaikki verb morphology (see load_wiktionary fourth return value).
 def empty_kaikki_verb_morphology
   {
     past_surfaces: Set.new,
@@ -51,22 +51,22 @@ end
 #   kaikki_capitalized_only: Set<String> of lowercased headwords that never appeared with a
 #     lowercase headword in Kaikki (proper-noun signal for the Wiktionary floor / compute_frequency).
 #   kaikki_variant_map: { variant_headword => Set<{ target:, source:, tags: }> }
-#     One entry per sense that carries an +alt_of+ pointer, or whose gloss/tags identify the
+#     One entry per sense that carries an alt_of pointer, or whose gloss/tags identify the
 #     headword as a spelling variant, misspelling, or obsolete/archaic/dialectal form of another
-#     headword. Consumed by +corpus_variants.rb+ to emit +generated/spelling_variants_auto.txt+.
+#     headword. Consumed by corpus_variants.rb to emit generated/spelling_variants_auto.txt.
 #   kaikki_obsolete_alt_of_only: { headword => target_headword } for Kaikki records whose every
-#     JSONL row was purely +alt-of obsolete/archaic/dated → target+. Paradigm contributions
+#     JSONL row was purely alt-of obsolete/archaic/dated → target. Paradigm contributions
 #     (forms_map, pron_hash, pos_map, verb_morph) are already suppressed in this loader; dict.rb
-#     additionally prunes the headword from +word_dict+ when the target survives the build.
+#     additionally prunes the headword from word_dict when the target survives the build.
 #   kaikki_glosses_map: { headword => [gloss_text_1, gloss_text_2, ...] } definitional glosses
-#     (one per Kaikki sense's first +glosses+ entry). Pointer senses (alt-of / form-of /
+#     (one per Kaikki sense's first glosses entry). Pointer senses (alt-of / form-of /
 #     misspelling) are filtered out so the map carries definitional text only — those pointer
 #     phrases ("Alternative spelling of X.", "Plural of Y.") would be noise in the gloss-token
-#     and per-sense embedding consumers (+gloss_word_token_set+ / +sense_vectors+ /
-#     +gloss_tokens_for_word+ / +bin/dump-sense-glosses+) that this map feeds. Mirrors the
+#     and per-sense embedding consumers (gloss_word_token_set / sense_vectors /
+#     gloss_tokens_for_word / bin/dump-sense-glosses) that this map feeds. Mirrors the
 #     WordNet synset gloss surface that those consumers already use; serialized to
-#     +generated/wiktionary_glosses.msgpack+ by +dict.rb+ and read back at offline-compute
-#     time via +wiktionary_glosses_for+.
+#     generated/wiktionary_glosses.msgpack by dict.rb and read back at offline-compute
+#     time via wiktionary_glosses_for.
 def load_wiktionary
   path = WIKTIONARY_DATA_PATH
   unless File.exist?(path)
@@ -83,10 +83,10 @@ def load_wiktionary
   kaikki_has_lowercase = Set.new
   variant_map = Hash.new { |h, k| h[k] = [] }
   glosses_map = Hash.new { |h, k| h[k] = [] }
-  # Kaikki splits multi-POS words across rows (e.g. +asse+ has an "Obsolete spelling of ass"
+  # Kaikki splits multi-POS words across rows (e.g. asse has an "Obsolete spelling of ass"
   # noun row AND a "Cape fox" rare-noun row). A word is classified obsolete-only iff _every_
-  # row for it was obsolete-only. We maintain that as: +obsolete_only_candidate[word] = target+
-  # on the first obsolete-only row, and retract + +obsolete_only_blocked.add(word)+ the moment
+  # row for it was obsolete-only. We maintain that as: obsolete_only_candidate[word] = target
+  # on the first obsolete-only row, and retract + obsolete_only_blocked.add(word) the moment
   # any non-obsolete row shows up (or two obsolete rows disagree on target).
   obsolete_only_candidate = {}
   obsolete_only_blocked = Set.new
@@ -111,15 +111,15 @@ def load_wiktionary
       pos = obj["pos"].to_s
       next if pos == "name"
 
-      # Detect "Kaikki ghost" rows: Early Modern English spellings (+appeare+, +blesse+,
-      # +ladie+, …) whose only sense is +alt-of obsolete/archaic/dated+ → modern canonical.
-      # Their paradigms (+appeared+, +appearing+, +appeares+) are mirrors of the modern
-      # lemma's paradigm, so letting them seed +forms_map+ / +pron_hash+ / +verb_morph+
-      # causes +$inflection_base_words+ last-write-wins to mis-route +appeared → appeare+
-      # in +compute_lemma_map+ Source A. Suppress the paradigm contribution here and let
-      # +prune_obsolete_alt_of_only_headwords!+ in dict.rb drop the ghost from word_dict.
-      # +collect_variant_senses+ still runs below so the evidence is available to
-      # +corpus_variants.rb+ (harmless; its +headwords_share_full_pron?+ gate already filters).
+      # Detect "Kaikki ghost" rows: Early Modern English spellings (appeare, blesse,
+      # ladie, …) whose only sense is alt-of obsolete/archaic/dated → modern canonical.
+      # Their paradigms (appeared, appearing, appeares) are mirrors of the modern
+      # lemma's paradigm, so letting them seed forms_map / pron_hash / verb_morph
+      # causes $inflection_base_words last-write-wins to mis-route appeared → appeare
+      # in compute_lemma_map Source A. Suppress the paradigm contribution here and let
+      # prune_obsolete_alt_of_only_headwords! in dict.rb drop the ghost from word_dict.
+      # collect_variant_senses still runs below so the evidence is available to
+      # corpus_variants.rb (harmless; its headwords_share_full_pron? gate already filters).
       obsolete_target = kaikki_record_obsolete_alt_of_only_target(obj, word)
       if obsolete_target && !obsolete_only_blocked.include?(word)
         existing = obsolete_only_candidate[word]
@@ -135,14 +135,14 @@ def load_wiktionary
 
       # Non-obsolete-only row: this row carries a real definitional meaning (or an
       # active alt-of / misspelling / regional variant). Retract any prior obsolete
-      # candidacy for +word+ and block future obsolete rows from re-establishing one
+      # candidacy for word and block future obsolete rows from re-establishing one
       # so we don't prune a headword that has a live sense. Blocking unconditionally
       # (not only when a candidate already exists) covers the case where the live
-      # rows for +word+ arrive before the obsolete row — e.g. *I*'s personal-pronoun
-      # +pos: "pron"+ + ego +pos: "noun"+ + letter +pos: "character"+ rows precede the
-      # +pos: "intj"+ row whose only sense is "Obsolete spelling of aye." Without the
+      # rows for word arrive before the obsolete row — e.g. *I*'s personal-pronoun
+      # pos: "pron" + ego pos: "noun" + letter pos: "character" rows precede the
+      # pos: "intj" row whose only sense is "Obsolete spelling of aye." Without the
       # unconditional block, the late obsolete row would set a fresh candidate that
-      # +prune_obsolete_alt_of_only_headwords!+ then deletes from word_dict.
+      # prune_obsolete_alt_of_only_headwords! then deletes from word_dict.
       obsolete_only_candidate.delete(word) if obsolete_only_candidate.key?(word)
       obsolete_only_blocked.add(word)
 
@@ -153,8 +153,8 @@ def load_wiktionary
       # so we process them before the sounds gate.
       collect_variant_senses(obj, word, variant_map)
       # Definitional glosses (per-sense, pointer senses skipped). Emitted regardless
-      # of pronunciation availability for the same reason as +collect_variant_senses+:
-      # downstream readers (+wiktionary_glosses_for+) only need the headword keyed
+      # of pronunciation availability for the same reason as collect_variant_senses:
+      # downstream readers (wiktionary_glosses_for) only need the headword keyed
       # text, and the entries with no IPA still carry useful definitional content.
       collect_definitional_glosses(obj, word, glosses_map)
 
@@ -207,18 +207,18 @@ def load_wiktionary
   [pron_hash, forms_map, pos_map, verb_morph, kaikki_capitalized_only, variant_map, obsolete_only_candidate, glosses_map]
 end
 
-# Sense-tag whitelist / blacklist for classifying +alt_of+ pointers as genuine spelling
+# Sense-tag whitelist / blacklist for classifying alt_of pointers as genuine spelling
 # variants. Calibrated against Kaikki English dump tag-combo frequencies:
 #
-#   Accept when the sense carries any of +VARIANT_ACCEPT_TAGS+ (alternative, archaic,
+#   Accept when the sense carries any of VARIANT_ACCEPT_TAGS (alternative, archaic,
 #   obsolete, dated, rare, nonstandard, misspelling, eye-dialect, or a regional dialect
 #   tag like UK / US / British / Commonwealth / Australian / Irish / etc.).
 #
-#   Reject outright if the sense carries any of +VARIANT_REJECT_TAGS+ because those senses
-#   point at a semantically different word: abbreviations (+cat+ ≠ +catapult+), clippings,
-#   initialisms, contractions, morpheme-templates (+hex- → hexa-+), misconstructions
-#   (+tenant → tenet+, a malapropism, not a spelling variant), and pronunciation-spellings
-#   (+gonna → going to+, eye dialect rendering, not a canonical alternate).
+#   Reject outright if the sense carries any of VARIANT_REJECT_TAGS because those senses
+#   point at a semantically different word: abbreviations (cat ≠ catapult), clippings,
+#   initialisms, contractions, morpheme-templates (hex- → hexa-), misconstructions
+#   (tenant → tenet, a malapropism, not a spelling variant), and pronunciation-spellings
+#   (gonna → going to, eye dialect rendering, not a canonical alternate).
 VARIANT_ACCEPT_TAGS = Set.new(%w[
   alternative alt-form altform alt-spelling
   archaic obsolete dated rare nonstandard informal misspelling
@@ -234,7 +234,7 @@ VARIANT_REJECT_TAGS = Set.new(%w[
 
 # Region words that Wiktionary editors use as prose prefixes in variant glosses. Used both
 # to recognize gloss patterns like "Commonwealth standard spelling of X" and to extract
-# an implicit regional tag from such glosses (the sense itself often has +tags: []+).
+# an implicit regional tag from such glosses (the sense itself often has tags: []).
 VARIANT_GLOSS_REGION_WORDS = [
   "British", "American", "UK", "US", "Commonwealth",
   "Australia", "Australian", "Canada", "Canadian", "Ireland", "Irish",
@@ -247,8 +247,8 @@ VARIANT_GLOSS_REGION_WORDS = [
 VARIANT_GLOSS_REGION_RE = Regexp.union(VARIANT_GLOSS_REGION_WORDS).freeze
 
 # Canonical region-tag form (spaces collapsed to hyphens) for each recognized region word.
-# Used to gate +Synonym of X+ glosses: we only trust the synonym phrasing when the sense
-# is explicitly marked regional. Kept in sync with +extract_region_tags_from_gloss+.
+# Used to gate Synonym of X glosses: we only trust the synonym phrasing when the sense
+# is explicitly marked regional. Kept in sync with extract_region_tags_from_gloss.
 VARIANT_GLOSS_REGION_TAG_SET = Set.new(VARIANT_GLOSS_REGION_WORDS.map { |w| w.gsub(/\s/, "-") }).freeze
 # Region list: "Commonwealth", "Australia, British, Canada", "Commonwealth and Ireland", etc.
 VARIANT_GLOSS_REGION_LIST_RE = /
@@ -264,7 +264,7 @@ VARIANT_GLOSS_QUALIFIER_RE = /
 
 VARIANT_GLOSS_TARGET_RE = /["'\u2018\u201C]?([a-zA-Z][a-zA-Z\-']{0,40})["'\u2019\u201D]?(?:[.,;:\s\(]|\z)/.freeze
 
-# Gloss patterns used when a Kaikki sense has no structured +alt_of+ pointer but does say
+# Gloss patterns used when a Kaikki sense has no structured alt_of pointer but does say
 # "Alternative spelling of X" in prose. Patterns are anchored at gloss start and must name a
 # spelling-variant qualifier and/or a regional prefix so we don't hallucinate pairings from
 # substrings of unrelated glosses. Ordered most-to-least specific so the earliest match wins.
@@ -325,12 +325,12 @@ def collect_variant_senses(obj, word, variant_map)
     gloss = (s["glosses"] || []).first.to_s
 
     # Kaikki distinguishes _spelling variance_ from _morphological inflection_ via the
-    # +alt-of+ vs +form-of+ sense tags. A sense tagged +form-of+ without +alt-of+ means
-    # "this is an inflected form" (+baddest → bad+, +backpedalled → backpedal+) -- not a
-    # spelling variant, even when the sense carries +rare+/+archaic+/+UK+/etc. Gating on
-    # +alt-of+/+misspelling+ excludes inflections cleanly; the regional/rarity tags are
-    # still recorded in +VARIANT_ACCEPT_TAGS+ so we can use them as secondary evidence
-    # in +resolve_wiktionary_variant_winner+ later.
+    # alt-of vs form-of sense tags. A sense tagged form-of without alt-of means
+    # "this is an inflected form" (baddest → bad, backpedalled → backpedal) -- not a
+    # spelling variant, even when the sense carries rare/archaic/UK/etc. Gating on
+    # alt-of/misspelling excludes inflections cleanly; the regional/rarity tags are
+    # still recorded in VARIANT_ACCEPT_TAGS so we can use them as secondary evidence
+    # in resolve_wiktionary_variant_winner later.
     is_alt_sense = tags.include?("alt-of")
     is_misspelling = tags.include?("misspelling")
     has_spelling_variant_tag = is_alt_sense || is_misspelling
@@ -340,7 +340,7 @@ def collect_variant_senses(obj, word, variant_map)
     if has_spelling_variant_tag
       # Kaikki occasionally mis-parses a templated alt-of into a list that mixes a word
       # with a prose sense-narrowing qualifier:
-      #   +wicked | alt_of=[{word: "wick"}, {word: "as applying to inanimate objects only"}]+
+      #   wicked | alt_of=[{word: "wick"}, {word: "as applying to inanimate objects only"}]
       # The phrase entry is a strong tell that the list is narrowing a single niche sense,
       # not declaring a canonical spelling pointer; drop the whole alt_of list in that case.
       alt_of_words = alt_of.map { |x| x.is_a?(Hash) ? x["word"].to_s : x.to_s }
@@ -349,7 +349,7 @@ def collect_variant_senses(obj, word, variant_map)
           add_variant_evidence(variant_map, word, target, source_hint, tags, seen)
         end
       end
-      # We only follow +form_of+ pointers when the sense also carries +alt-of+ (i.e.,
+      # We only follow form_of pointers when the sense also carries alt-of (i.e.,
       # Kaikki marked it as _both_ an inflection and a spelling variant; rare but real).
       if is_alt_sense
         form_of_words = form_of.map { |x| x.is_a?(Hash) ? x["word"].to_s : x.to_s }
@@ -371,7 +371,7 @@ def collect_variant_senses(obj, word, variant_map)
       # When the pattern captured a regional prefix list ("Commonwealth", "Australia, British,
       # Canada, ..."), tokenize it into individual region tags and merge with the sense tags.
       # This lets gloss-derived pairs satisfy the regional-evidence gate in
-      # +wiktionary_pair_is_useful?+ even when the sense itself had no tags.
+      # wiktionary_pair_is_useful? even when the sense itself had no tags.
       captures = m.captures
       region_prefix = captures[0..-2].compact.first
       target = captures.last
@@ -397,16 +397,16 @@ DEFINITIONAL_GLOSS_REJECT_TAGS = Set.new(%w[
 # tautological "Not X." / "A X." patterns and overly generic 1-word definitions
 # that add noise to gloss-containment and pooled-definition embedding signals
 # without supplying real semantic content. Default 0 (no length filter) preserves
-# pre-existing behavior; set +RHYMECRIME_KAIKKI_MIN_GLOSS_LEN+ to enable.
+# pre-existing behavior; set RHYMECRIME_KAIKKI_MIN_GLOSS_LEN to enable.
 DEFINITIONAL_GLOSS_MIN_LEN = (ENV["RHYMECRIME_KAIKKI_MIN_GLOSS_LEN"] || "0").to_i
 
-# Walk +obj+'s senses and append each sense's first definitional gloss to
-# +glosses_map[word]+. Pointer senses (alt-of / form-of / misspelling and the other
-# +DEFINITIONAL_GLOSS_REJECT_TAGS+ classes) are filtered out so the surviving entries
+# Walk obj's senses and append each sense's first definitional gloss to
+# glosses_map[word]. Pointer senses (alt-of / form-of / misspelling and the other
+# DEFINITIONAL_GLOSS_REJECT_TAGS classes) are filtered out so the surviving entries
 # carry definitional text only — mirrors the WordNet synset gloss surface that the
-# downstream consumers (+gloss_word_token_set+, +sense_vectors+, +gloss_tokens_for_word+,
-# +bin/dump-sense-glosses+) already work with. Per-sense first-gloss truncation matches
-# what +bin/filter-kaikki+ has already done at corpus-filter time.
+# downstream consumers (gloss_word_token_set, sense_vectors, gloss_tokens_for_word,
+# bin/dump-sense-glosses) already work with. Per-sense first-gloss truncation matches
+# what bin/filter-kaikki has already done at corpus-filter time.
 def collect_definitional_glosses(obj, word, glosses_map)
   senses = obj["senses"]
   return if senses.nil? || senses.empty?
@@ -428,7 +428,7 @@ end
 
 # Split a Wiktionary-style regional prefix list ("Australia, British, Canada, Ireland, New
 # Zealand, and South Africa") into individual canonical region tags that match
-# +REGIONAL_VARIANT_TAGS+ in +corpus_variants.rb+. Returns [] for nil/empty input.
+# REGIONAL_VARIANT_TAGS in corpus_variants.rb. Returns [] for nil/empty input.
 def extract_region_tags_from_gloss(text)
   return [] if text.nil? || text.empty?
   # Split on commas, "and", or conjunctive "&".
@@ -438,22 +438,22 @@ def extract_region_tags_from_gloss(text)
   end
 end
 
-# Subset of +VARIANT_ACCEPT_TAGS+ that mark an +alt-of+ sense as a _historical_ pointer
+# Subset of VARIANT_ACCEPT_TAGS that mark an alt-of sense as a _historical_ pointer
 # (Early Modern English spelling, obsolete typography) rather than a still-active regional
-# or orthographic variant. Same list as +STRUCTURED_ALT_OF_DECAY_TAGS+ in corpus_variants.rb;
-# kept as a local copy so +load_wiktionary+ can classify senses without a cross-file constant
-# dependency. When every sense of a record is an obsolete/archaic/dated +alt-of+ pointer at a
+# or orthographic variant. Same list as STRUCTURED_ALT_OF_DECAY_TAGS in corpus_variants.rb;
+# kept as a local copy so load_wiktionary can classify senses without a cross-file constant
+# dependency. When every sense of a record is an obsolete/archaic/dated alt-of pointer at a
 # single modern target, the whole record is a Kaikki "ghost" we want to suppress from
-# +forms_map+ / +pron_hash+ and prune from the final +word_dict+.
+# forms_map / pron_hash and prune from the final word_dict.
 OBSOLETE_DECAY_TAGS = Set.new(%w[archaic obsolete dated])
 
 # Gloss-prefix qualifiers that mark a sense as "Obsolete/Archaic/Dated (form|spelling) of X".
-# Matches the decay arm of +VARIANT_GLOSS_QUALIFIER_RE+ in +collect_variant_senses+.
+# Matches the decay arm of VARIANT_GLOSS_QUALIFIER_RE in collect_variant_senses.
 OBSOLETE_GLOSS_QUALIFIER_RE = /Archaic|Obsolete|Dated/i.freeze
 
 # Whole-gloss pattern: "Obsolete spelling of appear.", "Archaic form of bless", etc.
-# Narrower than +VARIANT_GLOSS_PATTERNS+ (doesn't allow Alternative/Dialectal/Nonstandard/etc.
-# prefixes, because those are live variants that the +corpus_variants+ pipeline still wants
+# Narrower than VARIANT_GLOSS_PATTERNS (doesn't allow Alternative/Dialectal/Nonstandard/etc.
+# prefixes, because those are live variants that the corpus_variants pipeline still wants
 # to emit and we must not prune).
 OBSOLETE_GLOSS_PATTERN = /
   \A\s*
@@ -463,13 +463,13 @@ OBSOLETE_GLOSS_PATTERN = /
 /ix.freeze
 
 # Classify a single sense for the obsolete-only detector. Returns:
-#   [:decay, target]  — sense is a historical +alt-of+ or "Obsolete/Archaic/Dated spelling of X"
-#                       gloss pointing at +target+ (!= headword).
-#   :skip             — sense is empty / pure-inflection +form-of+ / reject-tagged; doesn't
+#   [:decay, target]  — sense is a historical alt-of or "Obsolete/Archaic/Dated spelling of X"
+#                       gloss pointing at target (!= headword).
+#   :skip             — sense is empty / pure-inflection form-of / reject-tagged; doesn't
 #                       disqualify the record but doesn't contribute a target either.
 #   :other            — sense carries meaning that isn't obsolete-alt-of (definitional gloss,
-#                       live +alt-of+ without decay tag, modern regional variant, misspelling).
-#                       A single +:other+ sense disqualifies the whole record.
+#                       live alt-of without decay tag, modern regional variant, misspelling).
+#                       A single :other sense disqualifies the whole record.
 def classify_sense_for_obsolete_detector(sense, word)
   return :skip unless sense.is_a?(Hash)
   tags = sense["tags"] || []
@@ -483,7 +483,7 @@ def classify_sense_for_obsolete_detector(sense, word)
   has_decay = tags.any? { |t| OBSOLETE_DECAY_TAGS.include?(t) }
 
   # Misspelling is a live canonicalization hint, not a historical one. Leave these to the
-  # corpus_variants pipeline; don't let a +misspelling+ sense make the record "obsolete-only".
+  # corpus_variants pipeline; don't let a misspelling sense make the record "obsolete-only".
   return :other if is_misspelling
 
   if is_alt && has_decay
@@ -497,7 +497,7 @@ def classify_sense_for_obsolete_detector(sense, word)
     return :other
   end
 
-  # Pure inflection (+form-of+ without +alt-of+) — doesn't signal meaning either way.
+  # Pure inflection (form-of without alt-of) — doesn't signal meaning either way.
   return :skip if tags.include?("form-of")
 
   if gloss.empty?
@@ -514,11 +514,11 @@ def classify_sense_for_obsolete_detector(sense, word)
   :other
 end
 
-# Returns the single canonical target T when every sense of +obj+ is an obsolete/archaic/dated
-# +alt-of+ pointer (or "Obsolete spelling of T" gloss) pointing at the same T, with T != word.
+# Returns the single canonical target T when every sense of obj is an obsolete/archaic/dated
+# alt-of pointer (or "Obsolete spelling of T" gloss) pointing at the same T, with T != word.
 # Returns nil for records that carry any non-obsolete meaning (definitional gloss, live
 # regional variant, misspelling, mixed targets). Caller is expected to additionally verify
-# T is in +pronunciation_map+ / +word_dict+ before acting on the result — we don't want to suppress a
+# T is in pronunciation_map / word_dict before acting on the result — we don't want to suppress a
 # headword whose only canonical target isn't even in the lexicon.
 def kaikki_record_obsolete_alt_of_only_target(obj, word)
   senses = obj["senses"]
@@ -549,12 +549,12 @@ end
 def add_variant_evidence(variant_map, word, target, source, tags, seen)
   target = target.to_s.downcase.strip
   return if target.empty? || target == word || target.include?(" ") || target.match?(/\d/)
-  # Apostrophes turn up on contractions (+y'know+), deliberately-punctuated
-  # lexicographic renderings (+i's+), and clitic pseudo-lemmas. None of these belong in
+  # Apostrophes turn up on contractions (y'know), deliberately-punctuated
+  # lexicographic renderings (i's), and clitic pseudo-lemmas. None of these belong in
   # a preferred-spelling mapping the web UI will normalize against.
   return if word.include?("'") || target.include?("'")
   # Single-letter "words" are almost always Kaikki abbreviation noise that slipped past
-  # the tag blacklist (+a ay+, +c see+, +f fuck+); reject by length so we don't pollute
+  # the tag blacklist (a ay, c see, f fuck); reject by length so we don't pollute
   # the variants file with them.
   return if word.length < 2 || target.length < 2
   return if word.include?("-") && (word.start_with?("-") || word.end_with?("-"))
@@ -574,9 +574,9 @@ def pick_ga_sounds(sounds)
     ipa = s["ipa"]
     next if ipa.nil? || ipa.empty?
     tags = s["tags"] || []
-    # Skip Wiktionary +nonstandard+-tagged rows: stigmatized / hyper-local /
+    # Skip Wiktionary nonstandard-tagged rows: stigmatized / hyper-local /
     # reading-spelling renderings that don't represent the broadly accepted
-    # pronunciation. Defensive: +bin/filter-kaikki+ also drops these on snapshot
+    # pronunciation. Defensive: bin/filter-kaikki also drops these on snapshot
     # rebuild, but older snapshots may still contain them.
     next if tags.include?("nonstandard")
 

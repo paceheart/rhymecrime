@@ -1,17 +1,17 @@
 # frozen_string_literal: true
 
-# AWS Lambda's Ruby runtime ships with +LANG+ unset (or set to +C+), which
-# leaves +Encoding.default_external+ at +US-ASCII+. Net::HTTP then tags
+# AWS Lambda's Ruby runtime ships with LANG unset (or set to C), which
+# leaves Encoding.default_external at US-ASCII. Net::HTTP then tags
 # response bodies as US-ASCII; when the AWS SDK's JSON parser hits the first
-# multibyte UTF-8 sequence in a DynamoDB response (a +\xC3+ from any cue or
-# related word like +café+, +naïve+, +résumé+, or any of the Spanish/French
-# loanwords in our dict), +String#encode("utf-8")+ raises
-# +Encoding::InvalidByteSequenceError+ and the request 500s.
+# multibyte UTF-8 sequence in a DynamoDB response (a \xC3 from any cue or
+# related word like café, naïve, résumé, or any of the Spanish/French
+# loanwords in our dict), String#encode("utf-8") raises
+# Encoding::InvalidByteSequenceError and the request 500s.
 #
-# Forcing UTF-8 here — before any +require+ that triggers SDK or Net::HTTP
-# loading — makes every subsequent +File.read+, +Net::HTTP.get+, and
-# +JSON.parse+ in this process tag strings as UTF-8 by default. Belt-and-
-# suspenders: +template.yaml+ also pins +LANG=en_US.UTF-8+ on the function;
+# Forcing UTF-8 here — before any require that triggers SDK or Net::HTTP
+# loading — makes every subsequent File.read, Net::HTTP.get, and
+# JSON.parse in this process tag strings as UTF-8 by default. Belt-and-
+# suspenders: template.yaml also pins LANG=en_US.UTF-8 on the function;
 # this line keeps things sane even if that env var ever drifts.
 Encoding.default_external = Encoding::UTF_8
 Encoding.default_internal = Encoding::UTF_8
@@ -27,18 +27,18 @@ require "rhymecrime/frontend"
 require "rhymecrime/feedback_store"
 
 # Static asset table. assets/header.html references these as root-relative
-# URLs (+/crimestyle.css+, etc.), so the Lambda has to answer for them too.
-# The CloudFront distribution in +template.yaml+ uses +CachingDisabled+, so
-# static assets ride the +Cache-Control: public, max-age=300+ header set by
-# +asset_response+ below — i.e. the *browser* caches; CloudFront just passes
+# URLs (/crimestyle.css, etc.), so the Lambda has to answer for them too.
+# The CloudFront distribution in template.yaml uses CachingDisabled, so
+# static assets ride the Cache-Control: public, max-age=300 header set by
+# asset_response below — i.e. the *browser* caches; CloudFront just passes
 # through. Cleanest path to S3+OAC offload (which would let the lambda exit
 # the static-asset business entirely) is a separate stack-up; out of scope
 # here. Reading at module load (rather than per-request) means a warm
 # container serves each asset out of memory; a missing file blows up init
 # loudly instead of silent-404'ing on every page render.
 #
-# When you add a new +<link rel=stylesheet>+ or +<script src>+ in
-# +assets/header.html+ (or anywhere else served from /), mirror an entry
+# When you add a new <link rel=stylesheet> or <script src> in
+# assets/header.html (or anywhere else served from /), mirror an entry
 # below or the deployed page silently degrades to default browser styling.
 ASSET_ROUTES = {
   "/crimestyle.css"      => ["text/css; charset=utf-8",               File.read(File.join(__dir__, "assets", "crimestyle.css"),      encoding: "UTF-8")],
@@ -54,7 +54,7 @@ def asset_response(path)
       "Content-Type"  => content_type,
       # 5-minute cache: short enough that a redeploy of CSS/JS rolls out
       # fast, long enough to amortize Lambda invocations across a session.
-      # Bump to 1y +immutable+ once we hash filenames for cache-busting.
+      # Bump to 1y immutable once we hash filenames for cache-busting.
       "Cache-Control" => "public, max-age=300",
     },
     body: body,
@@ -62,11 +62,11 @@ def asset_response(path)
 end
 
 def handler(event:, context:)
-  # Lexicon and rime cohort are loaded once from +word_dict.msgpack+ /
-  # +rime_dict.msgpack+ at process boot and stay resident across warm-
-  # container invocations (immutable per data deploy — see +bin/stage-
-  # lambda+). +DynamoRuntime+ no longer holds any per-session state, so the
-  # only cache that needs invalidating per request is +RelatedWords+'s
+  # Lexicon and rime cohort are loaded once from word_dict.msgpack /
+  # rime_dict.msgpack at process boot and stay resident across warm-
+  # container invocations (immutable per data deploy — see bin/stage-
+  # lambda). DynamoRuntime no longer holds any per-session state, so the
+  # only cache that needs invalidating per request is RelatedWords's
   # in-process result memo (cue-keyed, would otherwise leak across users).
   RelatedWords.reset_caches! if defined?(RelatedWords)
 
@@ -75,8 +75,8 @@ def handler(event:, context:)
   params = event["queryStringParameters"] || {}
   word1 = params["word1"].to_s
   word2 = params["word2"].to_s
-  # +?debug=1+ is the catch-all dev affordance: drives the pruning visualizer
-  # AND set_related per-word coloring. Mirrored in +app.rb+ for local dev.
+  # ?debug=1 is the catch-all dev affordance: drives the pruning visualizer
+  # AND set_related per-word coloring. Mirrored in app.rb for local dev.
   debug = params["debug"].to_s == "1"
 
   case [method, path]
@@ -101,7 +101,7 @@ def handler(event:, context:)
   end
 end
 
-# HTTP API v2 hands the request body in +event["body"]+, possibly base64-
+# HTTP API v2 hands the request body in event["body"], possibly base64-
 # encoded (binary content types and a few size-driven cases). We always
 # decode the flag rather than trusting Content-Type, since API Gateway is
 # the authority on whether it base64'd before invoking us.

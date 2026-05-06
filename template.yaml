@@ -8,21 +8,21 @@ Globals:
     # 1769 MB is Lambda's "1 full vCPU" tier: CPU time is allocated linearly
     # with memory and 1 vCPU is the breakpoint where Ruby stops paying a
     # multi-tenant context-switch tax on JSON parsing + GC. The set_related
-    # path on a common cue (~3K related lemmas → ~150 +BatchGetItem+ calls
+    # path on a common cue (~3K related lemmas → ~150 BatchGetItem calls
     # over ~100 KB of JSON-encoded responses) was tripping the 29-second
-    # API Gateway timeout at the previous +512 MB+ (~⅓ vCPU) setting; bumping
-    # here, combined with the +parallel_batch_get_items+ fan-out in
-    # +dynamo_store.rb+ and the inflight +RHYMECRIME_LOG_TIMING+ phase logs,
+    # API Gateway timeout at the previous 512 MB (~⅓ vCPU) setting; bumping
+    # here, combined with the parallel_batch_get_items fan-out in
+    # dynamo_store.rb and the inflight RHYMECRIME_LOG_TIMING phase logs,
     # gets us back under budget. Cost impact: ~3.5x per-ms billed, but the
     # function also runs ~3-5x faster, so total billed-ms per request goes
     # *down*. Pricing: us-east-1 arm64 = $0.0000133334 / GB-second.
     MemorySize: 1769
-    # Match Gemfile +ruby "~> 3.4.0"+ — AWS picks the patch level inside the
-    # +ruby3.4+ managed runtime; pessimistic Gemfile pin surfaces 3.5/4.0
+    # Match Gemfile ruby "~> 3.4.0" — AWS picks the patch level inside the
+    # ruby3.4 managed runtime; pessimistic Gemfile pin surfaces 3.5/4.0
     # contributor drift before deploy rather than after.
     Runtime: ruby3.4
     # arm64 is ~20% cheaper than x86_64 on Lambda compute and matches the
-    # arm64-darwin dev host, so +sam build --use-container+ is a same-arch
+    # arm64-darwin dev host, so sam build --use-container is a same-arch
     # build (no Rosetta / qemu emulation, no cross-platform native-gem dance).
     # All gems we depend on ship arm64-linux artifacts.
     Architectures:
@@ -35,30 +35,30 @@ Parameters:
   FeedbackTableName:
     Type: String
     Default: rhymecrime-feedback
-  # Apex domain to point at the HTTP API (e.g. +rhymecrime.com+). Leave empty
+  # Apex domain to point at the HTTP API (e.g. rhymecrime.com). Leave empty
   # to skip all custom-domain resources — the deploy still produces a working
-  # +execute-api.us-east-1.amazonaws.com+ URL via +HttpApiUrl+. Set via
-  # +samconfig.toml+ +parameter_overrides+ once the apex's NS records have
-  # been delegated to the +HostedZoneId+ Route 53 zone.
+  # execute-api.us-east-1.amazonaws.com URL via HttpApiUrl. Set via
+  # samconfig.toml parameter_overrides once the apex's NS records have
+  # been delegated to the HostedZoneId Route 53 zone.
   #
-  # Both the apex (+<domain>+) and the +www.<domain>+ subdomain are served by
-  # this stack: a single ACM cert with +www+ as a +SubjectAlternativeName+,
-  # both listed in the +CloudFrontDistribution+'s +Aliases+, and a +Www+-
+  # Both the apex (<domain>) and the www.<domain> subdomain are served by
+  # this stack: a single ACM cert with www as a SubjectAlternativeName,
+  # both listed in the CloudFrontDistribution's Aliases, and a Www-
   # suffixed Route 53 alias record pointing at the same distribution. The
   # Lambda doesn't need to know which hostname served the request — every
-  # request lands on the same +$default+ stage of the same +ServerlessHttpApi+,
-  # so +rhymecrime.com+ and +www.rhymecrime.com+ render identical content.
+  # request lands on the same $default stage of the same ServerlessHttpApi,
+  # so rhymecrime.com and www.rhymecrime.com render identical content.
   # (We don't enforce a canonical hostname via 301 today; if SEO ever cares,
-  # attach a CloudFront Function to the distribution that 301s +www+ → apex.)
+  # attach a CloudFront Function to the distribution that 301s www → apex.)
   DomainName:
     Type: String
     Default: ""
-    Description: Apex domain (e.g. rhymecrime.com); leave empty to skip custom-domain wiring. The +www.<DomainName>+ subdomain is also wired up automatically.
-  # Route 53 public hosted zone ID for +DomainName+. Required if +DomainName+
-  # is set: +AWS::CertificateManager::Certificate+ uses it to auto-create
+    Description: Apex domain (e.g. rhymecrime.com); leave empty to skip custom-domain wiring. The www.<DomainName> subdomain is also wired up automatically.
+  # Route 53 public hosted zone ID for DomainName. Required if DomainName
+  # is set: AWS::CertificateManager::Certificate uses it to auto-create
   # the DNS-validation CNAME (and tear it down at delete time), and the
-  # +ApexAliasRecord+ below writes the apex A-ALIAS into it. Find via
-  # +aws route53 list-hosted-zones --profile paceheart+.
+  # ApexAliasRecord below writes the apex A-ALIAS into it. Find via
+  # aws route53 list-hosted-zones --profile paceheart.
   HostedZoneId:
     Type: String
     Default: ""
@@ -66,9 +66,9 @@ Parameters:
 
 Conditions:
   # Single gate for every custom-domain resource. Lets the stack deploy with
-  # +DomainName+ unset (CI / first-time deploy / domain not yet delegated to
-  # Route 53) without conditionally referencing a non-existent +Certificate+
-  # ARN. Add new domain-related resources with +Condition: HasCustomDomain+
+  # DomainName unset (CI / first-time deploy / domain not yet delegated to
+  # Route 53) without conditionally referencing a non-existent Certificate
+  # ARN. Add new domain-related resources with Condition: HasCustomDomain
   # so they all flip together — half-on stacks (cert without alias record,
   # alias record without cert) leave the apex pointing nowhere or stuck on
   # the previous deploy's ALIAS.
@@ -88,10 +88,10 @@ Resources:
           KeyType: HASH
 
   # Feedback table: one item per thumbs click. Composite key lets us
-  # +Query+ all votes for a single (cue, related) pair without scanning,
-  # while +Scan+ is still cheap enough at expected feedback volume to drive
+  # Query all votes for a single (cue, related) pair without scanning,
+  # while Scan is still cheap enough at expected feedback volume to drive
   # the periodic export back into curated/related.csv. Kept separate from
-  # +RhymecrimeTable+ so the function's read policy on the main table
+  # RhymecrimeTable so the function's read policy on the main table
   # stays read-only — write capability is scoped to this table only.
   RhymecrimeFeedbackTable:
     Type: AWS::DynamoDB::Table
@@ -112,19 +112,19 @@ Resources:
   RhymecrimeFunction:
     Type: AWS::Serverless::Function
     Properties:
-      # +CodeUri+ points at a staging directory populated by +bin/stage-lambda+,
-      # not the repo root. SAM CLI's +CopySource+ phase walks the entire
-      # +CodeUri+ tree before any build hook fires, and it does NOT honor
-      # +.samignore+ / +.gitignore+ / +.dockerignore+, so a +CodeUri: .+ build
+      # CodeUri points at a staging directory populated by bin/stage-lambda,
+      # not the repo root. SAM CLI's CopySource phase walks the entire
+      # CodeUri tree before any build hook fires, and it does NOT honor
+      # .samignore / .gitignore / .dockerignore, so a CodeUri: . build
       # both (a) drags 4+ GB of corpora + MPNet vectors through copy-source
-      # and (b) crashes on +.venv/bin/python3+, which is an absolute symlink
+      # and (b) crashes on .venv/bin/python3, which is an absolute symlink
       # to a uv-managed Python that doesn't exist inside the build container.
-      # +bin/stage-lambda+ enumerates the files the runtime actually opens
+      # bin/stage-lambda enumerates the files the runtime actually opens
       # — see the doc-comment header there for the require-graph audit.
       #
-      # Build with +sam build --use-container+ so the default
-      # +RubyBundlerBuilder+ runs +bundle install+ inside
-      # +public.ecr.aws/sam/build-ruby3.4+ and native gems (+msgpack+ has a
+      # Build with sam build --use-container so the default
+      # RubyBundlerBuilder runs bundle install inside
+      # public.ecr.aws/sam/build-ruby3.4 and native gems (msgpack has a
       # C extension on the lemma-map hot path) compile for arm64-linux
       # instead of the build host's arm64-darwin.
       CodeUri: lambda-build/
@@ -135,23 +135,23 @@ Resources:
           RHYMECRIME_TABLE_NAME: !Ref TableName
           RHYMECRIME_FEEDBACK_TABLE_NAME: !Ref FeedbackTableName
           TABLE_NAME: !Ref TableName
-          # Lambda's Ruby runtime ships with +LANG+ unset, leaving
-          # +Encoding.default_external+ at US-ASCII. The AWS SDK's JSON parser
+          # Lambda's Ruby runtime ships with LANG unset, leaving
+          # Encoding.default_external at US-ASCII. The AWS SDK's JSON parser
           # then chokes on any multibyte UTF-8 byte in a DynamoDB response
-          # (e.g. +\xC3+ from +café+ / +naïve+ in our dict). +lambda_handler+
-          # also force-sets +Encoding.default_external = UTF_8+ as a backstop;
+          # (e.g. \xC3 from café / naïve in our dict). lambda_handler
+          # also force-sets Encoding.default_external = UTF_8 as a backstop;
           # this env var fixes it at the source so any other process spawned
           # by the runtime (less of a concern in practice, but cheap) inherits
           # the right locale too.
           LANG: en_US.UTF-8
-          # Turn on +Rhymecrime::Timing.measure+ so each phase of
-          # +really_find_rhyming_tuples+ (find+filter, rhyme-bucket loop,
-          # prune) logs its wall-clock to CloudWatch. Cheap (a +warn+ per
+          # Turn on Rhymecrime::Timing.measure so each phase of
+          # really_find_rhyming_tuples (find+filter, rhyme-bucket loop,
+          # prune) logs its wall-clock to CloudWatch. Cheap (a warn per
           # phase), and the only way to attribute a slow request to a
-          # specific stage. The DDB +word#+ / +rime#+ prefetch phases
-          # (+batch_get_words+ / +batch_get_rimes+) that this knob originally
+          # specific stage. The DDB word# / rime# prefetch phases
+          # (batch_get_words / batch_get_rimes) that this knob originally
           # targeted have been retired — lexicon + rime cohort now load from
-          # +word_dict.msgpack+ / +rime_dict.msgpack+ at boot. Flip to +"0"+
+          # word_dict.msgpack / rime_dict.msgpack at boot. Flip to "0"
           # (or remove this line) once the set_related perf work has
           # stabilized; in steady state we don't need this log volume.
           RHYMECRIME_LOG_TIMING: "1"
@@ -176,16 +176,16 @@ Resources:
           Properties:
             Path: /feedback
             Method: POST
-        # Catch-all for static assets (+/crimestyle.css+, +/feedback.js+, etc.)
-        # served by +ASSET_ROUTES+ in +lambda_handler.rb+. Without it, API
+        # Catch-all for static assets (/crimestyle.css, /feedback.js, etc.)
+        # served by ASSET_ROUTES in lambda_handler.rb. Without it, API
         # Gateway 404s every asset request before the Lambda sees it, the
         # browser falls back to default styling, and the page renders with a
         # white background.
         #
-        # +Method: GET+ keeps the proxy GET-only so random +POST /anything+
+        # Method: GET keeps the proxy GET-only so random POST /anything
         # still 404s at the API Gateway layer instead of paying for a Lambda
         # cold-start. New POST/PUT endpoints get their own explicit route
-        # above; longest-match wins, so +POST /feedback+ above is unaffected.
+        # above; longest-match wins, so POST /feedback above is unaffected.
         ApiAssetProxy:
           Type: HttpApi
           Properties:
@@ -193,24 +193,24 @@ Resources:
             Method: GET
 
   # ---------------- Custom domain (apex + www via CloudFront) -------------
-  # All resources in this section are gated on +HasCustomDomain+ so the
-  # stack still deploys cleanly with +DomainName=""+. Resource creation
-  # order is implicit via +!Ref+ / +!GetAtt+ dependencies: Certificate →
-  # CloudFrontDistribution (needs +CertificateArn+ + +ServerlessHttpApi+
+  # All resources in this section are gated on HasCustomDomain so the
+  # stack still deploys cleanly with DomainName="". Resource creation
+  # order is implicit via !Ref / !GetAtt dependencies: Certificate →
+  # CloudFrontDistribution (needs CertificateArn + ServerlessHttpApi
   # for its origin) → ApexAliasRecord and WwwAliasRecord (both need
-  # +CloudFrontDistribution.DomainName+).
+  # CloudFrontDistribution.DomainName).
 
   # ACM certificate, DNS-validated through the same Route 53 zone we control.
-  # +DomainValidationOptions.HostedZoneId+ tells ACM "create the validation
+  # DomainValidationOptions.HostedZoneId tells ACM "create the validation
   # CNAME for me in this zone" (instead of asking us to add it manually),
-  # so the +sam deploy+ block on first issue is just the DNS propagation
+  # so the sam deploy block on first issue is just the DNS propagation
   # delay (~5 min in practice). Subsequent stack updates that don't change
-  # +DomainName+ are no-ops on the cert — the same ARN is reused.
+  # DomainName are no-ops on the cert — the same ARN is reused.
   #
   # Region: this resource lives in us-east-1 along with the rest of the
   # stack, which is *also* required by CloudFront — viewer certs on a
   # CloudFront distribution must be in us-east-1 regardless of where the
-  # origin lives. (Origin-side TLS to the +execute-api+ URL is a separate
+  # origin lives. (Origin-side TLS to the execute-api URL is a separate
   # cert managed by AWS; we don't touch it.) If we ever move the rest of
   # the stack to another region, this resource has to stay pinned here.
   Certificate:
@@ -218,14 +218,14 @@ Resources:
     Condition: HasCustomDomain
     Properties:
       DomainName: !Ref DomainName
-      # Single cert covers both the apex and +www.<apex>+ so we don't pay for
+      # Single cert covers both the apex and www.<apex> so we don't pay for
       # (or operate) two separate ACM certs. ACM-issued public certs allow up
       # to ~10 SANs by default, well above our two-name need. Adding a SAN
       # *does* trigger a re-issue on first deploy with this template — ACM
-      # issues a new cert ARN, +CloudFrontDistribution+ updates to point at
+      # issues a new cert ARN, CloudFrontDistribution updates to point at
       # it, and the old cert is left orphaned (delete it manually after the
       # deploy if you want a clean ACM list). Subsequent deploys are no-ops
-      # on the cert as long as the +DomainName+ + +SubjectAlternativeNames+
+      # on the cert as long as the DomainName + SubjectAlternativeNames
       # tuple doesn't change.
       SubjectAlternativeNames:
         - !Sub "www.${DomainName}"
@@ -233,48 +233,48 @@ Resources:
       DomainValidationOptions:
         - DomainName: !Ref DomainName
           HostedZoneId: !Ref HostedZoneId
-        # Each SAN needs its own +DomainValidationOptions+ entry pointing at
+        # Each SAN needs its own DomainValidationOptions entry pointing at
         # the same hosted zone; without this ACM falls back to "email the
-        # WHOIS contact" for the +www+ name, which has no automated path and
+        # WHOIS contact" for the www name, which has no automated path and
         # would block the deploy indefinitely.
         - DomainName: !Sub "www.${DomainName}"
           HostedZoneId: !Ref HostedZoneId
 
   # CloudFront distribution fronting the HTTP API. The whole point of this
   # resource is to give the apex a port-80 listener (API Gateway v2 endpoints
-  # are 443-only — there is no +EndpointType+ / +SecurityPolicy+ knob that
+  # are 443-only — there is no EndpointType / SecurityPolicy knob that
   # adds HTTP, and there is no API-Gateway-native HTTP→HTTPS redirect),
-  # so +ViewerProtocolPolicy: redirect-to-https+ below is what makes
-  # +http://${DomainName}+ resolve at all. +allow-all+ would *serve* plain
+  # so ViewerProtocolPolicy: redirect-to-https below is what makes
+  # http://${DomainName} resolve at all. allow-all would *serve* plain
   # HTTP, which we explicitly do not want (HSTS, mixed-content rules, and
   # search-engine canonicalization all assume HTTPS is the real origin).
   #
-  # Origin is the API Gateway default URL — +${ServerlessHttpApi}.execute-api...+
-  # rather than +${DomainName}+ — because we removed the API Gateway custom-
+  # Origin is the API Gateway default URL — ${ServerlessHttpApi}.execute-api...
+  # rather than ${DomainName} — because we removed the API Gateway custom-
   # domain mapping (apex hostname can only be claimed by one AWS service at
-  # a time; CloudFront wins). No +OriginPath+ here on purpose: HTTP API's
-  # auto-generated +$default+ stage routes are exposed at the *root* of the
-  # execute-api URL (+/health+ resolves to +https://${id}.execute-api.../health+,
-  # NOT +.../​$default/health+) — adding +OriginPath: /$default+ makes
-  # CloudFront prepend +/$default+ to every request and API Gateway 404s
-  # the lot. If we ever switch to an explicit +AWS::Serverless::HttpApi+
-  # with a non-default named +StageName+ (e.g. +prod+), set
-  # +OriginPath: /prod+ at that point.
+  # a time; CloudFront wins). No OriginPath here on purpose: HTTP API's
+  # auto-generated $default stage routes are exposed at the *root* of the
+  # execute-api URL (/health resolves to https://${id}.execute-api.../health,
+  # NOT .../​$default/health) — adding OriginPath: /$default makes
+  # CloudFront prepend /$default to every request and API Gateway 404s
+  # the lot. If we ever switch to an explicit AWS::Serverless::HttpApi
+  # with a non-default named StageName (e.g. prod), set
+  # OriginPath: /prod at that point.
   #
   # The two managed-policy GUIDs are stable AWS values:
-  # +CachingDisabled+ — every +GET /+ is parameterized by +?w=...+, +/health+
-  # is meant to be live, and +/feedback+ is POST. Zero CloudFront caching by
-  # default; the lambda already sets +Cache-Control: public, max-age=300+ on
-  # +/crimestyle.css+ etc., so the *browser* still caches static assets
+  # CachingDisabled — every GET / is parameterized by ?w=..., /health
+  # is meant to be live, and /feedback is POST. Zero CloudFront caching by
+  # default; the lambda already sets Cache-Control: public, max-age=300 on
+  # /crimestyle.css etc., so the *browser* still caches static assets
   # without CloudFront layering anything on top. To actually cache rhyme
   # results we'd need a query-string-keyed policy + a TTL discussion;
   # separate refactor.
-  # +AllViewerExceptHostHeader+ — forwards every viewer header to API Gateway
-  # *except* +Host+, which CloudFront rewrites to the execute-api hostname.
-  # Without this, API Gateway sees +Host: ${DomainName}+ and 404s (since we
+  # AllViewerExceptHostHeader — forwards every viewer header to API Gateway
+  # *except* Host, which CloudFront rewrites to the execute-api hostname.
+  # Without this, API Gateway sees Host: ${DomainName} and 404s (since we
   # deleted the custom-domain mapping that owned that name).
   #
-  # +PriceClass_100+ (US/CA/EU edge locations only) is the cheapest tier and
+  # PriceClass_100 (US/CA/EU edge locations only) is the cheapest tier and
   # matches our user geography; opting out of Asia/SA/AU edges is the right
   # default for an English-language rhyming dictionary.
   CloudFrontDistribution:
@@ -312,14 +312,14 @@ Resources:
   # the apex must always have an SOA / NS record set, and CNAME forbids
   # coexisting records at the same name), so we use Route 53's
   # AWS-proprietary "Alias" record, which is stored as A but resolves to
-  # the CloudFront distribution. The +HostedZoneId+ inside +AliasTarget+
-  # is CloudFront-side: AWS hardcodes +Z2FDTNDATAQYW2+ for *every* CloudFront
+  # the CloudFront distribution. The HostedZoneId inside AliasTarget
+  # is CloudFront-side: AWS hardcodes Z2FDTNDATAQYW2 for *every* CloudFront
   # distribution globally — there's no per-distribution variant — so we can't
-  # use +!GetAtt+ here the way we used to with API Gateway's
-  # +RegionalHostedZoneId+. The constant is documented at
+  # use !GetAtt here the way we used to with API Gateway's
+  # RegionalHostedZoneId. The constant is documented at
   # https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-properties-route53-aliastarget.html
   #
-  # +EvaluateTargetHealth: false+ because the CloudFront endpoint already
+  # EvaluateTargetHealth: false because the CloudFront endpoint already
   # has its own health/SLA managed by AWS; Route 53 health-checks would
   # only add cost without adding signal.
   ApexAliasRecord:
@@ -335,11 +335,11 @@ Resources:
         EvaluateTargetHealth: false
 
   # -------------------- www subdomain (parallel to apex) ------------------
-  # +www+ isn't an apex, so we *could* use a plain CNAME here — but A-ALIAS
+  # www isn't an apex, so we *could* use a plain CNAME here — but A-ALIAS
   # to CloudFront avoids the extra DNS hop a CNAME would force the resolver
   # through, costs the same (Route 53 alias queries are free against AWS
-  # targets), and keeps the record shape symmetric with +ApexAliasRecord+.
-  # Same +Z2FDTNDATAQYW2+ CloudFront-global hosted zone constant as the apex.
+  # targets), and keeps the record shape symmetric with ApexAliasRecord.
+  # Same Z2FDTNDATAQYW2 CloudFront-global hosted zone constant as the apex.
   WwwAliasRecord:
     Type: AWS::Route53::RecordSet
     Condition: HasCustomDomain
@@ -364,12 +364,12 @@ Outputs:
     Condition: HasCustomDomain
     Description: Public custom-domain URL (www subdomain; HTTP redirects to HTTPS via CloudFront — same content as apex)
     Value: !Sub "https://www.${DomainName}"
-  # Distribution ID is the only handle +aws cloudfront create-invalidation+
+  # Distribution ID is the only handle aws cloudfront create-invalidation
   # accepts, so emit it as a stack output for the cache-purge runbook.
   # (Path-based invalidations are free for the first 1000/month; we'd only
   # need them after enabling actual edge caching, which today is off via
-  # +CachePolicyId: CachingDisabled+. Cheaper to surface the ID now than
-  # to dig it out of +aws cloudfront list-distributions+ later.)
+  # CachePolicyId: CachingDisabled. Cheaper to surface the ID now than
+  # to dig it out of aws cloudfront list-distributions later.)
   CloudFrontDistributionId:
     Condition: HasCustomDomain
     Description: CloudFront distribution ID (for create-invalidation runbook)

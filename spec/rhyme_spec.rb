@@ -12,10 +12,10 @@ def oughta_rhyme_one_way(word1, word2, not_working_reason: nil)
   it test_name do
     skip_if_not_working(not_working_reason)
     rhymes = find_preferred_rhyming_words(word1)
-    # Accept any spelling variant of +word2+: the rhyme list only contains preferred forms,
-    # so if the spec names a dispreferred variant (+spectre+ vs +specter+, +cord+ vs +chord+)
+    # Accept any spelling variant of word2: the rhyme list only contains preferred forms,
+    # so if the spec names a dispreferred variant (spectre vs specter, cord vs chord)
     # we still want the positive test to pass. The negative matcher stays literal so tests
-    # like +ought_not_rhyme_one_way 'goner', 'honour'+ (which specifically assert the
+    # like ought_not_rhyme_one_way 'goner', 'honour' (which specifically assert the
     # dispreferred form is filtered) still do what they say.
     word2_forms = all_forms(word2)
     matched = (rhymes & word2_forms).any?
@@ -212,10 +212,10 @@ describe 'RHYMES' do
     ought_not_rhyme 'wind', 'upwind' # up- + 
     ought_not_rhyme 'wind', 'downwind' # down-
     ought_not_rhyme 'upwind', 'downwind' # up- + down-
-    # +upwind+ has two cmudict prons (+AH P W IH N D+ for the direction, +AH P W AY N D+ for
-    # the verb). The second shares a rime with +find+, so this only fails because both prons
+    # upwind has two cmudict prons (AH P W IH N D for the direction, AH P W AY N D for
+    # the verb). The second shares a rime with find, so this only fails because both prons
     # are accepted. Fixing properly needs primary-pron selection or a morphological check
-    # that +upwind+'s root is +wind+ (not +find+).
+    # that upwind's root is wind (not find).
     ought_not_rhyme 'find', 'upwind'
     ought_not_rhyme 'game', 'pregame' # pre-
     ought_not_rhyme 'game', 'postgame' # post-
@@ -298,7 +298,7 @@ describe 'RHYMES' do
     ought_not_rhyme 'businessperson', 'layperson'
     ought_not_rhyme 'man', 'layman'
     context "unless they're not derivationally related" do
-      # Nested so +before(:each)+ below does not skip these: hooks apply to the whole group.
+      # Nested so before(:each) below does not skip these: hooks apply to the whole group.
       context "pairs that do not need pseudo-prefix deferral" do
         ought_not_rhyme 'pulse', 'impulse' # stress mismatch
         ought_not_rhyme 'certain', 'ascertain'
@@ -306,13 +306,13 @@ describe 'RHYMES' do
         oughta_rhyme 'plumber', 'dumber'
         ought_not_rhyme 'dumber', 'demur' # stress mismatch, but would be a homophone anyway
         ought_not_rhyme 'national', 'international'
-        # +recorded → corded+ direction works (the reverse is still deferred below)
+        # recorded → corded direction works (the reverse is still deferred below)
         oughta_rhyme_one_way 'recorded', 'corded'
       end
 
-      # Pseudo-prefixes (the +re-+, +a-+, +im-+ isn't really derivational here) would need
+      # Pseudo-prefixes (the re-, a-, im- isn't really derivational here) would need
       # lemma-aware / etymological reasoning to distinguish from real prefix rhymes. For now
-      # every pair below is skipped: we accept splash damage from +filter_out_prefix_words+
+      # every pair below is skipped: we accept splash damage from filter_out_prefix_words
       # and revisit when we have a signal that tells real prefixation (atonal, impure) apart
       # from opaque or borrowed look-alikes (abasement, impact, ahead).
       context "deferred pending better prefix-vs-opaque detection" do
@@ -401,7 +401,7 @@ describe 'RHYMES' do
     oughta_rhyme_one_way 'cord', 'record', not_working_reason: 'splash damage: re- prefix filter (record is etymologically re+cord)'
     oughta_rhyme 'chord', 'record'
     # hemiola isn't in our lexicon at all; mandolin/violin have genuinely different rimes
-    # (+AE_N_D_AH_L_AH_N+ vs +IH_N+ -- the stress lands in different places), so they
+    # (AE_N_D_AH_L_AH_N vs IH_N -- the stress lands in different places), so they
     # can't rhyme under the current primary-stress-rime model.
     oughta_rhyme 'hemiola', 'viola'
     oughta_rhyme 'mandolin', 'violin'
@@ -415,8 +415,8 @@ describe 'RHYMES' do
     oughta_rhyme 'nation', 'abomination'
     ought_not_rhyme 'corn', 'acorn' # stress mismatch
     # S ER V vs. Z ER V (and plurals/participles), so these aren't actually rich rhymes
-    # phonetically. They share the +de-+ shape orthographically and the spelling-only filter
-    # used to drop them as splash damage; +pron_suffix_aligned?+ now sees the S → Z onset
+    # phonetically. They share the de- shape orthographically and the spelling-only filter
+    # used to drop them as splash damage; pron_suffix_aligned? now sees the S → Z onset
     # shift and lets the pair through.
     oughta_rhyme 'serve', 'deserve'
     oughta_rhyme 'served', 'deserved'
@@ -460,9 +460,11 @@ describe 'RHYMES' do
     ought_not_rhyme 'nuclear', 'thermonuclear'
     ought_not_rhyme 'dynamic', 'thermodynamic'
     ought_not_rhyme 'dynamics', 'thermodynamics'
+    oughta_rhyme 'meter', 'neater'
     ought_not_rhyme 'meter', 'thermometer'
-    oughta_rhyme 'kilometer', 'thermometer' # kilo- is not in COMMON_PREFIXES, so the
-                                             # filter declines and the shared rime stands
+    ought_not_rhyme 'neater', 'thermometer'
+    oughta_rhyme 'kilometer', 'thermometer' # kilo- is not in COMMON_PREFIXES, so the filter declines and the shared rime stands
+
     # Additional Greek combining forms (auto-, bio-, micro-, macro-, mono-, endo-, exo-,
     # hyper-) — same shape as thermo-: prefix peels to a real dict-headword tail with the
     # same rime, primary stress preserved, so the prefix-rhyme filter must fire.

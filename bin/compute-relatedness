@@ -3,19 +3,19 @@
 
 # Pre-compute thematically related headword lists per distinct lemma.
 #
-# Cue set (one row per): every +word_common_preferred_headword?+ lemma,
-# including rhymeless ones like +music+ / +concerto+ / +algebra+ — runtime
-# (and +spec/related_spec.rb+) may legitimately ask +thematically_related?+
+# Cue set (one row per): every word_common_preferred_headword? lemma,
+# including rhymeless ones like music / concerto / algebra — runtime
+# (and spec/related_spec.rb) may legitimately ask thematically_related?
 # about any common headword, so we need a row for any common headword.
 #
-# Relateds list (per row): +find_all_thematically_related_words_by_scan(lem,
-# include_rhymeless=false, common_only=true)+ — narrower, only rhymable
+# Relateds list (per row): find_all_thematically_related_words_by_scan(lem,
+# include_rhymeless=false, common_only=true) — narrower, only rhymable
 # common headwords, because rhymeless lemmas have no UI path to show up as a
 # related rhyme suggestion. This asymmetry is intentional (see the
-# +lemmas = rep.keys.select+ block below for the cue-side filter).
+# lemmas = rep.keys.select block below for the cue-side filter).
 # Computation uses only local generated/ files (no RHYMECRIME_DATA_SOURCE=dynamodb).
 # Writes directly into the local SQLite store (generated/rhymecrime_local.sqlite3) — the same file
-# +Rhymecrime::LocalStore+ reads at runtime and +bin/upload-to-dynamodb+ streams to prod DDB.
+# Rhymecrime::LocalStore reads at runtime and bin/upload-to-dynamodb streams to prod DDB.
 #
 #   ruby bin/compute-relatedness
 #
@@ -27,58 +27,58 @@
 #                          the current processing order (freq-desc, alpha within band).
 #                          Will do the wrong thing if the word frequencies changed
 #                          between runs — in that case, re-run with --incremental
-#   --threads=N            Parallel workers (fork-based). Default: half of +Etc.nprocessors+.
+#   --threads=N            Parallel workers (fork-based). Default: half of Etc.nprocessors.
 #   --incremental          Keep existing rows in the target DB and only process cues
 #                          not already present. Use after widening the cue filter so
 #                          you don't redo cues the stored rows already cover.
 #   --only=W[,W...]        Restrict the run to the given headwords / lemmas (comma-
 #                          separated, may repeat). Headwords are resolved to their
-#                          lemma via +word_dict+ so passing +running+ targets the
-#                          +run+ row. Entries not in the cue set (rare words,
+#                          lemma via word_dict so passing running targets the
+#                          run row. Entries not in the cue set (rare words,
 #                          stop words, non-cues) are warned and skipped. Combines
-#                          with +--start-after+ / +--max-cues+ / +--incremental+
+#                          with --start-after / --max-cues / --incremental
 #                          (intersection). Implies preserve-existing-rows: the
 #                          full-DB wipe is suppressed (only the requested rows
-#                          are upserted), so a typo'd +--only=music+ can never
+#                          are upserted), so a typo'd --only=music can never
 #                          stomp on the other ~21K rows the way a bare run would.
-#                          Unlike +--incremental+, it still re-processes the
+#                          Unlike --incremental, it still re-processes the
 #                          requested cues even if they're already in the DB —
-#                          that's the typical "I changed +curated/related.csv+
+#                          that's the typical "I changed curated/related.csv
 #                          for these cues, recompute them" use case.
 #
 # Ordering: cues are processed in descending order of how often they appear as
-# the +cue+ column in +curated/related.csv+ (resolved through the +word_dict+
-# lemma so e.g. +running+ rows fold into +run+'s count), alphabetical within
+# the cue column in curated/related.csv (resolved through the word_dict
+# lemma so e.g. running rows fold into run's count), alphabetical within
 # band. This front-loads the cues you've actually invested curation effort in
-# (+cat+ first at ~2K rows, then +pirate+, +food+, +hell+, …) so a +Ctrl-C+
+# (cat first at ~2K rows, then pirate, food, hell, …) so a Ctrl-C
 # partway through leaves the hub lemmas persisted and the long tail of cues
-# nobody has labeled runs last. +word_dict+ frequency is *not* used as a
+# nobody has labeled runs last. word_dict frequency is *not* used as a
 # tiebreak: it has only ~5 distinct values and the vast majority of cues
-# share +freq=10+, so it degenerates into "alphabetical-among-the-mass"
+# share freq=10, so it degenerates into "alphabetical-among-the-mass"
 # inside that bucket and provides no useful signal. Cues not in
-# +related.csv+ at all share count 0 and tiebreak alphabetically.
+# related.csv at all share count 0 and tiebreak alphabetically.
 #
 # Threading notes: the compute is pure-Ruby CPU-bound, so we fork worker processes
 # rather than native threads (MRI's GVL prevents parallel Ruby execution). All
 # heavy data (Numberbatch ~169 MB, ConceptNet, MPNet ~923 MB, WordNet, classifier)
 # loads in the parent before fork, so workers share those pages via copy-on-write.
-# Peak RSS per worker climbs to ~2.5 GB as its +$thematically_related_memo+ /
-# +$gloss_negative_pair_cache+ dirty pages and break CoW sharing; the default
+# Peak RSS per worker climbs to ~2.5 GB as its $thematically_related_memo /
+# $gloss_negative_pair_cache dirty pages and break CoW sharing; the default
 # therefore takes the min of two caps:
-#   * CPU cap:    +Etc.nprocessors / 2+          — keep the box responsive
-#   * memory cap: +(RAM - OS_RESERVE) / PER_WORKER_RSS+
+#   * CPU cap:    Etc.nprocessors / 2          — keep the box responsive
+#   * memory cap: (RAM - OS_RESERVE) / PER_WORKER_RSS
 # so a 16 GB box doesn't try to run 5 workers just because it has 10 cores and
-# end up swapping. Override either cap with +--threads=N+, or tune the
-# +RHYMECRIME_COMPUTE_PER_WORKER_GB+ / +RHYMECRIME_COMPUTE_OS_RESERVE_GB+
+# end up swapping. Override either cap with --threads=N, or tune the
+# RHYMECRIME_COMPUTE_PER_WORKER_GB / RHYMECRIME_COMPUTE_OS_RESERVE_GB
 # env vars if the observed RSS drifts.
 #
-# Output: each worker writes to its own shard SQLite file (+.shardN.tmp+ next to
-# the target DB); the parent attaches + +INSERT OR REPLACE+ merges on success.
+# Output: each worker writes to its own shard SQLite file (.shardN.tmp next to
+# the target DB); the parent attaches + INSERT OR REPLACE merges on success.
 # Per-shard DBs avoid write contention that would otherwise serialize workers on
 # the main file's WAL lock.
 #
 # OOV Numberbatch: headwords whose dictionary lemma has no row in generated/numberbatch_vectors.msgpack
-# skip the expensive full relatedness scan (see +dictionary_lemma_has_numberbatch_vector?+ in related.rb).
+# skip the expensive full relatedness scan (see dictionary_lemma_has_numberbatch_vector? in related.rb).
 # Set RHYMECRIME_WARN_OOV_NUMBERBATCH=1 to print a line to stderr for each such headword.
 
 $LOAD_PATH.unshift File.expand_path("../lib", __dir__)
@@ -105,10 +105,10 @@ max_cues = nil
 start_after = nil
 incremental = false
 only_words = []
-# Detect installed physical RAM in bytes (macOS / Linux). Falls back to +nil+
+# Detect installed physical RAM in bytes (macOS / Linux). Falls back to nil
 # on other platforms or when the probe fails, in which case we skip the
 # memory-based cap and rely on the CPU cap alone. Called once during startup;
-# the +sysctl+ / +/proc/meminfo+ cost is negligible.
+# the sysctl / /proc/meminfo cost is negligible.
 def detect_physical_memory_bytes
   case RbConfig::CONFIG["host_os"]
   when /darwin/
@@ -122,7 +122,7 @@ rescue StandardError
   nil
 end
 
-# Per-worker peak RSS assumption (GB). Measured around 2.5 GB on the +pirate+
+# Per-worker peak RSS assumption (GB). Measured around 2.5 GB on the pirate
 # compute profile; rounded up a little for headroom (GC thrash bloats the
 # heap beyond the steady-state working set before major collections clean up).
 per_worker_gb = (ENV["RHYMECRIME_COMPUTE_PER_WORKER_GB"] || "3").to_f
@@ -147,7 +147,7 @@ default_threads =
     cpu_cap
   end
 threads = default_threads
-# Declared at outer scope so the +--threads=N+ block can assign to it without
+# Declared at outer scope so the --threads=N block can assign to it without
 # shadowing as a block-local; we check it below to decide whether to explain
 # the derived default.
 threads_user_supplied = false
@@ -161,7 +161,7 @@ OptionParser.new do |o|
     threads = [n, 1].max
     threads_user_supplied = true
   end
-  o.on("--incremental", "Keep existing rows; skip cues already present in +output-path+. " \
+  o.on("--incremental", "Keep existing rows; skip cues already present in output-path. " \
                        "Use when widening the cue filter to avoid redoing the cues already done.") do
     incremental = true
   end
@@ -172,16 +172,16 @@ OptionParser.new do |o|
   end
 end.parse!
 
-# +--only+ implies preserve-existing-rows. Without this guard, a bare
-# +--only=music+ run would delete the entire +output_path+ DB (the
-# +unless incremental+ branch in +delete_database_file!+ below) and only
+# --only implies preserve-existing-rows. Without this guard, a bare
+# --only=music run would delete the entire output_path DB (the
+# unless incremental branch in delete_database_file! below) and only
 # repopulate the requested cue, silently destroying the other ~21K rows
 # the user almost certainly meant to keep. We implement the guard as
-# "+--only+ forces preservation but does NOT force +--incremental+'s
-# skip-already-present" — the user passing +--only+ explicitly wants
+# "--only forces preservation but does NOT force --incremental's
+# skip-already-present" — the user passing --only explicitly wants
 # these cues processed, even if rows already exist (the typical "I
 # updated the curated CSV for these cues, please recompute their rows"
-# workflow). Implementation: introduce a separate +preserve_existing_db+
+# workflow). Implementation: introduce a separate preserve_existing_db
 # flag for the wipe decision so the upsert-only-these-rows behavior is
 # decoupled from incremental's worklist filter.
 preserve_existing_db = incremental || only_words.any?
@@ -215,15 +215,15 @@ end
 wd = word_dict
 rd = rime_dict
 before_n = rep.size
-# Asymmetric cue / relateds filtering: see +cue_word?+ vs
-# +relatedness_target_word?+ in +lib/rhymecrime/dict/rime.rb+. Cues include
-# rhymeless lemmas (+music+, +concerto+, +algebra+, +quarterback+) so any
-# question +thematically_related?+ might be asked at runtime has a row; the
-# rhyme-partner check lives in +relatedness_target_word?+ and only governs the
-# _relateds_ list inside each row (see +process_cue+ below, which uses
-# +find_all_thematically_related_words_by_scan(..., false, true)+ — i.e.
-# +include_rhymeless=false, common_only=true+). Pre-asymmetry, ~70 CSV pairs
-# with e.g. +music+/+drumstick+ missed the store entirely and fell through to
+# Asymmetric cue / relateds filtering: see cue_word? vs
+# relatedness_target_word? in lib/rhymecrime/dict/rime.rb. Cues include
+# rhymeless lemmas (music, concerto, algebra, quarterback) so any
+# question thematically_related? might be asked at runtime has a row; the
+# rhyme-partner check lives in relatedness_target_word? and only governs the
+# _relateds_ list inside each row (see process_cue below, which uses
+# find_all_thematically_related_words_by_scan(..., false, true) — i.e.
+# include_rhymeless=false, common_only=true). Pre-asymmetry, ~70 CSV pairs
+# with e.g. music/drumstick missed the store entirely and fell through to
 # the slow compute path every eval run.
 lemmas = rep.keys.select do |lem|
   next false unless wd.key?(lem)
@@ -231,11 +231,11 @@ lemmas = rep.keys.select do |lem|
   cue_word?(lem, wd)
 end
 
-# +curated/related.csv+ row count keyed by lemma — used as the primary sort
+# curated/related.csv row count keyed by lemma — used as the primary sort
 # key below. We tally counts per surface first, then fold them into lemmas via
-# the +word_dict+ lemma column so e.g. +running+ rows fold into +run+'s count
-# (matching how the runtime keys +thematically_related?+ lookups). When
-# several surfaces map to the same lemma we take +max+ rather than +sum+,
+# the word_dict lemma column so e.g. running rows fold into run's count
+# (matching how the runtime keys thematically_related? lookups). When
+# several surfaces map to the same lemma we take max rather than sum,
 # since the same labeled relationship is often duplicated across inflected
 # variants and we'd otherwise double-count curation effort. Built once here
 # so the sort below is O(n log n) hash lookups, not n× CSV scans.
@@ -255,31 +255,31 @@ if File.exist?(related_csv_path)
   end
 end
 
-# Sort cues by descending +curated_priority+ — i.e. how often the lemma
-# appears as a +cue+ in +curated/related.csv+ — with an alpha tiebreak. This
-# front-loads the lemmas you've put real curation effort into (+cat+ at ~2K
-# rows, then +pirate+, +food+, +hell+, +music+, +crime+, …) so a mid-run
-# +Ctrl-C+ leaves the lemmas you most care about persisted; lemmas with no
-# +related.csv+ row share count 0 and tiebreak alphabetically. +word_dict+
+# Sort cues by descending curated_priority — i.e. how often the lemma
+# appears as a cue in curated/related.csv — with an alpha tiebreak. This
+# front-loads the lemmas you've put real curation effort into (cat at ~2K
+# rows, then pirate, food, hell, music, crime, …) so a mid-run
+# Ctrl-C leaves the lemmas you most care about persisted; lemmas with no
+# related.csv row share count 0 and tiebreak alphabetically. word_dict
 # frequency is intentionally not consulted: it has only ~5 distinct values
-# and the vast majority of cues share +freq=10+, so it degenerates into
+# and the vast majority of cues share freq=10, so it degenerates into
 # "alphabetical-among-the-mass" inside that bucket and adds no signal.
 lemmas.sort_by! { |l| [-curated_priority[l], l] }
 # Semantically promiscuous lemmas are related to every other word (see
-# +thematically_related?+), so their compute entry would be the full
+# thematically_related?), so their compute entry would be the full
 # candidate list — ~20k headwords per cue. The runtime in
-# +RelatedWords.find_all_thematically_related_words+ short-circuits
-# promiscuous lookups to +words_we_care_about+ directly, so no row is needed.
-# Peel them off before +--start-after+ / +--max-cues+ apply so a
-# +--max-cues=5+ smoke test doesn't burn its entire budget on
-# +could+/+perhaps+/+thereby+ (all freq-999999 promiscuous words that sort
+# RelatedWords.find_all_thematically_related_words short-circuits
+# promiscuous lookups to words_we_care_about directly, so no row is needed.
+# Peel them off before --start-after / --max-cues apply so a
+# --max-cues=5 smoke test doesn't burn its entire budget on
+# could/perhaps/thereby (all freq-999999 promiscuous words that sort
 # ahead of the real work).
 promiscuous_lemmas, lemmas = lemmas.partition { |l| semantically_promiscuous?(l) }
 puts "Skipping #{promiscuous_lemmas.size} semantically promiscuous lemmas (runtime short-circuits to words_we_care_about): #{promiscuous_lemmas.inspect}" if promiscuous_lemmas.any?
 
-# +--only+: explicit cue allowlist. Resolve each passed word to its dictionary
-# lemma (so +running+ targets the +run+ row, matching how the runtime keys
-# +thematically_related?+ lookups), then intersect with the filtered cue set
+# --only: explicit cue allowlist. Resolve each passed word to its dictionary
+# lemma (so running targets the run row, matching how the runtime keys
+# thematically_related? lookups), then intersect with the filtered cue set
 # while preserving the freq-desc / alpha order. Anything that doesn't survive
 # the intersection (rare, promiscuous, non-cue, unknown headword) gets warned
 # once so a typo doesn't silently produce an empty run.
@@ -311,7 +311,7 @@ unless only_words.empty?
 end
 
 if start_after
-  # Resume-after-crash: drop everything up through +start_after+ in the current
+  # Resume-after-crash: drop everything up through start_after in the current
   # sort order (freq-desc, alpha). Pre-reorder this compared lexicographically,
   # which no longer matches the processing order.
   idx = lemmas.index(start_after)
@@ -319,11 +319,11 @@ if start_after
 end
 lemmas = lemmas.first(max_cues) if max_cues
 
-# +--incremental+: keep the existing +output_path+ DB and only process cues
+# --incremental: keep the existing output_path DB and only process cues
 # not already present. Used to grow the compute table after widening the
 # cue filter (or after adding new rare headwords to the dict) without redoing
 # hours of work the stored rows already cover. Everything downstream (shard
-# writes, merge via +INSERT OR REPLACE+) already tolerates this — we just
+# writes, merge via INSERT OR REPLACE) already tolerates this — we just
 # filter the worklist up front.
 if incremental && !dry_run && File.exist?(output_path)
   require "sqlite3"
@@ -346,25 +346,25 @@ n = lemmas.size
 threads = [threads, n].min if n.positive?
 threads = 1 if threads < 1
 
-# cueniverse is +cue_word?+: in +word_dict+, freq > +RARE_FREQ_MAX+,
+# cueniverse is cue_word?: in word_dict, freq > RARE_FREQ_MAX,
 # preferred surface == self. The filter does *not* check rhyme partners or
-# even pronunciations — rhymeless lemmas (+music+ / +concerto+ / +algebra+ /
-# +quarterback+) are kept on purpose because the runtime can legitimately
-# ask +thematically_related?+ about any common headword. +pirate+ for
-# example has +prons=[]+ and +headword_has_non_rich_rhyme_partner?=false+
-# yet still surfaces as a cue here (its +set_related+ row is rich because
-# pirate's *related* words rhyme with each other — +[handsome, ransom]+,
-# +[acquire, crier, entire, squire]+ — even though pirate itself has no
-# rhyme partners). See +cue_word?+ vs +relatedness_target_word?+ in
-# +lib/rhymecrime/dict/rime.rb+.
+# even pronunciations — rhymeless lemmas (music / concerto / algebra /
+# quarterback) are kept on purpose because the runtime can legitimately
+# ask thematically_related? about any common headword. pirate for
+# example has prons=[] and headword_has_non_rich_rhyme_partner?=false
+# yet still surfaces as a cue here (its set_related row is rich because
+# pirate's *related* words rhyme with each other — [handsome, ransom],
+# [acquire, crier, entire, squire] — even though pirate itself has no
+# rhyme partners). See cue_word? vs relatedness_target_word? in
+# lib/rhymecrime/dict/rime.rb.
 curated_count = lemmas.count { |l| curated_priority[l].positive? }
 puts "Compute cues: #{n} preferred common lemmas (#{before_n} distinct common lemmas in word_dict before filter; rhymeless cues kept — see comment above)"
-puts "Ordering: by +curated/related.csv+ row count desc, alpha tiebreak (#{curated_count} cues with ≥1 curated row run first; remaining #{n - curated_count} run alphabetically)."
+puts "Ordering: by curated/related.csv row count desc, alpha tiebreak (#{curated_count} cues with ≥1 curated row run first; remaining #{n - curated_count} run alphabetically)."
 unless threads_user_supplied
   # Show how the default fell out so it's obvious whether CPU or RAM is the
-  # binding constraint; users with more RAM can then override with +--threads+.
-  # Reports +default_threads+ rather than +threads+ because small +--max-cues+
-  # runs clamp +threads+ down to +n+ and would otherwise hide the real default.
+  # binding constraint; users with more RAM can then override with --threads.
+  # Reports default_threads rather than threads because small --max-cues
+  # runs clamp threads down to n and would otherwise hide the real default.
   ram_gb = mem_bytes ? (mem_bytes.to_f / 1024**3).round(1) : nil
   ram_note = ram_gb ? "RAM cap=#{mem_cap} (#{ram_gb} GB, per-worker #{per_worker_gb} GB, OS reserve #{os_reserve_gb} GB)" : "RAM cap unavailable"
   puts "Default threads=#{default_threads}: min(CPU cap=#{cpu_cap} (nproc/2), #{ram_note}). Override with --threads=N."
@@ -384,24 +384,24 @@ RelatedWords.reset_caches!
 # are easy to spot-check.
 run_started_at = Process.clock_gettime(Process::CLOCK_MONOTONIC)
 
-# Per-cue +find_all_thematically_related_words+ scans every candidate headword (~20k) and
-# calls +thematically_related?+ on each pair, populating +$thematically_related_memo+ and
-# +$gloss_negative_pair_cache+ with one entry per pair. Across ~20k cues that's O(N²)
+# Per-cue find_all_thematically_related_words scans every candidate headword (~20k) and
+# calls thematically_related? on each pair, populating $thematically_related_memo and
+# $gloss_negative_pair_cache with one entry per pair. Across ~20k cues that's O(N²)
 # entries — hundreds of millions — which sends Ruby's GC into progressively worse
 # thrashing (ETA climbs then swings around erratically). Within a single scan each
 # candidate is distinct so the pair memo gives no intra-scan benefit; across scans it
 # only ever saves the symmetric (b, a) recomputation when both endpoints are cues,
 # a ~2x win nowhere near worth the memory cost. Reset them after each cue. Same for
-# +@related_word_cache+, which never sees a repeat lookup in this loop.
+# @related_word_cache, which never sees a repeat lookup in this loop.
 reset_per_cue_caches = lambda do
   $thematically_related_memo = nil
   $gloss_negative_pair_cache = Set.new
   RelatedWords.reset_caches!
 end
 
-# Process a single cue: full-scan path captures the +relatedness_score+ computed
+# Process a single cue: full-scan path captures the relatedness_score computed
 # for each cue / candidate pair alongside the candidate headword. Returns a
-# +[words, scores]+ pair (parallel arrays sorted descending by score) or +nil+
+# [words, scores] pair (parallel arrays sorted descending by score) or nil
 # when the cue has no related words.
 process_cue = lambda do |lem|
   reset_per_cue_caches.call
@@ -411,7 +411,7 @@ process_cue = lambda do |lem|
   # Clamp to 0..100 (the stop-word shortcut emits 100; rule-based scoring
   # can emit slightly over 100 via the cooccurrence combiner; threshold
   # floor is 50). Sort descending by score so the related-list UI gets the
-  # strongest hits first and +max_candidates+ truncation keeps them.
+  # strongest hits first and max_candidates truncation keeps them.
   sorted = word_score_pairs
     .map { |w, s| [w, s.clamp(0, 100)] }
     .sort_by { |(_w, s)| -s }
@@ -419,9 +419,9 @@ process_cue = lambda do |lem|
   [sorted.map(&:first), sorted.map(&:last)]
 end
 
-# Run the scan for +shard+ (the slice of +lemmas+ assigned to this worker),
-# upserting one SQLite row per non-empty cue through +writer+ (or nil for
-# dry-run). +tag+ is a short identifier printed with each progress line.
+# Run the scan for shard (the slice of lemmas assigned to this worker),
+# upserting one SQLite row per non-empty cue through writer (or nil for
+# dry-run). tag is a short identifier printed with each progress line.
 run_shard = lambda do |shard, writer, tag|
   t0 = Process.clock_gettime(Process::CLOCK_MONOTONIC)
   total = shard.size
@@ -460,12 +460,12 @@ if threads <= 1 || n.zero?
     run_shard.call(lemmas, nil, "0")
   else
     # Non-preserving: wipe the old DB so rows dropped by the current cue
-    # filter don't survive. Preserving (+--incremental+ or +--only+): keep
+    # filter don't survive. Preserving (--incremental or --only): keep
     # the existing DB; the single-writer transaction below will
-    # +INSERT OR REPLACE+ just the new rows. +delete_database_file!+ also
-    # removes the +-wal+ / +-shm+ sidecars; a bare +File.delete+ would
-    # leave them behind and SQLite would fault the next +open_for_write+
-    # with +SQLITE_IOERR+ on the first transaction.
+    # INSERT OR REPLACE just the new rows. delete_database_file! also
+    # removes the -wal / -shm sidecars; a bare File.delete would
+    # leave them behind and SQLite would fault the next open_for_write
+    # with SQLITE_IOERR on the first transaction.
     Rhymecrime::LocalStore.delete_database_file!(output_path) unless preserve_existing_db
     Rhymecrime::LocalStore.open_for_write(output_path) do |writer|
       run_shard.call(lemmas, writer, "0")
@@ -478,15 +478,15 @@ else
   # tables (Numberbatch, ConceptNet, MPNet, classifier) via copy-on-write.
   #
   # Eager-load every lazy global here so workers inherit the populated tables
-  # instead of re-reading the files N times (+30s per worker, +1GB RSS per
+  # instead of re-reading the files N times (+30s per worker, 1GB RSS per
   # worker). GC will still dirty some pages over time — COW isn't perfect —
   # but peak RSS stays closer to 1x than Nx.
   #
-  # The +words_we_care_about(false, true)+ call relies on the memo in
-  # +lib/rhymecrime/dict/utils_rhyme.rb+ to actually persist; without that
+  # The words_we_care_about(false, true) call relies on the memo in
+  # lib/rhymecrime/dict/utils_rhyme.rb to actually persist; without that
   # memo the parent would return and discard the ~20k-element filtered list
   # and every worker would rebuild it from scratch on every cue
-  # (~4000+ +has_rhyming_word?+ / +rare?+ probes per element per cue).
+  # (~4000 has_rhyming_word? / rare? probes per element per cue).
   puts "Warming up compute caches in parent before fork..."
   numberbatch
   conceptnet_edges
@@ -503,17 +503,17 @@ else
   lemmas.each_with_index { |lem, i| shards[i % threads] << lem }
 
   # Each worker writes to its own SQLite file; parent ATTACHes + merges on
-  # success. +.shardN.tmp+ sits next to the final output so it lives on the
+  # success. .shardN.tmp sits next to the final output so it lives on the
   # same filesystem (ATTACH across filesystems still works but copy is slower)
   # and is easy to spot + clean up on crash.
   shard_paths = dry_run ? Array.new(threads) { nil } : Array.new(threads) { |i| "#{output_path}.shard#{i}.tmp" }
 
   # Fresh shard files every run: stale rows from a crashed previous shard
-  # would otherwise survive the merge. Also tears down the +-wal+ / +-shm+
+  # would otherwise survive the merge. Also tears down the -wal / -shm
   # sidecars; SQLite refuses to open a brand-new main file paired with an
-  # inherited WAL pair (counters disagree → +SQLITE_IOERR+ on first write),
+  # inherited WAL pair (counters disagree → SQLITE_IOERR on first write),
   # which is exactly the failure mode that bit when a previous compute crash
-  # left +.shardN.tmp-shm+ files alongside cleaned +.tmp+ mains.
+  # left .shardN.tmp-shm files alongside cleaned .tmp mains.
   shard_paths.each { |p| Rhymecrime::LocalStore.delete_database_file!(p) }
 
   # Flush so parent's stdout buffer isn't duplicated into every child.
@@ -544,7 +544,7 @@ else
 
   unless failed.empty?
     # Clean up partial shard files on failure so the next run doesn't merge
-    # half-written output. Sidecars too — see +delete_database_file!+.
+    # half-written output. Sidecars too — see delete_database_file!.
     shard_paths.each { |p| Rhymecrime::LocalStore.delete_database_file!(p) }
     failed.each { |idx, st| warn "worker w#{idx} failed: #{st.inspect}" }
     exit 1
@@ -552,10 +552,10 @@ else
 
   unless dry_run
     # Non-preserving: wipe the destination so rows dropped by the current
-    # cue filter don't survive. Preserving (+--incremental+ or +--only+):
-    # keep it; +merge_shard+ does +INSERT OR REPLACE+ so the new shards
+    # cue filter don't survive. Preserving (--incremental or --only):
+    # keep it; merge_shard does INSERT OR REPLACE so the new shards
     # overlay cleanly on the existing rows without touching cues not in
-    # this run. +delete_database_file!+ so the +-wal+ / +-shm+ go too —
+    # this run. delete_database_file! so the -wal / -shm go too —
     # see comment above.
     Rhymecrime::LocalStore.delete_database_file!(output_path) unless preserve_existing_db
     puts "Merging #{shard_paths.size} shard#{shard_paths.size == 1 ? '' : 's'} into #{output_path}..."

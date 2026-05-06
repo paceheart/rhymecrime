@@ -12,52 +12,52 @@ require_relative "../pace_utils"
 
 RIME_DICT_FILENAME = "rime_dict.txt"
 WORD_DICT_FILENAME = "word_dict.txt"
-# MessagePack mirrors of the +.txt+ artifacts above. Same shape semantics —
-# +word_dict.msgpack+ is +{word => [freq, prons, lemma_or_nil]}+ where +prons+
+# MessagePack mirrors of the .txt artifacts above. Same shape semantics —
+# word_dict.msgpack is {word => [freq, prons, lemma_or_nil]} where prons
 # is an Array of space-joined ARPABET strings (split on load to feed
-# +Pronunciation.new+); +rime_dict.msgpack+ is +{rime => [w1, w2, ...]}+. Self-
-# lemmas are stored as +nil+ (matching +save_word_lemma_map!+'s policy) and
+# Pronunciation.new); rime_dict.msgpack is {rime => [w1, w2, ...]}. Self-
+# lemmas are stored as nil (matching save_word_lemma_map!'s policy) and
 # materialized back to the headword on load.
 #
-# These are the runtime-canonical artifacts: +word_dict()+ / +rime_dict()+ in
-# +crime.rb+ load these in BOTH local-dev and Lambda mode (the DDB +word#+ /
-# +rime#+ partitions were retired — see +bin/upload-to-dynamodb+ and
-# +bin/stage-lambda+). The +.txt+ files are kept on disk for human inspection
-# and for tools like +bin/audit-word+ that grep them, but the runtime never
-# reads them when the +.msgpack+ is present.
+# These are the runtime-canonical artifacts: word_dict() / rime_dict() in
+# crime.rb load these in BOTH local-dev and Lambda mode (the DDB word# /
+# rime# partitions were retired — see bin/upload-to-dynamodb and
+# bin/stage-lambda). The .txt files are kept on disk for human inspection
+# and for tools like bin/audit-word that grep them, but the runtime never
+# reads them when the .msgpack is present.
 #
-# Built by +rebuild_rhymecrime_dictionaries+ alongside the +.txt+ saves so a
-# single +./bin/dict-build+ refreshes both surfaces; see +bin/build+ and
-# +bin/dict-build+ for the full pipeline.
+# Built by rebuild_rhymecrime_dictionaries alongside the .txt saves so a
+# single ./bin/dict-build refreshes both surfaces; see bin/build and
+# bin/dict-build for the full pipeline.
 WORD_DICT_MSGPACK_FILENAME = "word_dict.msgpack"
 RIME_DICT_MSGPACK_FILENAME = "rime_dict.msgpack"
-# Flat +{word => canonical_lemma}+ table, emitted by dict-build right after
-# +save_word_dict+ and read into +$word_to_lemma+ at runtime. Exists so the
-# hot +lemma(w)+ path (hit thousands of times per page render while coloring
-# +set_related+ tuples) is a single Hash lookup, instead of walking through
-# +lexicon_word_entry+ → +DataSource.dynamodb?+ → +word_dict[w]+ → +entry[2]+
+# Flat {word => canonical_lemma} table, emitted by dict-build right after
+# save_word_dict and read into $word_to_lemma at runtime. Exists so the
+# hot lemma(w) path (hit thousands of times per page render while coloring
+# set_related tuples) is a single Hash lookup, instead of walking through
+# lexicon_word_entry → DataSource.dynamodb? → word_dict[w] → entry[2]
 # on every call. Shipping this msgpack in the Lambda deploy bundle also lets
-# DDB mode answer +lemma(w)+ without a per-word +GetItem+.
+# DDB mode answer lemma(w) without a per-word GetItem.
 WORD_LEMMA_MAP_FILENAME = "word_lemma_map.msgpack"
 # Derivational-base map used by the relatedness pipeline only (R3). Composes
-# on top of +lemma(w)+ at runtime: +semantic_base(w) = derivation_map[lemma(w)]
-# || lemma(w)+. Built from WordNet derivation pointers + a curated suffix
-# allowlist in +compute_semantic_base_map+. Keys are inflectional-base headwords
-# (i.e. self-lemmas — +artistic+, +criminality+); values are the derivational
-# root (+artist+, +criminal+). Inflected surfaces aren't keys here because
-# they compose through +lemma(w)+ first. Loaded lazily into
-# +$word_to_semantic_base+ on the first +semantic_base(w)+ call.
+# on top of lemma(w) at runtime: semantic_base(w) = derivation_map[lemma(w)]
+# || lemma(w). Built from WordNet derivation pointers + a curated suffix
+# allowlist in compute_semantic_base_map. Keys are inflectional-base headwords
+# (i.e. self-lemmas — artistic, criminality); values are the derivational
+# root (artist, criminal). Inflected surfaces aren't keys here because
+# they compose through lemma(w) first. Loaded lazily into
+# $word_to_semantic_base on the first semantic_base(w) call.
 WORD_SEMANTIC_BASE_MAP_FILENAME = "word_semantic_base_map.msgpack"
-# Sorted +"word\\tbase\\ttransform"+ dump emitted alongside the msgpack so the
+# Sorted "word\\tbase\\ttransform" dump emitted alongside the msgpack so the
 # map is auditable by eye. Not loaded at runtime.
 WORD_SEMANTIC_BASE_MAP_TXT_FILENAME = "word_semantic_base_map.txt"
 # Local-dev key/value store that mirrors the DynamoDB schema used in Lambda:
-# the +related+ table is keyed by +"related#<lemma>"+ with parallel +words+ and
-# +scores+ JSON arrays. Single SQLite file, no daemon; boot is O(open file) and
+# the related table is keyed by "related#<lemma>" with parallel words and
+# scores JSON arrays. Single SQLite file, no daemon; boot is O(open file) and
 # per-lemma lookups are a single indexed SELECT. Built by bin/compute-relatedness
-# and consumed by +Rhymecrime::LocalStore+ (runtime shim) and by bin/upload-to-dynamodb
+# and consumed by Rhymecrime::LocalStore (runtime shim) and by bin/upload-to-dynamodb
 # (when streaming rows up to prod DDB). In Lambda this file is absent and
-# +Rhymecrime::DataSource.dynamodb?+ routes everything to +DynamoRuntime+ instead.
+# Rhymecrime::DataSource.dynamodb? routes everything to DynamoRuntime instead.
 LOCAL_STORE_FILENAME = "rhymecrime_local.sqlite3"
 PART_OF_SPEECH_FILENAME = "part_of_speech.json"
 # Multi-spelling hyphen folds (in-laws/inlaws, …); built in dict.rb, loaded at runtime.
@@ -68,40 +68,40 @@ CONCEPTNET_EDGES_FILENAME = "conceptnet_edges.json"
 # English vocab on kept ConceptNet relations; built by bin/preprocess-conceptnet → generated/.
 CONCEPTNET_VOCAB_CACHE_SUFFIX = ".en-kept-vocab.txt.gz"
 # Pre-canonicalization English edge triples (w1, w2, weight) on kept relations; a pure function of
-# the assertions .csv.gz, so it can be reused across +dict-build+ runs whose +word_dict+ differs.
+# the assertions .csv.gz, so it can be reused across dict-build runs whose word_dict differs.
 # Saves ~15% of total build time by skipping the full gzip-decompress + line-parse pass of
-# +save_conceptnet_edge_map!+ when the cache is fresh.
+# save_conceptnet_edge_map! when the cache is fresh.
 CONCEPTNET_EDGES_CACHE_SUFFIX = ".en-kept-edges.msgpack.gz"
 # Numberbatch word vectors pre-filtered to dictionary *base* headwords only; built in dict.rb.
 NUMBERBATCH_VECTORS_FILENAME = "numberbatch_vectors.msgpack"
 # USF cue→target association strengths (FSG); place under generated/ for runtime (e.g. built from corpora/usf/).
 USF_ASSOCIATIONS_FILENAME = "usf_associations.json"
 # Auto-detected lexical spelling variant pairs (e.g. -oes/-os), emitted by dict-build from corpus
-# frequency data. Whitespace-separated +preferred alt+ pairs (legacy format kept for the auto
-# file; the hand-edited list lives at +curated/spelling.csv+ in CSV form). Both are loaded at
-# runtime via +load_variants_raw+ so no corpus I/O leaks into the runtime path.
+# frequency data. Whitespace-separated preferred alt pairs (legacy format kept for the auto
+# file; the hand-edited list lives at curated/spelling.csv in CSV form). Both are loaded at
+# runtime via load_variants_raw so no corpus I/O leaks into the runtime path.
 SPELLING_VARIANTS_AUTO_FILENAME = "spelling_variants_auto.txt"
-# Learned relatedness score-combiner (logistic regression over +PairSignals+ features);
+# Learned relatedness score-combiner (logistic regression over PairSignals features);
 # built by bin/train-relatedness-classifier, consumed in related.rb.
 RELATEDNESS_CLASSIFIER_FILENAME = "relatedness_classifier.json"
 # Contextualized sentence-transformer embeddings of dictionary-lemma headwords and their
 # WordNet gloss-per-sense (built by bin/dump-sense-glosses → bin/build-sense-vectors.py).
 # MessagePack: { model:, dim:, headword: {lemma=>vec}, senses: {lemma=>[vec,…]} }.
-# Provides the modern-embedding signals in +PairSignals+ that supplement Numberbatch.
+# Provides the modern-embedding signals in PairSignals that supplement Numberbatch.
 MODEL_SENSE_VECTORS_FILENAME = "model_sense_vectors.msgpack"
 # Wiktionary (Kaikki) per-headword definitional glosses, parallel to (and merged with) the
 # WordNet synset glosses consulted by the gloss-token, gloss-citation, and per-sense embedding
-# code paths. Built by +load_wiktionary+ at dict-build time from the same filtered Kaikki dump
-# the rest of +wiktionary.rb+ already loads, then serialized as MessagePack
-# +{ headword => [gloss_text_1, gloss_text_2, ...] }+ where each entry is one Kaikki sense's
+# code paths. Built by load_wiktionary at dict-build time from the same filtered Kaikki dump
+# the rest of wiktionary.rb already loads, then serialized as MessagePack
+# { headword => [gloss_text_1, gloss_text_2, ...] } where each entry is one Kaikki sense's
 # first gloss (alt-of / form-of pointer senses are filtered out so only definitional text
-# survives — the alt-of pointers already feed +corpus_variants+).
+# survives — the alt-of pointers already feed corpus_variants).
 #
-# Loaded lazily into +$wiktionary_glosses+ on first call to +wiktionary_glosses_for+, with the
-# usual nil-loader / +false+-sentinel pattern so a missing file (fresh checkout pre-dict-build,
+# Loaded lazily into $wiktionary_glosses on first call to wiktionary_glosses_for, with the
+# usual nil-loader / false-sentinel pattern so a missing file (fresh checkout pre-dict-build,
 # or Lambda runtime where corpora aren't shipped) collapses to "no glosses" instead of raising.
-# Same conservative-on-no-signal contract as +gloss_tokens_for_word+ in +crime.rb+ and
-# +gloss_word_token_set+ in +signals.rb+: callers default to the WordNet-only behavior when
+# Same conservative-on-no-signal contract as gloss_tokens_for_word in crime.rb and
+# gloss_word_token_set in signals.rb: callers default to the WordNet-only behavior when
 # this map is empty.
 WIKTIONARY_GLOSSES_FILENAME = "wiktionary_glosses.msgpack"
 # Word-frequency rare ceiling: treat as rare when frequency is at or below this (see rare? in crime.rb).
@@ -114,8 +114,8 @@ INCLUDE_RICH_RHYMES = begin
   v && !v.empty? && %w[1 true yes on].include?(v.downcase)
 end
 
-# +debug+ comes from runtime (e.g. pace_utils via crime); dict-build loads this file alone.
-# Do not use +respond_to?(:debug)+ — it can be true without a callable +debug+ on +main+ in some loads.
+# debug comes from runtime (e.g. pace_utils via crime); dict-build loads this file alone.
+# Do not use respond_to?(:debug) — it can be true without a callable debug on main in some loads.
 def dict_utils_debug(msg)
   return unless defined?(debug) == "method"
 
@@ -148,30 +148,30 @@ end
 #
 #   semantically_promiscuous.txt — content-empty words that "relate to
 #       everything" ("could", "perhaps", "henceforth", "thereby"). Kept in
-#       +word_dict+ at sentinel-high frequency; relatedness predicates short-
-#       circuit them in scoring / display. Predicate: +semantically_promiscuous?+.
+#       word_dict at sentinel-high frequency; relatedness predicates short-
+#       circuit them in scoring / display. Predicate: semantically_promiscuous?.
 #   unrhymable_stop_words.txt    — function words and contractions ("the",
 #       "a", "you'll", "they're", "huh", "uh") that are valid English but
-#       make poor rhyme targets. Deleted from +word_dict+ entirely at dict-
-#       build time (see +delete_unrhymable_stop_words_from_hash+ in
-#       +phonology.rb+), alongside the +forbidden+/+forbidden_ish+ rows in
-#       +curated/rarity.csv+ (see +rarity_csv_forbidden_words+). Predicate:
-#       +unrhymable_stop_word?+.
+#       make poor rhyme targets. Deleted from word_dict entirely at dict-
+#       build time (see delete_unrhymable_stop_words_from_hash in
+#       phonology.rb), alongside the forbidden/forbidden_ish rows in
+#       curated/rarity.csv (see rarity_csv_forbidden_words). Predicate:
+#       unrhymable_stop_word?.
 #
-# Every runtime call site uses +semantically_promiscuous?+ — unrhymable
+# Every runtime call site uses semantically_promiscuous? — unrhymable
 # entries are deleted from the dictionary, so they can never appear as a
 # headword the relatedness / UI / pruning code might consult. There is no
-# +stop_word?+ shim: any leftover call site is a bug we want to find at
+# stop_word? shim: any leftover call site is a bug we want to find at
 # load time, not silently route through a union.
 #
 # A small overlap (seven entries: "eh", "mhm", "mm", "thees", "thou'd",
 # "thou'll", "ye") between the two files is intentional — deletion wins
-# (the unrhymable scrub runs before any +semantically_promiscuous?+ check
+# (the unrhymable scrub runs before any semantically_promiscuous? check
 # the runtime can reach), so they leave the dict and the runtime never
 # sees them.
 #
-# +#+ comment lines and blank lines are skipped; trailing whitespace on each
-# entry is stripped (so +"hey "+ in the file matches +"hey"+).
+# # comment lines and blank lines are skipped; trailing whitespace on each
+# entry is stripped (so "hey " in the file matches "hey").
 
 UNRHYMABLE_STOP_WORDS_FILENAME = "unrhymable_stop_words.txt"
 SEMANTICALLY_PROMISCUOUS_FILENAME = "semantically_promiscuous.txt"
@@ -179,7 +179,7 @@ SEMANTICALLY_PROMISCUOUS_FILENAME = "semantically_promiscuous.txt"
 $unrhymable_stop_words = nil
 $semantically_promiscuous_words = nil
 
-# Shared loader for newline-delimited curated word lists. +#+ comment lines
+# Shared loader for newline-delimited curated word lists. # comment lines
 # and blank lines are skipped; trailing whitespace is stripped.
 def load_curated_word_set(filename)
   set = Set.new
@@ -204,24 +204,24 @@ def semantically_promiscuous_words
   $semantically_promiscuous_words ||= load_curated_word_set(SEMANTICALLY_PROMISCUOUS_FILENAME)
 end
 
-# Direct membership in +semantically_promiscuous.txt+, OR the word's +lemma+
+# Direct membership in semantically_promiscuous.txt, OR the word's lemma
 # is in the list. The lemma fallback lets derived/inflected forms ("abouts",
 # "having", "puts") inherit promiscuity from their base ("about", "have",
 # "put") without us enumerating every inflection in the curated file.
 #
 # Safe to call before the lemma map exists on disk (dict-build seed loops in
-# +frequency.rb+ / +phonology.rb+): +lemma+ falls back to +lexicon_word_entry+
+# frequency.rb / phonology.rb): lemma falls back to lexicon_word_entry
 # and ultimately to the word itself, so a missing map just collapses the
 # fallback into the direct check we already did.
 #
-# Build-time interaction: the dict-build seed loop in +add_frequency_info+
-# uses this predicate to stamp +999999+ (sentinel-high) frequencies, which
+# Build-time interaction: the dict-build seed loop in add_frequency_info
+# uses this predicate to stamp 999999 (sentinel-high) frequencies, which
 # means the lemma fallback also sweeps in Wiktionary/Kaikki paradigm-noise
-# surfaces (+gots+, +alles+, +nots+, +theyed+, +abouts+, ...). The
-# +stopword_inflection_scrub+ pass right after +unrhymable_scrub+ deletes
+# surfaces (gots, alles, nots, theyed, abouts, ...). The
+# stopword_inflection_scrub pass right after unrhymable_scrub deletes
 # those noise surfaces back out, gated by WordNet / wordfreq-Zipf /
-# +rarity.csv+ attestation so legitimate inflections (+outing+, +mostly+,
-# +willing+, +owned+, +others+) are preserved.
+# rarity.csv attestation so legitimate inflections (outing, mostly,
+# willing, owned, others) are preserved.
 def semantically_promiscuous?(word)
   return true if semantically_promiscuous_words.include?(word)
   base = lemma(word)
@@ -230,20 +230,20 @@ end
 
 #
 # rarity-list-driven word sets — common / rare / forbidden — read from
-# +curated/rarity.csv+ (a single CSV is the source of truth, replacing the
-# retired +common_words.txt+, +rare_words.txt+, and +forbid_list.txt+).
+# curated/rarity.csv (a single CSV is the source of truth, replacing the
+# retired common_words.txt, rare_words.txt, and forbid_list.txt).
 #
-# Per-kind dispatch (matches the spec sweep in +spec/rarity_spec.rb+ and the
+# Per-kind dispatch (matches the spec sweep in spec/rarity_spec.rb and the
 # eval scoring buckets):
-#   +common+ / +common_ish+        -> rarity_csv_common_words
-#   +rare+   / +rare_ish+          -> rarity_csv_rare_words
-#   +forbidden+ / +forbidden_ish+  -> rarity_csv_forbidden_words
-# Other kinds (+uncommon+, +common_no_rhymes+, +rare_no_rhymes+,
-# +have_rhymes+) are eval-only labels and contribute nothing to these sets.
+#   common / common_ish        -> rarity_csv_common_words
+#   rare   / rare_ish          -> rarity_csv_rare_words
+#   forbidden / forbidden_ish  -> rarity_csv_forbidden_words
+# Other kinds (uncommon, common_no_rhymes, rare_no_rhymes,
+# have_rhymes) are eval-only labels and contribute nothing to these sets.
 #
 # Loaded lazily on first access (Set/Array memoized in process-globals) and
 # the file is only opened once per process. CSV is parsed with the stdlib
-# +CSV+ module — encoding is UTF-8 (matches +curated/rarity.csv+ on disk).
+# CSV module — encoding is UTF-8 (matches curated/rarity.csv on disk).
 #
 
 RARITY_CSV_PATH = File.join(CURATED_DIR, "rarity.csv")
@@ -267,9 +267,9 @@ def rarity_csv_rare_words
   $rarity_csv_rare_words
 end
 
-# Forbidden as an Array (insertion order = file order). Old +forbid_list+
+# Forbidden as an Array (insertion order = file order). Old forbid_list
 # call sites used Array#include? semantics; preserved here so anything that
-# expected an Array surface (e.g. iterations, +length+) keeps working.
+# expected an Array surface (e.g. iterations, length) keeps working.
 def rarity_csv_forbidden_words
   load_rarity_csv_word_sets! if $rarity_csv_forbidden_words_array.nil?
   $rarity_csv_forbidden_words_array
@@ -303,9 +303,9 @@ def load_rarity_csv_word_sets!
 end
 
 #
-# forbid_list — facade over +rarity_csv_forbidden_words+. Kept under the same
-# name so legacy call sites (+explicitly_forbidden?+, +audit_word+,
-# +delete_explicitly_forbidden_keys_from_hash+, …) don't have to learn about
+# forbid_list — facade over rarity_csv_forbidden_words. Kept under the same
+# name so legacy call sites (explicitly_forbidden?, audit_word,
+# delete_explicitly_forbidden_keys_from_hash, …) don't have to learn about
 # the rarity.csv plumbing.
 #
 
@@ -315,7 +315,7 @@ end
 
 # Word consists entirely of non-ASCII bytes (e.g. emoji like '🍇', '🌮', '🧢').
 # UTF-8 ASCII chars occupy bytes < 0x80, so a word with no byte < 0x80 has zero
-# ASCII characters. Mixed-script borrowings like +café+ / +résumé+ are NOT
+# ASCII characters. Mixed-script borrowings like café / résumé are NOT
 # matched (they contain ASCII letters too) — only fully non-ASCII surfaces.
 # Empty strings are not considered non-ASCII-only (no characters at all).
 def non_ascii_only?(word)
@@ -323,28 +323,28 @@ def non_ascii_only?(word)
   word.bytes.all? { |b| b >= 0x80 }
 end
 
-# +explicitly_forbidden?+ unifies three policy sources:
-#   1. +forbidden+/+forbidden_ish+ rows in +curated/rarity.csv+
+# explicitly_forbidden? unifies three policy sources:
+#   1. forbidden/forbidden_ish rows in curated/rarity.csv
 #      (the curated, hand-maintained block list)
-#   2. +non_ascii_only?+ — any word with zero ASCII characters
+#   2. non_ascii_only? — any word with zero ASCII characters
 #      (catches emoji and other purely-pictographic surfaces that leak in via
 #      Wiktionary/Kaikki; we don't want them as headwords or as rhyme outputs).
-#   3. +paradigm_noise_inflection?+ — Wiktionary/Kaikki paradigm-table
-#      inflections of curated stop-word / +semantically_promiscuous+ lemmas
-#      (+gots+, +nots+, +theyed+, +abouts+, ...) that have no corpus
-#      attestation. Mirrors the build-time +stopword_inflection_scrub+ in
-#      +frequency.rb+ so the runtime classifier is correct even when the live
-#      +word_dict+ on disk was generated before the scrub landed (or before
+#   3. paradigm_noise_inflection? — Wiktionary/Kaikki paradigm-table
+#      inflections of curated stop-word / semantically_promiscuous lemmas
+#      (gots, nots, theyed, abouts, ...) that have no corpus
+#      attestation. Mirrors the build-time stopword_inflection_scrub in
+#      frequency.rb so the runtime classifier is correct even when the live
+#      word_dict on disk was generated before the scrub landed (or before
 #      a particular paradigm-noise surface was added to the seed list).
-# The build-time +forbidden_scrub+ pass in +frequency.rb+ iterates +word_dict+
+# The build-time forbidden_scrub pass in frequency.rb iterates word_dict
 # keys against this predicate, so the policy-2 / policy-3 inputs are also
 # pruned from the generated dict on the next rebuild — no separate scrub needed.
 #
-# +wiktionary_overgenerated_abstract_nesses_plural?+ deliberately is NOT
-# wired into this runtime predicate: it lives downstream in +frequency.rb+'s
-# +wiktionary_nesses_overplural_scrub+ where the verdict bakes into the
-# generated +word_dict+ (tombstoned). Same for the +-ings+ demote rule
-# (+wiktionary_gerund_overplural_scrub+). The build-time scrubs are the
+# wiktionary_overgenerated_abstract_nesses_plural? deliberately is NOT
+# wired into this runtime predicate: it lives downstream in frequency.rb's
+# wiktionary_nesses_overplural_scrub where the verdict bakes into the
+# generated word_dict (tombstoned). Same for the -ings demote rule
+# (wiktionary_gerund_overplural_scrub). The build-time scrubs are the
 # single source of truth; runtime stays cheap.
 def explicitly_forbidden?(word)
   return true if non_ascii_only?(word)
@@ -353,24 +353,24 @@ def explicitly_forbidden?(word)
   paradigm_noise_inflection?(word)
 end
 
-# True when +word+ looks like a Wiktionary/Kaikki paradigm-table inflection
-# of a curated stop-word / +semantically_promiscuous+ lemma (+theyed+ <-
-# +they+, +gots+ <- +got+, +nots+ <- +not+, +abouts+ <- +about+, +heyed+
-# <- +hey+) with no independent corpus attestation — those surfaces are
+# True when word looks like a Wiktionary/Kaikki paradigm-table inflection
+# of a curated stop-word / semantically_promiscuous lemma (theyed <-
+# they, gots <- got, nots <- not, abouts <- about, heyed
+# <- hey) with no independent corpus attestation — those surfaces are
 # theoretical inflections that real English never uses.
 #
-# Mirrors +stopword_inflection_scrub+ in +frequency.rb+ — same gates, so the
+# Mirrors stopword_inflection_scrub in frequency.rb — same gates, so the
 # build-time scrub and the runtime predicate agree on which surfaces are
 # forbidden. Critically, this excludes self-listed promiscuous words
-# (+is+, +does+, +its+, +than+, +else+) — those are legitimate stop-word
-# surfaces that the build-time pipeline keeps in +word_dict+ so they remain
-# valid as cue inputs to +find_rhyming_words+, just promiscuous enough to
+# (is, does, its, than, else) — those are legitimate stop-word
+# surfaces that the build-time pipeline keeps in word_dict so they remain
+# valid as cue inputs to find_rhyming_words, just promiscuous enough to
 # not be returned as rhymes for arbitrary cues. Forbidding them outright
-# would break the +RHYMES tricky+ / +RHYMES apostrophes+ /
-# +RHYMES bad pronunciations+ specs in +spec/rhyme_spec.rb+.
+# would break the RHYMES tricky / RHYMES apostrophes /
+# RHYMES bad pronunciations specs in spec/rhyme_spec.rb.
 #
-# Returning +true+ forwards through +explicitly_forbidden?+ to +allowed?+ /
-# +rarity_category+, dropping the surface from rhyme and +set_related+
+# Returning true forwards through explicitly_forbidden? to allowed? /
+# rarity_category, dropping the surface from rhyme and set_related
 # output without requiring a dict rebuild.
 def paradigm_noise_inflection?(word)
   return false if word.nil? || word.empty?
@@ -388,10 +388,10 @@ end
 
 # WordNet noun lexicographer files we treat as "concrete" for the purposes of
 # the Wiktionary-overpluralization gates below. Bases whose noun senses span
-# at least one of these survive both the +-ings+ demote-to-rare and +-nesses+
+# at least one of these survive both the -ings demote-to-rare and -nesses
 # forbid rules — a concrete sense is what licenses the plural in English
-# (you can have multiple +mornings+/+evenings+/+meetings+, multiple
-# +baronesses+/+hostesses+). Bases whose senses are exclusively in the
+# (you can have multiple mornings/evenings/meetings, multiple
+# baronesses/hostesses). Bases whose senses are exclusively in the
 # complement (noun.act, noun.attribute, noun.cognition, noun.communication,
 # noun.feeling, noun.motive, noun.phenomenon, noun.process, noun.relation,
 # noun.state, noun.Tops) read as abstract / mass and the surface is treated
@@ -414,10 +414,10 @@ WN_NOUN_LEXNAME_CONCRETE = Set.new(%w[
   noun.time
 ]).freeze
 
-# True when +base+ has at least one WordNet noun sense in a concrete-leaning
-# lexicographer file (see +WN_NOUN_LEXNAME_CONCRETE+). Returns +false+ for
+# True when base has at least one WordNet noun sense in a concrete-leaning
+# lexicographer file (see WN_NOUN_LEXNAME_CONCRETE). Returns false for
 # bases not in WordNet or with only abstract senses. Cheap because
-# +wn_lemma_find_all_cached+ memoizes per-process.
+# wn_lemma_find_all_cached memoizes per-process.
 def wn_base_has_concrete_noun_sense?(base)
   return false if base.nil? || base.empty?
   return false unless wn_has_entry?(base)
@@ -426,31 +426,31 @@ def wn_base_has_concrete_noun_sense?(base)
   end
 end
 
-# True when +word+ is a +<gerund>s+ surface (+addressings+, +upswings+,
-# +publishings+) that English never actually pluralizes — Wiktionary/Kaikki
-# enumerate +-s+ paradigm rows for every gerund-as-noun lemma, so the dict
-# inherits +bannings+, +dockings+, +marketings+, +pricings+, +typings+ etc.
+# True when word is a <gerund>s surface (addressings, upswings,
+# publishings) that English never actually pluralizes — Wiktionary/Kaikki
+# enumerate -s paradigm rows for every gerund-as-noun lemma, so the dict
+# inherits bannings, dockings, marketings, pricings, typings etc.
 # none of which are real corpus surfaces.
 #
 # Gates (in order — early-exit cheap):
-#   * shape: ends in +-ings+, base (chomp +s+) ends in +-ing+, length >= 6
-#   * +rarity.csv+ +common+/+rare+ rows win (curator's call beats the rule —
-#     see the +upswings+ row in +curated/rarity.csv+)
-#   * surface in WordNet (+savings+, +findings+, +dealings+, +feelings+,
-#     +proceedings+) → preserve
-#   * base must be a real gerund (in +word_dict+) — guards against typos
-#     like +xxxings+ where +xxxing+ isn't an attested verb form
-#   * base has at least one concrete WN noun sense (+morning+ noun.time,
-#     +meeting+ noun.group/event, +saving+ noun.act-or-not — preserved when
+#   * shape: ends in -ings, base (chomp s) ends in -ing, length >= 6
+#   * rarity.csv common/rare rows win (curator's call beats the rule —
+#     see the upswings row in curated/rarity.csv)
+#   * surface in WordNet (savings, findings, dealings, feelings,
+#     proceedings) → preserve
+#   * base must be a real gerund (in word_dict) — guards against typos
+#     like xxxings where xxxing isn't an attested verb form
+#   * base has at least one concrete WN noun sense (morning noun.time,
+#     meeting noun.group/event, saving noun.act-or-not — preserved when
 #     surface is in WN, otherwise dropped through this gate too) → preserve
-#   * otherwise the surface is Wiktionary paradigm noise: +word_dict+'s
-#     +wiktionary_gerund_overplural_scrub+ in +frequency.rb+ clamps freq to
-#     +RARE_FREQ_MAX+ at build time, so the runtime +rare?+ short-circuit
+#   * otherwise the surface is Wiktionary paradigm noise: word_dict's
+#     wiktionary_gerund_overplural_scrub in frequency.rb clamps freq to
+#     RARE_FREQ_MAX at build time, so the runtime rare? short-circuit
 #     fires naturally without needing a runtime predicate.
 #
-# Build-time scrub only — not wired into +rare?+ at runtime: the demote
-# bakes into the generated +word_dict+ via +append_freq_tag!+, so the live
-# rarity gates read it through plain +frequency(word) <= RARE_FREQ_MAX+.
+# Build-time scrub only — not wired into rare? at runtime: the demote
+# bakes into the generated word_dict via append_freq_tag!, so the live
+# rarity gates read it through plain frequency(word) <= RARE_FREQ_MAX.
 def wiktionary_overgenerated_gerund_plural?(word)
   return false if word.nil? || word.empty?
   return false unless word.end_with?("ings")
@@ -467,18 +467,18 @@ def wiktionary_overgenerated_gerund_plural?(word)
   true
 end
 
-# True when +word+ is a +<X>nesses+ surface (+abruptnesses+, +stiffnesses+,
-# +goodnesses+) that pluralizes an abstract +-ness+ nominalization — a
+# True when word is a <X>nesses surface (abruptnesses, stiffnesses,
+# goodnesses) that pluralizes an abstract -ness nominalization — a
 # Wiktionary paradigm artifact, since English doesn't pluralize abstract
-# qualities. Concrete +-ness+ surfaces survive: +baronesses+ via the WN
-# concreteness gate (base +baroness+ is noun.person).
+# qualities. Concrete -ness surfaces survive: baronesses via the WN
+# concreteness gate (base baroness is noun.person).
 #
-# Gates mirror +wiktionary_overgenerated_gerund_plural?+ — same shape /
-# rarity.csv / WN structure, just sliced for the +-nesses+ pluralization
-# pattern. These are stronger junk than the +-ings+ class — the build-time
-# +wiktionary_nesses_overplural_scrub+ in +frequency.rb+ tombstones them
-# entirely (vs. the +-ings+ demote-to-rare). Build-time only; not wired
-# into +explicitly_forbidden?+ at runtime.
+# Gates mirror wiktionary_overgenerated_gerund_plural? — same shape /
+# rarity.csv / WN structure, just sliced for the -nesses pluralization
+# pattern. These are stronger junk than the -ings class — the build-time
+# wiktionary_nesses_overplural_scrub in frequency.rb tombstones them
+# entirely (vs. the -ings demote-to-rare). Build-time only; not wired
+# into explicitly_forbidden? at runtime.
 def wiktionary_overgenerated_abstract_nesses_plural?(word)
   return false if word.nil? || word.empty?
   return false unless word.end_with?("nesses")
@@ -516,7 +516,7 @@ def variants()
 end
 
 # US/UK -ize ↔ -ise (and -yze ↔ -yse) morphology: generate UK (s) from US (z) only.
-# UK spellings map back to US as preferred only when that US headword exists in +$word_dict+
+# UK spellings map back to US as preferred only when that US headword exists in $word_dict
 # (e.g. compromise has no valid *compromize*, so it is left alone—no blocklist needed).
 US_UK_YZE_SUFFIXES = [
   ["yzing", "ysing"],
@@ -544,48 +544,48 @@ def word_dict_includes_headword?(w)
   return false unless defined?($word_dict) && $word_dict.is_a?(Hash) && !$word_dict.empty?
   entry = $word_dict[w]
   return false if entry.nil?
-  # During +build_word_dict+ (the defer-rarity-losses window between scrubs
-  # and +finalize_build_entries!+), entries marked for tombstoned are
-  # still physically in +$word_dict+ but are logically absent. Preferred-form
+  # During build_word_dict (the defer-rarity-losses window between scrubs
+  # and finalize_build_entries!), entries marked for tombstoned are
+  # still physically in $word_dict but are logically absent. Preferred-form
   # / spelling-variant / US-UK mapping callers must treat them as
   # non-existent so they don't anoint a half-scrubbed row as the preferred
-  # surface of a live sibling (e.g. "flors" from +flour→flor+ where +flors+
+  # surface of a live sibling (e.g. "flors" from flour→flor where flors
   # only exists because SUBTLEX happened to list it and a later scrub had
   # already marked it for deletion).
   return false if defined?(BuildEntry) && entry.is_a?(BuildEntry) && entry.tombstoned?
   true
 end
 
-# Like +word_dict_includes_headword?+ but also requires that the entry carries at least one
+# Like word_dict_includes_headword? but also requires that the entry carries at least one
 # pronunciation. Used by US/UK variant-pair detection to avoid anointing frequency-only ghost
-# entries (+expertize+, +favorize+, +criticize+/+criticise+ mispairings, etc.) as the
+# entries (expertize, favorize, criticize/criticise mispairings, etc.) as the
 # preferred form of a well-pronounced counterpart: a prefix-less entry with empty prons
 # can't rhyme, so making it the canonical surface strands the real word in no cohort.
 def word_dict_includes_pronounced_headword?(w)
   return false unless defined?($word_dict) && $word_dict.is_a?(Hash) && !$word_dict.empty?
   entry = $word_dict[w]
   return false unless entry
-  # Same rationale as +word_dict_includes_headword?+: tombstoned
+  # Same rationale as word_dict_includes_headword?: tombstoned
   # entries are logically absent during the build-time window.
   return false if defined?(BuildEntry) && entry.is_a?(BuildEntry) && entry.tombstoned?
   prons = entry[1]
   prons.is_a?(Array) && !prons.empty?
 end
 
-# Lexicon headwords (+ optional +WORDS_NEEDED_FOR_TESTING+). When +include_rhymeless+ is false,
-# keep only words for which +has_rhyming_word?+ is true. When +common_only+ is true, drop +rare?+
-# headwords (+frequency+ at or below +RARE_FREQ_MAX+). Both predicates need +crime.rb+ loaded.
+# Lexicon headwords (+ optional WORDS_NEEDED_FOR_TESTING). When include_rhymeless is false,
+# keep only words for which has_rhyming_word? is true. When common_only is true, drop rare?
+# headwords (frequency at or below RARE_FREQ_MAX). Both predicates need crime.rb loaded.
 #
-# Memoized per +(include_rhymeless, common_only)+ flag combination (4 possible
-# keys total) because the hot path in +bin/compute-relatedness+ calls
-# +words_we_care_about(false, true)+ once per cue (~4000x per worker), and
+# Memoized per (include_rhymeless, common_only) flag combination (4 possible
+# keys total) because the hot path in bin/compute-relatedness calls
+# words_we_care_about(false, true) once per cue (~4000x per worker), and
 # rebuilding the ~20k-element filtered list — which includes a
-# +has_rhyming_word?+ pronunciations / rime_dict probe per candidate — dominated
-# the per-cue overhead. +word_dict+ is loaded once and treated as immutable
+# has_rhyming_word? pronunciations / rime_dict probe per candidate — dominated
+# the per-cue overhead. word_dict is loaded once and treated as immutable
 # at runtime, so the memo is safe; dict-build scripts that mutate
-# +word_dict+ do not call this function.
+# word_dict do not call this function.
 #
-# The parent in +bin/compute-relatedness+ primes this memo before +fork+
+# The parent in bin/compute-relatedness primes this memo before fork
 # so all worker processes inherit the filled entry via copy-on-write instead
 # of each rebuilding it from scratch.
 $words_we_care_about_memo = {}
@@ -645,8 +645,8 @@ def us_uk_ize_pair(word)
     return [w, uk]
   end
   us = uk_to_us_ize_spelling(w)
-  # Require a pronounced US counterpart: rejects frequency-only ghosts like +expertize+ that
-  # would otherwise be crowned the canonical form of a real word (+expertise+) and strand it
+  # Require a pronounced US counterpart: rejects frequency-only ghosts like expertize that
+  # would otherwise be crowned the canonical form of a real word (expertise) and strand it
   # from every rime cohort.
   if us && us != w && word_dict_includes_pronounced_headword?(us) && us_to_uk_ize_spelling(us) == w
     return [us, w]
@@ -655,7 +655,7 @@ def us_uk_ize_pair(word)
 end
 
 # US/UK -or ↔ -our (behavior/behaviour, color/colour, …). Longest suffix first; both spellings
-# must exist in +$word_dict+ (avoids tor/tour, for/four, contour, …).
+# must exist in $word_dict (avoids tor/tour, for/four, contour, …).
 US_UK_OR_SUFFIXES = [
   ["iors", "iours"],
   ["ior", "iour"],
@@ -704,7 +704,7 @@ def us_uk_or_pair(word)
   nil
 end
 
-# US/UK -er ↔ -re (center/centre, fiber/fibre, …). Longest suffix first; both spellings in +$word_dict+;
+# US/UK -er ↔ -re (center/centre, fiber/fibre, …). Longest suffix first; both spellings in $word_dict;
 # stem before the matched suffix must end in a consonant and have length ≥ 3 (avoids acre/acer, etc.).
 US_UK_ER_RE_SUFFIXES = [
   ["ering", "ring"],
@@ -758,7 +758,7 @@ end
 # US/UK consonant-doubling before a vowel-initial suffix on verbs ending in -l
 # (barreled/barrelled, traveling/travelling, modeler/modeller, marvelous/marvellous, counselor/
 # counsellor, …). US keeps a single l; UK doubles it. The pseudo-base (word minus the vowel
-# suffix, ending in a single l) must itself be a headword in +$word_dict+, which guards against
+# suffix, ending in a single l) must itself be a headword in $word_dict, which guards against
 # silent-e collisions (filed/filled, tiled/tilled, smiled/smilled, …) and unrelated ll-words
 # (called/caled, pulled/puled, boiled/boilled, …). As an extra safety belt the silent-e form
 # (pseudo-base with the trailing l replaced by "e") must NOT be a headword; this rejects the
@@ -769,10 +769,10 @@ US_UK_LL_VOWEL_SUFFIXES = %w[ing ers est ors ous ed er or].freeze
 US_UK_LL_MIN_WORD_LENGTH = 6
 US_UK_LL_MIN_PSEUDO_BASE_LENGTH = 3
 
-# Parse +word+ as either the US or UK shape of an -l-/-ll- doubling pair. Returns
+# Parse word as either the US or UK shape of an -l-/-ll- doubling pair. Returns
 # [us_suffix_sliced_base_ending_in_single_l, matched_vowel_suffix] on match, nil otherwise.
 # The returned base always ends in a single "l" (never "ll") and is at least
-# +US_UK_LL_MIN_PSEUDO_BASE_LENGTH+ characters long.
+# US_UK_LL_MIN_PSEUDO_BASE_LENGTH characters long.
 def us_uk_ll_parse(word)
   w = word.to_s
   return nil if w.length < US_UK_LL_MIN_WORD_LENGTH
@@ -828,10 +828,10 @@ def us_uk_morphology_variant_forms(word)
   k == u ? [u] : [u, k]
 end
 
-# Shape-only match of +word+ as the -oes or -os surface of an -o noun's plural. Returns
+# Shape-only match of word as the -oes or -os surface of an -o noun's plural. Returns
 # [oes_form, os_form] when the pattern matches, nil otherwise. Used by the build-time
 # corpus variant emitter (dict/corpus_variants.rb); runtime consumption of the resolved
-# pairs goes through +variants()+ via the generated +spelling_variants_auto.txt+ so no
+# pairs goes through variants() via the generated spelling_variants_auto.txt so no
 # corpus I/O leaks into the runtime path.
 O_PLURAL_MIN_WORD_LENGTH = 4
 
@@ -876,9 +876,9 @@ PARTICLE_HYPHEN_PREF_RE = Regexp.new(
 # very common N+N closed-compound case (back-hand → backhand, foot-fall → footfall,
 # pine-cone → pinecone, air-port → airport, bath-room → bathroom, ...). Curated
 # exceptions where the hyphenated form should win despite no echo (low-key, wi-fi,
-# fine-tune, ...) belong in +curated/spelling.csv+, which is consulted before this.
+# fine-tune, ...) belong in curated/spelling.csv, which is consulted before this.
 REDUP_STYLE_SINGLE_HYPHEN_RE = /\A[[:alpha:]]{2,}-[[:alpha:]]{2,}\z/.freeze
-# Second-segment matches here → prefer solid spelling (handout not hand-out). Omits +on+ (no common *-on tail).
+# Second-segment matches here → prefer solid spelling (handout not hand-out). Omits on (no common *-on tail).
 HYPHEN_COMPOUND_TRAILING_PARTICLES_SOLID_PREF =
   (HYPHEN_COMPOUND_LEADING_PARTICLES - %w[on]).freeze
 
@@ -895,7 +895,7 @@ def hyphen_redup_prefers_hyphenated_form?(f)
   hyphen_redup_halves_echo?(left, right)
 end
 
-# True when +left+ and +right+ exhibit one of the three phonological echoes of a
+# True when left and right exhibit one of the three phonological echoes of a
 # reduplication: identical halves (boo-boo, ha-ha), ablaut (same length, identical
 # consonant skeleton, only vowels differ — zig-zag, flip-flop, criss-cross,
 # wishy-washy), or a rhyming pair (same length, shared rightmost segment ≥ 2 chars
@@ -948,8 +948,8 @@ def ingest_word_into_hyphen_fold_buckets!(buckets, w)
 end
 
 # Build { fold => [form, ...] } only where multiple spellings share a fold.
-# +explicit_word_keys+: enumerable of headwords (e.g. word_dict.keys) when building during dict.rb;
-# otherwise uses +$word_dict+ or scans word_dict.txt (fallback when JSON cache is missing).
+# explicit_word_keys: enumerable of headwords (e.g. word_dict.keys) when building during dict.rb;
+# otherwise uses $word_dict or scans word_dict.txt (fallback when JSON cache is missing).
 def build_hyphen_multi_fold_map(explicit_word_keys = nil)
   buckets = {}
   load_variants_raw.each do |forms|
@@ -978,8 +978,8 @@ def build_hyphen_multi_fold_map(explicit_word_keys = nil)
   out.freeze
 end
 
-# +build_keys+: headwords used to discover fold groups (include rare spellings when pairing hyphen/solid variants).
-# +exported_keys+: final lexicon; a fold is written only when at least one of its spellings remains exported.
+# build_keys: headwords used to discover fold groups (include rare spellings when pairing hyphen/solid variants).
+# exported_keys: final lexicon; a fold is written only when at least one of its spellings remains exported.
 def save_hyphen_variant_map!(build_keys, exported_keys: nil)
   exported_keys = build_keys if exported_keys.nil?
   map = build_hyphen_multi_fold_map(build_keys)
@@ -1001,8 +1001,8 @@ end
 # Causes, HasProperty, HasSubevent, DerivedFrom, FormOf, SimilarTo, HasPrerequisite,
 # HasContext, MannerOf, ReceivesAction, HasFirstSubevent, HasLastSubevent, DefinedAs
 #
-# Vocab list gzip when assertions exist: built by +ensure_conceptnet_vocab_cache_for_build!+ (dict-build) or
-# setup.sh / bin/preprocess-conceptnet. +conceptnet_headwords_intersecting+ aborts if cache still missing/stale.
+# Vocab list gzip when assertions exist: built by ensure_conceptnet_vocab_cache_for_build! (dict-build) or
+# setup.sh / bin/preprocess-conceptnet. conceptnet_headwords_intersecting aborts if cache still missing/stale.
 # Path: CONCEPTNET_VOCAB_CACHE_GZ, else <repo>/generated/<assertions-basename>.en-kept-vocab.txt.gz.
 CONCEPTNET_ASSERTIONS_GZ = "conceptnet-assertions-5.7.0.csv.gz"
 CONCEPTNET_KEEP_RELATIONS = %w[
@@ -1014,7 +1014,7 @@ CONCEPTNET_KEEP_RELATIONS = %w[
 CONCEPTNET_KEEP_RELATION_INDEX = CONCEPTNET_KEEP_RELATIONS.each_with_object({}) { |r, h| h[r] = true }.freeze
 CONCEPTNET_EN_NODE_RE = %r{\A/c/en/([a-z][a-z]*)\z}
 
-# Fast /c/en/<ascii_lowercase_word> parse (same acceptance as +CONCEPTNET_EN_NODE_RE+); avoids MatchData in hot loops.
+# Fast /c/en/<ascii_lowercase_word> parse (same acceptance as CONCEPTNET_EN_NODE_RE); avoids MatchData in hot loops.
 def conceptnet_en_lemma_from_uri(uri)
   return nil unless uri
   len = uri.bytesize
@@ -1030,18 +1030,18 @@ def hyphens_to_underscores(word)
   word.to_s.tr("-", "_")
 end
 
-# True if +dict_set+ contains this ConceptNet lemma spelling or the hyphenated CMU-style variant.
+# True if dict_set contains this ConceptNet lemma spelling or the hyphenated CMU-style variant.
 def conceptnet_dict_includes_lemma?(dict_set, cn_lemma)
   dict_set.include?(cn_lemma) || dict_set.include?(cn_lemma.tr("_", "-"))
 end
 
-# Headwords that are their own relatedness-export key: excludes inflected forms (keys of +lemma_map+).
+# Headwords that are their own relatedness-export key: excludes inflected forms (keys of lemma_map).
 def relatedness_export_base_headwords(all_headwords, lemma_map)
   all_headwords.reject { |w| lemma_map.key?(w) }
 end
 
 # Map a ConceptNet /c/en/ lemma to the spelling we store in relatedness artifacts when it matches
-# our lexicon (otherwise returns +cn_lemma+ unchanged). Uses build-time +lemma_map+ like runtime +lemma+.
+# our lexicon (otherwise returns cn_lemma unchanged). Uses build-time lemma_map like runtime lemma.
 def relatedness_canonical_spelling_for_conceptnet_lemma(cn_lemma, dict_set, lemma_map)
   if dict_set.include?(cn_lemma)
     return lemma_map[cn_lemma] || cn_lemma
@@ -1075,7 +1075,7 @@ def conceptnet_vocab_cache_derived_gz_path(assertions_path)
   File.join(GENERATED_DIR, "#{stem}#{CONCEPTNET_VOCAB_CACHE_SUFFIX}")
 end
 
-# Canonical vocab-cache path (read + write): CONCEPTNET_VOCAB_CACHE_GZ if set, else under +GENERATED_DIR+.
+# Canonical vocab-cache path (read + write): CONCEPTNET_VOCAB_CACHE_GZ if set, else under GENERATED_DIR.
 def conceptnet_vocab_cache_output_gz_path(assertions_path = nil)
   assertions_path ||= conceptnet_assertions_gz_path
   return nil unless assertions_path
@@ -1105,7 +1105,7 @@ def ensure_conceptnet_vocab_cache_for_build!
   build_conceptnet_vocab_cache!
 end
 
-# Loads vocab entries from a cache built by +build_conceptnet_vocab_cache!+ (skips # comments).
+# Loads vocab entries from a cache built by build_conceptnet_vocab_cache! (skips # comments).
 def conceptnet_vocab_load(cache_gz_path)
   require "zlib"
   s = Set.new
@@ -1181,7 +1181,7 @@ def build_conceptnet_vocab_cache!(output_path: nil)
   output_path
 end
 
-# Subset of +dict_set+ that have a Numberbatch row (lowercase a-z and underscore in the embedding file).
+# Subset of dict_set that have a Numberbatch row (lowercase a-z and underscore in the embedding file).
 def numberbatch_headwords_intersecting(dict_set)
   return Set.new if dict_set.nil? || dict_set.empty?
   txt_path = numberbatch_txt_path
@@ -1204,7 +1204,7 @@ def numberbatch_headwords_intersecting(dict_set)
   out
 end
 
-# Subset of +dict_set+ that appear as /c/en/… endpoints on a kept ConceptNet relation (same filter as edge export).
+# Subset of dict_set that appear as /c/en/… endpoints on a kept ConceptNet relation (same filter as edge export).
 def conceptnet_headwords_intersecting(dict_set)
   return Set.new if dict_set.nil? || dict_set.empty?
   gz_path = conceptnet_assertions_gz_path
@@ -1239,7 +1239,7 @@ def conceptnet_headwords_intersecting(dict_set)
   end
 end
 
-# Path of the pre-canonicalization edges cache derived from +assertions_path+.
+# Path of the pre-canonicalization edges cache derived from assertions_path.
 def conceptnet_edges_cache_derived_path(assertions_path)
   return nil unless assertions_path
   stem = File.basename(assertions_path).sub(/\.csv\.gz\z/i, "").sub(/\.gz\z/i, "")
@@ -1259,10 +1259,10 @@ def conceptnet_edges_cache_usable?(assertions_gz, cache_path)
   File.mtime(cache_path) >= File.mtime(assertions_gz)
 end
 
-# Streaming scan of +assertions_gz+ → +cache_path+ msgpack.gz with all kept English-English edges as
+# Streaming scan of assertions_gz → cache_path msgpack.gz with all kept English-English edges as
 # pre-canonicalization triples (w1, w2, weight) where w1 < w2. Output is a pure function of the
-# assertions file + +CONCEPTNET_KEEP_RELATIONS+, so it survives across dict builds that vary only in
-# +word_dict+. Header records the keep-relations signature so a relation-set change forces a rescan.
+# assertions file + CONCEPTNET_KEEP_RELATIONS, so it survives across dict builds that vary only in
+# word_dict. Header records the keep-relations signature so a relation-set change forces a rescan.
 def build_conceptnet_filtered_edges_cache!(assertions_gz, cache_path)
   require 'zlib'
   keep = CONCEPTNET_KEEP_RELATION_INDEX
@@ -1311,8 +1311,8 @@ def build_conceptnet_filtered_edges_cache!(assertions_gz, cache_path)
   triples.size
 end
 
-# Yields each +[w1, w2, weight]+ from a previously built cache. Returns +nil+ if the cache's
-# +keep_signature+ doesn't match current +CONCEPTNET_KEEP_RELATIONS+ (so the caller falls back to
+# Yields each [w1, w2, weight] from a previously built cache. Returns nil if the cache's
+# keep_signature doesn't match current CONCEPTNET_KEEP_RELATIONS (so the caller falls back to
 # rebuilding); returns the triple count on success.
 def each_conceptnet_cached_edge(cache_path)
   return enum_for(:each_conceptnet_cached_edge, cache_path) unless block_given?
@@ -1506,11 +1506,11 @@ def hyphen_multi_fold_map
 end
 
 # Frequency lookup that works in both runtime and build contexts. Runtime
-# (+crime.rb+ loaded) defers to +word_dict+'s lazy loader; build time
-# (+bin/dict-build+, where +crime.rb+ is not on the load path) reads the
-# +$word_dict+ global pinned by +preferred_form_in_build_lexicon+. Calling
-# +frequency(word)+ directly would NameError during the build because
-# +crime.rb+ is the only place it's defined.
+# (crime.rb loaded) defers to word_dict's lazy loader; build time
+# (bin/dict-build, where crime.rb is not on the load path) reads the
+# $word_dict global pinned by preferred_form_in_build_lexicon. Calling
+# frequency(word) directly would NameError during the build because
+# crime.rb is the only place it's defined.
 def preferred_form_frequency_lookup(word)
   return 0 if word.nil?
   wd = defined?(word_dict) ? word_dict : $word_dict
@@ -1547,7 +1547,7 @@ def preferred_among_hyphen_equivalents(forms)
     # like 'offset' (vs 'off-set') where modern usage has collapsed the
     # hyphen. Cases like 'in-laws' (different stress from 'inlaws') are
     # filtered out earlier by the pron-compatibility guard in
-    # +preferred_form+, so this rule never sees them.
+    # preferred_form, so this rule never sees them.
     hyph_pick = parts.min
     solid_alt = forms.find { |f| !f.include?("-") }
     if solid_alt.nil? || preferred_form_frequency_lookup(solid_alt) < preferred_form_frequency_lookup(hyph_pick)
@@ -1578,8 +1578,8 @@ def preferred_among_hyphen_equivalents(forms)
   forms.min_by { |f| [f.count("-"), f.downcase] }
 end
 
-# Filter +forms+ (a hyphen-fold equivalence class containing +word+) down to
-# those that share at least one pronunciation with +word+. Different stress
+# Filter forms (a hyphen-fold equivalence class containing word) down to
+# those that share at least one pronunciation with word. Different stress
 # patterns or phoneme sequences mean the forms are different lexemes that
 # happen to share an orthographic fold ('inlaws' /IH1 N L AA2 Z/ is stressed
 # differently from 'in-laws' /IH2 N L AA1 Z/), so they shouldn't be grouped
@@ -1639,14 +1639,14 @@ def preferred_form(word)
   preferred_among_hyphen_equivalents(compatible)
 end
 
-# Run +block+ with +$word_dict+ pointing at +hash+, restoring the previous
+# Run block with $word_dict pointing at hash, restoring the previous
 # value on exit (success or raise). Used by build-time call sites that need
-# helpers in this file (+preferred_form+, +word_dict_includes_headword?+,
-# the +wiktionary_*_overplural+ predicates, …) to read the in-flight build
-# +hash+ instead of the runtime-loaded msgpack: those helpers consult
-# +$word_dict+ unconditionally, so without this swap they'd see either
-# +nil+ (pre-runtime) or a stale prior-build dict during +bin/dict-build+.
-# Idempotent on nested calls (each call stashes/restores its own +previous+).
+# helpers in this file (preferred_form, word_dict_includes_headword?,
+# the wiktionary_*_overplural predicates, …) to read the in-flight build
+# hash instead of the runtime-loaded msgpack: those helpers consult
+# $word_dict unconditionally, so without this swap they'd see either
+# nil (pre-runtime) or a stale prior-build dict during bin/dict-build.
+# Idempotent on nested calls (each call stashes/restores its own previous).
 def with_word_dict(hash)
   previous = $word_dict
   $word_dict = hash
@@ -1655,8 +1655,8 @@ ensure
   $word_dict = previous
 end
 
-# Like +preferred_form+, but US/UK / hyphen resolution consults +word_dict+ (the build-time hash) via
-# +$word_dict+ so rime-bucket pruning sees the correct preferred surface before export.
+# Like preferred_form, but US/UK / hyphen resolution consults word_dict (the build-time hash) via
+# $word_dict so rime-bucket pruning sees the correct preferred surface before export.
 def preferred_form_in_build_lexicon(word, word_dict)
   with_word_dict(word_dict) { preferred_form(word) }
 end
@@ -1704,14 +1704,14 @@ end
 SPELLING_CSV_PATH = File.join(CURATED_DIR, "spelling.csv")
 
 # A spelling.csv column counts as a word-form (rather than a free-text notes value)
-# when it consists entirely of letters, hyphens, and apostrophes (e.g. +color+,
-# +'til+, +rock'n'roll+, +acknowledgement+). Anything containing whitespace, digits,
-# +#+, or other punctuation is treated as the start of the optional notes column.
+# when it consists entirely of letters, hyphens, and apostrophes (e.g. color,
+# 'til, rock'n'roll, acknowledgement). Anything containing whitespace, digits,
+# #, or other punctuation is treated as the start of the optional notes column.
 SPELLING_CSV_FORM_RE = /\A['[:alpha:]][[:alpha:]'\-]*\z/
 
 # Split a comma-separated spelling.csv row into [forms, notes_or_nil].
 # Forms are stripped and consumed left-to-right until the first column that does
-# not look like a word-form (per +SPELLING_CSV_FORM_RE+); from there to end-of-line
+# not look like a word-form (per SPELLING_CSV_FORM_RE); from there to end-of-line
 # is the notes payload, rejoined with commas so embedded commas inside notes survive.
 def split_spelling_row(line)
   raw = line.split(",")
@@ -1735,23 +1735,23 @@ def split_spelling_row(line)
   [forms, notes]
 end
 
-# Returns an array of form-arrays: each inner array is +[preferred, alt1[, alt2, ...]]+.
-# Sources, in load order (later sources OVERRIDE earlier ones because +load_variants+
+# Returns an array of form-arrays: each inner array is [preferred, alt1[, alt2, ...]].
+# Sources, in load order (later sources OVERRIDE earlier ones because load_variants
 # does last-write-wins per surface form):
-#   * +generated/spelling_variants_auto.txt+ — emitted by dict-build, whitespace-separated
-#                                   +preferred alt+ pairs. Optional (skipped when missing,
+#   * generated/spelling_variants_auto.txt — emitted by dict-build, whitespace-separated
+#                                   preferred alt pairs. Optional (skipped when missing,
 #                                   e.g. on a fresh checkout before the first build).
-#   * +curated/spelling.csv+     — hand-edited list, CSV (comma-separated) with +#+ comment
+#   * curated/spelling.csv     — hand-edited list, CSV (comma-separated) with # comment
 #                                   header lines and an optional trailing free-text notes
 #                                   column (silently dropped at load time; see
-#                                   +split_spelling_row+).
-# Curated MUST come last: detectors in +emit_spelling_variants_auto!+ sometimes pick the
-# opposite preference direction from the human-curated list (corpus Zipf can favor +adapter+
-# over +adaptor+, +ax+ over +axe+, +disc+ over +disk+, +mamma+ over +mama+) and we want the
+#                                   split_spelling_row).
+# Curated MUST come last: detectors in emit_spelling_variants_auto! sometimes pick the
+# opposite preference direction from the human-curated list (corpus Zipf can favor adapter
+# over adaptor, ax over axe, disc over disk, mamma over mama) and we want the
 # hand-edited choice to win for any pair that appears in both files.
 #
-# Comment lines (starting with +#+) and lines that don't begin with an alphabetic character
-# are skipped at parse time, matching the legacy +/A[[:alpha:]]/+ filter.
+# Comment lines (starting with #) and lines that don't begin with an alphabetic character
+# are skipped at parse time, matching the legacy /A[[:alpha:]]/ filter.
 def load_variants_raw
   result = []
   auto_path = generated_dict_path(SPELLING_VARIANTS_AUTO_FILENAME)
@@ -1779,14 +1779,14 @@ def load_variants
 end
 
 #
-# Single morphological prefixes used by +prefix_words+ (crime.rb) for the rhyme filter
-# and by +syllabify_with_common_prefix_split+ (phonology.rb) for the syllabifier's prefix
-# split. Order: longer before shorter where one contains another (+inter+ before +in+).
-# Overlaps +HYPHEN_COMPOUND_LEADING_PARTICLES+ only on +in+, +out+, +up+ — those serve
+# Single morphological prefixes used by prefix_words (crime.rb) for the rhyme filter
+# and by syllabify_with_common_prefix_split (phonology.rb) for the syllabifier's prefix
+# split. Order: longer before shorter where one contains another (inter before in).
+# Overlaps HYPHEN_COMPOUND_LEADING_PARTICLES only on in, out, up — those serve
 # different rules; do not merge arrays without checking both call sites.
 #
-# Intentionally restricted to *single* prefixes. Compound shapes like +insub-+ in
-# +insubordinate+ are handled by recursive stripping in +recursive_prefix_ancestors+
+# Intentionally restricted to *single* prefixes. Compound shapes like insub- in
+# insubordinate are handled by recursive stripping in recursive_prefix_ancestors
 # (crime.rb), which iterates this list at each step. Don't add compound entries here as
 # a band-aid — that's the smell that motivated the recursive refactor.
 #
@@ -1794,118 +1794,184 @@ end
 COMMON_PREFIXES = [
   'a',       # privative (atonal, asexual, achromatic, abiotic) and locative (aflame, ashore,
              # around, aground, abuzz). Accepts splash damage on words that merely start with
-             # +a+ (ajar/jar, acorn/corn, amid/mid, ahead/head, abut/but, avoid/void, ado/do,
-             # abasement/basement...) -- those cases live in the +unless they're not
-             # derivationally related+ spec subcontext which is currently skipped.
+             # a (ajar/jar, acorn/corn, amid/mid, ahead/head, abut/but, avoid/void, ado/do,
+             # abasement/basement...) -- those cases live in the unless they're not
+             # derivationally related spec subcontext which is currently skipped.
+  'aero',    # Greek combining form (aerodynamic, aeronautical).
   'along',   # alongside
+  'alpha',   # alphanumeric.
   'an',
   'ante',
   'anti',
   'arch',
+  'atto',    # SI prefix 10^-18.
   'auto',
   'be',      # beside, below, become (splash damage on between/tween etc.)
   'bi',
   'bio',     # Greek combining form (biology, biomedical, biotech). Splash damage: nothing
-             # observed — opaque +bio-+ words (biopsy/psy, biceps/ceps) don't share rimes
+             # observed — opaque bio- words (biopsy/psy, biceps/ceps) don't share rimes
              # with their over-stripped tails.
+  'centi',   # SI prefix 10^-2 (centimeter, centiliter, centigram).
+  'chemo',   # Greek combining form (chemotherapy, chemotherapies).
   'co',
   'com',
   'con',
   'contra',
   'counter', # counterattack/attack, counterattacked/attacked, counterpoint/point,
              # counterespionage/espionage. The bare-stem pairs are also caught by
-             # +compound_modifier_remainders+ (both +counter+ and +attack+ are dict
-             # headwords), but the inflected +counterattacked+ → +attacked+ peel
-             # needs the explicit prefix entry because +attacked+ isn't a dict
-             # headword. Splash damage: +counterfeit+/+feit+, +counterpane+/+pane+,
-             # +countervail+/+vail+ — but +feit+/+pane+/+vail+ aren't dict headwords
+             # compound_modifier_remainders (both counter and attack are dict
+             # headwords), but the inflected counterattacked → attacked peel
+             # needs the explicit prefix entry because attacked isn't a dict
+             # headword. Splash damage: counterfeit/feit, counterpane/pane,
+             # countervail/vail — but feit/pane/vail aren't dict headwords
              # (or aren't in the rime cohort) so the filter never fires on them.
   'de',
+  'deca',    # SI prefix 10^1 (US spelling).
+  'deci',    # SI prefix 10^-1.
+  'deka',    # SI prefix 10^1 (alt spelling).
+  'demo',    # Greek combining form (demographic, demographics).
   'dis',
   'disen',   # compound dis- + en- (disenchanted → chanted). Now redundant with the
-             # recursive stripping in +recursive_prefix_ancestors+ (which also reaches
-             # +chanted+ via dis- → +enchanted+ → en- → +chanted+); kept as a single-step
+             # recursive stripping in recursive_prefix_ancestors (which also reaches
+             # chanted via dis- → enchanted → en- → chanted); kept as a single-step
              # fast path and to document the historic compound entry.
   'down',    # downwind, downhill, downstream
   'dys',     # Greek negative: dysfunction, dysfunctional, dystopia, dyslexia, dysphoria.
-             # Splash damage: nothing observed — opaque words starting with +dys+ are
-             # virtually all derivational (+dys+ doesn't appear as a non-morphological
+             # Splash damage: nothing observed — opaque words starting with dys are
+             # virtually all derivational (dys doesn't appear as a non-morphological
              # word-initial trigraph in English).
   'east',
+  'echo',    # combining form (echolocation, echolocations). Opaque echo- words have
+             # tails (echinacea→inacea, echinoderm→inoderm) that aren't dict, so the
+             # filter never fires on them.
   'en',
   'endo',    # endothermic → thermic
+  'euro',    # combining form (euromissiles, eurozone). europe→pe is non-dict so safe.
   'ex',
+  'exa',     # SI prefix 10^18. Opaque exa- words (exact, example, exam, exalt, exasperate)
+             # have non-dict tails, so the filter never fires on them.
   'exo',     # exothermic → thermic
   'extra',
+  'femto',   # SI prefix 10^-15.
+  'giga',    # SI prefix 10^9.
+  'hecto',   # SI prefix 10^2.
   'hetero',
+  'hippo',   # Greek combining form (hippocampus, hippopotamus).
   'homeo',
   'homo',
   'hyper',
+  'hypo',    # Greek combining form (hypocritical, hypotension, hypothetical).
   'il',      # illegal, illicit, illogical
   'im',      # impure, impolite (splash damage on peach/impeach etc.)
   'in',
   'inter',
   'intra',
-  'lay',     # Compound modifier (+layperson+, +layman+, +laymen+). Treating it as a single-
-             # prefix lets +recursive_prefix_ancestors+ peel it in step with +business+, +council+,
+  'kilo',    # SI prefix 10^3 (kilometer, kilogram, kilowatt). The historical
+             # rationale for excluding kilo- was that kilometer/thermometer should
+             # rhyme — handled now by PREFIX_FILTER_SIBLING_ANCHOR_TAILS in crime.rb,
+             # which preserves the stress-shifted kilometer↔thermometer pairing
+             # (and friends: speedometer, barometer, etc.) while still correctly
+             # filtering kilometer↔meter and kilogram↔gram. centimeter and the
+             # other front-stress SI compounds live in different rime cohorts and
+             # don't interact with the carve-out at all.
+  'lay',     # Compound modifier (layperson, layman, laymen). Treating it as a single-
+             # prefix lets recursive_prefix_ancestors peel it in step with business, council,
              # etc., which are caught by the (length-gated) compound-modifier branch. Splash
-             # damage: +layout+ / +out+, +layered+ / opaque tails — both rejected downstream by
-             # the primary-stress-preservation gate in +phoneme_tail_match?+ (the +-out+ in
-             # +layout+ is +AW2+, not +AW1+) so the filter only fires when the resulting
-             # compound element actually keeps primary stress (+layperson+'s +per+).
+             # damage: layout / out, layered / opaque tails — both rejected downstream by
+             # the primary-stress-preservation gate in phoneme_tail_match? (the -out in
+             # layout is AW2, not AW1) so the filter only fires when the resulting
+             # compound element actually keeps primary stress (layperson's per).
+  'loco',    # Greek combining form (locomotion, locomotive, locomotives). Unblocks
+             # the currently-skipped ought_not_rhyme 'motion','locomotion' spec.
+  'logo',    # combining form (logographic).
   'macro',
+  'mega',    # SI prefix 10^6 (megabyte, megawatt, megameter).
+  'meta',    # Greek combining form (metaphysical, metastatic, metacarpal). Opaque
+             # meta- words (metaphor→phor, metabolism→bolism, metallic→llic) have
+             # non-dict tails so the filter never fires on them.
   'micro',
   'mid',
+  'milli',   # SI prefix 10^-3 (millimeter, milligram, milliliter).
   'mis',
   'mono',
   'multi',   # multimillionaire/millionaire, multinational/national, multipurpose/purpose,
              # multitask/task, multiform/form, multiplex/plex. Splash damage on words that
-             # merely start with +multi+ but aren't morphological derivations (none observed
-             # so far — opaque uses like +multiply+/+ply+ collapse correctly here too since
+             # merely start with multi but aren't morphological derivations (none observed
+             # so far — opaque uses like multiply/ply collapse correctly here too since
              # they ARE etymologically prefixed and we don't want them paired as rhymes).
+  'nano',    # SI prefix 10^-9 (nanometer, nanosecond).
   'non',
   'north',
   'off',
   'omni',
   'out',
   'over',
+  'para',    # Greek combining form (paralegal/legal, paramedic/medic, paranormal/normal,
+             # paramilitary/military, parasympathetic/sympathetic). Splash damage:
+             # paragraph/graph and paratext/text would be peeled — those ARE
+             # etymological compounds, so the prefix filter firing on them is correct.
+             # Opaque para- words (parade, paradox, parallel, parameter, paradise) have
+             # non-dict tails so the filter never fires on them.
   'pen',     # Latin "almost" (penultimate, antepenultimate). Splash damage on words
-             # that merely start with +pen+ (penny, pencil, penal, pen, penance) — but
-             # those don't share rimes with +ultimate+ / +ult+, so the splash is bounded
+             # that merely start with pen (penny, pencil, penal, pen, penance) — but
+             # those don't share rimes with ultimate / ult, so the splash is bounded
              # by the rime cohort.
+  'peta',    # SI prefix 10^15.
+  'photo',   # Greek combining form (photochemical, photographic, photosynthesis,
+             # photovoltaic).
+  'physio',  # Greek combining form (physiological, physiotherapies).
+  'pico',    # SI prefix 10^-12.
+  'poly',    # Greek combining form (polytechnic, polyethylene, polyamorous).
+  'porno',   # combining form (pornographic).
   'post',
   'pre',
+  'proto',   # Greek combining form (prototypical). Iterated longer-first so it peels
+             # ahead of pro- when both apply.
   'pseudo',  # pseudoscience/science etc.
   'pro',
+  'psycho',  # Greek combining form (psychotherapy, psychoanalysis, psychological).
+  'pyro',    # Greek combining form (pyrotechnic, pyromaniac).
+  'radio',   # combining form (radioactive, radiological). Opaque radio- words
+             # (radium→um, radius→us, radial→al) have non-dict tails so safe.
   're',
+  'retro',   # Latin combining form (retroactive, retrovirus, retrogressive).
   'semi',    # semiautomatic/automatic, semistatic/static, semicircle/circle, etc.
-             # +semi+ is a rare dict headword (the +rare?+ gate in
-             # +compound_modifier_remainders+ would otherwise reject the peel that
-             # productive prefixes like +multi+ — also listed here — would be caught
-             # by). Same situation as +thermo+. Splash damage: virtually none —
-             # +semi-+ is almost exclusively a productive prefix in modern English
-             # (no opaque +semi+ words share rimes with their tails).
+             # semi is a rare dict headword (the rare? gate in
+             # compound_modifier_remainders would otherwise reject the peel that
+             # productive prefixes like multi — also listed here — would be caught
+             # by). Same situation as thermo. Splash damage: virtually none —
+             # semi- is almost exclusively a productive prefix in modern English
+             # (no opaque semi words share rimes with their tails).
   'south',
+  'steno',   # Greek combining form (stenographic).
+  'stereo',  # Greek combining form (stereotypical, stereomicroscope).
   'sub',
   'super',
   'sym',
   'syn',
   'tele',
   'teleo',   # teleological → logical (tele → ological wouldn't match)
+  'tera',    # SI prefix 10^12.
   'thermo',  # Greek combining form (thermoplastic/plastic, thermometer/meter,
              # thermonuclear/nuclear, thermodynamics/dynamics, thermosphere/sphere,
              # thermocouple/couple, thermotherapy/therapy). Listed here because
-             # +thermo+ is a rare dict headword (freq 2), so the +rare?+ gate in
-             # +compound_modifier_remainders+ would otherwise reject the peel that
-             # +electro+ (freq 10) sails through. Splash damage on +thermo+ words
+             # thermo is a rare dict headword (freq 2), so the rare? gate in
+             # compound_modifier_remainders would otherwise reject the peel that
+             # electro (freq 10) sails through. Splash damage on thermo words
              # whose tail is non-derivational is bounded by the pron-suffix-
              # alignment gate downstream.
   'trans',
   'tri',
+  'typo',    # combining form (typographical).
   'un',
   'under',
   'uni',
   'up',
+  'video',   # combining form (videoconferencing).
+  'yocto',   # SI prefix 10^-24.
+  'yotta',   # SI prefix 10^24.
+  'zepto',   # SI prefix 10^-21.
+  'zetta',   # SI prefix 10^21.
 ]
 
 #
@@ -2138,7 +2204,7 @@ ALL_FINAL_CONSONANT_CLUSTERS = [
   'V D', # caved
   'V Z', # drives
   'Z D', # dozed
-] # ARPABET format. source: John Algeo, https://www.tandfonline.com/doi/pdf/10.1080/00437956.1978.11435661 + original work (+JH D+ covers camouflaged)
+] # ARPABET format. source: John Algeo, https://www.tandfonline.com/doi/pdf/10.1080/00437956.1978.11435661 + original work (JH D covers camouflaged)
 
 # Words with weird initial/final consonant clusters that should be included anyway
 WHITELIST = [
@@ -2260,19 +2326,19 @@ def load_word_dict()
   word_dict
 end
 
-# Overridden in +crime.rb+ for DynamoDB mode (+lexicon_word_entry+).
+# Overridden in crime.rb for DynamoDB mode (lexicon_word_entry).
 def lexicon_word_entry(word)
   word_dict[word]
 end
 
-# Flat +{word => lemma}+ lookup loaded from +WORD_LEMMA_MAP_FILENAME+ (built by
-# dict-build). Only stores +word != lemma+ pairs to keep the file small
+# Flat {word => lemma} lookup loaded from WORD_LEMMA_MAP_FILENAME (built by
+# dict-build). Only stores word != lemma pairs to keep the file small
 # (~40% of headwords have a non-self lemma); every missing key means "lemma
-# is the word itself", matching the nil-collapse rule in +save_word_dict+ and
-# +lexicon_word_entry+. A +false+ sentinel means "already checked and the
-# file isn't on disk" — avoids re-stat'ing on every +lemma+ call.
+# is the word itself", matching the nil-collapse rule in save_word_dict and
+# lexicon_word_entry. A false sentinel means "already checked and the
+# file isn't on disk" — avoids re-stat'ing on every lemma call.
 #
-# Must stay a top-level global (not a module constant) so +load_word_dict+
+# Must stay a top-level global (not a module constant) so load_word_dict
 # can reset it as part of its invalidation handshake.
 $word_to_lemma = nil
 def load_word_to_lemma!
@@ -2280,11 +2346,11 @@ def load_word_to_lemma!
   $word_to_lemma = File.exist?(path) ? MessagePackUtils.load_and_unpack(path) : false
 end
 
-# Hot-path inner loop for +RelatedWords+ pair lookups (called thousands of
-# times per page render while coloring +set_related+ tuples). The +$word_to_
-# lemma+ global is checked inline rather than via a helper method so the
+# Hot-path inner loop for RelatedWords pair lookups (called thousands of
+# times per page render while coloring set_related tuples). The $word_to_
+# lemma global is checked inline rather than via a helper method so the
 # common warm-path case is one Hash lookup plus one nil check, not two method
-# dispatches. The +lexicon_word_entry+ fallback only fires when the msgpack
+# dispatches. The lexicon_word_entry fallback only fires when the msgpack
 # hasn't been generated yet (pre-dict-build checkout).
 def lemma(word)
   map = $word_to_lemma
@@ -2299,10 +2365,10 @@ def lemma(word)
   entry[2] || word
 end
 
-# Lazy +$word_to_semantic_base+ load mirroring +load_word_to_lemma!+. Map keys
-# are self-lemmas (lookup composes +lemma(w)+ first), values are derivational
-# roots. Missing on disk → +false+ sentinel so subsequent +semantic_base+ calls
-# don't re-stat the file. Reset by +load_word_dict+ when the dictionary is
+# Lazy $word_to_semantic_base load mirroring load_word_to_lemma!. Map keys
+# are self-lemmas (lookup composes lemma(w) first), values are derivational
+# roots. Missing on disk → false sentinel so subsequent semantic_base calls
+# don't re-stat the file. Reset by load_word_dict when the dictionary is
 # reloaded.
 $word_to_semantic_base = nil
 def load_word_to_semantic_base!
@@ -2312,15 +2378,15 @@ end
 
 # Hot path for relatedness lookups (R3). Returns the derivational root when
 # WordNet pointed to one and the suffix-allowlist gates passed during
-# +compute_semantic_base_map+; otherwise falls back to the inflectional
-# +lemma(w)+. Composes the two normalization layers in one call so callers
+# compute_semantic_base_map; otherwise falls back to the inflectional
+# lemma(w). Composes the two normalization layers in one call so callers
 # don't have to memorize the order.
 #
-# +RELATED_SKIP_DERIVATION=1+ disables the derivational hop (returns plain
-# +lemma(w)+) — used by A/B harnesses to measure R3's contribution against the
-# pre-R3 normalization regime. Layered with +RELATED_SKIP_LEMMA=1+ at the
-# call sites: +RELATED_SKIP_LEMMA+ skips this entirely (passes the raw
-# surface), +RELATED_SKIP_DERIVATION+ skips just the derivational layer.
+# RELATED_SKIP_DERIVATION=1 disables the derivational hop (returns plain
+# lemma(w)) — used by A/B harnesses to measure R3's contribution against the
+# pre-R3 normalization regime. Layered with RELATED_SKIP_LEMMA=1 at the
+# call sites: RELATED_SKIP_LEMMA skips this entirely (passes the raw
+# surface), RELATED_SKIP_DERIVATION skips just the derivational layer.
 def semantic_base(word)
   base = lemma(word)
   return base if ENV["RELATED_SKIP_DERIVATION"] == "1"
@@ -2333,13 +2399,13 @@ def semantic_base(word)
 end
 
 # One-shot loader for the Numberbatch cosine guard in
-# +compute_semantic_base_map+. Returns the +word_underscored -> Array<Float>+
-# hash from +numberbatch_vectors.msgpack+ (already L2-normalized at save time
-# by +save_numberbatch_vectors!+, so cosine = dot product), or +nil+ when the
-# file is absent. Independent of +signals.rb+'s +numberbatch_table+ — that
-# path casts to +Numo::SFloat+ for hot-path BLAS, but the map build runs once
+# compute_semantic_base_map. Returns the word_underscored -> Array<Float>
+# hash from numberbatch_vectors.msgpack (already L2-normalized at save time
+# by save_numberbatch_vectors!, so cosine = dot product), or nil when the
+# file is absent. Independent of signals.rb's numberbatch_table — that
+# path casts to Numo::SFloat for hot-path BLAS, but the map build runs once
 # and only needs the dot product, so plain Ruby arrays are fine here. Skipping
-# +Numo+ also keeps +dict.rb+ free of the relatedness pipeline's heavy deps.
+# Numo also keeps dict.rb free of the relatedness pipeline's heavy deps.
 def load_numberbatch_vectors_for_semantic_base_guard
   path = generated_dict_path(NUMBERBATCH_VECTORS_FILENAME)
   return nil unless File.exist?(path)
@@ -2376,9 +2442,9 @@ end
 $lemma_to_words = nil
 def lemma_to_words
   return $lemma_to_words unless $lemma_to_words.nil?
-  # Force +word_dict+ to load before we allocate +$lemma_to_words+; +load_word_dict+ nils out
-  # +$lemma_to_words+ as part of its invalidation handshake, so allocating first would make the
-  # first loop iteration crash with +nil+.
+  # Force word_dict to load before we allocate $lemma_to_words; load_word_dict nils out
+  # $lemma_to_words as part of its invalidation handshake, so allocating first would make the
+  # first loop iteration crash with nil.
   wd = word_dict
   $lemma_to_words = Hash.new { |h, k| h[k] = [] }
   wd.each_key do |w|
@@ -2420,25 +2486,25 @@ def save_word_dict(word_dict, lemma_map = nil)
   f.close
 end
 
-# Emit the runtime-canonical +word_dict.msgpack+ — same +[freq, prons, lemma]+
-# triple shape as the in-memory hash returned by +load_word_dict+, with two
+# Emit the runtime-canonical word_dict.msgpack — same [freq, prons, lemma]
+# triple shape as the in-memory hash returned by load_word_dict, with two
 # storage tweaks:
 #
-#   * +prons+ on disk is an Array of space-joined ARPABET strings (e.g.
-#     +["K AE1 T", "K AE2 T"]+) rather than an Array of +Pronunciation+
+#   * prons on disk is an Array of space-joined ARPABET strings (e.g.
+#     ["K AE1 T", "K AE2 T"]) rather than an Array of Pronunciation
 #     objects — keeps the file ~30% smaller than the equivalent nested array
 #     of phoneme strings (one msgpack string header per pronunciation rather
-#     than per phoneme) and matches the +pron1|pron2+ wire format we already
-#     use in +word_dict.txt+, so +load_word_dict_msgpack+ can pass each
-#     element straight to +pronstr.split+ → +Pronunciation.new+.
-#   * +lemma+ is stored as +nil+ when it equals the headword (matches
-#     +save_word_lemma_map!+'s "drop self-lemmas" policy). +load_word_dict_
-#     msgpack+ resolves +nil+ back to the headword so the runtime contract
+#     than per phoneme) and matches the pron1|pron2 wire format we already
+#     use in word_dict.txt, so load_word_dict_msgpack can pass each
+#     element straight to pronstr.split → Pronunciation.new.
+#   * lemma is stored as nil when it equals the headword (matches
+#     save_word_lemma_map!'s "drop self-lemmas" policy). load_word_dict_
+#     msgpack resolves nil back to the headword so the runtime contract
 #     ("entry[2] is always a non-nil string equal to lemma or word") holds.
 #
-# Called right after +save_word_dict+ in +rebuild_rhymecrime_dictionaries+ so
-# a single dict-build refreshes both the human-readable +.txt+ and the
-# runtime-loaded +.msgpack+. The +Pronunciation#to_s+ join is cheap (~200K
+# Called right after save_word_dict in rebuild_rhymecrime_dictionaries so
+# a single dict-build refreshes both the human-readable .txt and the
+# runtime-loaded .msgpack. The Pronunciation#to_s join is cheap (~200K
 # entries × 1-2 prons of 4-8 phonemes), well under the rest of the build.
 def save_word_dict_msgpack!(word_dict, lemma_map = nil)
   ensure_generated_dict_dir!
@@ -2456,16 +2522,16 @@ def save_word_dict_msgpack!(word_dict, lemma_map = nil)
   puts "Wrote #{obj.size} word_dict entries to #{WORD_DICT_MSGPACK_FILENAME} (#{size_mb} MB)"
 end
 
-# Runtime mirror of +load_word_dict+ that reads +word_dict.msgpack+ instead
-# of streaming the +.txt+ file. Reconstitutes +Pronunciation+ instances and
-# resolves +nil+ lemmas back to the headword so the returned hash is
-# byte-for-byte equivalent to what +load_word_dict+ would have produced from
-# the +.txt+ surface — every downstream consumer (+lexicon_word_entry+,
-# +pronunciations+, +lemma+ fallback, etc.) is shape-agnostic between the
+# Runtime mirror of load_word_dict that reads word_dict.msgpack instead
+# of streaming the .txt file. Reconstitutes Pronunciation instances and
+# resolves nil lemmas back to the headword so the returned hash is
+# byte-for-byte equivalent to what load_word_dict would have produced from
+# the .txt surface — every downstream consumer (lexicon_word_entry,
+# pronunciations, lemma fallback, etc.) is shape-agnostic between the
 # two loaders.
 #
-# Returns +nil+ when the msgpack doesn't exist (caller falls back to the
-# +.txt+ loader for fresh checkouts pre-dict-build); raises through the
+# Returns nil when the msgpack doesn't exist (caller falls back to the
+# .txt loader for fresh checkouts pre-dict-build); raises through the
 # usual MessagePack errors otherwise.
 def load_word_dict_msgpack
   path = generated_dict_path(WORD_DICT_MSGPACK_FILENAME)
@@ -2491,14 +2557,14 @@ def load_word_dict_msgpack
   word_dict
 end
 
-# Emit the runtime-canonical +rime_dict.msgpack+ — same +{rime => [word, ...]}+
-# shape as +load_string_hash(rime_dict.txt)+, but native MessagePack for fast
+# Emit the runtime-canonical rime_dict.msgpack — same {rime => [word, ...]}
+# shape as load_string_hash(rime_dict.txt), but native MessagePack for fast
 # Lambda cold-start load and an order-of-magnitude smaller bundle hit than
 # the txt + .sanitize round-trip. Keys / values are stored verbatim (the txt
-# surface uses +.sanitize+ to fold +" "+ → +"_"+ for the whitespace-delimited
+# surface uses .sanitize to fold " " → "_" for the whitespace-delimited
 # format; msgpack doesn't need the fold so we keep raw spaces). Called from
-# +rebuild_rhymecrime_dictionaries+ alongside +save_string_hash(... rime_dict
-# ...)+.
+# rebuild_rhymecrime_dictionaries alongside save_string_hash(... rime_dict
+# ...).
 def save_rime_dict_msgpack!(rime_dict)
   ensure_generated_dict_dir!
   path = generated_dict_path_under_dict_dir(RIME_DICT_MSGPACK_FILENAME)
@@ -2511,8 +2577,8 @@ def save_rime_dict_msgpack!(rime_dict)
   puts "Wrote #{obj.size} rime_dict buckets to #{RIME_DICT_MSGPACK_FILENAME} (#{size_mb} MB)"
 end
 
-# Runtime mirror of +load_rime_dict_as_hash+. Returns +{rime => [word, ...]}+
-# or +nil+ when the msgpack isn't on disk (caller falls back to the +.txt+
+# Runtime mirror of load_rime_dict_as_hash. Returns {rime => [word, ...]}
+# or nil when the msgpack isn't on disk (caller falls back to the .txt
 # loader for fresh checkouts pre-dict-build).
 def load_rime_dict_msgpack
   path = generated_dict_path(RIME_DICT_MSGPACK_FILENAME)
@@ -2523,13 +2589,13 @@ def load_rime_dict_msgpack
   out
 end
 
-# Source-selection ablation gate. Env var +RHYMECRIME_GLOSS_SOURCE+ ∈ {+wordnet+, +wiktionary+,
-# +both+} (default +both+); the four gloss-using code paths (+gloss_word_token_set+ /
-# +sense_vectors+ / +sense_vectors_morphy+ in +signals.rb+, +gloss_tokens_for_word+ in
-# +crime.rb+, +combined_glosses_for+ in +bin/dump-sense-glosses+) consult these helpers
+# Source-selection ablation gate. Env var RHYMECRIME_GLOSS_SOURCE ∈ {wordnet, wiktionary,
+# both} (default both); the four gloss-using code paths (gloss_word_token_set /
+# sense_vectors / sense_vectors_morphy in signals.rb, gloss_tokens_for_word in
+# crime.rb, combined_glosses_for in bin/dump-sense-glosses) consult these helpers
 # before walking either corpus, so flipping the env var produces a clean A/B without code
 # edits. Used to retrain WN-only or WK-only baselines for direct classifier comparisons —
-# see +bin/diagnose-gloss-coverage+ and the experimental program around the Wiktionary-
+# see bin/diagnose-gloss-coverage and the experimental program around the Wiktionary-
 # glosses extension. Memoized at first call: changing the env var mid-process won't take
 # effect (the four paths cache token sets and sense-vector matrices keyed on word, not on
 # source — a fresh process is the boundary).
@@ -2556,35 +2622,35 @@ def gloss_source_use_wiktionary?
 end
 
 # Source ordering for the cap-bounded sense-vector / MPNet-item paths
-# (+sense_vectors+, +sense_vectors_morphy+ in +signals.rb+, +combined_glosses_for+
-# in +bin/dump-sense-glosses+). When both sources have more senses than the cap,
+# (sense_vectors, sense_vectors_morphy in signals.rb, combined_glosses_for
+# in bin/dump-sense-glosses). When both sources have more senses than the cap,
 # the source listed first eats the slots; the other only contributes if the first
-# leaves room. Default +wn-first+ matches the original integration; flip to
-# +wk-first+ via +RHYMECRIME_GLOSS_ORDER=wk-first+ to test whether the trained
+# leaves room. Default wn-first matches the original integration; flip to
+# wk-first via RHYMECRIME_GLOSS_ORDER=wk-first to test whether the trained
 # classifier prefers Wiktionary's denser per-word sense pool.
-# The token-union and pooled-definition paths (+gloss_word_token_set+,
-# +gloss_tokens_for_word+, +def_cos+) are unaffected — they consume both sources
+# The token-union and pooled-definition paths (gloss_word_token_set,
+# gloss_tokens_for_word, def_cos) are unaffected — they consume both sources
 # fully rather than bumping into a cap.
 def gloss_source_wk_first?
   @gloss_source_wk_first ||= (ENV["RHYMECRIME_GLOSS_ORDER"].to_s.strip.downcase == "wk-first") ? :yes : :no
   @gloss_source_wk_first == :yes
 end
 
-# Lazy +$wiktionary_glosses+ load. Map shape is +{ headword => [gloss_text, ...] }+ where
+# Lazy $wiktionary_glosses load. Map shape is { headword => [gloss_text, ...] } where
 # each entry is one Kaikki sense's first gloss (alt-of / form-of pointer senses excluded
-# at build time by +load_wiktionary+ so only definitional text survives). Missing-file
-# collapse to a +false+ sentinel so callers don't pay a +stat+ on every lookup; the
-# read accessor +wiktionary_glosses_for+ unwraps the sentinel back to an empty array.
+# at build time by load_wiktionary so only definitional text survives). Missing-file
+# collapse to a false sentinel so callers don't pay a stat on every lookup; the
+# read accessor wiktionary_glosses_for unwraps the sentinel back to an empty array.
 $wiktionary_glosses = nil
 def load_wiktionary_glosses!
   path = generated_dict_path(WIKTIONARY_GLOSSES_FILENAME)
   $wiktionary_glosses = File.exist?(path) ? MessagePackUtils.load_and_unpack(path) : false
 end
 
-# Returns +Array<String>+ of Wiktionary glosses for +word+ (one entry per definitional sense
-# in the filtered Kaikki dump), or +[]+ when the headword has no Wiktionary glosses, the
-# msgpack isn't on disk yet, or +RHYMECRIME_GLOSS_SOURCE+ excludes Wiktionary. Same
-# conservative no-signal contract as +gloss_tokens_for_word+ in +crime.rb+: callers fall
+# Returns Array<String> of Wiktionary glosses for word (one entry per definitional sense
+# in the filtered Kaikki dump), or [] when the headword has no Wiktionary glosses, the
+# msgpack isn't on disk yet, or RHYMECRIME_GLOSS_SOURCE excludes Wiktionary. Same
+# conservative no-signal contract as gloss_tokens_for_word in crime.rb: callers fall
 # back to WordNet-only behavior when this returns empty.
 def wiktionary_glosses_for(word)
   return [] if word.nil? || word.to_s.empty?
@@ -2595,11 +2661,11 @@ def wiktionary_glosses_for(word)
   map[word.to_s] || []
 end
 
-# Source-agnostic Wiktionary accessor: bypasses +RHYMECRIME_GLOSS_SOURCE+ entirely.
-# Used by the +wn_/wk_+ split features (+wn_gloss_match?+, +wk_sv_max+, ...) which
+# Source-agnostic Wiktionary accessor: bypasses RHYMECRIME_GLOSS_SOURCE entirely.
+# Used by the wn_/wk_ split features (wn_gloss_match?, wk_sv_max, ...) which
 # always read each source independently to study its individual contribution. The
-# regular +wiktionary_glosses_for+ above is the gate-respecting reader for the
-# combined +gloss_match?+ / +sense_vectors+ paths and the runtime hot path.
+# regular wiktionary_glosses_for above is the gate-respecting reader for the
+# combined gloss_match? / sense_vectors paths and the runtime hot path.
 def wiktionary_glosses_raw_for(word)
   return [] if word.nil? || word.to_s.empty?
   load_wiktionary_glosses! if $wiktionary_glosses.nil?
@@ -2608,8 +2674,8 @@ def wiktionary_glosses_raw_for(word)
   map[word.to_s] || []
 end
 
-# Save the headword → [gloss, ...] map as +WIKTIONARY_GLOSSES_FILENAME+. Called from
-# +rebuild_rhymecrime_dictionaries+ alongside the other generated/-msgpack writers.
+# Save the headword → [gloss, ...] map as WIKTIONARY_GLOSSES_FILENAME. Called from
+# rebuild_rhymecrime_dictionaries alongside the other generated/-msgpack writers.
 # Drops empty headword entries so the file size is bounded by the headword count that
 # actually carries gloss text.
 def save_wiktionary_glosses!(glosses_map)
@@ -2627,9 +2693,9 @@ def save_wiktionary_glosses!(glosses_map)
   puts "Wrote #{obj.size} headwords (#{total_glosses} glosses) to #{WIKTIONARY_GLOSSES_FILENAME} (#{size_mb} MB)"
 end
 
-# Emit the runtime +word → canonical_lemma+ msgpack consumed by +word_to_lemma+.
-# Called right after +save_word_dict+ in dict-build; only stores entries where
-# the lemma differs from the word (matches +lemma(w)+'s "unknown → word"
+# Emit the runtime word → canonical_lemma msgpack consumed by word_to_lemma.
+# Called right after save_word_dict in dict-build; only stores entries where
+# the lemma differs from the word (matches lemma(w)'s "unknown → word"
 # collapse and keeps the file small — ~40% of headwords have a non-self lemma).
 def save_word_lemma_map!(word_dict, lemma_map)
   ensure_generated_dict_dir!

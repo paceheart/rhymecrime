@@ -40,7 +40,7 @@ REPO="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$REPO"
 
 # Absolute path: bin/dict-build chdir's into lib/rhymecrime/dict/, so a
-# relative +DUMP_SIGNALS+ would resolve under that subtree rather than the
+# relative DUMP_SIGNALS would resolve under that subtree rather than the
 # repo root. (The Ruby side now repo-anchors a relative path itself, but
 # absolute is unambiguous either way.)
 DEFAULT_DUMP_PATH="$REPO/generated/rarity_signals_dump.jsonl"
@@ -62,4 +62,4 @@ echo "==> Build Stage 4/4: dict-build rescore (rarity-classifier rescore pass ap
 ./bin/dict-build
 
 echo
-echo "build done. Run +bundle exec rspec+ to validate."
+echo "build done. Run bundle exec rspec to validate."

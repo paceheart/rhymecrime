@@ -1,30 +1,30 @@
 # Surface-spelling preference expectations: the dictionary should normalize each documented
-# pair to a single preferred form via +preferred_form+. Covers both:
+# pair to a single preferred form via preferred_form. Covers both:
 #
-#   - manually declared variants (+curated/spelling.csv+), and
-#   - automatically detected morphology pairs (+us_uk_morphology_pair+ and friends).
+#   - manually declared variants (curated/spelling.csv), and
+#   - automatically detected morphology pairs (us_uk_morphology_pair and friends).
 #
-# Per-pair semantics: if the non-preferred form is not a headword in +word_dict+ there is nothing
+# Per-pair semantics: if the non-preferred form is not a headword in word_dict there is nothing
 # to normalize away, so the example passes vacuously. When the variant IS a headword, we assert
 # it normalizes to the preferred form, AND that the preferred form is itself a fixed point (so a
 # future regression that flips the preference shows up as a spec failure either way).
 
 SPELLING_CSV_SPEC_PATH = File.expand_path("../curated/spelling.csv", __dir__)
 
-# Run-time counters consumed by the +sanity+ context at the bottom of this file. We track both
-# +attempted+ (every +prefer_spelling+ example body that started executing) and +non_vacuous+
-# (the subset that got past the +word_dict_includes_headword?(alt)+ short-circuit). Used to
-# guard against a silent-failure mode where +$word_dict+ hasn't been lazy-loaded yet at the
-# moment these examples run, +word_dict_includes_headword?+ short-circuits on +nil+, and
-# every +prefer_spelling+ example +next+s into a vacuous pass — making the file look green
+# Run-time counters consumed by the sanity context at the bottom of this file. We track both
+# attempted (every prefer_spelling example body that started executing) and non_vacuous
+# (the subset that got past the word_dict_includes_headword?(alt) short-circuit). Used to
+# guard against a silent-failure mode where $word_dict hasn't been lazy-loaded yet at the
+# moment these examples run, word_dict_includes_headword? short-circuits on nil, and
+# every prefer_spelling example +next+s into a vacuous pass — making the file look green
 # in isolation while still failing in the full suite once another spec triggers the load.
 SPELLING_SPEC_STATS = { attempted: 0, non_vacuous: 0 }
 
-# Parse +curated/spelling.csv+: each non-comment line is
-# +preferred,alt1[,alt2,...][,free-text notes]+. We yield every +(preferred, alt)+ pair.
-# The +#+-prefixed comment header at the top is skipped, and an optional trailing notes
+# Parse curated/spelling.csv: each non-comment line is
+# preferred,alt1[,alt2,...][,free-text notes]. We yield every (preferred, alt) pair.
+# The #-prefixed comment header at the top is skipped, and an optional trailing notes
 # column (any column containing whitespace / punctuation / digits — i.e. not matching
-# +split_spelling_row+'s word-form regex) is silently dropped here.
+# split_spelling_row's word-form regex) is silently dropped here.
 def each_spelling_csv_pair
   File.foreach(SPELLING_CSV_SPEC_PATH, chomp: true, encoding: "UTF-8") do |line|
     next unless line =~ /\A[[:alpha:]]/
@@ -35,12 +35,12 @@ def each_spelling_csv_pair
   end
 end
 
-# Assert that +preferred_form(alt) == preferred+ (and that +preferred+ is a fixed point).
-# Passes vacuously when +alt+ is not in +word_dict+ — there is nothing the dict could normalize.
+# Assert that preferred_form(alt) == preferred (and that preferred is a fixed point).
+# Passes vacuously when alt is not in word_dict — there is nothing the dict could normalize.
 #
-# Note: we deliberately use +word_dict.key?(alt)+ (which lazy-loads via the +word_dict+
-# accessor) rather than the +word_dict_includes_headword?+ predicate. That predicate is
-# build-path-safe and short-circuits on +$word_dict.nil?+ without forcing a load — fine for
+# Note: we deliberately use word_dict.key?(alt) (which lazy-loads via the word_dict
+# accessor) rather than the word_dict_includes_headword? predicate. That predicate is
+# build-path-safe and short-circuits on $word_dict.nil? without forcing a load — fine for
 # dict-compile callers, but in tests it would silently turn every example into a vacuous
 # pass when this file runs alone (since nothing in spec_helper triggers the load).
 def prefer_spelling(preferred, alt)
@@ -219,10 +219,10 @@ describe "SPELLING VARIANTS" do
     end
   end
 
-  # Defined LAST on purpose: with rspec's default +:defined+ order it runs after every
-  # other example in this file, so +SPELLING_SPEC_STATS+ has accumulated by the time the
+  # Defined LAST on purpose: with rspec's default :defined order it runs after every
+  # other example in this file, so SPELLING_SPEC_STATS has accumulated by the time the
   # check fires. If some future change flips the suite to random ordering and this example
-  # happens to land first, the +attempted == 0+ skip below keeps it from false-alarming.
+  # happens to land first, the attempted == 0 skip below keeps it from false-alarming.
   context "sanity" do
     it "at least one prefer_spelling example exercised the dict (non-vacuous run)" do
       attempted = SPELLING_SPEC_STATS[:attempted]
@@ -230,7 +230,7 @@ describe "SPELLING VARIANTS" do
       skip "no prefer_spelling examples have run yet (subset run, or this example ran first under random order)" if attempted == 0
       expect(non_vacuous).to be > 0,
         "all #{attempted} prefer_spelling example(s) passed vacuously: word_dict_includes_headword?(alt) " \
-        "returned false for every alt, so the +preferred_form+ assertions never fired. This usually " \
+        "returned false for every alt, so the preferred_form assertions never fired. This usually " \
         "means $word_dict had not been lazy-loaded by the time spelling_spec ran — try requiring it " \
         "from spec_helper, or run alongside another file (e.g. rarity_spec) that triggers the load."
     end

@@ -3,10 +3,10 @@
 # frozen_string_literal: true
 
 # Print a random sample of Kaikki entries that would trampoline through their
-# +senses[].alt_of+ to a canonical entry with pronunciations. Helps gut-check
-# the trampoline filter used by +bin/compare-authoritative-vs-kaikki+: an
+# senses[].alt_of to a canonical entry with pronunciations. Helps gut-check
+# the trampoline filter used by bin/compare-authoritative-vs-kaikki: an
 # entry is treated as a *pure* alt-of stub only when every sense is tagged
-# +alt-of+ with a non-empty +alt_of+ target (so words like +highball+ — which
+# alt-of with a non-empty alt_of target (so words like highball — which
 # has real senses plus one clipping alt-of — don't get conflated).
 #
 # Usage: bin/sample-alt-of-trampolines [N=20] [--seed=...]
@@ -39,8 +39,8 @@ def record_alt_of_targets(obj)
 end
 
 # Pass 1: aggregate every record per word so we can ask whether the *whole
-# word* is a pure alt-of stub. A word like +cache+ has three Kaikki records
-# (noun + verb + a misspelling-of-+cachet+ stub) — the third record is alt-of
+# word* is a pure alt-of stub. A word like cache has three Kaikki records
+# (noun + verb + a misspelling-of-cachet stub) — the third record is alt-of
 # in isolation, but the word as a whole stands on its own with real senses
 # and pronunciations and must not trampoline.
 words = {}
@@ -73,9 +73,9 @@ words.each do |src, rec|
   needed << target.downcase
 end
 
-# Pass 2: collect sounds for each target. Group by exact +word+ so we can
-# prefer an exact-case match (Wiktionary case-distinguishes +Mafioso+ vs
-# +mafioso+, +Mob+ vs +mob+, etc.).
+# Pass 2: collect sounds for each target. Group by exact word so we can
+# prefer an exact-case match (Wiktionary case-distinguishes Mafioso vs
+# mafioso, Mob vs mob, etc.).
 target_hits = Hash.new { |h, k| h[k] = [] }
 Zlib::GzipReader.open(WIKTIONARY_DATA_PATH, encoding: "UTF-8") do |gz|
   gz.each_line do |line|
@@ -92,7 +92,7 @@ Zlib::GzipReader.open(WIKTIONARY_DATA_PATH, encoding: "UTF-8") do |gz|
 end
 
 # Keep only stubs whose canonical actually has IPA. Resolve to a single GA-ish
-# IPA per stub when possible (prefer +General-American+ / +US+ / +Canada+
+# IPA per stub when possible (prefer General-American / US / Canada
 # tags; fall back to the first untagged variant; last resort: anything).
 def pick_one_ipa(hits, target)
   exact = hits.select { |h| h[:target_word] == target }

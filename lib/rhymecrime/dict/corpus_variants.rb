@@ -1,23 +1,23 @@
 # Build-time emitter for lexical spelling-variant pairs that are derivable from corpus data
-# (as opposed to the hand-curated US/UK dialectal rules in +utils_rhyme.rb+). Output goes to
-# +generated/spelling_variants_auto.txt+, which +load_variants_raw+ reads alongside the
-# hand-edited +curated/spelling.csv+. All corpus I/O stays here: the runtime +preferred_form+
-# path never consults +wordfreq.tsv+, SUBTLEX, or Kaikki directly.
+# (as opposed to the hand-curated US/UK dialectal rules in utils_rhyme.rb). Output goes to
+# generated/spelling_variants_auto.txt, which load_variants_raw reads alongside the
+# hand-edited curated/spelling.csv. All corpus I/O stays here: the runtime preferred_form
+# path never consults wordfreq.tsv, SUBTLEX, or Kaikki directly.
 #
 # Two discovery signals:
 #
-#   1. Shape-based +-oes/-os+ plural alternation (tomatoes/tomatos, aficionados/aficionadoes,
+#   1. Shape-based -oes/-os plural alternation (tomatoes/tomatos, aficionados/aficionadoes,
 #      mottos/mottoes, …). Both forms must appear as headwords with a shared lemma; the
 #      winner is whichever spelling is ≥3× more frequent on the wordfreq Zipf scale, else
 #      the morphologically simpler -os form wins deterministically.
 #
-#   2. Wiktionary-attested variants from Kaikki's +alt_of+ pointers and canonical
+#   2. Wiktionary-attested variants from Kaikki's alt_of pointers and canonical
 #      "Alternative spelling of X" / "Misspelling of X" glosses. Both sides must be dict
-#      headwords. For +alt_of+, the direction is treated as a _candidate pairing_ only --
+#      headwords. For alt_of, the direction is treated as a _candidate pairing_ only --
 #      Wiktionary's choice of which side hosts the pointer is editorial, so we still pick
 #      the preferred form by wordfreq and fall back to whichever Wiktionary points _at_
 #      (i.e., the sibling that other Wiktionary editors treated as canonical). For
-#      +misspelling+, the target is always preferred.
+#      misspelling, the target is always preferred.
 
 require "set"
 require_relative "utils_rhyme"
@@ -25,7 +25,7 @@ require_relative "utils_rhyme"
 CORPUS_ZIPF_DECISIVE_DELTA = Math.log10(3.0)
 
 # Wordfreq Zipf below which a form counts as "rare" for the rare-form variant rule: any
-# Wiktionary-attested pair where one side has Zipf ≤ +RARE_FORM_ZIPF_MAX+ is accepted
+# Wiktionary-attested pair where one side has Zipf ≤ RARE_FORM_ZIPF_MAX is accepted
 # outright, because the rare side is obviously an archaic/obscure spelling and the common
 # side is the modern canonical form.
 RARE_FORM_ZIPF_MAX = 3.0
@@ -33,8 +33,8 @@ RARE_FORM_ZIPF_MAX = 3.0
 # Wordfreq Zipf below which a form is still ambiguously common: if _both_ sides of a pair
 # are at or above this threshold (i.e. neither is rare), we require a regional-dialect or
 # misspelling tag to treat them as spelling variants. Without such evidence, Wiktionary's
-# +obsolete+/+dated+/+dialectal+/+alternative+ annotations tend to produce historical
-# curiosity pairs like +be/by+ that aren't useful modern spelling variants.
+# obsolete/dated/dialectal/alternative annotations tend to produce historical
+# curiosity pairs like be/by that aren't useful modern spelling variants.
 COMMON_PAIR_REGIONAL_TAG_FLOOR = RARE_FORM_ZIPF_MAX
 
 # Wiktionary/Kaikki tags that mark a pair as a dialectal or orthographic variant of the
@@ -47,26 +47,26 @@ REGIONAL_VARIANT_TAGS = Set.new(%w[
   misspelling
 ])
 
-# Tags on a structured +alt-of+ sense that mark the pair as a _historical_ curiosity rather
-# than a modern spelling variant. When both sides of a pair are common (Zipf > +RARE_FORM_ZIPF_MAX+)
-# and the only evidence is a structured +alt-of+ annotation carrying one of these decay
-# markers, we reject the pair: Wiktionary's +be → by+ (tagged +dated+/+dialectal+) and
-# +bee → be+ (tagged +obsolete+) are technically Middle English spellings but aren't useful
+# Tags on a structured alt-of sense that mark the pair as a _historical_ curiosity rather
+# than a modern spelling variant. When both sides of a pair are common (Zipf > RARE_FORM_ZIPF_MAX)
+# and the only evidence is a structured alt-of annotation carrying one of these decay
+# markers, we reject the pair: Wiktionary's be → by (tagged dated/dialectal) and
+# bee → be (tagged obsolete) are technically Middle English spellings but aren't useful
 # modern spelling variants.
 STRUCTURED_ALT_OF_DECAY_TAGS = Set.new(%w[
   archaic obsolete dated
 ])
 
 # Wiktionary-attested pairs we refuse to emit as spelling variants. Each entry is a
-# [sorted] pair. These are cases where Kaikki's +alt-of+ pointer exists only for a minor
+# [sorted] pair. These are cases where Kaikki's alt-of pointer exists only for a minor
 # POS or sense of an otherwise independent word with its own dominant meaning:
 #
-#   * +biddy+ is primarily a noun ("old woman, Irish maid, …"); the +biddy [adj] alt-of
-#     bitty+ entry is one minor US-dialect sense that shouldn't dispreference +biddy+ from
-#     the +IH_D_IY+ rime bucket and break +pity oughta-rhyme biddy+.
-#   * +pie+ is primarily the dessert noun; the +pie [noun/verb] alt-of pi+ entries cover a
-#     rare typography sense ("mixed-up printing type") that shouldn't dispreference +pie+
-#     from the +AY+ rime bucket and break +bi oughta-rhyme pie+.
+#   * biddy is primarily a noun ("old woman, Irish maid, …"); the biddy [adj] alt-of
+#     bitty entry is one minor US-dialect sense that shouldn't dispreference biddy from
+#     the IH_D_IY rime bucket and break pity oughta-rhyme biddy.
+#   * pie is primarily the dessert noun; the pie [noun/verb] alt-of pi entries cover a
+#     rare typography sense ("mixed-up printing type") that shouldn't dispreference pie
+#     from the AY rime bucket and break bi oughta-rhyme pie.
 #
 # Listed as unordered pairs; order within each pair doesn't matter for blocking.
 WIKTIONARY_VARIANT_BLOCKLIST = Set.new([
@@ -82,37 +82,37 @@ SPELLING_VARIANTS_AUTO_HEADER = <<~HEADER
   # load_variants_raw in utils_rhyme.rb (alongside the hand-edited curated/spelling.csv).
 HEADER
 
-# Emit +generated/spelling_variants_auto.txt+ from +word_dict+, +wordfreq_hash+, and (optionally)
-# the Wiktionary and VarCon variant maps. Safe to call inside +build_word_dict+ before
-# +strip_dispreferred_headwords_from_rime_dict!+ so the rime-dict bucket stripper sees the resolved
+# Emit generated/spelling_variants_auto.txt from word_dict, wordfreq_hash, and (optionally)
+# the Wiktionary and VarCon variant maps. Safe to call inside build_word_dict before
+# strip_dispreferred_headwords_from_rime_dict! so the rime-dict bucket stripper sees the resolved
 # pairs on the same build.
 #
-# Detector precedence (first-write-wins inside +dedupe_variant_pairs+):
+# Detector precedence (first-write-wins inside dedupe_variant_pairs):
 #
 #   1. Diacritic / ligature ASCII fold — purely orthographic, fully deterministic. ASCII
-#      wins over any accented or ligature surface (+cafe/café+, +naive/naïve+, +oeuvre/œuvre+,
-#      +ore/øre+).
-#   2. +-oes/-os+ plural alternation — shape-based, strongest morphological signal.
-#   3. Silent-+e+ drop before vowel-initial suffix (+icing/iceing+, +having/haveing+,
-#      +googling/googleing+) — shape-based with conservative homograph guards.
-#   4. Consonant-doubling errors (+parroted/parrotted+, +tasered/taserred+) — shape-based,
+#      wins over any accented or ligature surface (cafe/café, naive/naïve, oeuvre/œuvre,
+#      ore/øre).
+#   2. -oes/-os plural alternation — shape-based, strongest morphological signal.
+#   3. Silent-e drop before vowel-initial suffix (icing/iceing, having/haveing,
+#      googling/googleing) — shape-based with conservative homograph guards.
+#   4. Consonant-doubling errors (parroted/parrotted, tasered/taserred) — shape-based,
 #      gated on the actual English doubling rule (unstressed final syllable in the base).
-#   5. +-eys+/+-ies+ plural alternation (+abbeys/abbies+, +stories/storeys+) — shape-based,
-#      gated on shared pronunciation to filter +alleys/allies+-style homograph collisions.
+#   5. -eys/-ies plural alternation (abbeys/abbies, stories/storeys) — shape-based,
+#      gated on shared pronunciation to filter alleys/allies-style homograph collisions.
 #   6. VarCon (Atkinson's hand-verified US/UK/CA/AU mapping) — authoritative preference direction
 #      for the regional-spelling axis.
 #   7. Wiktionary gloss/alt-of pointers — broadest coverage, but noisier. Complements VarCon for
 #      misspellings, eye-dialect, Hiberno/Scottish, archaic variants, and anything VarCon hasn't
 #      seen yet.
-#   8. Inflection propagation over Wiktionary base pairs — e.g. +cipher/cypher → ciphered/cyphered+.
-#   9. Apostrophe-stripped misspellings (+there'll/therell+, +whackin'/whackin+) — last so any
+#   8. Inflection propagation over Wiktionary base pairs — e.g. cipher/cypher → ciphered/cyphered.
+#   9. Apostrophe-stripped misspellings (there'll/therell, whackin'/whackin) — last so any
 #      higher-precedence detector that already picked a direction for an apostrophe pair wins.
 #  10. US/UK canonical-direction correction (post-dedup) — flips emitted pairs on a recognized
-#      US/UK morphology axis (+-er/-re+, +-or/-our+, +-ize/-ise+, +-l/-ll+) to canonical [US, UK]
+#      US/UK morphology axis (-er/-re, -or/-our, -ize/-ise, -l/-ll) to canonical [US, UK]
 #      when an upstream emitter picked the wrong direction on a low-frequency cluster (e.g. flips
-#      +megametre/megameter+ to +megameter/megametre+ so it matches the canonical +meter/metre+
-#      axis, even when VarCon's +Cv+/+C+ tagging on the +megameter+ cluster disagrees with
-#      +meter+'s +A B+/+B C+ pattern). Pure re-direction; doesn't add new pairs.
+#      megametre/megameter to megameter/megametre so it matches the canonical meter/metre
+#      axis, even when VarCon's Cv/C tagging on the megameter cluster disagrees with
+#      meter's A B/B C pattern). Pure re-direction; doesn't add new pairs.
 def emit_spelling_variants_auto!(word_dict, wordfreq_hash, kaikki_variant_map = nil, varcon_variant_map = nil)
   pairs = with_word_dict(word_dict) do
     pairs = []
@@ -135,8 +135,8 @@ def emit_spelling_variants_auto!(word_dict, wordfreq_hash, kaikki_variant_map = 
     puts "Wrote #{pairs.size} auto-detected spelling variants to #{path}"
     pairs
   end
-  # Force a reload so downstream +preferred_form+ sees the freshly-written
-  # pairs file. NOT inside the +with_word_dict+ block — these are
+  # Force a reload so downstream preferred_form sees the freshly-written
+  # pairs file. NOT inside the with_word_dict block — these are
   # forward actions, not restorations of pre-call state.
   $variants = nil
   clear_spelling_variant_hyphen_caches!
@@ -144,10 +144,10 @@ def emit_spelling_variants_auto!(word_dict, wordfreq_hash, kaikki_variant_map = 
 end
 
 # Single-letter ligatures and stroked letters that Unicode NFD/NFKD does NOT split (they
-# are encoded as distinct letters, not as +base + combining mark+ sequences). Each maps to
-# its conventional ASCII expansion. The truly-decomposable diacritics (+é → e + ́+,
-# +ñ → n + ̃+, +ö → o + ̈+, +ā → a + ̄+, +ồ → o + ̂ + ̀+, +š → s + ̌+, …) are handled
-# generically by +ascii_fold_word+'s NFD pass and don't need an entry here. Add new
+# are encoded as distinct letters, not as base + combining mark sequences). Each maps to
+# its conventional ASCII expansion. The truly-decomposable diacritics (é → e + ́,
+# ñ → n + ̃, ö → o + ̈, ā → a + ̄, ồ → o + ̂ + ̀, š → s + ̌, …) are handled
+# generically by ascii_fold_word's NFD pass and don't need an entry here. Add new
 # entries when a new headword surfaces a ligature or stroke we haven't covered yet.
 ASCII_FOLD_LIGATURE_EXPANSIONS = {
   "ø" => "o", "Ø" => "O",
@@ -164,11 +164,11 @@ ASCII_FOLD_LIGATURE_EXPANSIONS = {
 }.freeze
 ASCII_FOLD_LIGATURE_EXPANSIONS_RE = Regexp.union(ASCII_FOLD_LIGATURE_EXPANSIONS.keys).freeze
 
-# Map +word+ to its ASCII surface by expanding ligatures and stroked letters via
-# +ASCII_FOLD_LIGATURE_EXPANSIONS+ (+æ → ae+, +ø → o+, +đ → d+, +ß → ss+, …) and stripping
-# combining marks from NFD-decomposed accents (+é → e+, +ñ → n+, +ồ → o+, …). Returns
-# +nil+ when the result still contains non-ASCII code points (emoji, symbols like +μ+,
-# +º+, +♥+ — these have no meaningful ASCII fold).
+# Map word to its ASCII surface by expanding ligatures and stroked letters via
+# ASCII_FOLD_LIGATURE_EXPANSIONS (æ → ae, ø → o, đ → d, ß → ss, …) and stripping
+# combining marks from NFD-decomposed accents (é → e, ñ → n, ồ → o, …). Returns
+# nil when the result still contains non-ASCII code points (emoji, symbols like μ,
+# º, ♥ — these have no meaningful ASCII fold).
 def ascii_fold_word(word)
   s = word.to_s
   return s if s.bytes.all? { |b| b <= 127 }
@@ -178,13 +178,13 @@ def ascii_fold_word(word)
 end
 
 # Spelling-variant pairs derived from ASCII-folding accented/ligature spellings of
-# +word_dict+ headwords. The ASCII surface is always preferred (+cafe+ over +café+,
-# +naive+ over +naïve+, +oeuvre+ over +œuvre+) — this matches the way ASCII spellings
+# word_dict headwords. The ASCII surface is always preferred (cafe over café,
+# naive over naïve, oeuvre over œuvre) — this matches the way ASCII spellings
 # show up in modern English corpus data, search queries, and the precomposed CMU
 # pronunciations dict-build inherits from cmudict / Wiktionary.
 #
-# When the ASCII fold collides with a different existing headword (+resume+ verb vs
-# +résumé+ noun), we gate on +headwords_diacritic_compatible?+: distinct words with
+# When the ASCII fold collides with a different existing headword (resume verb vs
+# résumé noun), we gate on headwords_diacritic_compatible?: distinct words with
 # truly different pronunciations must not be conflated as spelling variants, but the
 # pure-orthographic ASCII-fold relationship is itself a strong identity signal so we
 # accept gracefully when prons are stress-divergent or one-sided (see the helper for
@@ -210,36 +210,36 @@ end
 
 # Pronunciation-compatibility gate for spelling-variant emission from sources whose
 # orthographic relationship is itself a strong identity signal (VarCon's hand-verified
-# regional-spelling clusters, Wiktionary's structured +alt-of+/+misspelling+ pointers,
+# regional-spelling clusters, Wiktionary's structured alt-of/misspelling pointers,
 # inflection propagation off an already-vetted base pair). Strictly stronger than rejecting
-# (and weaker than +headwords_share_full_pron?+): we still catch the dreamed/dreamt-style
+# (and weaker than headwords_share_full_pron?): we still catch the dreamed/dreamt-style
 # verb-morphology hazard, but we no longer drop a pair just because one or both sides
 # survived dict-build without prons.
 #
 # Why this matters: the dict-build pipeline only attaches prons to a headword when CMU,
-# Wiktionary, or Kaikki supplies one. Low-frequency surfaces like +recolor+, +recolour+,
-# +colourize+, +colourise+ enter +word_dict+ via wordfreq alone and surface pron-less.
+# Wiktionary, or Kaikki supplies one. Low-frequency surfaces like recolor, recolour,
+# colourize, colourise enter word_dict via wordfreq alone and surface pron-less.
 # Without prons they aren't in any rime bucket -- so we have no rhyme-correctness reason
 # to refuse the variant pairing -- but downstream relatedness wants the variant link so
-# that +recolor+ and +recolour+ share a single semantic computation. The strict
-# +headwords_share_full_pron?+ gate exists to protect rime buckets from regional doublets
+# that recolor and recolour share a single semantic computation. The strict
+# headwords_share_full_pron? gate exists to protect rime buckets from regional doublets
 # that pronounce differently; with no rime bucket to protect, the gate is dead weight.
 #
 # Acceptance rules (any one suffices):
 #   1. Both sides have no prons. Neither is in any rime bucket, so emitting the pair is
 #      rhyme-safe. Lets relatedness deduplicate identical-semantics surfaces.
 #   2. Exactly one side has prons. The pronounced side stays in its rime bucket; the
-#      unpronounced side has no bucket to be stripped from. +preferred_form+ maps the
+#      unpronounced side has no bucket to be stripped from. preferred_form maps the
 #      empty side to the pronounced side and inherits its prons via the variant lookup.
-#      This is exactly the desired behavior for +colorize/colourize+ where only +colorize+
+#      This is exactly the desired behavior for colorize/colourize where only colorize
 #      survives dict-build with prons.
-#   3. Both sides are pronounced and +headwords_share_full_pron?+ holds.
+#   3. Both sides are pronounced and headwords_share_full_pron? holds.
 #
 # Rejected (and should be): both sides pronounced AND no phoneme sequence matches.
-# +dreamed+ (+D R IY M D+) vs +dreamt+ (+D R EH M P T+), +burned+/+burnt+, +learned+/
-# +learnt+ — clustered together in VarCon as regional doublets but with genuinely
-# different rimes. Treating them as spelling variants would strip +dreamt+ from
-# +EH_M_P_T+ (and break +tempt+/+kempt+/+undreamt+ rhyme cohorts).
+# dreamed (D R IY M D) vs dreamt (D R EH M P T), burned/burnt, learned/
+# learnt — clustered together in VarCon as regional doublets but with genuinely
+# different rimes. Treating them as spelling variants would strip dreamt from
+# EH_M_P_T (and break tempt/kempt/undreamt rhyme cohorts).
 def headwords_pron_compatible?(a, b, word_dict)
   prons_a = word_dict[a]&.dig(1) || []
   prons_b = word_dict[b]&.dig(1) || []
@@ -249,7 +249,7 @@ def headwords_pron_compatible?(a, b, word_dict)
 end
 
 # Diacritic-pair-specific relaxation that adds stress-stripped fallback on top of the
-# general +headwords_pron_compatible?+ rules. Only called from +diacritic_corpus_pairs+;
+# general headwords_pron_compatible? rules. Only called from diacritic_corpus_pairs;
 # the standard pron-compatibility helper is used elsewhere (VarCon / Wiktionary /
 # inflection propagation).
 #
@@ -259,29 +259,29 @@ end
 #   * CMU only carries the ASCII spelling, so stress markers on the accented form come
 #     from a different source (Wiktionary/Kaikki) and often disagree on secondary stress
 #     even when the syllable structure and segmental phonemes match exactly. Concrete
-#     example: +cafe+ has CMU prons +K AH0 . F EY1+ and +K AE0 . F EY1+ (zero stress on
-#     first vowel), while +café+ surfaces as +K AE2 . F EY1+ (secondary stress) — same
+#     example: cafe has CMU prons K AH0 . F EY1 and K AE0 . F EY1 (zero stress on
+#     first vowel), while café surfaces as K AE2 . F EY1 (secondary stress) — same
 #     word, but stress-strict comparison rejects the merge. Hence rule (2) below.
-#   * Wiktionary/Kaikki imports of low-frequency accented forms (+naïve+, +œuvre+,
-#     +résumé+, +façade+) frequently arrive without any pron at all, while their ASCII
+#   * Wiktionary/Kaikki imports of low-frequency accented forms (naïve, œuvre,
+#     résumé, façade) frequently arrive without any pron at all, while their ASCII
 #     folds inherit a CMU pron through the standard pipeline. The empty-side cases are
-#     handled uniformly by +headwords_pron_compatible?+ (rules 1 and 2 there).
+#     handled uniformly by headwords_pron_compatible? (rules 1 and 2 there).
 #
 # Acceptance rules (any one suffices):
-#   1. +headwords_pron_compatible?+ accepts (covers strict pron-share, both-empty, and
-#      one-empty cases). Handles +cliché/cliche+, +naïve/naive+, +œuvre/oeuvre+.
+#   1. headwords_pron_compatible? accepts (covers strict pron-share, both-empty, and
+#      one-empty cases). Handles cliché/cliche, naïve/naive, œuvre/oeuvre.
 #   2. Both sides are pronounced and at least one ASCII-fold pair of full phoneme
-#      sequences matches modulo stress digits. Catches +café/cafe+ where +K AE2 . F EY1+
-#      and +K AE0 . F EY1+ become identical after stripping stress.
+#      sequences matches modulo stress digits. Catches café/cafe where K AE2 . F EY1
+#      and K AE0 . F EY1 become identical after stripping stress.
 #
 # What still rejects (and should): genuine accented homographs where both sides are
-# pronounced AND no phoneme sequence matches even modulo stress. +mate+ (+M EY1 T+)
-# vs +maté+ if pronounced as +M AA1 . T EY1+ rejects under (2); +rose+ (+R OW1 Z+) vs
-# +rosé+ as +R OW0 . Z EY1+ likewise rejects. The narrow remaining risk is rule (1) of
-# +headwords_pron_compatible?+ misfiring on a +maté+-style homograph that arrives
+# pronounced AND no phoneme sequence matches even modulo stress. mate (M EY1 T)
+# vs maté if pronounced as M AA1 . T EY1 rejects under (2); rose (R OW1 Z) vs
+# rosé as R OW0 . Z EY1 likewise rejects. The narrow remaining risk is rule (1) of
+# headwords_pron_compatible? misfiring on a maté-style homograph that arrives
 # pronunciation-less; in practice common-enough English-corpus homographs land with
-# prons on both sides, and the few edge cases can be excluded via +curated/forbid_list.txt+
-# or a curated +dont_prefer_spelling+ entry if they ever surface.
+# prons on both sides, and the few edge cases can be excluded via curated/forbid_list.txt
+# or a curated dont_prefer_spelling entry if they ever surface.
 def headwords_diacritic_compatible?(folded, accented, word_dict)
   return true if headwords_pron_compatible?(folded, accented, word_dict)
   prons_folded = word_dict[folded]&.dig(1) || []
@@ -299,18 +299,18 @@ def headwords_diacritic_compatible?(folded, accented, word_dict)
   end
 end
 
-# Apostrophe-stripped misspellings: every +word_dict+ headword containing an
-# apostrophe is paired with its apostrophe-stripped surface (e.g. +there'll → therell+,
-# +whackin' → whackin+, +o'rourke → orourke+) and registered as a spelling variant
+# Apostrophe-stripped misspellings: every word_dict headword containing an
+# apostrophe is paired with its apostrophe-stripped surface (e.g. there'll → therell,
+# whackin' → whackin, o'rourke → orourke) and registered as a spelling variant
 # of the apostrophe form. We only emit when the stripped surface is _not_ itself a
-# headword — when both forms exist as headwords (+abbey's/abbeys+ possessive vs plural,
-# +nothin'/nothin+, +i'll/ill+) they are legitimately distinct words and conflating them
-# would clobber the bare surface. Stop-word-only pairs (+it's/its+, +we're/were+) are
+# headword — when both forms exist as headwords (abbey's/abbeys possessive vs plural,
+# nothin'/nothin, i'll/ill) they are legitimately distinct words and conflating them
+# would clobber the bare surface. Stop-word-only pairs (it's/its, we're/were) are
 # also skipped via the same headword check, since both sides exist as headwords.
 #
 # Build-time emission keeps this list in sync with the live dictionary — new
 # apostrophe headwords picked up by future cmudict/Wiktionary refreshes get covered
-# automatically without hand-editing +curated/spelling.csv+. Returns an array of
+# automatically without hand-editing curated/spelling.csv. Returns an array of
 # [preferred, alternate] pairs (preferred = the apostrophe-bearing form).
 def apostrophe_stripped_corpus_pairs(word_dict)
   pairs = []
@@ -326,7 +326,7 @@ def apostrophe_stripped_corpus_pairs(word_dict)
   pairs
 end
 
-# Scan +word_dict+ for -oes/-os plural pairs that both survive as headwords and share the
+# Scan word_dict for -oes/-os plural pairs that both survive as headwords and share the
 # same lemma (a stronger signal at build time than pronunciation overlap: dict-build's
 # inflection pipeline assigns quirky secondary stress to alternate-form CMU entries, but
 # only groups them under one base lemma when morphology actually recognizes the pair).
@@ -345,24 +345,24 @@ def o_plural_corpus_pairs(word_dict, wordfreq_hash)
     next unless oes_entry && os_entry
     next if word_dict_entry_tombstoned?(oes_entry) || word_dict_entry_tombstoned?(os_entry)
     # Both forms must be plural of the same lexical stem. The shape match already implies
-    # both derive from +oes[0...-2]+ (the +-es+ in +-oes+ is the inflectional suffix; the
-    # singular keeps the +-o+: +tomatoes+ → +tomato+, +ghettoes+ → +ghetto+); we
-    # additionally gate on that base actually being a +word_dict+ headword so we filter
+    # both derive from oes[0...-2] (the -es in -oes is the inflectional suffix; the
+    # singular keeps the -o: tomatoes → tomato, ghettoes → ghetto); we
+    # additionally gate on that base actually being a word_dict headword so we filter
     # out false positives where one or both surfaces are noise that just happens to fit
-    # the +-oes+/+-os+ suffix pattern.
+    # the -oes/-os suffix pattern.
     #
-    # We deliberately do NOT consult +entry[2]+ (the lemma column) here: this function is
-    # called from +emit_spelling_variants_auto!+ inside +build_word_dict+, which runs
-    # BEFORE +compute_lemma_map+ has stitched lemmas onto +word_dict+ — at that moment
-    # entries have shape +[freq, prons]+ with no third element, so a lemma-equality gate
-    # short-circuits on +nil == nil+ and emits zero pairs (regression: every legitimate
-    # pair like +tomatoes/tomatos+, +ghettos/ghettoes+, +echoes/echos+ silently dropped).
+    # We deliberately do NOT consult entry[2] (the lemma column) here: this function is
+    # called from emit_spelling_variants_auto! inside build_word_dict, which runs
+    # BEFORE compute_lemma_map has stitched lemmas onto word_dict — at that moment
+    # entries have shape [freq, prons] with no third element, so a lemma-equality gate
+    # short-circuits on nil == nil and emits zero pairs (regression: every legitimate
+    # pair like tomatoes/tomatos, ghettos/ghettoes, echoes/echos silently dropped).
     # The base-headword check is shape-equivalent to lemma equality for the -oes/-os
     # paradigm — both sides being plurals of the same stem — and it works at both build
     # and runtime regardless of when lemmas are populated.
     base = oes[0...-2]
-    # Base must be at least 4 chars (matches +O_PLURAL_MIN_WORD_LENGTH+ on the singular).
-    # Filters short fragments like +do/does/dos+, +lo/loes/los+, +woe/woes/wos+ where the
+    # Base must be at least 4 chars (matches O_PLURAL_MIN_WORD_LENGTH on the singular).
+    # Filters short fragments like do/does/dos, lo/loes/los, woe/woes/wos where the
     # pseudo-base is itself a word_dict headword for unrelated reasons (auxiliary verb,
     # interjection, monosyllable).
     next if base.length < 4
@@ -376,25 +376,25 @@ def o_plural_corpus_pairs(word_dict, wordfreq_hash)
   pairs
 end
 
-# Consonants that legitimately double in English inflection. Excludes +h+/+j+/+q+/+w+/+x+/+y+
-# (never doubled by suffix in English orthography), and digraph-finals like +sh+/+ch+/+th+/+ck+
-# (handled by their own rules). Doublable letters appear at +stem[-2..]+ of the doubled-form
-# stem we're trying to flag (e.g. +parrott+ from +parrotted+, +cancell+ from +cancelled+,
-# +taserr+ from +taserred+).
+# Consonants that legitimately double in English inflection. Excludes h/j/q/w/x/y
+# (never doubled by suffix in English orthography), and digraph-finals like sh/ch/th/ck
+# (handled by their own rules). Doublable letters appear at stem[-2..] of the doubled-form
+# stem we're trying to flag (e.g. parrott from parrotted, cancell from cancelled,
+# taserr from taserred).
 DOUBLABLE_CONSONANTS = Set.new(%w[b c d f g k l m n p r s t v z]).freeze
 
 # Inflection suffixes that participate in the English consonant-doubling rule. Each one
 # attaches to the base verb / adjective and triggers a doubled-final-consonant in the
 # orthographic surface only when the base ends in single-vowel + single-consonant AND the
-# final syllable carries primary OR secondary stress (+stop → stopped+, +commit → committed+,
-# +program → programmed+). With an unstressed final syllable the doubling is wrong and the
-# canonical form is the single-consonant inflection (+parrot → parroted+, +target → targeted+,
-# +benefit → benefited+, +cancel → canceled+, +taser → tasered+).
+# final syllable carries primary OR secondary stress (stop → stopped, commit → committed,
+# program → programmed). With an unstressed final syllable the doubling is wrong and the
+# canonical form is the single-consonant inflection (parrot → parroted, target → targeted,
+# benefit → benefited, cancel → canceled, taser → tasered).
 DOUBLING_INFLECTION_SUFFIXES = %w[ed ing er est].freeze
 
-# Returns the stress digit ('0', '1', or '2') of the last vowel in +pron+, or +nil+ if the
+# Returns the stress digit ('0', '1', or '2') of the last vowel in pron, or nil if the
 # pron has no vowels (or is itself nil). Vowel phonemes are ARPAbet tokens whose final
-# character is a stress digit; consonants and the syllable boundary +.+ have no trailing
+# character is a stress digit; consonants and the syllable boundary . have no trailing
 # digit and are skipped over from the right.
 def last_vowel_stress_digit(pron)
   return nil if pron.nil?
@@ -406,11 +406,11 @@ def last_vowel_stress_digit(pron)
   nil
 end
 
-# True iff every pronunciation of +base+ in +word_dict+ places its final vowel at stress 0
+# True iff every pronunciation of base in word_dict places its final vowel at stress 0
 # (unstressed). The English doubling rule fires only on bases whose final syllable carries
 # primary or secondary stress; a base whose final syllable is unstressed in EVERY pron is
-# unambiguously a "no-doubling" base (+parrot+ +AE1 R AH0 T+, +target+ +AA1 R G AH0 T+,
-# +cancel+ +AE1 N S AH0 L+). Conservative on disagreement: a base with one pron showing
+# unambiguously a "no-doubling" base (parrot AE1 R AH0 T, target AA1 R G AH0 T,
+# cancel AE1 N S AH0 L). Conservative on disagreement: a base with one pron showing
 # stressed final and another showing unstressed (rare, mostly proper-noun edge cases) we
 # consider ambiguous and decline to flag.
 def base_has_unstressed_final_syllable?(base, word_dict)
@@ -427,32 +427,32 @@ def base_has_unstressed_final_syllable?(base, word_dict)
   saw_polysyllabic_unstressed
 end
 
-# Detect consonant-doubling spelling errors: pairs +(parroted, parrotted)+ where the doubled
-# form is a +word_dict+ headword but English's doubling rule says the base's final syllable
+# Detect consonant-doubling spelling errors: pairs (parroted, parrotted) where the doubled
+# form is a word_dict headword but English's doubling rule says the base's final syllable
 # is unstressed and so the canonical inflection is the single-consonant surface.
 #
 # Pipeline:
-#   1. Walk every +word_dict+ headword; only headwords ending in +-ed+/+-ing+/+-er+/+-est+
-#      with a doubled +DOUBLABLE_CONSONANTS+ at the stem-final position are candidates.
-#   2. Strip the doubling: candidate stem +parrott+ → base +parrot+. The base must itself
+#   1. Walk every word_dict headword; only headwords ending in -ed/-ing/-er/-est
+#      with a doubled DOUBLABLE_CONSONANTS at the stem-final position are candidates.
+#   2. Strip the doubling: candidate stem parrott → base parrot. The base must itself
 #      be a headword (no inventing words) and the single-consonant inflection +B+sfx+
-#      (+parroted+) must also be a headword (no inventing inflections either).
-#   3. Reject when +B+e+ is a headword (+bar/bare+, +cap/cape+, +bat/bate+, +bid/bide+,
-#      +cane/can+, +tape/tap+, +dine/din+ …). When the silent-+e+ form exists the doubled
+#      (parroted) must also be a headword (no inventing inflections either).
+#   3. Reject when +B+e+ is a headword (bar/bare, cap/cape, bat/bate, bid/bide,
+#      cane/can, tape/tap, dine/din …). When the silent-e form exists the doubled
 #      and single-consonant inflections almost always belong to two different verbs, and
 #      the doubling distinguishes them — collapsing them as spelling variants would
 #      destroy that distinction.
-#   4. Apply the doubling rule via +base_has_unstressed_final_syllable?+. Only emit when
+#   4. Apply the doubling rule via base_has_unstressed_final_syllable?. Only emit when
 #      the base's final syllable is unstressed in every pronunciation; this filters out
-#      monosyllabic bases (+chop/chopped+, +stop/stopped+, +bus/bussed+) and end-stressed
-#      polysyllables (+commit/committed+, +refer/referred+, +program/programmed+) where
+#      monosyllabic bases (chop/chopped, stop/stopped, bus/bussed) and end-stressed
+#      polysyllables (commit/committed, refer/referred, program/programmed) where
 #      doubling is canonical.
 #
-# +-l/-ll+ regional doublets (+canceled/cancelled+, +traveling/travelling+, +counselor/
-# counsellor+) pass step 4 because the base's final syllable is unstressed; they overlap
-# with the +us_uk_morphology_pair+ runtime fallback in +preferred_form+ but that's
-# harmless (+dedupe_variant_pairs+ first-write-wins, and runtime +us_uk_morphology+ is
-# only consulted when +variants+ has no entry).
+# -l/-ll regional doublets (canceled/cancelled, traveling/travelling, counselor/
+# counsellor) pass step 4 because the base's final syllable is unstressed; they overlap
+# with the us_uk_morphology_pair runtime fallback in preferred_form but that's
+# harmless (dedupe_variant_pairs first-write-wins, and runtime us_uk_morphology is
+# only consulted when variants has no entry).
 def consonant_doubling_corpus_pairs(word_dict)
   pairs = []
   seen = Set.new
@@ -482,49 +482,49 @@ def consonant_doubling_corpus_pairs(word_dict)
   pairs
 end
 
-# Detect silent-+e+-drop / preserved-+e+ spelling-variant pairs in +-ing+ inflection: pairs
-# +(icing, iceing)+ where +Xe+ is the base verb and +Xing+ vs +Xeing+ are competing surface
-# spellings of its +-ing+ form. Both directions show up depending on the final-letter
-# environment of the base — the canonical English rule drops the silent +e+ before
-# vowel-initial suffixes for consonant+e bases (+ice → icing+, +bake → baking+,
-# +love → loving+, +meme → meming+) but English orthography idiomatically preserves the +e+
+# Detect silent-e-drop / preserved-e spelling-variant pairs in -ing inflection: pairs
+# (icing, iceing) where Xe is the base verb and Xing vs Xeing are competing surface
+# spellings of its -ing form. Both directions show up depending on the final-letter
+# environment of the base — the canonical English rule drops the silent e before
+# vowel-initial suffixes for consonant+e bases (ice → icing, bake → baking,
+# love → loving, meme → meming) but English orthography idiomatically preserves the e
 # for short vowel+e (and y+e / w+e) bases to keep the final vowel disambiguated and the
-# orthographic syllable count intact (+toe → toeing+, +rue → rueing+, +eye → eyeing+,
-# +awe → aweing+, +cue → cueing+).
+# orthographic syllable count intact (toe → toeing, rue → rueing, eye → eyeing,
+# awe → aweing, cue → cueing).
 #
 # Direction-picking rules:
-#   1. Consonant+e base (+ice+, +meme+, +have+, +love+, +google+, +singe+, +binge+, +route+):
-#      drop the +e+. The standard rule with no idiomatic exceptions.
-#   2. Vowel+e / y+e / w+e base, base length ≤ 4 (+toe+, +rue+, +cue+, +eye+, +awe+,
-#      +blue+, +glue+, +clue+, +dye+ — but see homograph guards below): preserve the +e+.
+#   1. Consonant+e base (ice, meme, have, love, google, singe, binge, route):
+#      drop the e. The standard rule with no idiomatic exceptions.
+#   2. Vowel+e / y+e / w+e base, base length ≤ 4 (toe, rue, cue, eye, awe,
+#      blue, glue, clue, dye — but see homograph guards below): preserve the e.
 #      Short stems are too phonologically thin to absorb the e-drop without looking truncated
-#      (+ruing+, +cuing+, +eying+ are all attested but read as terse), and modern style
-#      guides recommend the preserved-+e+ form.
-#   3. Vowel+e base, base length ≥ 5 (+queue+, +argue+, +pursue+, +continue+, +barbecue+):
-#      drop the +e+. Long stems carry enough phonological weight that the dropped-+e+ form
+#      (ruing, cuing, eying are all attested but read as terse), and modern style
+#      guides recommend the preserved-e form.
+#   3. Vowel+e base, base length ≥ 5 (queue, argue, pursue, continue, barbecue):
+#      drop the e. Long stems carry enough phonological weight that the dropped-e form
 #      reads naturally and is the modern dominant choice.
 #
-# Two homograph guards block emission when the +-ing+ form could equally well be the regular
-# inflection of a _different_ verb in +word_dict+:
+# Two homograph guards block emission when the -ing form could equally well be the regular
+# inflection of a _different_ verb in word_dict:
 #
-#   * Bare-stem collision (consonant+e bases only): +singing+ from +sing+ collides with
-#     +singeing+ from +singe+; +binging+ from +bing+ (search engine; a +word_dict+ headword
-#     even though it's a named entity) collides with +bingeing+ from +binge+; +routing+ from
-#     +rout+ (verb meaning to defeat) collides with +routeing+ from +route+; +tinging+ from
-#     +ting+ collides with +tingeing+ from +tinge+. We skip when +corrected[0...-3]+ is itself
+#   * Bare-stem collision (consonant+e bases only): singing from sing collides with
+#     singeing from singe; binging from bing (search engine; a word_dict headword
+#     even though it's a named entity) collides with bingeing from binge; routing from
+#     rout (verb meaning to defeat) collides with routeing from route; tinging from
+#     ting collides with tingeing from tinge. We skip when corrected[0...-3] is itself
 #     a _pronounced_ headword. The pronunciation gate filters out SUBTLEX-presence artifacts
-#     that land in +word_dict+ as bare-frequency entries with no prons — e.g. +hav+ (a
+#     that land in word_dict as bare-frequency entries with no prons — e.g. hav (a
 #     Norse-origin loanword fragment / abbreviation, not a verb), which would otherwise spuriously
-#     block +haveing → having+. Real verbs that motivate this guard (+sing+, +bing+, +rout+,
-#     +ting+) all have CMU prons, so the gate continues to fire for them. We deliberately do
+#     block haveing → having. Real verbs that motivate this guard (sing, bing, rout,
+#     ting) all have CMU prons, so the gate continues to fire for them. We deliberately do
 #     _not_ apply this guard to vowel+e/y+e/w+e bases: those rarely have a meaningful
-#     bare-stem verb collision, and when they do (+to+ as a rare verb used in idioms like
-#     "toing and froing" colliding with the more common +toe+-derived +toeing+) the spec
+#     bare-stem verb collision, and when they do (to as a rare verb used in idioms like
+#     "toing and froing" colliding with the more common toe-derived toeing) the spec
 #     deems it desirable to normalize the rarer surface to the more conventional spelling.
-#   * +-ie+ y-mutation collision (always applied): +dying+ is the +-ing+ form of both
-#     +dye+ (via silent-+e+ drop) and +die+ (via +-ie+ → +-ying+ y-mutation). We skip when
-#     +corrected[0...-3]+ ends in +y+ and the +-ie+-replaced form +(corrected[0...-4] + "ie")+
-#     is a headword distinct from the +-eing+ base.
+#   * -ie y-mutation collision (always applied): dying is the -ing form of both
+#     dye (via silent-e drop) and die (via -ie → -ying y-mutation). We skip when
+#     corrected[0...-3] ends in y and the -ie-replaced form (corrected[0...-4] + "ie")
+#     is a headword distinct from the -eing base.
 def silent_e_drop_corpus_pairs(word_dict)
   pairs = []
   seen = Set.new
@@ -567,33 +567,33 @@ def silent_e_drop_corpus_pairs(word_dict)
   pairs
 end
 
-# Detect +-eys+/+-ies+ plural-spelling variants: pairs +(abbeys, abbies)+ where both surfaces
-# are +word_dict+ headwords with shared pronunciation, indicating they're alternate spellings
+# Detect -eys/-ies plural-spelling variants: pairs (abbeys, abbies) where both surfaces
+# are word_dict headwords with shared pronunciation, indicating they're alternate spellings
 # of the same plural rather than plurals of two unrelated bases. The pron-share gate is the
-# load-bearing discriminator: of the ~19 candidate +-ies+/+-eys+ shape matches in a typical
-# build, ~12 are genuine homograph collisions where the +-ies+ form is the y→ies plural of
-# one verb and the +-eys+ form is the +-ey+s plural of an unrelated noun, and they pronounce
+# load-bearing discriminator: of the ~19 candidate -ies/-eys shape matches in a typical
+# build, ~12 are genuine homograph collisions where the -ies form is the y→ies plural of
+# one verb and the -eys form is the +-ey+s plural of an unrelated noun, and they pronounce
 # differently in the stressed syllable:
 #
-#   +alleys+ +AE1 . L IY0 Z+ (alley) vs +allies+ +AE1 . L AY0 Z+ (ally) — different vowels
-#   +preys+  +P R EY1 Z+    (prey)  vs +pries+  +P R AY1 Z+    (pry)  — different vowels
-#   +treys+  +T R EY1 Z+    (trey)  vs +tries+  +T R AY1 Z+    (try)  — different vowels
-#   +bogeys+ +B OW1 . G IY0 Z+      vs +bogies+ +B UH1 . G IY0 Z+    — different vowels
-#   +smileys+ +S M AY1 . L IY0 Z+   vs +smilies+ +S M IH1 . L IY0 Z+ — different vowels
+#   alleys AE1 . L IY0 Z (alley) vs allies AE1 . L AY0 Z (ally) — different vowels
+#   preys  P R EY1 Z    (prey)  vs pries  P R AY1 Z    (pry)  — different vowels
+#   treys  T R EY1 Z    (trey)  vs tries  T R AY1 Z    (try)  — different vowels
+#   bogeys B OW1 . G IY0 Z      vs bogies B UH1 . G IY0 Z    — different vowels
+#   smileys S M AY1 . L IY0 Z   vs smilies S M IH1 . L IY0 Z — different vowels
 #
-# +headwords_share_full_pron?+ rejects all of these. The remaining ~7 pairs that pass are
-# genuine spelling variants — +abbeys/abbies+, +gulleys/gullies+, +jeffreys/jeffries+,
-# +loveys/lovies+, +moneys/monies+, +storeys/stories+, +whiskeys/whiskies+ — all of which
+# headwords_share_full_pron? rejects all of these. The remaining ~7 pairs that pass are
+# genuine spelling variants — abbeys/abbies, gulleys/gullies, jeffreys/jeffries,
+# loveys/lovies, moneys/monies, storeys/stories, whiskeys/whiskies — all of which
 # pronounce identically modulo orthography.
 #
-# Direction-picking via +pick_corpus_winner_by_zipf+ on the underlying singular bases
-# (+abbey+ vs +abby+, +gully+ vs +gulley+, +story+ vs +storey+): the more-attested base
+# Direction-picking via pick_corpus_winner_by_zipf on the underlying singular bases
+# (abbey vs abby, gully vs gulley, story vs storey): the more-attested base
 # determines the preferred plural shape. This is a regular rule that gets the right answer
 # for the majority case (regular English plurals follow the more-frequent base) but will
-# pick +moneys+ over +monies+ — the historical i-mutated +monies+ is preferred in English's
-# formal/legal register despite +money+ being the higher-frequency base. To override this
-# kind of registry-driven exception, add a +monies,moneys+ entry to +curated/spelling.csv+;
-# per the load order in +load_variants_raw+, curated entries always win over auto-detected
+# pick moneys over monies — the historical i-mutated monies is preferred in English's
+# formal/legal register despite money being the higher-frequency base. To override this
+# kind of registry-driven exception, add a monies,moneys entry to curated/spelling.csv;
+# per the load order in load_variants_raw, curated entries always win over auto-detected
 # ones.
 def eys_ies_corpus_pairs(word_dict, wordfreq_hash)
   pairs = []
@@ -626,27 +626,27 @@ end
 # hand-verified mapping of US/UK/CA/AU spellings, and for any pair it covers we trust its
 # preference direction over Wiktionary's editorial choice. Both sides must be dict headwords;
 # pairs are aggregated across all evidence rows so that POS-qualified entries (e.g.
-# +practice/practise | <N>+ and +practice/practise | <V>+) vote together rather than splitting.
+# practice/practise | <N> and practice/practise | <V>) vote together rather than splitting.
 #
-# When VarCon's preference scores tie (e.g. sense-split clusters like +disc/disk+, where +disk+
-# is primary in sense 1 and +disc+ in sense 2), we fall back to the Zipf-based frequency picker
+# When VarCon's preference scores tie (e.g. sense-split clusters like disc/disk, where disk
+# is primary in sense 1 and disc in sense 2), we fall back to the Zipf-based frequency picker
 # so the more commonly-written spelling wins.
 #
-# Cluster-level canonical resolution: 3+-surface clusters like +A: colorize / B: colourise /
-# Z: colourize+ would otherwise emit three pairwise pairs +(colorize, colourise)+,
-# +(colorize, colourize)+, and +(colourise, colourize)+. The first two pick +colorize+ as
+# Cluster-level canonical resolution: 3+-surface clusters like A: colorize / B: colourise /
+# Z: colourize would otherwise emit three pairwise pairs (colorize, colourise),
+# (colorize, colourize), and (colourise, colourize). The first two pick colorize as
 # preferred (A < B, A < Z), but the third resolves between two non-canonical surfaces with
-# tied scores and lands on alphabetic ordering, giving +(colourise, colourize)+ — i.e.,
-# +colourize → colourise+. At runtime that pair OVERWRITES the +colourize → colorize+ mapping
-# in the variants hash (last-write-wins per +load_variants+), breaking the chain so
-# +preferred_form('colourize')+ returns +colourise+ instead of +colorize+. We fix this by
+# tied scores and lands on alphabetic ordering, giving (colourise, colourize) — i.e.,
+# colourize → colourise. At runtime that pair OVERWRITES the colourize → colorize mapping
+# in the variants hash (last-write-wins per load_variants), breaking the chain so
+# preferred_form('colourize') returns colourise instead of colorize. We fix this by
 # building connected components over the unordered pair graph and forcing every alt in a
 # component to point at the component's canonical (lowest-scoring) surface, so the (B, Z)
 # pair never gets emitted as a chain-breaking sibling and all three surfaces map cleanly to
 # the cluster canonical.
 def varcon_variant_pairs(word_dict, varcon_variant_map, wordfreq_hash = nil)
   by_pair = Hash.new { |h, k| h[k] = [] }
-  # Per-surface canonical score: minimum +self_strength+ over any evidence row touching the
+  # Per-surface canonical score: minimum self_strength over any evidence row touching the
   # surface (within a word_dict-keyed pair). Used by the cluster-canonical post-pass below.
   canonical_score = {}
   varcon_variant_map.each do |word, rows|
@@ -670,17 +670,17 @@ def varcon_variant_pairs(word_dict, varcon_variant_map, wordfreq_hash = nil)
   pairwise = []
   by_pair.each do |(a, b), rows|
     # Pronunciation-compatibility gate: VarCon clusters a few verb-morphology alternations
-    # whose surfaces do not pronounce the same (+dreamed+ +D R IY M D+ vs +dreamt+
-    # +D R EH M P T+; +burned+/+burnt+; +learned+/+learnt+). These are regionally-accepted
+    # whose surfaces do not pronounce the same (dreamed D R IY M D vs dreamt
+    # D R EH M P T; burned/burnt; learned/learnt). These are regionally-accepted
     # _morphological_ doublets, not rhyme-preserving spelling variants — treating them as
-    # spelling variants would strip +dreamt+ from the +EH_M_P_T+ rime bucket even though
-    # +tempt+/+undreamt+/+kempt+ depend on it. +colour+/+color+, +centre+/+center+,
-    # +acknowledgement+/+acknowledgment+ and the rest of VarCon's genuine spelling-axis
+    # spelling variants would strip dreamt from the EH_M_P_T rime bucket even though
+    # tempt/undreamt/kempt depend on it. colour/color, centre/center,
+    # acknowledgement/acknowledgment and the rest of VarCon's genuine spelling-axis
     # clusters pronounce identically and pass the gate unchanged.
     #
-    # We use +headwords_pron_compatible?+ rather than the strict +headwords_share_full_pron?+
-    # so that low-frequency surfaces that survived dict-build pron-less (+recolor+,
-    # +recolour+, +colourize+, +colourise+) still get their VarCon-attested variant link
+    # We use headwords_pron_compatible? rather than the strict headwords_share_full_pron?
+    # so that low-frequency surfaces that survived dict-build pron-less (recolor,
+    # recolour, colourize, colourise) still get their VarCon-attested variant link
     # emitted. Without prons they aren't in any rime bucket, so there's no rime-bucket
     # damage to guard against; relatedness wants the link so identical-semantics surfaces
     # collapse to one canonical form.
@@ -691,7 +691,7 @@ def varcon_variant_pairs(word_dict, varcon_variant_map, wordfreq_hash = nil)
   # Cluster the surviving pairs by connected component, then re-emit every non-canonical
   # surface paired with the cluster canonical. This is the load-bearing fix for 3+-surface
   # clusters (see function docstring); 2-surface clusters reduce trivially to the same
-  # +(canonical, alt)+ form they would have had under direct pairwise emission.
+  # (canonical, alt) form they would have had under direct pairwise emission.
   parent = {}
   find = lambda do |x|
     parent[x] = x unless parent.key?(x)
@@ -734,7 +734,7 @@ def varcon_variant_pairs(word_dict, varcon_variant_map, wordfreq_hash = nil)
   # VarCon's clusters already enumerate inflected forms explicitly (acknowledgment/acknowledgement,
   # acknowledgments/acknowledgements, acknowledgment's/acknowledgement's), so propagation here
   # is mostly a no-op. We run it anyway to catch morphological siblings that happen to appear in
-  # the dict via one path (e.g. the +-ing+ form) but not the other (VarCon sometimes omits
+  # the dict via one path (e.g. the -ing form) but not the other (VarCon sometimes omits
   # specific inflections for low-level clusters).
   direct_pairs.each do |preferred, alt|
     propagate_variant_inflections(preferred, alt, word_dict, headwords_with_direct_pair, pairs)
@@ -743,12 +743,12 @@ def varcon_variant_pairs(word_dict, varcon_variant_map, wordfreq_hash = nil)
 end
 
 # Emit variant pairs that Wiktionary (via Kaikki) explicitly marks as alternate spellings
-# or misspellings of a canonical headword. +kaikki_variant_map+ is
-# +{ variant_word => [{ target:, source:, tags: }, ...] }+ as produced by +load_wiktionary+.
+# or misspellings of a canonical headword. kaikki_variant_map is
+# { variant_word => [{ target:, source:, tags: }, ...] } as produced by load_wiktionary.
 # Both sides must be dict headwords that survive the build; we never invent a new row.
 # Returns an array of [preferred, alternate] pairs.
 def wiktionary_variant_pairs(word_dict, wordfreq_hash, kaikki_variant_map)
-  # Collapse directional evidence onto unordered pairs: +by_pair[[x, y].sort] = [{variant:, target:, source:, tags:}, ...]+
+  # Collapse directional evidence onto unordered pairs: by_pair[[x, y].sort] = [{variant:, target:, source:, tags:}, ...]
   by_pair = Hash.new { |h, k| h[k] = [] }
   kaikki_variant_map.each do |variant_word, evidences|
     variant_entry = word_dict[variant_word]
@@ -775,9 +775,9 @@ def wiktionary_variant_pairs(word_dict, wordfreq_hash, kaikki_variant_map)
   end
 
   # Track which headwords already have a _direct_ Wiktionary variant mapping. Inflection
-  # propagation must never contradict such a mapping: +hed → head+ (Wiktionary, archaic)
-  # is legitimate, but propagating +(he, hee) → (hed, heed)+ would spuriously claim
-  # +hed+ is also a variant of +heed+. When we see +hed+ already in this set, we skip any
+  # propagation must never contradict such a mapping: hed → head (Wiktionary, archaic)
+  # is legitimate, but propagating (he, hee) → (hed, heed) would spuriously claim
+  # hed is also a variant of heed. When we see hed already in this set, we skip any
   # propagation that would introduce a second target for it.
   headwords_with_direct_pair = Set.new
   direct_pairs.each do |preferred, alt|
@@ -793,10 +793,10 @@ def wiktionary_variant_pairs(word_dict, wordfreq_hash, kaikki_variant_map)
 end
 
 # Regular English suffix templates. Each entry is a pair of equal-length suffix arrays: one
-# for the +preferred+ surface, one for the +alt+ surface. For each template, if _both_
-# +preferred + pref_sfx+ and +alt + alt_sfx+ exist in +word_dict+, we emit that sibling
+# for the preferred surface, one for the alt surface. For each template, if _both_
+# preferred + pref_sfx and alt + alt_sfx exist in word_dict, we emit that sibling
 # variant pair. The symmetric shape keeps the usual English doubling / -y / -e alternations
-# consistent: e.g. +study/studied+ takes the same template as +cipher/ciphered+.
+# consistent: e.g. study/studied takes the same template as cipher/ciphered.
 REGULAR_INFLECTION_SUFFIX_PAIRS = [
   # plural + 3sg present
   ["s", "s"],
@@ -816,24 +816,24 @@ def propagate_variant_inflections(preferred, alt, word_dict, headwords_with_dire
     aa = regular_inflect(alt, alt_sfx)
     next if pa.nil? || aa.nil?
     next if pa == preferred || aa == alt
-    # Skip no-op pairs: applying +-s+ vs +-es+ to +absinthe+/+absinth+ both surface as
-    # +absinthes+, which isn't a variant relationship worth emitting.
+    # Skip no-op pairs: applying -s vs -es to absinthe/absinth both surface as
+    # absinthes, which isn't a variant relationship worth emitting.
     next if pa == aa
     # Require both inflected forms to already be attested headwords. That's the strongest
     # correctness check we have: if Wiktionary/cmudict don't list the inflected alt surface,
-    # we don't invent it here (avoids +maneuver/manoeuver → maneuvered/manoeuvered+, where
+    # we don't invent it here (avoids maneuver/manoeuver → maneuvered/manoeuvered, where
     # the alt base is itself a rare nonstandard spelling whose inflected forms are vanishingly
     # rare in wild English usage).
     next unless word_dict_live?(word_dict, pa) && word_dict_live?(word_dict, aa)
-    # +hed → head+ is the right canonical mapping for +hed+; don't overwrite it with a
-    # chain-propagated +hed → heed+ just because +(he, hee)+ happens to be a Wiktionary
-    # pair that extends regularly by +-d+.
+    # hed → head is the right canonical mapping for hed; don't overwrite it with a
+    # chain-propagated hed → heed just because (he, hee) happens to be a Wiktionary
+    # pair that extends regularly by -d.
     next if headwords_with_direct_pair.include?(pa) || headwords_with_direct_pair.include?(aa)
-    # Propagated forms must be pronunciation-compatible: +sin/sinne+ is a valid archaic
-    # pair, but the +-er+-propagated pair +siner/sinner+ collides with a genuine English
-    # noun with a different pronunciation (+sinner+ = +S IH N ER+, not +S AY N ER+); their
-    # full prons differ, so reject. We use +headwords_pron_compatible?+ rather than the
-    # strict pron-share gate so that pron-less inflected forms (e.g. +recoloring+ if it
+    # Propagated forms must be pronunciation-compatible: sin/sinne is a valid archaic
+    # pair, but the -er-propagated pair siner/sinner collides with a genuine English
+    # noun with a different pronunciation (sinner = S IH N ER, not S AY N ER); their
+    # full prons differ, so reject. We use headwords_pron_compatible? rather than the
+    # strict pron-share gate so that pron-less inflected forms (e.g. recoloring if it
     # survives the build but only via wordfreq) still propagate from a vetted base pair.
     next unless headwords_pron_compatible?(pa, aa, word_dict)
     out_pairs << [pa, aa]
@@ -845,8 +845,8 @@ def propagate_variant_inflections(preferred, alt, word_dict, headwords_with_dire
       pa = p_stem + sfx
       aa = a_stem + sfx
       # Require both inflected forms to be attested headwords for the same reason the main
-      # suffix loop does: otherwise +blowsy/blousy+ (from Wiktionary's +blowsy → blousy+) would
-      # propagate to +blowsier/blousier+ even though +blousier+ isn't in cmudict or wordfreq.
+      # suffix loop does: otherwise blowsy/blousy (from Wiktionary's blowsy → blousy) would
+      # propagate to blowsier/blousier even though blousier isn't in cmudict or wordfreq.
       next unless word_dict_live?(word_dict, pa) && word_dict_live?(word_dict, aa)
       next if headwords_with_direct_pair.include?(pa) || headwords_with_direct_pair.include?(aa)
       next unless headwords_pron_compatible?(pa, aa, word_dict)
@@ -855,25 +855,25 @@ def propagate_variant_inflections(preferred, alt, word_dict, headwords_with_dire
   end
 end
 
-# True when +a+ and +b+ have at least one pronunciation each whose full phoneme sequence
+# True when a and b have at least one pronunciation each whose full phoneme sequence
 # matches. Used to veto Wiktionary/Kaikki-sourced and VarCon "spelling variants" that don't
-# actually pronounce the same: Kaikki's +alt_of+/+synonym_of+/+misspelling+ annotations are
-# noisy enough to produce pairs like +cache/cachet+ (+AE_SH+ vs +AE_T+), +bone/bane+
-# (+OW_N+ vs +EY_N+), +fuss/fuzz+ (+AH_S+ vs +AH_Z+), and +hundreds/tons+ (semantic synonymy,
+# actually pronounce the same: Kaikki's alt_of/synonym_of/misspelling annotations are
+# noisy enough to produce pairs like cache/cachet (AE_SH vs AE_T), bone/bane
+# (OW_N vs EY_N), fuss/fuzz (AH_S vs AH_Z), and hundreds/tons (semantic synonymy,
 # unrelated rimes), as well as onset-divergent pairs that share a rime but differ at the
-# stressed-syllable onset (+tiddy/diddy+: +T IH . D IY+ vs +D IH . D IY+ — both share rime
-# +IH_D_IY+ but +tiddy+ never flaps its initial T). Real spelling variants — +colour/color+
-# (+K AH . L AH R+), +teem/team+ (+T IY M+), +acknowledgment/acknowledgement+ — share a
+# stressed-syllable onset (tiddy/diddy: T IH . D IY vs D IH . D IY — both share rime
+# IH_D_IY but tiddy never flaps its initial T). Real spelling variants — colour/color
+# (K AH . L AH R), teem/team (T IY M), acknowledgment/acknowledgement — share a
 # full pron, not just a rime, so the stricter gate accepts them while rejecting the
 # rime-only-collision noise.
 #
-# Both sides must have +Pronunciation+ entries in +word_dict+ (we don't invent prons). A
+# Both sides must have Pronunciation entries in word_dict (we don't invent prons). A
 # side without any recorded pron can't meaningfully share one with the other, so we reject
-# the pair: e.g. +seeder+ survives the build with no CMU pronunciation but +seder+ has
-# +S EY . D AH R+; treating them as spelling variants would only dispreference the side that
-# actually has a pron. The +o_plural_corpus_pairs+ caller bypasses this gate entirely (its
+# the pair: e.g. seeder survives the build with no CMU pronunciation but seder has
+# S EY . D AH R; treating them as spelling variants would only dispreference the side that
+# actually has a pron. The o_plural_corpus_pairs caller bypasses this gate entirely (its
 # shape-based lemma match is a stronger morphological signal); VarCon and Wiktionary pairs
-# are gated so verb-morphology doublets like +dreamed/dreamt+ (different rimes, also
+# are gated so verb-morphology doublets like dreamed/dreamt (different rimes, also
 # different full prons) don't strip rime-bucket members.
 def headwords_share_full_pron?(a, b, word_dict)
   prons_a = word_dict[a]&.dig(1)
@@ -890,22 +890,22 @@ def headwords_share_full_pron?(a, b, word_dict)
   end
 end
 
-# True when both +a+ and +b+ are Kaikki-documented inflected forms of _different_ base lemmas.
-# Kaikki's dialectal +alt-of+ annotations occasionally cross morphological families -- the
-# +hits → its+ pointer ("hits is a dialectal Alternative form of its", tagged +alt-of+
-# +alternative+ +dialectal+) passes the freq and decay gates in +wiktionary_pair_is_useful?+
-# because neither is rare and +dialectal+ isn't a decay tag, but the pair is phonologically
-# misleading: +hits+ is the plural of +hit+ (lemma +hit+) and +its+ is the possessive of +it+
-# (lemma +it+). Treating them as spelling variants dispreferences +its+ from +hits+'s rhyme
-# list and lumps them under +all_forms+, breaking +hits oughta-rhyme its+ and
-# +its ought-not-rhyme it's+. True spelling variants -- +colour/color+, +catalog/catalogue+,
-# +adapter/adaptor+ -- have each side as its own base in Kaikki's forms_map (no base
-# annotation); the inflected siblings like +catalogs/catalogues+ come in via
-# +propagate_variant_inflections+, not as direct Wiktionary pairs.
+# True when both a and b are Kaikki-documented inflected forms of _different_ base lemmas.
+# Kaikki's dialectal alt-of annotations occasionally cross morphological families -- the
+# hits → its pointer ("hits is a dialectal Alternative form of its", tagged alt-of
+# alternative dialectal) passes the freq and decay gates in wiktionary_pair_is_useful?
+# because neither is rare and dialectal isn't a decay tag, but the pair is phonologically
+# misleading: hits is the plural of hit (lemma hit) and its is the possessive of it
+# (lemma it). Treating them as spelling variants dispreferences its from hits's rhyme
+# list and lumps them under all_forms, breaking hits oughta-rhyme its and
+# its ought-not-rhyme it's. True spelling variants -- colour/color, catalog/catalogue,
+# adapter/adaptor -- have each side as its own base in Kaikki's forms_map (no base
+# annotation); the inflected siblings like catalogs/catalogues come in via
+# propagate_variant_inflections, not as direct Wiktionary pairs.
 #
-# We read +$inflection_base_words+ rather than +word_dict[w][2]+ because lemma assignment
-# (+compute_lemma_map+) runs _after_ +emit_spelling_variants_auto!+ in +dict.rb+, so the
-# word_dict entries seen here still have shape +[freq, prons]+ (no lemma slot populated yet).
+# We read $inflection_base_words rather than word_dict[w][2] because lemma assignment
+# (compute_lemma_map) runs _after_ emit_spelling_variants_auto! in dict.rb, so the
+# word_dict entries seen here still have shape [freq, prons] (no lemma slot populated yet).
 def distinct_inflected_forms?(a, b)
   ba = $inflection_base_words[a]
   bb = $inflection_base_words[b]
@@ -913,15 +913,15 @@ def distinct_inflected_forms?(a, b)
   ba != bb
 end
 
-# Minimal regular-English morphological inflection for +stem + suffix+. Returns +nil+ when
-# the combination isn't morphologically well-formed (e.g. +manoeuvre+-+s+ would be
-# +manoeuvres+, but +maneuver+-+es+ would be +maneuveres+, which isn't a real English form).
+# Minimal regular-English morphological inflection for stem + suffix. Returns nil when
+# the combination isn't morphologically well-formed (e.g. manoeuvre-s would be
+# manoeuvres, but maneuver-es would be maneuveres, which isn't a real English form).
 #
 # Handles:
-#   * e-drop before vowel-initial suffixes (+manoeuvre+"ed" → +manoeuvred+)
-#   * +-es+ on sibilant-final stems (+kiss+"s" → +kisses+, +lash+"s" → +lashes+)
-#   * +-y+ → +-ies+ and +-y+ → +-ied+ on consonant-+y stems when suffix is plain +s+ or
-#     +ed+ (we already handle +-y+/+-ies+ alternation with an explicit branch above, so
+#   * e-drop before vowel-initial suffixes (manoeuvre"ed" → manoeuvred)
+#   * -es on sibilant-final stems (kiss"s" → kisses, lash"s" → lashes)
+#   * -y → -ies and -y → -ied on consonant-+y stems when suffix is plain s or
+#     ed (we already handle -y/-ies alternation with an explicit branch above, so
 #     here we only canonicalize for the consistency of regular inflection)
 def regular_inflect(stem, suffix)
   return nil if stem.nil? || stem.empty? || suffix.nil?
@@ -929,11 +929,11 @@ def regular_inflect(stem, suffix)
   # Disallow impossible concatenations first.
   vowel_initial = suffix.start_with?("e") || suffix.start_with?("i")
   if stem.end_with?("e") && vowel_initial
-    # +manoeuvre+ + +ed+ → +manoeuvred+ (drop trailing +e+ before vowel-initial suffix)
+    # manoeuvre + ed → manoeuvred (drop trailing e before vowel-initial suffix)
     return stem[0..-2] + suffix
   end
   if suffix == "s" && stem =~ /(s|x|z|ch|sh)\z/
-    # +kiss+ + +s+ → +kisses+ (need +-es+ after sibilant-final stems)
+    # kiss + s → kisses (need -es after sibilant-final stems)
     return stem + "es"
   end
   stem + suffix
@@ -941,18 +941,18 @@ end
 
 # Reject pairs whose evidence is too weak to treat as an active spelling variant. The
 # rare-form rule keeps any pair where one side is an obviously archaic/obscure spelling
-# (Zipf ≤ +RARE_FORM_ZIPF_MAX+). When both sides are common we accept whenever any
+# (Zipf ≤ RARE_FORM_ZIPF_MAX). When both sides are common we accept whenever any
 # evidence row carries:
 #
 #   * a regional-dialect tag (UK/US/Commonwealth/Australian/...); or
-#   * +:misspelling+ source (canonical vs misspelled form); or
-#   * a _structured_ +:alt_of+ pointer (Kaikki sense tagged +alt-of+ with an +alt_of[]+
-#     target) that is not weighed down by +archaic+/+obsolete+/+dated+ decay markers.
-#     Wiktionary's editorial +alt-of+ annotations are intentional canonicalization
-#     hints: +disc alt-of disk+, +centre alt-of center+. We trust them unless the sense
-#     also admits the variant is historical, which gets us +be/by+ and +bee/be+ noise.
+#   * :misspelling source (canonical vs misspelled form); or
+#   * a _structured_ :alt_of pointer (Kaikki sense tagged alt-of with an alt_of[]
+#     target) that is not weighed down by archaic/obsolete/dated decay markers.
+#     Wiktionary's editorial alt-of annotations are intentional canonicalization
+#     hints: disc alt-of disk, centre alt-of center. We trust them unless the sense
+#     also admits the variant is historical, which gets us be/by and bee/be noise.
 #
-# Gloss-derived +:alt_of_gloss+ evidence without regional tags is treated as weak: the
+# Gloss-derived :alt_of_gloss evidence without regional tags is treated as weak: the
 # "Alternative form of X" phrasing alone is enough for the low-frequency rare-form case
 # but not enough to justify a common-common pair in modern usage.
 def wiktionary_pair_is_useful?(a, b, rows, wordfreq_hash)
@@ -962,10 +962,10 @@ def wiktionary_pair_is_useful?(a, b, rows, wordfreq_hash)
 
   # Rare-form rule: one side being obviously archaic/rare is a strong signal, but only
   # when paired with evidence that phrases the pair as a _spelling_ variant. Wiktionary's
-  # +moulder | Synonym of mould+ (tagged +UK obsolete rare+) meets the frequency test --
-  # +moulder+ is Zipf 2.1 -- but the gloss records a semantic synonymy in an obsolete
-  # sense, not a spelling variant. Structured +alt-of+ pointers, +misspelling of X+, and
-  # prose phrasings like +Alternative/Archaic form of X+ remain trustworthy.
+  # moulder | Synonym of mould (tagged UK obsolete rare) meets the frequency test --
+  # moulder is Zipf 2.1 -- but the gloss records a semantic synonymy in an obsolete
+  # sense, not a spelling variant. Structured alt-of pointers, misspelling of X, and
+  # prose phrasings like Alternative/Archaic form of X remain trustworthy.
   rows.any? do |r|
     tags = r[:tags] || []
     has_regional = tags.any? { |t| REGIONAL_VARIANT_TAGS.include?(t) }
@@ -974,18 +974,18 @@ def wiktionary_pair_is_useful?(a, b, rows, wordfreq_hash)
     when :misspelling
       next true
     when :alt_of
-      # Structured +alt-of+ pointer is Wiktionary's editorial canonicalization; trust it
+      # Structured alt-of pointer is Wiktionary's editorial canonicalization; trust it
       # for rare-side pairs unconditionally and for common-common pairs only when the
-      # sense isn't marked +archaic+/+obsolete+/+dated+.
+      # sense isn't marked archaic/obsolete/dated.
       next true if one_side_rare || !has_decay
     when :alt_of_gloss
-      # Prose phrasing like +Alternative/Archaic/Commonwealth spelling of X+ is strong
+      # Prose phrasing like Alternative/Archaic/Commonwealth spelling of X is strong
       # enough for the rare-side case; for common-common we still need regional evidence
       # (and the regional sense itself has to be active, not obsolete).
       next true if one_side_rare
       next true if has_regional && !has_decay
     when :synonym_of
-      # +Synonym of X+ is semantically broad (frolf/disc, moulder/mould); only accept
+      # Synonym of X is semantically broad (frolf/disc, moulder/mould); only accept
       # when the regional tag signals an active regional spelling synonymy.
       next true if has_regional && !has_decay
     end
@@ -996,16 +996,16 @@ end
 # Pick the preferred spelling for a Wiktionary-attested pair, given a set of directional
 # evidence rows {variant:, target:, source:, tags:}. Rules in precedence order:
 #
-#   1. Wordfreq Zipf delta ≥ +CORPUS_ZIPF_DECISIVE_DELTA+ (≈log10(3)): higher-frequency
+#   1. Wordfreq Zipf delta ≥ CORPUS_ZIPF_DECISIVE_DELTA (≈log10(3)): higher-frequency
 #      spelling wins, regardless of which direction Wiktionary's editorial annotations
 #      point. A massively more common "misspelling" is in practice the canonical modern
-#      form (+team+ Zipf 5.67 vs +teem+ 2.07, +sinner+ 3.39 vs +siner+ 1.05); trusting
+#      form (team Zipf 5.67 vs teem 2.07, sinner 3.39 vs siner 1.05); trusting
 #      Kaikki's arrow here would invert the preference. Same rule applies when Kaikki
-#      marks the low-freq side +archaic+/+obsolete+/+alt-form+ of the high-freq side.
-#   2. +:misspelling+ evidence (freq indecisive): +target+ of the +misspelling+ annotation
+#      marks the low-freq side archaic/obsolete/alt-form of the high-freq side.
+#   2. :misspelling evidence (freq indecisive): target of the misspelling annotation
 #      wins. Used for genuinely close-freq pairs where Kaikki's explicit canonicalization
 #      direction is the best signal we have.
-#   3. Directional +:alt_of+ majority: if Wiktionary consistently points one side at the
+#   3. Directional :alt_of majority: if Wiktionary consistently points one side at the
 #      other, respect that as a canonicalization hint.
 #   4. Lexicographic fallback so builds are reproducible.
 def resolve_wiktionary_variant_winner(a, b, rows, wordfreq_hash)
@@ -1024,7 +1024,7 @@ def resolve_wiktionary_variant_winner(a, b, rows, wordfreq_hash)
 
   alt_of_target_votes = Hash.new(0)
   rows.each do |r|
-    # Count structured +:alt_of+ twice as heavily as +:alt_of_gloss+ or +:synonym_of+:
+    # Count structured :alt_of twice as heavily as :alt_of_gloss or :synonym_of:
     # Wiktionary editors' tag-structured canonicalization pointer is a stronger signal
     # than a prose phrasing that could reflect either direction.
     case r[:source]
@@ -1050,14 +1050,14 @@ def resolve_wiktionary_variant_winner(a, b, rows, wordfreq_hash)
 end
 
 # Tiebreaker for spelling-variant pairs where Wiktionary supplies no
-# directional evidence (no misspelling tag, no +alt-of+ pointer) and corpus
+# directional evidence (no misspelling tag, no alt-of pointer) and corpus
 # frequency is tied or absent. Picks the form with the richer attested
-# inflectional paradigm in +$word_dict+: the canonical spelling typically
-# anchors a productive paradigm (+arrest+ → +arrests+, +arrested+,
-# +arresting+, +arrester+) while a misspelled stem rarely accumulates one
-# (+arest+ → none). Returns +nil+ when the paradigm counts are within 1 of
+# inflectional paradigm in $word_dict: the canonical spelling typically
+# anchors a productive paradigm (arrest → arrests, arrested,
+# arresting, arrester) while a misspelled stem rarely accumulates one
+# (arest → none). Returns nil when the paradigm counts are within 1 of
 # each other, leaving the alphabetical fallback to resolve ambiguous cases
-# like +cipher+/+cypher+ where both stems generate parallel paradigms.
+# like cipher/cypher where both stems generate parallel paradigms.
 def pick_inflectional_paradigm_winner(a, b)
   count_a = inflectional_paradigm_count(a)
   count_b = inflectional_paradigm_count(b)
@@ -1066,11 +1066,11 @@ def pick_inflectional_paradigm_winner(a, b)
   nil
 end
 
-# Concatenate the regular inflectional suffixes onto +stem+ and count how many
-# of the resulting surfaces are live +$word_dict+ headwords. A relative measure:
+# Concatenate the regular inflectional suffixes onto stem and count how many
+# of the resulting surfaces are live $word_dict headwords. A relative measure:
 # a misspelled stem typically produces zero attested inflections, while the
 # canonical spelling produces several. Naive concatenation undercounts cases
-# that involve consonant-doubling or +-y+ → +-i+ rewriting, but as a comparison
+# that involve consonant-doubling or -y → -i rewriting, but as a comparison
 # between two close-spelling candidates the absolute miss rate is symmetric
 # and the relative ordering still holds.
 def inflectional_paradigm_count(stem)
@@ -1085,9 +1085,9 @@ def inflectional_paradigm_count(stem)
 end
 
 # Pick the canonical surface in a connected-component cluster of VarCon-linked spellings
-# (3+-surface clusters like +A: colorize / B: colourise / Z: colourize+, or 2-surface clusters
-# that reduce trivially). Order: lowest +canonical_score+ first (VarCon's own preference scoring
-# — A=0, B=10, Z=10, etc.), then highest wordfreq Zipf as a tiebreaker (so +disc/disk+-style
+# (3+-surface clusters like A: colorize / B: colourise / Z: colourize, or 2-surface clusters
+# that reduce trivially). Order: lowest canonical_score first (VarCon's own preference scoring
+# — A=0, B=10, Z=10, etc.), then highest wordfreq Zipf as a tiebreaker (so disc/disk-style
 # sense-tied clusters defer to corpus frequency), then alphabetic order for full reproducibility.
 def pick_cluster_canonical(members, canonical_score, wordfreq_hash)
   members.min_by do |m|
@@ -1098,8 +1098,8 @@ def pick_cluster_canonical(members, canonical_score, wordfreq_hash)
 end
 
 # Pick whichever spelling has the decisively higher wordfreq Zipf (delta ≥
-# +CORPUS_ZIPF_DECISIVE_DELTA+); on a tie (or when both forms are absent from wordfreq) return
-# +deterministic_fallback+. Callers pass the morphologically simpler -os form (or +nil+) as the
+# CORPUS_ZIPF_DECISIVE_DELTA); on a tie (or when both forms are absent from wordfreq) return
+# deterministic_fallback. Callers pass the morphologically simpler -os form (or nil) as the
 # fallback so the UI never displays both spellings of a truly-tied pair.
 def pick_corpus_winner_by_zipf(a, b, wordfreq_hash, deterministic_fallback:)
   za = (wordfreq_hash[a] || 0.0).to_f
@@ -1126,25 +1126,25 @@ end
 
 # Direction-correction post-pass: when a corpus emitter (typically VarCon or
 # Wiktionary) emits a pair on a recognized US/UK regional-spelling axis but
-# in the wrong direction, flip it to canonical. +us_uk_morphology_pair+ is
-# the authority for these axes (+-er/-re+, +-or/-our+, +-ize/-ise+,
-# +-l/-ll+); it always returns [US, UK] when both halves are pronounced
+# in the wrong direction, flip it to canonical. us_uk_morphology_pair is
+# the authority for these axes (-er/-re, -or/-our, -ize/-ise,
+# -l/-ll); it always returns [US, UK] when both halves are pronounced
 # headwords on the axis, regardless of the input's surface form. So if a
-# pair +(P, A)+ in our auto set has a canonical answer that disagrees with
+# pair (P, A) in our auto set has a canonical answer that disagrees with
 # its current direction, the corpus emitter's per-cluster signal got muddied
-# (typically by a low-level VarCon entry: +A Cv: megameter / B C: megametre+
-# scores megametre lower despite the +meter/metre+ cluster at +A B / B C+
+# (typically by a low-level VarCon entry: A Cv: megameter / B C: megametre
+# scores megametre lower despite the meter/metre cluster at A B / B C
 # scoring meter lower) and the canonical axis answer is the load-bearing
 # truth.
 #
-# Why scope to +us_uk_morphology_pair+'s axes specifically: most other
-# variant pairs in the auto set are length-dependent (+silent_e_drop+:
-# +cueing+ keeps +e+ for short stems but +barbecuing+ drops it for long
-# ones) or lexical exceptions (+hos/hoes+ is a slang plural that doesn't
-# generalize to +echoes/echos+ being the standard +-oes+ plural). Inheriting
+# Why scope to us_uk_morphology_pair's axes specifically: most other
+# variant pairs in the auto set are length-dependent (silent_e_drop:
+# cueing keeps e for short stems but barbecuing drops it for long
+# ones) or lexical exceptions (hos/hoes is a slang plural that doesn't
+# generalize to echoes/echos being the standard -oes plural). Inheriting
 # direction across those axes via shared suffix would over-fire. The US/UK
-# regional axes encoded in +us_uk_morphology_pair+ are precisely the ones
-# whose direction IS suffix-uniform (+colour+ → +color+ regardless of stem),
+# regional axes encoded in us_uk_morphology_pair are precisely the ones
+# whose direction IS suffix-uniform (colour → color regardless of stem),
 # so they're the safe scope.
 #
 # Pure direction-flip; doesn't add new pairs. Pairs not on a US/UK axis are

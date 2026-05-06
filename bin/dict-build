@@ -14,8 +14,8 @@
 #
 #   ./bin/dict-build                                              # slim default
 #   RHYMECRIME_DICT_BUILD_CONCEPTNET_NUMBERBATCH=1 ./bin/dict-build  # +CN+NB exports
-#   RHYMECRIME_RARITY_DUMP_SIGNALS=PATH         ./bin/dict-build  # +rarity signal dump
-#                                                                 # (+ disables rescore)
+#   RHYMECRIME_RARITY_DUMP_SIGNALS=PATH         ./bin/dict-build  # rarity signal dump
+#                                                                 # ( disables rescore)
 #
 # CPU sampling profile (StackProf): ./bin/dict-build-profile — see script header for STACKPROF_* env vars.
 #

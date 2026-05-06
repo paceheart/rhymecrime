@@ -58,15 +58,15 @@ end
 # *hahaha*, *goodbye*). Verified empirically against our corpus snapshots: both
 # files have zero hyphenated headwords. Without a bridge every hyphenated CMU /
 # authoritative surface reads as freq=0, and bucket pruning kills pairs like
-# +so-so+/+mafioso+ (+OW_S_OW+): one common anchor + a rare partner trips
-# +rime_bucket_one_common_preferred_with_any_rare?+ even though the "rare"
+# so-so/mafioso (OW_S_OW): one common anchor + a rare partner trips
+# rime_bucket_one_common_preferred_with_any_rare? even though the "rare"
 # partner is really a perfectly ordinary English word whose corpus evidence is
 # hiding under the dehyphenated spelling.
 #
-# Install a +default_proc+ that transparently falls back from +foo-bar+ reads to
-# +foobar+'s value. Reads only: +key?+, +fetch+ with no default, and iteration
-# stay literal so "is this token in the TSV?" checks (+in_wordfreq_tsv+,
-# +wordfreq_hash.key?+) still reflect the raw corpus contents.
+# Install a default_proc that transparently falls back from foo-bar reads to
+# foobar's value. Reads only: key?, fetch with no default, and iteration
+# stay literal so "is this token in the TSV?" checks (in_wordfreq_tsv,
+# wordfreq_hash.key?) still reflect the raw corpus contents.
 def install_hyphen_collapse_fallback_default_proc!(hash, missing_value)
   hash.default_proc = proc do |h, k|
     if k.is_a?(String) && k.include?("-")
@@ -98,9 +98,9 @@ end
 #     *Cabot*, *Lawton*).
 #   - SUBTLEX capitalized ratio ≥ threshold (*Cabot* 0.99, *Mott* 1.0, *Patricia* 1.0, *Brant* 0.88).
 #
-# +max_low+ defaults to SUBTLEX_PROPER_NOUN_MAX_FREQLOW (2), the strict setting used with a WN
+# max_low defaults to SUBTLEX_PROPER_NOUN_MAX_FREQLOW (2), the strict setting used with a WN
 # anchor (where pentagon 12 / chicago 12 are legitimate common-noun senses we must preserve).
-# Callers may raise +max_low+ to SUBTLEX_OVERRIDE_PROPER_MIN (12) when the word is OOV in WordNet,
+# Callers may raise max_low to SUBTLEX_OVERRIDE_PROPER_MIN (12) when the word is OOV in WordNet,
 # to catch mid-FREQlow names (*shi* 12, *strom* 5, *mong* 3) that have no WN common-noun risk.
 def likely_proper_noun_by_case?(word, subtlex_hash, subtlex_total_hash, kaikki_capitalized_only,
                                  max_low: SUBTLEX_PROPER_NOUN_MAX_FREQLOW)
@@ -112,7 +112,7 @@ def likely_proper_noun_by_case?(word, subtlex_hash, subtlex_total_hash, kaikki_c
   false
 end
 
-# True if +w+ hits at least one external lexicon used for runtime relatedness / audit (wordfreq TSV,
+# True if w hits at least one external lexicon used for runtime relatedness / audit (wordfreq TSV,
 # SUBTLEX FREQlow, WordNet lemma, pre-merge CMU headword, USF cue/target, ConceptNet vocab cache,
 # Numberbatch embedding list). Used to block morph phases from copying base_freq>RARE_FREQ_MAX onto
 # surfaces that exist only via Kaikki/Inflect (e.g. *necrophilias*).
@@ -157,7 +157,7 @@ def load_wordfreq()
   install_hyphen_collapse_fallback_default_proc!(wordfreq_hash, nil)
   wordfreq_hash
 end
-# Kaikki +wordfreq+ OOV rescue (idea 2b): forms in +forms_map+ whose +base+ has wordfreq Zipf ≥ +zipf_floor+.
+# Kaikki wordfreq OOV rescue (idea 2b): forms in forms_map whose base has wordfreq Zipf ≥ zipf_floor.
 # Does not use Inflect forward derivation (idea 2a) — too many FPs.
 # Skip -ing / -ed forms whose base is a non-verb in WordNet (*kitchen* noun ⇒ *kitchening* rescue
 # denied): Kaikki often lists deverbal participle-shape forms for nouns that English doesn't
@@ -194,7 +194,7 @@ def subtlex_freqlow_positive?(w, subtlex_hash)
 end
 
 # Strict wordfreq-OOV anchors: Kaikki form-of-Zipf≥RARE base (2b) ∪ SUBTLEX FREQlow>0 ∪ WordNet lemma.
-# Kaikki lexical POS alone is excluded (CMU artefacts like +mopus+). +pos_map+ unused; kept for call-site API.
+# Kaikki lexical POS alone is excluded (CMU artefacts like mopus). pos_map unused; kept for call-site API.
 def wordfreq_oov_lexical_rescue?(w, subtlex_hash, wordfreq_hash, pos_map, kaikki_form_rescue_set)
   return false if wordfreq_hash.key?(w)
   kaikki_form_rescue_set.include?(w) ||
@@ -204,20 +204,20 @@ end
 
 # Drop freq==0 headwords that fail the disconnect policy, then prune rime index until fixed point.
 #
-# Has a +wordfreq_hash+ row (exported wordfreq TSV): never drop here — the token is corpus-attested. Rhyme-only
+# Has a wordfreq_hash row (exported wordfreq TSV): never drop here — the token is corpus-attested. Rhyme-only
 # OOV junk was removed in earlier rounds; without this, those removals would cascade and evict attested rares
 # that no longer have a live rhyme partner and lack a NB/CN/WN hit.
 #
 # Strict OOV (no wordfreq row): keep only if Kaikki form-of-Zipf≥RARE base (2b) ∪ SUBTLEX FREQlow>0 ∪ WordNet
-# lemma — rhyme neighbors alone do not rescue; Kaikki POS alone does not (see +wordfreq_oov_lexical_rescue?+).
+# lemma — rhyme neighbors alone do not rescue; Kaikki POS alone does not (see wordfreq_oov_lexical_rescue?).
 # Inflect-from-strong-base (2a) is intentionally not used here (too noisy).
 #
 # Exception: CMU surface forms written with a hyphen or apostrophe (e.g. okey-dokey, takin') often lack
 # WordNet / wordfreq rows but share a live rime bucket; keep them when they were original CMU headwords.
 # *-in'* merged after original CMU snapshot (Wiktionary/Inflect, e.g. fakin'): same disconnect case as takin'
-# but +pronunciation_map_seed_headwords+ does not include them. Pattern is tight (*…in'*); +kitchenin'+ is removed
-# earlier if +explicitly_forbidden?+.
-# Prunes +rime_dict+ and re-runs +delete_rare_only_rime_buckets!+ until fixed point so partner removal can cascade.
+# but pronunciation_map_seed_headwords does not include them. Pattern is tight (*…in'*); kitchenin' is removed
+# earlier if explicitly_forbidden?.
+# Prunes rime_dict and re-runs delete_rare_only_rime_buckets! until fixed point so partner removal can cascade.
 def pronunciation_map_seed_surface_rhyme_rescue?(word, prons, has_rhyme, pronunciation_map_seed_headwords)
   return false unless word.is_a?(String)
   return false if prons.nil? || prons.empty?
@@ -265,19 +265,19 @@ end
 
 def filter_word_dict_disconnected!(word_dict, rime_dict, subtlex_hash, wordfreq_hash, pos_map, forms_map, pronunciation_map_seed_headwords = nil, wiktionary_words = nil)
   # Fresh pruning window for every disconnect call. The outer
-  # +with_pruning_active+ block flips +rime_dict.pruning_active?+ on; naive reads
-  # of +rime_dict[rime]+ / +rime_dict.each+ / ... from inside the block raise unless
-  # the reader wraps its own reads in +rime_dict.with_reads_during_prune+. Four
+  # with_pruning_active block flips rime_dict.pruning_active? on; naive reads
+  # of rime_dict[rime] / rime_dict.each / ... from inside the block raise unless
+  # the reader wraps its own reads in rime_dict.with_reads_during_prune. Four
   # authorized readers live inside this window today:
   #
-  #   1. +headword_has_non_rich_rhyme_partner?+ (surface wraps its body).
-  #   2. +prune_rime_dict_to_headwords!+ (wraps its body).
-  #   3. +delete_rare_only_rime_buckets!+ (wraps its body).
-  #   4. +delete_common_rich_only_rime_buckets!+ (wraps its body).
+  #   1. headword_has_non_rich_rhyme_partner? (surface wraps its body).
+  #   2. prune_rime_dict_to_headwords! (wraps its body).
+  #   3. delete_rare_only_rime_buckets! (wraps its body).
+  #   4. delete_common_rich_only_rime_buckets! (wraps its body).
   #
   # Inner per-round word_dict deletions are deferred: each disconnect-dropped
-  # row gets +mark_tombstoned!+ with the rescue-diagnostic detail,
-  # and +live_word_dict_keys+ projects the pending-deleted-excluded keyset
+  # row gets mark_tombstoned! with the rescue-diagnostic detail,
+  # and live_word_dict_keys projects the pending-deleted-excluded keyset
   # that the three rime_dict pruners use as the "allowed" cohort. The
   # termination criterion is "no new tombstoned marks this round";
   # marks from earlier scrubs / classifier rescore don't count (they
@@ -333,11 +333,11 @@ def do_filter_word_dict_disconnected!(word_dict, rime_dict, subtlex_hash, wordfr
           end if rime_dict.respond_to?(:with_reads_during_prune)
         end
         in_wordfreq_tsv = wordfreq_hash.key?(w)
-        # Kaikki-documented non-lemma paradigm forms (+polys+ form_of +poly+, +gollies+ form_of +golly+)
+        # Kaikki-documented non-lemma paradigm forms (polys form_of poly, gollies form_of golly)
         # with weak corpus evidence are Wiktionary-paradigm-only junk: Zipf < RARE (tiny document
         # tail), SUBTLEX FREQcount 1-2 (caption noise). The default "any wordfreq row / any SUBTLEX
-        # trickle" rescue keeps them as freq=0 rows which later surface as +:rare+ in +rarity_spec+
-        # rather than the expected +:forbidden+. Require a stronger signal — Zipf ≥ RARE, SUBTLEX
+        # trickle" rescue keeps them as freq=0 rows which later surface as :rare in rarity_spec
+        # rather than the expected :forbidden. Require a stronger signal — Zipf ≥ RARE, SUBTLEX
         # dialogue above trickle, WN entry, or explicit NB/CN presence — for Kaikki paradigm surfaces.
         # Non-paradigm freq=0 words fall through the normal rescue paths below.
         kaikki_paradigm = morph_kaikki_lists_surface_as_inflected_nonlemma?(w)
@@ -353,15 +353,15 @@ def do_filter_word_dict_disconnected!(word_dict, rime_dict, subtlex_hash, wordfr
                  strong_wordfreq = zipf_w >= WORDFREQ_RARE_ZIPF
                  strong_subtlex = sub_w >= MORPH_CORPUS_SUBTLEX_MIN
                  wnw = wn_has_entry?(w)
-                 # Base-of-inflection anchor: when Kaikki's +form_of+ lemma has a POS-appropriate
+                 # Base-of-inflection anchor: when Kaikki's form_of lemma has a POS-appropriate
                  # WordNet entry (noun for *-s* plural, verb for *-ing* / *-ed*), the Wiktionary
                  # paradigm form is a legitimate rare inflection of an attested lexeme and should
-                 # survive as freq=0 (rarity_spec +:rare+). POS-aware, not "any WN POS", because
+                 # survive as freq=0 (rarity_spec :rare). POS-aware, not "any WN POS", because
                  # Kaikki aggressively documents deverbal participles for WN noun-only lemmas
-                 # (+opinion+→+opinioning+, +kitchen+→+kitchening+, +attorney+→+attorneying+,
-                 # +conversation+→+conversationing+) that English does not actually verbify.
-                 # Without this anchor the filter drops +agoraphobias+ / +foxed+ / +sacristies+
-                 # for the same weak-corpus reason we drop +polys+ / +gollies+ / +gettered+ (whose
+                 # (opinion→opinioning, kitchen→kitchening, attorney→attorneying,
+                 # conversation→conversationing) that English does not actually verbify.
+                 # Without this anchor the filter drops agoraphobias / foxed / sacristies
+                 # for the same weak-corpus reason we drop polys / gollies / gettered (whose
                  # bases are _not_ in WordNet at all). Junk bases never acquire a WN entry because
                  # WN's lexicographic gate is stricter than Wiktionary's.
                  base_wn = kaikki_paradigm_base_has_pos_appropriate_wn?(w)
@@ -418,8 +418,8 @@ def do_filter_word_dict_disconnected!(word_dict, rime_dict, subtlex_hash, wordfr
       # Terminate on "no new tombstoned marks this round" — the
       # parity-preserving analog of the old "no new hash.delete this round".
       # Earlier-phase scrub / classifier marks don't factor in here; those
-      # wouldn't have incremented the old +removed+ counter either because
-      # they were physically gone from +word_dict+ before the loop started.
+      # wouldn't have incremented the old removed counter either because
+      # they were physically gone from word_dict before the loop started.
       break if new_marks == 0 || rounds >= 12
     end
   end
@@ -429,11 +429,11 @@ def do_filter_word_dict_disconnected!(word_dict, rime_dict, subtlex_hash, wordfr
   word_dict
 end
 
-# True if +word+ is a Kaikki non-lemma form whose +form_of+ base has a POS-appropriate
-# WordNet entry: +-ing+/+-ed+ wants a verb base (WN participle paradigm), +-s+/-+es+/+-er+/
-# +-est+ wants any WN entry (plurals and comparatives often substantivize adjectives —
+# True if word is a Kaikki non-lemma form whose form_of base has a POS-appropriate
+# WordNet entry: -ing/-ed wants a verb base (WN participle paradigm), -s/-es/-er/
+# -est wants any WN entry (plurals and comparatives often substantivize adjectives —
 # *alpines*, *agoraphobics* — so noun-only gating drops them; the surface's wordfreq floor
-# in +compute_frequency+ still guards against truly empty paradigms). Used to shield
+# in compute_frequency still guards against truly empty paradigms). Used to shield
 # legitimate rare inflections of attested lexemes (*sacristies*, *foxed*, *alpines*,
 # *agoraphobics*) while still catching the junk (*polys*, *gollies*, *gettered*, *hocused*,
 # *finnaed*, *taserred*, *rizzed* — whose bases are not in WordNet at all).
@@ -448,12 +448,12 @@ def kaikki_paradigm_base_has_pos_appropriate_wn?(word)
   end
 end
 
-# +compute_frequency+ is a thin wrapper around +compute_frequency_structured+
-# that extracts the scalar +final_freq+ for callers that just want the number.
+# compute_frequency is a thin wrapper around compute_frequency_structured
+# that extracts the scalar final_freq for callers that just want the number.
 # New callers that want the structured view (applied clamps, pre-clamp signals,
-# raw inputs, Kaikki-paradigm flag) should call +compute_frequency_structured+
+# raw inputs, Kaikki-paradigm flag) should call compute_frequency_structured
 # directly and attach the resulting FreqComputation to the BuildEntry via
-# +entry.freq_computation=+. See build_entry.rb for the struct shape.
+# entry.freq_computation=. See build_entry.rb for the struct shape.
 def compute_frequency(word, subtlex_hash, wordfreq_hash, subtlex_total_hash: nil, kaikki_capitalized_only: nil, pos_map: nil)
   compute_frequency_structured(word, subtlex_hash, wordfreq_hash,
                                 subtlex_total_hash: subtlex_total_hash,
@@ -461,13 +461,13 @@ def compute_frequency(word, subtlex_hash, wordfreq_hash, subtlex_total_hash: nil
                                 pos_map: pos_map).final_freq
 end
 
-# Structured form of +compute_frequency+: runs the same cascade but records
-# every clamp / boost / early-return reason in an +applied_clamps+ array and
-# captures pre-clamp +subtlex_freq+ / +wordfreq_boost+ in the returned
+# Structured form of compute_frequency: runs the same cascade but records
+# every clamp / boost / early-return reason in an applied_clamps array and
+# captures pre-clamp subtlex_freq / wordfreq_boost in the returned
 # FreqComputation so downstream consumers (the classifier, debug dumps,
 # trace-word logging) can see _why_ a word ended up at its final freq — not
 # just the integer. The final_freq is guaranteed equal to the legacy
-# +compute_frequency+ output for the same inputs (regression-gate invariant).
+# compute_frequency output for the same inputs (regression-gate invariant).
 def compute_frequency_structured(word, subtlex_hash, wordfreq_hash, subtlex_total_hash: nil, kaikki_capitalized_only: nil, pos_map: nil)
   applied_clamps = []
   subtlex_total = if subtlex_total_hash
@@ -519,13 +519,13 @@ def compute_frequency_structured(word, subtlex_hash, wordfreq_hash, subtlex_tota
   # inflections all carry strong wordfreq Zipf, WN entries, or high SUBTLEX FREQcount and
   # bypass this gate.
   #
-  # Exception: if the Kaikki +form_of+ base has a POS-appropriate WordNet entry (noun for +-s+
-  # plural, verb for +-ed+ / +-ing+), leave compute_frequency alone. These are legitimate rare
-  # inflections of attested lexemes (+sacristies+ ← +sacristy+, +alpines+ ← +alpine+,
-  # +agoraphobics+ ← +agoraphobic+) that must keep their weak-signal frequency so they reach
-  # +filter_word_dict_disconnected!+'s base-WN rescue — zeroing them here would orphan them at
-  # the disconnect filter instead. Bases for the junk cases (+poly+, +golly+, +bravado+-as-verb,
-  # +hocus+, +getter+) have no matching WN entry so this clause does not apply to them.
+  # Exception: if the Kaikki form_of base has a POS-appropriate WordNet entry (noun for -s
+  # plural, verb for -ed / -ing), leave compute_frequency alone. These are legitimate rare
+  # inflections of attested lexemes (sacristies ← sacristy, alpines ← alpine,
+  # agoraphobics ← agoraphobic) that must keep their weak-signal frequency so they reach
+  # filter_word_dict_disconnected!'s base-WN rescue — zeroing them here would orphan them at
+  # the disconnect filter instead. Bases for the junk cases (poly, golly, bravado-as-verb,
+  # hocus, getter) have no matching WN entry so this clause does not apply to them.
   if !in_wordnet && zipf < WORDFREQ_RARE_ZIPF &&
       sub_raw < SUBTLEX_OVERRIDE_PROPER_MIN &&
       kaikki_paradigm &&
@@ -535,14 +535,14 @@ def compute_frequency_structured(word, subtlex_hash, wordfreq_hash, subtlex_tota
     return build_comp.call(0, wn_in: in_wordnet, wn_all_proper_val: wn_all_proper, syn_count: syn_n)
   end
 
-  # Short-base Kaikki paradigm plurals (+or+→+ors+, +o+→+os+, +pos+→+poss+, +bo+→+bos+): 1-3
-  # char bases whose Wiktionary-documented +-s+ surface inherits web/SUBTLEX noise that looks
+  # Short-base Kaikki paradigm plurals (or→ors, o→os, pos→poss, bo→bos): 1-3
+  # char bases whose Wiktionary-documented -s surface inherits web/SUBTLEX noise that looks
   # conversational but is mostly function-word / acronym / abbreviation fragment spam. Zero
   # when the surface has no WN entry of its own and Zipf stays sub-COMMON — legit short-base
-  # plurals (+bees+ from +bee+ Zipf 4.86, +toes+ from +toe+) either sit well above COMMON or
-  # show up in WN; their Kaikki form remains undisturbed. +poss+ SUBTLEX 7 is all-lowercase
-  # tweet slang for +possible+, not a real plural of WN +pos+. Does not apply to +-es+/+-ing+/
-  # +-ed+ which have verb paradigms with different noise profiles.
+  # plurals (bees from bee Zipf 4.86, toes from toe) either sit well above COMMON or
+  # show up in WN; their Kaikki form remains undisturbed. poss SUBTLEX 7 is all-lowercase
+  # tweet slang for possible, not a real plural of WN pos. Does not apply to -es/-ing/
+  # -ed which have verb paradigms with different noise profiles.
   if !in_wordnet && zipf < WORDFREQ_COMMON_ZIPF &&
       kaikki_paradigm &&
       word.end_with?("s")
@@ -591,10 +591,10 @@ def compute_frequency_structured(word, subtlex_hash, wordfreq_hash, subtlex_tota
     return build_comp.call(0, wn_in: in_wordnet, wn_all_proper_val: wn_all_proper, syn_count: syn_n)
   end
 
-  # All-proper + single-synset + trickle SUBTLEX FREQlow (< 5) in +noun.animal+ / +noun.plant+
-  # captures Latin scientific binomials (+pseudomonas+ bacterial genus, lexed +noun.animal+)
-  # whose 4-word dialogue trickle keeps them just above the +case_proper+ bar (sub_low ≤ 2).
-  # Restricted to biology lex categories to avoid +cajun+ (noun.person demonym with the same
+  # All-proper + single-synset + trickle SUBTLEX FREQlow (< 5) in noun.animal / noun.plant
+  # captures Latin scientific binomials (pseudomonas bacterial genus, lexed noun.animal)
+  # whose 4-word dialogue trickle keeps them just above the case_proper bar (sub_low ≤ 2).
+  # Restricted to biology lex categories to avoid cajun (noun.person demonym with the same
   # syn=1 + all_proper + sub=3 signal). Demonyms stay commmon through this gate.
   if wn_all_proper && syn_n == 1 && sub_raw > 0 && sub_raw < 5
     lexnames = wn_noun_synsets_unified(word).map { |s| wn_synset_noun_lexname(s) }.compact
@@ -647,10 +647,10 @@ def compute_frequency_structured(word, subtlex_hash, wordfreq_hash, subtlex_tota
   # Without a lexical anchor, high Zipf often reflects encyclopedic/person-name hits; do not let
   # SUBTLEX alone push past the rare threshold (e.g. nam ~ Viet Nam fragments in subtitles).
   if !lexically_anchored && zipf >= WORDFREQ_COMMON_ZIPF
-    # 2–3-letter OOV with sustained SUBTLEX FREQlow that Kaikki tags as interjection (+yum+, +duh+,
-    # +nah+, +meh+, +hmm+, +ugh+, +wow+) is real dialogue, not an initialism artifact. Prior version
-    # used +sub_raw >= SUBTLEX_OVERRIDE_PROPER_MIN+ alone which also let through encyclopedic /
-    # caption-fragment shapes (+bom+, +hee+, +ing+, +hor+, +oe+) whose SUBTLEX trickle is noise.
+    # 2–3-letter OOV with sustained SUBTLEX FREQlow that Kaikki tags as interjection (yum, duh,
+    # nah, meh, hmm, ugh, wow) is real dialogue, not an initialism artifact. Prior version
+    # used sub_raw >= SUBTLEX_OVERRIDE_PROPER_MIN alone which also let through encyclopedic /
+    # caption-fragment shapes (bom, hee, ing, hor, oe) whose SUBTLEX trickle is noise.
     intj_anchor = pos_map && Array(pos_map[word]).include?("intj")
     unless short_initialism_shape?(word) && intj_anchor
       pre = subtlex_freq
@@ -695,7 +695,7 @@ def compute_frequency_structured(word, subtlex_hash, wordfreq_hash, subtlex_tota
   # with mid Zipf (*flyby*, *getter*) can exceed the rare ceiling from SUBTLEX alone. Inflections of WN
   # lemmas (*successors*) skip the clamp when Zipf is strong so they are not stuck at rare with a WN base.
   #
-  # R2b: Kaikki noun-attested bypass — OOV lemmas Kaikki tags as +noun+ (and not capitalized-only)
+  # R2b: Kaikki noun-attested bypass — OOV lemmas Kaikki tags as noun (and not capitalized-only)
   # with Zipf in the modern [COMMON, OOV_STRONG_MODERN) band represent productive neologism nouns
   # (*biopic*, *meetup*) rather than surname trickle. Skip the clamp so SUBTLEX + wordfreq lift
   # them out of rare. Capitalized-only Kaikki entries (proper nouns) still fall through to the
@@ -720,9 +720,9 @@ def compute_frequency_structured(word, subtlex_hash, wordfreq_hash, subtlex_tota
   end
 
   # OOV with Kaikki tagging the word exclusively as a function-word POS (pron / particle /
-  # det / conj / prep / num) is nonstandard (+hisself+, +theirselves+) or foreign closed-class
-  # (+raison+… unattested, +hor+ particle). Genuine common function words (+of+, +his+,
-  # +yours+) are stop words that bypass compute_frequency entirely, so clamping here is safe.
+  # det / conj / prep / num) is nonstandard (hisself, theirselves) or foreign closed-class
+  # (raison… unattested, hor particle). Genuine common function words (of, his,
+  # yours) are stop words that bypass compute_frequency entirely, so clamping here is safe.
   if !in_wordnet && pos_map && (tags = pos_map[word]) && !tags.empty? &&
       tags.all? { |t| OOV_FUNCTION_WORD_POS_TAGS.include?(t) }
     pre_s = subtlex_freq
@@ -736,9 +736,9 @@ def compute_frequency_structured(word, subtlex_hash, wordfreq_hash, subtlex_tota
   end
 
   # 2–3 char OOV tokens with mid Zipf (in [2.0, COMMON)) and trickle SUBTLEX FREQlow (< 5)
-  # are caption-fragment noise or foreign letter-name residue (+oe+, +hor+, +ae+). Different
+  # are caption-fragment noise or foreign letter-name residue (oe, hor, ae). Different
   # band from the earlier short-initialism Zipf≥COMMON clamp at line ~371. Real dialogue
-  # interjections (+yum+, +wow+, +huh+) have either Kaikki +intj+ anchoring or SUBTLEX FREQlow
+  # interjections (yum, wow, huh) have either Kaikki intj anchoring or SUBTLEX FREQlow
   # ≥ 12, so they don't fall into the low-sub cell.
   if !in_wordnet && word.length <= 3 && word.match?(/\A[a-z]+\z/) &&
       sub_raw > 0 && sub_raw < 5 && zipf > 0 && zipf < WORDFREQ_COMMON_ZIPF
@@ -752,14 +752,14 @@ def compute_frequency_structured(word, subtlex_hash, wordfreq_hash, subtlex_tota
     wordfreq_boost = new_w
   end
 
-  # Obscure single-synset WN nouns in highly specialized lex categories (+noun.plant+ Latin
-  # binomial-style anatomy, +noun.quantity+ foreign numeral units, +noun.group+ gens / clan
+  # Obscure single-synset WN nouns in highly specialized lex categories (noun.plant Latin
+  # binomial-style anatomy, noun.quantity foreign numeral units, noun.group gens / clan
   # tokens) are genuine WN lemmas but encyclopedic rather than conversational. When SUBTLEX
-  # FREQlow < 5 they lack the dialogue signature of everyday noun.plant commons (+tulip+,
-  # +orchid+) and noun.group commons (+posse+, +linemen+), so clamp the computed freq to
-  # rare. Catches +anther+, +gens+, +lakh+ while leaving +pseudomonas+ (noun.animal, conflicts
-  # with +tapir+ / +axolotl+ / +puffin+) and +mem+ (noun.communication, conflicts with
-  # +skulduggery+ / +malware+) to other gates.
+  # FREQlow < 5 they lack the dialogue signature of everyday noun.plant commons (tulip,
+  # orchid) and noun.group commons (posse, linemen), so clamp the computed freq to
+  # rare. Catches anther, gens, lakh while leaving pseudomonas (noun.animal, conflicts
+  # with tapir / axolotl / puffin) and mem (noun.communication, conflicts with
+  # skulduggery / malware) to other gates.
   if in_wordnet && syn_n == 1 && zipf > 0 && zipf < WORDFREQ_COMMON_ZIPF + 0.5 && sub_raw < 5
     lexnames = wn_noun_synsets_unified(word).map { |s| wn_synset_noun_lexname(s) }.compact
     if lexnames.any? { |ln| WN_ENCYCLOPEDIC_SINGLE_SYNSET_LEXNAMES.include?(ln) }
@@ -780,12 +780,12 @@ def compute_frequency_structured(word, subtlex_hash, wordfreq_hash, subtlex_tota
   # senses. The default pipeline leaves them at freq ≤ RARE when SUBTLEX is absent / clamped
   # and Zipf hasn't crossed the common boost threshold (*append* 0-sub Zipf 2.64 → freq 0;
   # *moralize* Zipf 1.74 → freq 4 via SUBTLEX-clamp). Floor these to just-common
-  # (+RARE_FREQ_MAX+1+) so the WN anchor carries weight independent of +sub_raw+. Single-synset
+  # (+RARE_FREQ_MAX+1+) so the WN anchor carries weight independent of sub_raw. Single-synset
   # lemmas stay at the cautious default (earlier demotions already caught encyclopedic cases
-  # like +cohosh+, +paregoric+). Exclude +wn_all_proper+ (proper-noun senses only).
+  # like cohosh, paregoric). Exclude wn_all_proper (proper-noun senses only).
   #
-  # Zipf ≥ RARE is the default threshold. Highly multi-sense lemmas (+syn_n ≥ 3+) with any
-  # SUBTLEX presence (+sub_raw > 0+) also qualify below RARE — catches *moralize* (3 syn,
+  # Zipf ≥ RARE is the default threshold. Highly multi-sense lemmas (syn_n ≥ 3) with any
+  # SUBTLEX presence (sub_raw > 0) also qualify below RARE — catches *moralize* (3 syn,
   # Zipf 1.74, sub 4) and *entomb*/*arachnophobia* stay at the cautious floor.
   if in_wordnet && lexically_anchored && !wn_all_proper && syn_n >= 2 && freq <= RARE_FREQ_MAX &&
       (zipf >= WORDFREQ_RARE_ZIPF || (syn_n >= 3 && sub_raw > 0))
@@ -804,7 +804,7 @@ def compute_frequency_structured(word, subtlex_hash, wordfreq_hash, subtlex_tota
   )
 end
 
-# List-pivot Inflect inheritance: try to lift +word+ to donor freq via +listed+
+# List-pivot Inflect inheritance: try to lift word to donor freq via listed
 # (rarity.csv: common/common_ish), forward or reverse Inflect match.
 def morph_inherit_listed_once!(word, listed, forward, hash, rare_words, common_words, pos_map, forms_map, kaikki_verb_morph, subtlex_hash, wordfreq_hash, pronunciation_map_seed, ref_cn, ref_nb, ref_usf, neol_words)
   entry = hash[word]
@@ -864,9 +864,9 @@ def morph_inherit_listed_once!(word, listed, forward, hash, rare_words, common_w
     dict_trace_puts(word, "morph_inherit_listed ← base=#{base} (listed=#{listed}): skip (surface not in wordfreq/SUBTLEX/WN/CMU/USF/CN/NB/neol)") if tr
     return false
   end
-  # +donor_anchored+ uses the corpus-only predicate (no +common_words+ clause)
-  # so the +received_donor_from_common_base_flag+ feature can't read the
-  # curated label off its own input. See +donor_has_corpus_anchor?+ in dict.rb.
+  # donor_anchored uses the corpus-only predicate (no common_words clause)
+  # so the received_donor_from_common_base_flag feature can't read the
+  # curated label off its own input. See donor_has_corpus_anchor? in dict.rb.
   entry.append_freq_tag!(
     phase: :morph_inherit_listed,
     post_freq: donor,
@@ -955,10 +955,10 @@ def add_frequency_info(pronunciation_map, subtlex_hash, subtlex_total_hash, word
   puts "#{extra} extra words added from SUBTLEX"
 
   # Common-list floor: add (or sentinel-floor) words tagged common/common_ish in
-  # +curated/rarity.csv+. Freq 99 is a structural sentinel: it lands above
-  # +RARITY_CLASSIFIER_RESCORE_MAX_FREQ+ so the rarity-classifier rescore pass won't
+  # curated/rarity.csv. Freq 99 is a structural sentinel: it lands above
+  # RARITY_CLASSIFIER_RESCORE_MAX_FREQ so the rarity-classifier rescore pass won't
   # delete these curated headwords as forbidden. Pre-existing entries at or below
-  # +RARE_FREQ_MAX+ get bumped (otherwise a word like +mitten+ — legit but sparse in
+  # RARE_FREQ_MAX get bumped (otherwise a word like mitten — legit but sparse in
   # SUBTLEX — can be floored at freq 4 and then nuked by the classifier).
   common_extra = 0
   common_bumped = 0
@@ -980,7 +980,7 @@ def add_frequency_info(pronunciation_map, subtlex_hash, subtlex_total_hash, word
 
   # Neol promotion: modern neologisms from neol2016 (12dicts) + supplement.
   # Neither list is a complete inventory of inflections, so the union serves as attestation
-  # for the downstream morph inheritance / expansion passes (e.g. +yeeted+ from +yeet+).
+  # for the downstream morph inheritance / expansion passes (e.g. yeeted from yeet).
   neol_words = load_word_list_set(NEOL2016_FILENAME)
   neol_words.merge(load_word_list_set(NEOL_SUPPLEMENT_FILENAME))
   neol_promoted = 0
@@ -1053,28 +1053,28 @@ def add_frequency_info(pronunciation_map, subtlex_hash, subtlex_total_hash, word
   # The body is structured in three phases:
   #
   #   1. *Correctness gates* — bail with no metadata recording. These reject the
-  #      relationship as not a real Kaikki form-of: surface absent from +hash+,
+  #      relationship as not a real Kaikki form-of: surface absent from hash,
   #      curator-flagged rare, irregular Kaikki paradigm without corroboration,
   #      forbidden suffix shape (consonant+ys plural, blocked verb forms, …),
   #      or donor that doesn't anchor (rare base / stop-word base).
   #
   #   2. *Donor-metadata recording* — once correctness gates pass, the lineage
-  #      is real. +record_freq_propagation!+ fires unconditionally so the
-  #      classifier's +received_donor_from_common_base_flag+ feature reflects
+  #      is real. record_freq_propagation! fires unconditionally so the
+  #      classifier's received_donor_from_common_base_flag feature reflects
   #      the lineage even when the *frequency* update below is skipped.
   #
   #   3. *Frequency-inheritance gates* — "don't decrease" guards: skip the
-  #      +hash[inflected][0]+ overwrite when the inflection's existing freq is
+  #      hash[inflected][0] overwrite when the inflection's existing freq is
   #      already at or above what we'd inherit, or when the surface is already
   #      independently common in wordfreq. The metadata from phase 2 stays.
   #
   # Phase 2 is decoupled from phase 3 specifically because surfaces like
-  # +barbecuing+ (freq=8 from SUBTLEX presence, low Zipf, no donor anchor)
-  # used to bail at phase 3's +infl_freq > RARE_FREQ_MAX+ guard before any
+  # barbecuing (freq=8 from SUBTLEX presence, low Zipf, no donor anchor)
+  # used to bail at phase 3's infl_freq > RARE_FREQ_MAX guard before any
   # metadata was recorded — entering the rarity classifier as
-  # +donor_anchored=false+ despite being a Kaikki form-of of a common base
-  # (+barbecue+). The classifier then verdicted them +:forbidden+ and the
-  # rebuild deleted them. Recording metadata under +:morph_inherit_kaikki+
+  # donor_anchored=false despite being a Kaikki form-of of a common base
+  # (barbecue). The classifier then verdicted them :forbidden and the
+  # rebuild deleted them. Recording metadata under :morph_inherit_kaikki
   # before phase-3 gates closes that gap.
   inherited = 0
   metadata_only = 0
@@ -1090,10 +1090,10 @@ def add_frequency_info(pronunciation_map, subtlex_hash, subtlex_total_hash, word
       dict_trace_puts(inflected, "morph_inherit_kaikki ← #{base}: skip (in rarity.csv: rare)") if tr
       next
     end
-    # Respect the specialized-lex demotion applied by +compute_frequency+ (+gens+ syn=1
-    # noun.group, +anthers+ syn=1 noun.plant). Without this guard, Kaikki morph inheritance
-    # re-promotes +gens+ off its base +gen+ (freq≥common), undoing the Option 2 clamp.
-    # Treated as a correctness gate so the classifier doesn't get a +received_donor+ flag
+    # Respect the specialized-lex demotion applied by compute_frequency (gens syn=1
+    # noun.group, anthers syn=1 noun.plant). Without this guard, Kaikki morph inheritance
+    # re-promotes gens off its base gen (freq≥common), undoing the Option 2 clamp.
+    # Treated as a correctness gate so the classifier doesn't get a received_donor flag
     # that would let it relearn the demoted lemma's commonness through the lineage.
     if wn_encyclopedic_single_synset_demoted?(inflected, subtlex_hash, wordfreq_hash)
       dict_trace_puts(inflected, "morph_inherit_kaikki ← #{base}: skip (WN single-synset specialized-lex demotion)") if tr
@@ -1134,12 +1134,12 @@ def add_frequency_info(pronunciation_map, subtlex_hash, subtlex_total_hash, word
       dict_trace_puts(inflected, "morph_inherit_kaikki ← #{base}: skip (plural :s not allowed)") if tr
       next
     end
-    # Non-standard consonant+y plurals: English pluralizes +lady+→+ladies+, +teddy+→+teddies+,
-    # +eddy+→+eddies+. Kaikki sometimes documents the dialectal +-ys+ surface (*teddys*, *eddys*,
+    # Non-standard consonant+y plurals: English pluralizes lady→ladies, teddy→teddies,
+    # eddy→eddies. Kaikki sometimes documents the dialectal -ys surface (*teddys*, *eddys*,
     # *gettys*) as an "alternative form of" the lemma; these inherit donor frequency from the
     # common base. The -ies surface is the preferred/canonical inflection in CMUdict/wordfreq, so
     # the -ys form adds noise. Skip unless the -ys surface has its own Zipf ≥ RARE or WN entry
-    # (+boys+/+guys+ are not cons+y, so they do not match this pattern).
+    # (boys/guys are not cons+y, so they do not match this pattern).
     if inflection_suffix_kind == :s && base.length >= 2 &&
         base.end_with?("y") && !%w[a e i o u y].include?(base[-2]) &&
         inflected == "#{base}s"
@@ -1179,17 +1179,17 @@ def add_frequency_info(pronunciation_map, subtlex_hash, subtlex_total_hash, word
       wn_has_entry?(inflected) ||
       pronunciation_map_seed.include?(inflected) ||
       neol_words.include?(inflected)
-    # +base_has_corpus_anchor+ is the inheritance-gate's anchor predicate
-    # MINUS the +common_words.include?(base)+ clause: real corpus / lexical
+    # base_has_corpus_anchor is the inheritance-gate's anchor predicate
+    # MINUS the common_words.include?(base) clause: real corpus / lexical
     # evidence only (WordNet entry, neol membership, or Zipf ≥
-    # +WORDFREQ_COMMON_ZIPF+). +base_has_real_anchor+ adds curated commons
+    # WORDFREQ_COMMON_ZIPF). base_has_real_anchor adds curated commons
     # back in for the gate so curated-list-only words still license their
     # Kaikki-linked inflections (the curators' authoritative call). Only the
-    # corpus-anchor flavor flows into +donor_anchored+ metadata, because
+    # corpus-anchor flavor flows into donor_anchored metadata, because
     # otherwise the rarity-classifier feature
-    # +received_donor_from_common_base_flag+ leaks the curated-list label
-    # via inflection — every inflected form of a +common+ row in
-    # +curated/rarity.csv+ ends up with the flag set, which is
+    # received_donor_from_common_base_flag leaks the curated-list label
+    # via inflection — every inflected form of a common row in
+    # curated/rarity.csv ends up with the flag set, which is
     # indistinguishable from "this word's lemma is labeled common in
     # rarity.csv" — exactly the leak we just spent items 1–3 plugging.
     base_has_corpus_anchor = wn_has_entry?(base) ||
@@ -1202,7 +1202,7 @@ def add_frequency_info(pronunciation_map, subtlex_hash, subtlex_total_hash, word
     end
 
     # === Phase 2+3 fused: decide metadata_only vs full inherit, then append a single FreqTag ===
-    # The tag carries the donor lineage unconditionally; +metadata_only+ encodes
+    # The tag carries the donor lineage unconditionally; metadata_only encodes
     # whether phase 3 took the freq-overwrite path or the "don't decrease" skip
     # path. See the Kaikki-morph header comment for why the split matters.
     infl_freq = hash[inflected][0]
@@ -1247,8 +1247,8 @@ def add_frequency_info(pronunciation_map, subtlex_hash, subtlex_total_hash, word
   # the rare bins; this pass still handles list-driven cases. Match forward (listed +
   # suffix = word) or reverse (word + suffix = listed, e.g. regionalize… ← regionalized).
   # Structural junk guards only; list headwords skip Kaikki verb attestation (see
-  # +list_authoritative_base+ on +morph_base_allows_verb_forms?+). When +listed+ is in
-  # rarity.csv (common), also skip +inflection_surface_reference_attested?+ so curated lemmas
+  # list_authoritative_base on morph_base_allows_verb_forms?). When listed is in
+  # rarity.csv (common), also skip inflection_surface_reference_attested? so curated lemmas
   # can lift OOV inflections.
   cw_sorted = common_words.sort_by { |b| -b.length }
   cw_inherited = 0
@@ -1394,7 +1394,7 @@ def add_frequency_info(pronunciation_map, subtlex_hash, subtlex_total_hash, word
             dict_trace_puts(w, "morph_expand_listed ← #{base}: skip (existing freq #{hash[w][0]} > #{RARE_FREQ_MAX})") if tr
             next
           end
-          # +donor_anchored+ corpus-only — see comment in +morph_inherit_listed+.
+          # donor_anchored corpus-only — see comment in morph_inherit_listed.
           hash[w].append_freq_tag!(
             phase: :morph_expand_listed,
             post_freq: donor,
@@ -1465,12 +1465,12 @@ def add_frequency_info(pronunciation_map, subtlex_hash, subtlex_total_hash, word
       end
       # Proper-noun bases (SUBTLEX majority capitalized, Kaikki capitalized-only) without any WN
       # common-noun anchor must not drive Inflect derivation. Without this gate, surname CMU
-      # headwords (*ferris* with +ferris wheel+-driven Zipf 4.10 but SUBTLEX capitalized 185/209
+      # headwords (*ferris* with ferris wheel-driven Zipf 4.10 but SUBTLEX capitalized 185/209
       # vs lowercase 24) reach SUBTLEX-anchored Inflect expansion and spin up junk plural surfaces (*ferriss* — Inflect's
-      # consonant-doubling fallback for unstressed *-is* endings). Real common nouns (+blog+,
-      # +twerk+, +gramophone+) have WN noun entries or an almost-entirely-lowercase SUBTLEX
-      # profile and skip this gate. The +likely_proper_noun_by_case?+ helper is gated by a very
-      # low +max_low+ so we compute the capitalization ratio directly here for high-SUBTLEX-total
+      # consonant-doubling fallback for unstressed *-is* endings). Real common nouns (blog,
+      # twerk, gramophone) have WN noun entries or an almost-entirely-lowercase SUBTLEX
+      # profile and skip this gate. The likely_proper_noun_by_case? helper is gated by a very
+      # low max_low so we compute the capitalization ratio directly here for high-SUBTLEX-total
       # surname bases where the proper-noun signal is strong but the lowercase trickle (ferris
       # wheel / ferris-wheel idiom) inflates FREQlow above the normal gate.
       unless wn_has_entry?(base) && wn_base_has_noun?(base)
@@ -1561,10 +1561,10 @@ def add_frequency_info(pronunciation_map, subtlex_hash, subtlex_total_hash, word
         # wordfreq volume to self-attest. The junk cases (poly, golly, hocus, bravado-as-verb,
         # taser, rizz, finna, getter, fox-as-verb-beyond-WN, ferris-as-plural) all fail every
         # clause of this anchor: no common_words / WN / neol entry, and Zipf < COMMON.
-        # Mirror the +morph_inherit_kaikki+ split: corpus-only anchor for the
-        # metadata flag (no leakage into +received_donor_from_common_base_flag+),
+        # Mirror the morph_inherit_kaikki split: corpus-only anchor for the
+        # metadata flag (no leakage into received_donor_from_common_base_flag),
         # broad anchor (with curated commons) for the inheritance gate. See the
-        # long comment on the same split in +morph_inherit_kaikki+ above.
+        # long comment on the same split in morph_inherit_kaikki above.
         base_has_corpus_anchor = wn_has_entry?(base) ||
           neol_words.include?(base) ||
           base_zipf >= WORDFREQ_COMMON_ZIPF
@@ -1578,7 +1578,7 @@ def add_frequency_info(pronunciation_map, subtlex_hash, subtlex_total_hash, word
             dict_trace_puts(w, "morph_expand_subtlex ← #{base}: skip (:s branch, not in hash)") if tr
             next
           end
-          # Verb-only bases: *-s* is 3sg (*twerks*), not a noun plural — +morph_base_allows_plural_s?+ already
+          # Verb-only bases: *-s* is 3sg (*twerks*), not a noun plural — morph_base_allows_plural_s? already
           # allows that path elsewhere. Noun+verb lemmas (*blog*) still get plural promotion when morph allows.
           if wn_base_has_verb?(base) && !wn_base_has_noun?(base)
             dict_trace_puts(w, "morph_expand_subtlex ← #{base}: skip (:s branch, verb-only base)") if tr
@@ -1588,16 +1588,16 @@ def add_frequency_info(pronunciation_map, subtlex_hash, subtlex_total_hash, word
             dict_trace_puts(w, "morph_expand_subtlex ← #{base}: skip (:s branch, freq already high)") if tr
             next
           end
-          # Respect the specialized-lex demotion applied by +compute_frequency+ (+gens+ syn=1
-          # noun.group). SUBTLEX-anchored Inflect expansion's plural-s path would otherwise re-promote +gens+ off its
-          # +gen+ base (Zipf 4.33, passes corpus_ok), undoing the Option 2 clamp.
+          # Respect the specialized-lex demotion applied by compute_frequency (gens syn=1
+          # noun.group). SUBTLEX-anchored Inflect expansion's plural-s path would otherwise re-promote gens off its
+          # gen base (Zipf 4.33, passes corpus_ok), undoing the Option 2 clamp.
           if wn_encyclopedic_single_synset_demoted?(w, subtlex_hash, wordfreq_hash)
             dict_trace_puts(w, "morph_expand_subtlex ← #{base}: skip (:s branch, WN single-synset specialized-lex demotion)") if tr
             next
           end
           # Mirror the Kaikki morph inheritance nonstandard consonant+y plural gate: English canonical plural of
-          # +teddy+/+lady+/+eddy+ is +teddies+/+ladies+/+eddies+. Kaikki sometimes records the
-          # +-ys+ alternative; without its own Zipf ≥ RARE or WN entry, that surface is Wiktionary
+          # teddy/lady/eddy is teddies/ladies/eddies. Kaikki sometimes records the
+          # -ys alternative; without its own Zipf ≥ RARE or WN entry, that surface is Wiktionary
           # paradigm echo and should not receive donor frequency here either.
           if base.length >= 2 && base.end_with?("y") && !%w[a e i o u y].include?(base[-2]) &&
               w == "#{base}s" &&
@@ -1702,12 +1702,12 @@ def add_frequency_info(pronunciation_map, subtlex_hash, subtlex_total_hash, word
   end
   puts "#{morph_corpus} morphological extensions from strong-corpus bases (not in common_words list)" if morph_corpus > 0
 
-  # G-drop frequency inheritance: +failin'+/+wailin'+/+somethin'+ inherit from +failing+/+wailing+/
-  # +something+ when the base is common. The apostrophe surface is merged in
-  # +merge_gdropped_in_apostrophe_forms!+ before the frequency phases, but none of the
+  # G-drop frequency inheritance: failin'/wailin'/somethin' inherit from failing/wailing/
+  # something when the base is common. The apostrophe surface is merged in
+  # merge_gdropped_in_apostrophe_forms! before the frequency phases, but none of the
   # downstream morph inheritance / expansion passes
   # see it as an Inflect stem, so it sits at freq 0 and reads as :forbidden. Cap the inherited
-  # frequency at +RARE_FREQ_MAX+ so g-drop never surfaces as :common (it's informal dialect, not
+  # frequency at RARE_FREQ_MAX so g-drop never surfaces as :common (it's informal dialect, not
   # the base lemma).
   gdrop_inherited = 0
   hash.keys.each do |word|
@@ -1719,7 +1719,7 @@ def add_frequency_info(pronunciation_map, subtlex_hash, subtlex_total_hash, word
     base_entry = hash[base]
     next unless base_entry && base_entry[0] > 0
     capped = [base_entry[0], RARE_FREQ_MAX].min
-    # +donor_anchored+ corpus-only — see comment in +morph_inherit_listed+.
+    # donor_anchored corpus-only — see comment in morph_inherit_listed.
     entry.append_freq_tag!(
       phase: :gdrop,
       post_freq: capped,
@@ -1733,12 +1733,12 @@ def add_frequency_info(pronunciation_map, subtlex_hash, subtlex_total_hash, word
 
   strip_gdrop_bare_homographs!(hash, pronunciation_map_seed)
 
-  # Drop bare possessive surface forms (+X's+) whose stem +X+ has freq 0 or is missing from the
-  # dict. CMU ships encyclopedic surname / place-name possessives (+cardenas's+, +chinn's+,
-  # +hammas's+, +wallich's+, +baton-rouge's+) whose stem is either absent or sits at freq 0 after
+  # Drop bare possessive surface forms (X's) whose stem X has freq 0 or is missing from the
+  # dict. CMU ships encyclopedic surname / place-name possessives (cardenas's, chinn's,
+  # hammas's, wallich's, baton-rouge's) whose stem is either absent or sits at freq 0 after
   # the proper-noun gates above. These surface forms then survive the disconnect rescue via their
   # rime cohort and get classified as :rare, but they're purely encyclopedic noise. Common
-  # possessives (+it's+, +let's+, +john's+) have freq-positive stems and are preserved.
+  # possessives (it's, let's, john's) have freq-positive stems and are preserved.
   possessive_scrub = 0
   hash.keys.each do |word|
     entry = hash[word]
@@ -1764,7 +1764,7 @@ def add_frequency_info(pronunciation_map, subtlex_hash, subtlex_total_hash, word
   # artifact/communication/cognition compounds (*bain-marie*, *double-entendre*, *anti-semitism*,
   # *ad-hoc*) which the tests accept as rare via the normal disconnect rescue.
   # Drop freq==0 spurious invariant/irregular plurals (*sheeps*, *oxes*, *gooses*, *chaoses*):
-  # +compute_frequency+ already returned 0 via +morph_spurious_plural_s_on_invariant_noun?+, but
+  # compute_frequency already returned 0 via morph_spurious_plural_s_on_invariant_noun?, but
   # wordfreq's encyclopedic mix sometimes ships a low-Zipf row for them which the disconnect filter
   # treats as corpus-attested and keeps. They then read as :rare; remove outright so they're forbidden.
   invariant_plural_scrub = 0
@@ -1829,22 +1829,22 @@ def add_frequency_info(pronunciation_map, subtlex_hash, subtlex_total_hash, word
   end
   puts "#{unrhymable_scrub} unrhymable stop words removed after frequency phases" if unrhymable_scrub > 0
 
-  # Inflections of curated stop-word lemmas (+semantically_promiscuous.txt+ /
-  # +unrhymable_stop_words.txt+) that arrive from Wiktionary/Kaikki paradigm
+  # Inflections of curated stop-word lemmas (semantically_promiscuous.txt /
+  # unrhymable_stop_words.txt) that arrive from Wiktionary/Kaikki paradigm
   # tables but lack corpus attestation are paradigm noise — Wiktionary
-  # documents the full theoretical inflection set for a lemma (+gots+,
-  # +nots+, +alles+, +theyed+, +abouts+, +eaches+, +heyed+, +hithers+,
-  # +othering+, ...) but real English never uses these surfaces. The seed
-  # loop's +semantically_promiscuous?(word)+ check stamps them at the
-  # +999999+ sentinel via the predicate's lemma fallback even though they
+  # documents the full theoretical inflection set for a lemma (gots,
+  # nots, alles, theyed, abouts, eaches, heyed, hithers,
+  # othering, ...) but real English never uses these surfaces. The seed
+  # loop's semantically_promiscuous?(word) check stamps them at the
+  # 999999 sentinel via the predicate's lemma fallback even though they
   # aren't on either curated list themselves; without this scrub they leak
   # into the live dictionary as ultra-common headwords and spec/rarity_spec.rb
-  # flags them as +oughta_be_forbidden+ regressions.
+  # flags them as oughta_be_forbidden regressions.
   #
-  # Real inflections (+outing+, +mostly+, +willing+, +owned+, +others+,
-  # +outs+, +ups+, +beings+, +getters+ from +rarity.csv+ as common, ...)
+  # Real inflections (outing, mostly, willing, owned, others,
+  # outs, ups, beings, getters from rarity.csv as common, ...)
   # survive via the corpus-attestation gate: WordNet entry, wordfreq
-  # Zipf >= +WORDFREQ_COMMON_ZIPF+, or an explicit row in +rarity.csv+
+  # Zipf >= WORDFREQ_COMMON_ZIPF, or an explicit row in rarity.csv
   # (curator's escape hatch — both common-band and rare-band rows are
   # honored, since a rare-band row still wants the surface kept rather than
   # promoted to forbidden).
@@ -1877,8 +1877,8 @@ def add_frequency_info(pronunciation_map, subtlex_hash, subtlex_total_hash, word
 
   # Rarity classifier rescore: post-propagation rescore / signal dump (no-op when the
   # classifier JSON is absent AND dump is not enabled). See
-  # +lib/rhymecrime/dict/rarity_classifier.rb+ for the rescore semantics; the dump
-  # path is driven by +RHYMECRIME_RARITY_DUMP_SIGNALS+.
+  # lib/rhymecrime/dict/rarity_classifier.rb for the rescore semantics; the dump
+  # path is driven by RHYMECRIME_RARITY_DUMP_SIGNALS.
   rarity_rescore_and_dump!(
     hash,
     subtlex_hash: subtlex_hash,
@@ -1893,42 +1893,42 @@ def add_frequency_info(pronunciation_map, subtlex_hash, subtlex_total_hash, word
     ref_cn: ref_cn,
     ref_nb: ref_nb,
     ref_usf: ref_usf,
-    # Forwarded so the dump path can call +compute_frequency+ with the same
-    # +kaikki_capitalized_only+ guard the seed loop uses; keeps the dump's
+    # Forwarded so the dump path can call compute_frequency with the same
+    # kaikki_capitalized_only guard the seed loop uses; keeps the dump's
     # corpus-only freq aligned with what the non-curated fall-through branch
     # of the seed loop would have produced.
     kaikki_capitalized_only: kaikki_capitalized_only,
   )
 
-  # Wiktionary/Kaikki paradigm-table overgenerates +-s+ rows for every
-  # gerund-as-noun lemma — +addressings+, +bannings+, +pricings+, +typings+,
-  # +marketings+ etc. ride +freq=10+ off either the seed loop or the
+  # Wiktionary/Kaikki paradigm-table overgenerates -s rows for every
+  # gerund-as-noun lemma — addressings, bannings, pricings, typings,
+  # marketings etc. ride freq=10 off either the seed loop or the
   # classifier rescore even though no corpus surface attests them. Demote
   # (not tombstone) so they stay available as desperation rhymes; concrete
-  # bases (+morning+ noun.time, +meeting+ noun.group/event, +saving+ surface
+  # bases (morning noun.time, meeting noun.group/event, saving surface
   # in WN) survive via the gates inside
-  # +wiktionary_overgenerated_gerund_plural?+.
+  # wiktionary_overgenerated_gerund_plural?.
   #
-  # And: abstract +-ness+ pluralizations (+abruptnesses+, +stiffnesses+,
-  # +goodnesses+, +blandnesses+) are paradigm-table noise — English doesn't
-  # pluralize abstract qualities. Concrete +-ness+ surfaces (+baronesses+,
-  # base +baroness+ noun.person) survive via the WN concreteness gate.
-  # Stronger junk than the +-ings+ class — tombstone outright.
+  # And: abstract -ness pluralizations (abruptnesses, stiffnesses,
+  # goodnesses, blandnesses) are paradigm-table noise — English doesn't
+  # pluralize abstract qualities. Concrete -ness surfaces (baronesses,
+  # base baroness noun.person) survive via the WN concreteness gate.
+  # Stronger junk than the -ings class — tombstone outright.
   #
-  # Both scrubs run AFTER +rarity_rescore_and_dump!+ on purpose: the
+  # Both scrubs run AFTER rarity_rescore_and_dump! on purpose: the
   # classifier might otherwise re-promote a freshly-demoted gerund surface
-  # back to +freq=10+. Running last makes the demote / tombstone the
+  # back to freq=10. Running last makes the demote / tombstone the
   # final word in the build pipeline.
   #
-  # Bakes into +word_dict+ via +append_freq_tag!+ / +mark_tombstoned!+ —
-  # runtime +rare?+ / +explicitly_forbidden?+ then read the result through
-  # plain +frequency(word) <= RARE_FREQ_MAX+ / +!word_dict.key?(word)+,
+  # Bakes into word_dict via append_freq_tag! / mark_tombstoned! —
+  # runtime rare? / explicitly_forbidden? then read the result through
+  # plain frequency(word) <= RARE_FREQ_MAX / !word_dict.key?(word),
   # no live predicate needed.
   #
-  # Predicates consult +$word_dict+ via +word_dict_includes_headword?+ —
-  # +with_word_dict+ points that global at the in-flight +hash+ so the gate
-  # sees the mid-build dict (mirrors +preferred_form_in_build_lexicon+ /
-  # +emit_spelling_variants_auto!+).
+  # Predicates consult $word_dict via word_dict_includes_headword? —
+  # with_word_dict points that global at the in-flight hash so the gate
+  # sees the mid-build dict (mirrors preferred_form_in_build_lexicon /
+  # emit_spelling_variants_auto!).
   with_word_dict(hash) do
     gerund_overplural_scrub = 0
     hash.keys.each do |word|
@@ -1985,21 +1985,21 @@ def build_word_dict(pronunciation_map, rime_dict, subtlex_hash, subtlex_total_ha
   insert_r_before_final_sibilant_for_s_pronunciations!(word_dict, label: "word_dict")
   merge_word_dict_pronunciations_into_rime_dict!(rime_dict, word_dict)
   emit_spelling_variants_auto!(word_dict, wordfreq_hash, kaikki_variant_map, varcon_variant_map)
-  # +emit_spelling_variants_auto!+ has now populated the variant table that
-  # +preferred_form_in_build_lexicon+ consults; copy prons from dispreferred
-  # surfaces (+upend+) to their pron-less preferred siblings (+up-end+) before
+  # emit_spelling_variants_auto! has now populated the variant table that
+  # preferred_form_in_build_lexicon consults; copy prons from dispreferred
+  # surfaces (upend) to their pron-less preferred siblings (up-end) before
   # the rime-bucket stripper runs, then re-merge so the newly-pronounced
-  # preferred forms make it into +rime_dict+.
+  # preferred forms make it into rime_dict.
   inherit_prons_from_dispreferred_to_preferred!(word_dict)
   merge_word_dict_pronunciations_into_rime_dict!(rime_dict, word_dict)
   strip_dispreferred_headwords_from_rime_dict!(rime_dict, word_dict)
   delete_rare_only_rime_buckets!(rime_dict, word_dict)
   delete_common_rich_only_rime_buckets!(rime_dict, word_dict)
   filter_word_dict_disconnected!(word_dict, rime_dict, subtlex_hash, wordfreq_hash, pos_map, forms_map, pronunciation_map_seed_headwords, wiktionary_words)
-  # Terminal reducer: project every surviving +BuildEntry+ back to the
-  # legacy +[freq, prons, lemma]+ shape that +save_word_dict+,
-  # +save_word_dict_msgpack!+, and the rest of +rebuild_rhymecrime_dictionaries+
-  # expect. Drops +tombstoned+ rows (scrubs, classifier, disconnect) in
+  # Terminal reducer: project every surviving BuildEntry back to the
+  # legacy [freq, prons, lemma] shape that save_word_dict,
+  # save_word_dict_msgpack!, and the rest of rebuild_rhymecrime_dictionaries
+  # expect. Drops tombstoned rows (scrubs, classifier, disconnect) in
   # one consolidated pass so every downstream consumer sees exactly the
   # pre-refactor wire contract.
   finalize_build_entries!(word_dict)

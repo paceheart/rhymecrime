@@ -1,21 +1,21 @@
 # encoding: utf-8
 #
 # Build-time per-headword accumulator used by the rarity pipeline in
-# +frequency.rb+. Replaces the legacy +[freq, prons]+ pair that +word_dict+
+# frequency.rb. Replaces the legacy [freq, prons] pair that word_dict
 # used to carry during the build, so every phase that touches a headword can
 # append structured tags (freq decisions, donor lineage, clamp / boost
 # history, tombstoned reasons) onto the entry itself rather than
-# mutating +entry[0]+ in place or calling +hash.delete+ mid-pipeline.
+# mutating entry[0] in place or calling hash.delete mid-pipeline.
 #
-# The rest of the codebase still sees +[freq, prons, lemma]+: the terminal
-# reducer (+finalize_build_entries!+) projects each surviving +BuildEntry+
-# back onto that positional array right before +build_word_dict+ returns.
+# The rest of the codebase still sees [freq, prons, lemma]: the terminal
+# reducer (finalize_build_entries!) projects each surviving BuildEntry
+# back onto that positional array right before build_word_dict returns.
 # During the build, positional compatibility is preserved via
-# +BuildEntry#[]+ / +#dig+ / +#to_ary+ delegation so the ~hundred call sites
-# that read +entry[0]+ / +entry[1]+ or destructure +freq, prons = entry+
+# BuildEntry#[] / #dig / #to_ary delegation so the ~hundred call sites
+# that read entry[0] / entry[1] or destructure freq, prons = entry
 # continue to work unmodified.
 #
-# Four structured records are attached to a +BuildEntry+:
+# Four structured records are attached to a BuildEntry:
 #
 #   FreqTag         append_freq_tag! appends one per phase that touches the
 #                   running freq; records pre_freq / post_freq / donor /
@@ -36,21 +36,21 @@
 #                   score for :forbidden verdicts, has_rhyme + round for
 #                   disconnect, …).
 #
-# +RimeDict+ lives in this file too: it's a +Hash+ subclass whose read
-# methods consult a per-instance pruning-active flag so a naive +rime_dict[rime]+
+# RimeDict lives in this file too: it's a Hash subclass whose read
+# methods consult a per-instance pruning-active flag so a naive rime_dict[rime]
 # from a future contributor can't silently read the half-pruned rime_dict
-# during +filter_word_dict_disconnected!+'s fixed-point loop. Authorized
-# readers (the three rime_dict pruners and +headword_has_non_rich_rhyme_partner?+)
-# wrap their bodies in +rime_dict.with_reads_during_prune { ... }+; the
-# disconnect loop itself runs inside +rime_dict.with_pruning_active { ... }+.
+# during filter_word_dict_disconnected!'s fixed-point loop. Authorized
+# readers (the three rime_dict pruners and headword_has_non_rich_rhyme_partner?)
+# wrap their bodies in rime_dict.with_reads_during_prune { ... }; the
+# disconnect loop itself runs inside rime_dict.with_pruning_active { ... }.
 #
-# See plan +defer-rarity-losses_refactor+ for the migration choreography
+# See plan defer-rarity-losses_refactor for the migration choreography
 # and parity constraints.
 
 require "set"
 
 FreqTag = Struct.new(
-  :phase,           # Symbol; one of the phase names below (see +RARITY_FREQ_SOURCE_PHASES+)
+  :phase,           # Symbol; one of the phase names below (see RARITY_FREQ_SOURCE_PHASES)
   :pre_freq,        # Integer; entry[0] before this phase's write
   :post_freq,       # Integer; entry[0] after this phase's write
   :donor,           # String or nil; donor surface form for morph / g-drop phases
@@ -85,17 +85,17 @@ FreqComputation = Struct.new(
 )
 
 DeletionTag = Struct.new(
-  :phase,    # Symbol; one of +:possessive_scrub+, +:invariant_plural_scrub+,
-             # +:hyphenated_proper_scrub+, +:forbidden_scrub+, +:unrhymable_scrub+,
-             # +:gdrop_strip+, +:edge_hyphen_scrub+, +:disconnect+, +:classifier+
-  :reason,   # Symbol; more granular than phase (e.g. +:stem_freq_zero+,
-             # +:no_rhyme_partner_no_rescue+, +:forbidden_verdict+, +:shadowed_by_apostrophe_form+)
+  :phase,    # Symbol; one of :possessive_scrub, :invariant_plural_scrub,
+             # :hyphenated_proper_scrub, :forbidden_scrub, :unrhymable_scrub,
+             # :gdrop_strip, :edge_hyphen_scrub, :disconnect, :classifier
+  :reason,   # Symbol; more granular than phase (e.g. :stem_freq_zero,
+             # :no_rhyme_partner_no_rescue, :forbidden_verdict, :shadowed_by_apostrophe_form)
   :detail,   # Hash or nil; per-reason context (stem_freq, lexnames, classifier_score,
              # has_rhyme, round, …)
   keyword_init: true,
 )
 
-# Integer marker for the "no freq yet" state used as the initial +pre_freq+
+# Integer marker for the "no freq yet" state used as the initial pre_freq
 # of the first FreqTag a fresh BuildEntry receives. Chosen to sort below any
 # real freq; derive_freq never observes it (the first tag's post_freq
 # supersedes it immediately).
@@ -107,7 +107,7 @@ class BuildEntry
 
   # Constructed once per headword. Freq starts at 0; the first phase that
   # touches the entry (CMU seed, SUBTLEX expansion, common-list floor, …)
-  # appends a FreqTag that bumps +@derived_freq+ to its +post_freq+.
+  # appends a FreqTag that bumps @derived_freq to its post_freq.
   def initialize(word:, freq: BUILD_ENTRY_INITIAL_FREQ, prons: [], lemma: nil)
     @word = word
     @prons = prons
@@ -129,8 +129,8 @@ class BuildEntry
   end
 
   # Positional accessor used by the hundred-ish legacy call sites that read
-  # +entry[0]+ / +entry[1]+ / +entry[2]+ / +entry.dig(0)+ / +entry.dig(1)+.
-  # Keeps the BuildEntry drop-in for the existing +[freq, prons, lemma]+
+  # entry[0] / entry[1] / entry[2] / entry.dig(0) / entry.dig(1).
+  # Keeps the BuildEntry drop-in for the existing [freq, prons, lemma]
   # shape during the phase-by-phase migration.
   def [](i)
     case i
@@ -141,11 +141,11 @@ class BuildEntry
   end
 
   # Legacy-compat writer. Kept for the small set of in-build code that still
-  # writes +entry[0] = X+ directly (e.g. corpus_variants.rb surface-emission
+  # writes entry[0] = X directly (e.g. corpus_variants.rb surface-emission
   # pron-attachment branches that land on BuildEntry values during build).
-  # Does NOT append a FreqTag — phases that run through +add_frequency_info+
-  # should always call +append_freq_tag!+ for that. +entry[1] = prons+ and
-  # +entry[2] = lemma+ are routine during the build.
+  # Does NOT append a FreqTag — phases that run through add_frequency_info
+  # should always call append_freq_tag! for that. entry[1] = prons and
+  # entry[2] = lemma are routine during the build.
   def []=(i, v)
     case i
     when 0 then @derived_freq = v.to_i
@@ -155,8 +155,8 @@ class BuildEntry
     end
   end
 
-  # +#dig+ for the +entry&.dig(1)+ style used heavily in rime.rb and
-  # corpus_variants.rb. Delegates through +[](i)+ so callers can then dig
+  # #dig for the entry&.dig(1) style used heavily in rime.rb and
+  # corpus_variants.rb. Delegates through [](i) so callers can then dig
   # into the prons array or lemma string.
   def dig(*args)
     idx, *rest = args
@@ -166,9 +166,9 @@ class BuildEntry
     v.respond_to?(:dig) ? v.dig(*rest) : nil
   end
 
-  # +#to_a+ / +#to_ary+ enable +freq, prons = entry+ destructuring and
-  # +word_dict.each do |word, (freq, _)|+ nested-block destructuring. Must
-  # mirror the legacy +[freq, prons, lemma]+ array for positional parity.
+  # #to_a / #to_ary enable freq, prons = entry destructuring and
+  # word_dict.each do |word, (freq, _)| nested-block destructuring. Must
+  # mirror the legacy [freq, prons, lemma] array for positional parity.
   def to_a
     [@derived_freq, @prons, @lemma]
   end
@@ -183,9 +183,9 @@ class BuildEntry
   end
 
   # Append a structured FreqTag for a phase that just touched this headword.
-  # Updates +@derived_freq+ to +post_freq+ unless +metadata_only+ is set, in
+  # Updates @derived_freq to post_freq unless metadata_only is set, in
   # which case the tag records the donor lineage but the running freq stays
-  # put (matches the phase-2/phase-3 split in +morph_inherit_kaikki+ where a
+  # put (matches the phase-2/phase-3 split in morph_inherit_kaikki where a
   # surface can have its lineage recorded without its freq changing).
   def append_freq_tag!(phase:, post_freq:, pre_freq: nil, donor: nil, donor_anchored: false, gate_outcomes: nil, metadata_only: false)
     pre = pre_freq.nil? ? @derived_freq : pre_freq.to_i
@@ -206,8 +206,8 @@ class BuildEntry
   # First writer wins: the earliest scrub / filter / classifier pass that
   # decided the headword should come out sets the DeletionTag. Later passes
   # that also want to delete leave the original reason intact (their visit
-  # shows up in +freq_tags+ / trace output but doesn't overwrite the "who
-  # first claimed this row" provenance). Returns +self+ for chaining.
+  # shows up in freq_tags / trace output but doesn't overwrite the "who
+  # first claimed this row" provenance). Returns self for chaining.
   def mark_tombstoned!(phase:, reason:, detail: nil)
     @tombstoned ||= DeletionTag.new(phase: phase, reason: reason, detail: detail)
     self
@@ -218,20 +218,20 @@ class BuildEntry
   end
 
   # Latest non-metadata-only FreqTag's phase, for consumers that want the
-  # provenance slot that +record_freq_propagation!+ used to write. Falls
-  # back to +:unknown+ when no non-metadata-only tag exists, matching the
-  # default initializer used by +RaritySignals+.
+  # provenance slot that record_freq_propagation! used to write. Falls
+  # back to :unknown when no non-metadata-only tag exists, matching the
+  # default initializer used by RaritySignals.
   def latest_freq_source_phase
     (@freq_tags.reverse.find { |t| !t.metadata_only } || @freq_tags.last)&.phase || :unknown
   end
 
-  # Latest donor (if any). Same policy as +latest_freq_source_phase+.
+  # Latest donor (if any). Same policy as latest_freq_source_phase.
   def latest_donor
     @freq_tags.reverse.find { |t| !t.metadata_only && t.donor }&.donor
   end
 
-  # True iff any FreqTag on this entry fires +donor_anchored+. Matches the
-  # semantics of the legacy +received_donor_from_common_base_flag+ feature
+  # True iff any FreqTag on this entry fires donor_anchored. Matches the
+  # semantics of the legacy received_donor_from_common_base_flag feature
   # (once set, stays set — multiple inheritance passes don't unset).
   def any_donor_anchored?
     @freq_tags.any? { |t| t.donor_anchored }
@@ -243,27 +243,27 @@ class BuildEntry
   end
 end
 
-# +RimeDict+: a +Hash+ subclass that refuses unauthorized reads during a
-# +with_pruning_active { ... }+ window. "Read" means +[]+, +fetch+, +dig+,
-# +key?+ / +has_key?+ / +include?+ / +member?+, iteration (+each+,
-# +each_pair+, +each_key+, +each_value+), keys / values extraction (+keys+,
-# +values+, +values_at+, +to_a+, +to_h+), functional operations (+select+,
-# +map+, +reduce+, +any?+, +all?+, +none?+, +count+, +find+, +detect+,
-# +filter+, +sum+), and size queries (+size+, +length+, +empty?+).
+# RimeDict: a Hash subclass that refuses unauthorized reads during a
+# with_pruning_active { ... } window. "Read" means [], fetch, dig,
+# key? / has_key? / include? / member?, iteration (each,
+# each_pair, each_key, each_value), keys / values extraction (keys,
+# values, values_at, to_a, to_h), functional operations (select,
+# map, reduce, any?, all?, none?, count, find, detect,
+# filter, sum), and size queries (size, length, empty?).
 #
-# Mutations (+[]=+, +delete+, +delete_if+, +reject!+, +select!+, +clear+,
-# +merge!+, +replace+) are intentionally NOT guarded — the three pruners
-# inside +filter_word_dict_disconnected!+ need to mutate, and Ruby's
-# mutating-method C implementations don't always route through +[]+ / +each+
+# Mutations ([]=, delete, delete_if, reject!, select!, clear,
+# merge!, replace) are intentionally NOT guarded — the three pruners
+# inside filter_word_dict_disconnected! need to mutate, and Ruby's
+# mutating-method C implementations don't always route through [] / each
 # anyway. The guard's purpose is to catch a naive new caller that reads
 # rime_dict during the window without realizing it's in an inconsistent
 # intermediate state; mutations from outside the pruning window aren't in
 # scope for this refactor (rime_dict has existing mutation points before and
-# after the disconnect loop — +build_rime_dict+,
-# +merge_word_dict_pronunciations_into_rime_dict!+,
-# +strip_dispreferred_headwords_from_rime_dict!+, the two pre-disconnect
-# bucket pruners, and +prune_obsolete_alt_of_only_headwords!+ post-build —
-# and all of them run with +pruning_active?+ false).
+# after the disconnect loop — build_rime_dict,
+# merge_word_dict_pronunciations_into_rime_dict!,
+# strip_dispreferred_headwords_from_rime_dict!, the two pre-disconnect
+# bucket pruners, and prune_obsolete_alt_of_only_headwords! post-build —
+# and all of them run with pruning_active? false).
 class RimeDict < Hash
   READ_METHODS_GUARDED = %i[
     [] fetch dig
@@ -290,7 +290,7 @@ class RimeDict < Hash
   end
 
   # Scope block for the disconnect filter's fixed-point loop. Any read from
-  # outside +with_reads_during_prune+ raises while this block is running.
+  # outside with_reads_during_prune raises while this block is running.
   # Raises on re-entry so we can't accidentally nest two "I am pruning" contexts.
   def with_pruning_active
     raise "RimeDict pruning already active (re-entered)" if @pruning_active
@@ -302,7 +302,7 @@ class RimeDict < Hash
   end
 
   # Scope block for an authorized reader inside the pruning window (the
-  # three pruners and +headword_has_non_rich_rhyme_partner?+). Stackable
+  # three pruners and headword_has_non_rich_rhyme_partner?). Stackable
   # (nested opt-ins are fine — the counter increments / decrements).
   def with_reads_during_prune
     @reads_during_prune_depth += 1
@@ -337,9 +337,9 @@ class RimeDict < Hash
   end
 end
 
-# Wrap +rime_dict_or_hash+ (a plain +Hash+) in a +RimeDict+ carrying the same
-# entries. Used at the +build_rime_dict+ boundary so the rest of the build
-# sees a guarded +rime_dict+. No-op when the input is already a +RimeDict+.
+# Wrap rime_dict_or_hash (a plain Hash) in a RimeDict carrying the same
+# entries. Used at the build_rime_dict boundary so the rest of the build
+# sees a guarded rime_dict. No-op when the input is already a RimeDict.
 def wrap_as_rime_dict(rime_dict_or_hash)
   return rime_dict_or_hash if rime_dict_or_hash.is_a?(RimeDict)
   out = RimeDict.new
@@ -347,10 +347,10 @@ def wrap_as_rime_dict(rime_dict_or_hash)
   out
 end
 
-# Terminal reducer: projects every surviving +BuildEntry+ in +hash+ back
-# onto the legacy +[freq, prons, lemma]+ array shape that +save_word_dict+,
-# +save_word_dict_msgpack!+, and the downstream +rebuild_rhymecrime_dictionaries+
-# steps expect. Drops entries whose +tombstoned+ has been set.
+# Terminal reducer: projects every surviving BuildEntry in hash back
+# onto the legacy [freq, prons, lemma] array shape that save_word_dict,
+# save_word_dict_msgpack!, and the downstream rebuild_rhymecrime_dictionaries
+# steps expect. Drops entries whose tombstoned has been set.
 #
 # Emits a single consolidated summary of counts-by-reason, replacing the
 # scattered per-phase "puts" lines (which are non-contractual; nothing
@@ -386,10 +386,10 @@ def finalize_build_entries!(hash)
   hash
 end
 
-# Convenience helper: returns the live set of headword keys in +word_dict+,
-# excluding entries whose +tombstoned+ is set. Used by the disconnect
+# Convenience helper: returns the live set of headword keys in word_dict,
+# excluding entries whose tombstoned is set. Used by the disconnect
 # loop and its rime_dict pruners during the tag-deferred deletion window (when
-# entries are still in +word_dict+ but logically gone).
+# entries are still in word_dict but logically gone).
 def live_word_dict_keys(word_dict)
   out = []
   word_dict.each_pair do |word, entry|

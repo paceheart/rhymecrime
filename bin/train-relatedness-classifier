@@ -9,10 +9,10 @@
 #           logreg: { means, stds, weights }
 #           gbt:    { bias, lr, tree_format: "parallel_v1",
 #                     trees: [ { f: [...], t: [...], l: [...], r: [...] }, ... ] }
-#             Parallel arrays per tree (one entry per node, pre-order). +f[i] == -1+
-#             marks a leaf and +t[i]+ carries the leaf value (threshold and value
-#             share the same float slot — they're never both meaningful). +l[i]+ /
-#             +r[i]+ are child node indices for internal nodes, unused for leaves.
+#             Parallel arrays per tree (one entry per node, pre-order). f[i] == -1
+#             marks a leaf and t[i] carries the leaf value (threshold and value
+#             share the same float slot — they're never both meaningful). l[i] /
+#             r[i] are child node indices for internal nodes, unused for leaves.
 #
 # Two supported model types (--model):
 #   logreg  L2-regularized logistic regression (linear combiner, small file, fast).
@@ -22,16 +22,16 @@
 #           per 200 trees × depth 4) and ~1ms per pair at inference.
 #
 # Both optimize weighted log-loss. Base sample weights capture the "strong vs ish"
-# confidence asymmetry (+strong = 3+, +ish = 1+). The +--fn-weight+ knob (default
-# +1.0+, i.e. class-balanced — equal treatment of related vs. unrelated rows;
-# distinct from the +(cue, related)+ orientation, which the directional unfolds
-# in +learned_feature_vector+ already expose) further multiplies positive-class
+# confidence asymmetry (strong = 3, ish = 1). The --fn-weight knob (default
+# 1.0, i.e. class-balanced — equal treatment of related vs. unrelated rows;
+# distinct from the (cue, related) orientation, which the directional unfolds
+# in learned_feature_vector already expose) further multiplies positive-class
 # rows, turning the historical 3:1 pro-positive pull into an adjustable lever.
 # After fitting, sweeps the decision threshold over [0.05, 0.95] and picks the
-# probability cutoff maximizing composite; +--fn-penalty+ (default +1.0+)
+# probability cutoff maximizing composite; --fn-penalty (default 1.0)
 # independently scales the FN terms in that composite so threshold-selection
 # class asymmetry can be tuned apart from fit class asymmetry. Historical
-# behavior is reproducible with +--fn-weight 3 --fn-penalty 3+ and was identified
+# behavior is reproducible with --fn-weight 3 --fn-penalty 3 and was identified
 # as a major driver of thematic-relatedness overgeneration (see notes/todo.md).
 #
 # Reports N-fold CV composite for an honest generalization estimate, then fits once
@@ -44,10 +44,10 @@
 #   ruby bin/train-relatedness-classifier --threshold 0.43   # pin cutoff (skip sweep)
 #   ruby bin/train-relatedness-classifier --dry-run
 #
-# After training, run +bundle exec rspec spec/related_spec.rb+ to see the lift
-# (default +RELATED_LEARNED_MODE=additive+; +=replace+ for pure learned combiner).
+# After training, run bundle exec rspec spec/related_spec.rb to see the lift
+# (default RELATED_LEARNED_MODE=additive; =replace for pure learned combiner).
 # The spec evaluates with class-balanced scoring (3:1 strong vs ish, FN==FP); to
-# compare apples-to-apples with a +--fn-weight 3 --fn-penalty 3+ training run,
+# compare apples-to-apples with a --fn-weight 3 --fn-penalty 3 training run,
 # write a one-off evaluator that re-weights the per-row composites — the spec
 # deliberately doesn't bake training-time class asymmetry into its pass criterion.
 
@@ -65,14 +65,14 @@ options = {
   verbose: false,
 
   # Class-asymmetry knobs (positive vs. negative rows — orthogonal to the
-  # +(cue, related)+ orientation, which is asymmetric and exposed via the
-  # directional unfolds in +learned_feature_vector+). Historical behavior of
-  # this script was +fn_weight = fn_penalty = 3+ (sample weights 9/3/3/1,
+  # (cue, related) orientation, which is asymmetric and exposed via the
+  # directional unfolds in learned_feature_vector). Historical behavior of
+  # this script was fn_weight = fn_penalty = 3 (sample weights 9/3/3/1,
   # composite −9/−3/−3/−1), which compounded a ~3× positive pull in the fit
   # with a matching 3× FN:FP skew in the threshold sweep. That stacked bias
   # was identified as a major driver of thematic-relatedness overgeneration;
-  # defaults are now class-balanced (+1.0+ each) and the old behavior is
-  # reproducible with +--fn-weight 3 --fn-penalty 3+. +spec/related_spec.rb+
+  # defaults are now class-balanced (1.0 each) and the old behavior is
+  # reproducible with --fn-weight 3 --fn-penalty 3. spec/related_spec.rb
   # evaluates with class-balanced scoring; if a future experiment wants to
   # eval against asymmetric training, fork the spec or write a one-off.
   fn_weight: 1.0,   # sample-weight multiplier on positive-class rows (strong_pos / ish_pos)
@@ -98,10 +98,10 @@ OptionParser.new do |opt|
   opt.on("--seed N", Integer) { |v| options[:seed] = v }
   opt.on("--dry-run") { options[:dry_run] = true }
   opt.on("--verbose") { options[:verbose] = true }
-  # Override the auto-selected probability cutoff. Default (+nil+) keeps the
-  # historical behavior of sweeping +best_threshold+ over the in-sample fit and
+  # Override the auto-selected probability cutoff. Default (nil) keeps the
+  # historical behavior of sweeping best_threshold over the in-sample fit and
   # picking the composite-maximum. Useful when you want to lock the FE/eval
-  # boundary to a known-good prior (e.g. the +0.43+ cutoff that produced 91.7%
+  # boundary to a known-good prior (e.g. the 0.43 cutoff that produced 91.7%
   # before the latest data churn) without resurrecting the entire model file.
   opt.on("--threshold F", Float) { |v| options[:threshold] = v }
 
@@ -127,7 +127,7 @@ Dir.chdir(repo)
 
 require "rhymecrime/crime"
 # Full-compute pipeline (Numberbatch, ConceptNet, WordNet, USF, MPNet) — not
-# loaded at Lambda runtime by +rhymecrime/crime+, explicitly pulled in here
+# loaded at Lambda runtime by rhymecrime/crime, explicitly pulled in here
 # because the trainer's whole job is to consume these signals.
 require "rhymecrime/relatedness/signals"
 require "rhymecrime/relatedness/score"
@@ -144,8 +144,8 @@ def sigmoid(z)
   end
 end
 
-# Composite score for a prediction set at a given probability threshold. +rows+ is
-# an array of {y:, ish:, p:}. +fn_penalty+ (default +1.0+) multiplies the FN terms
+# Composite score for a prediction set at a given probability threshold. rows is
+# an array of {y:, ish:, p:}. fn_penalty (default 1.0) multiplies the FN terms
 # so threshold selection can be tuned independently of the sample-weight lever that
 # shapes the fit itself — useful for isolating which half of the pro-positive bias
 # is driving a given set of failures. The row-weight schedule used for the
@@ -159,7 +159,7 @@ def composite_at(rows, threshold, fn_penalty: 1.0)
   rows.each do |r|
     pred = r[:p] >= threshold
     truth = r[:y] == 1.0
-    # Report-side weights (unchanged by +fn_penalty+) — used only for the
+    # Report-side weights (unchanged by fn_penalty) — used only for the
     # human-readable "weighted accuracy" percentage printed in logs.
     row_w = if truth
               r[:ish] ? 3 : 9
@@ -284,10 +284,10 @@ end
 #
 # Xgboost-style binary logistic: at each round, fit a regression tree to the
 # (gradient / hessian) of log-loss wrt current margin, step margins by
-# +lr * leaf_value+. Tree splits minimize the xgboost gain formula
+# lr * leaf_value. Tree splits minimize the xgboost gain formula
 #   gain = G_L^2/(H_L+λ) + G_R^2/(H_R+λ) - G^2/(H+λ)
-# Leaf Newton step: +w* = -sum(g) / (sum(h) + λ)+. Sample weights scale +g+ and
-# +h+, so downstream gain / leaf formulas stay identical to unweighted xgboost.
+# Leaf Newton step: w* = -sum(g) / (sum(h) + λ). Sample weights scale g and
+# h, so downstream gain / leaf formulas stay identical to unweighted xgboost.
 # Trees stored as flat arrays of nodes; node = {f,t,l,r} internal or {v} leaf.
 
 def find_best_split(x_rows, g, h, feature_indices, rows, total_g, total_h, lambda_leaf:, min_child_hessian:)
@@ -328,9 +328,9 @@ def find_best_split(x_rows, g, h, feature_indices, rows, total_g, total_h, lambd
   best
 end
 
-# Parallel-array tree: +f+ (feature idx, -1 for leaves), +t+ (threshold for internal
-# nodes, leaf value for leaves — unioned into the same float slot), +l+ / +r+ (child
-# indices, 0 for leaves). Building via +append_*+ helpers keeps all four arrays the
+# Parallel-array tree: f (feature idx, -1 for leaves), t (threshold for internal
+# nodes, leaf value for leaves — unioned into the same float slot), l / r (child
+# indices, 0 for leaves). Building via append_* helpers keeps all four arrays the
 # same length and lets the recursion return the just-appended node's index.
 def append_leaf(tree, value)
   tree["f"] << -1
@@ -491,7 +491,7 @@ end
 
 # --- Shared fit / predict dispatch -----------------------------------------
 
-# Fit one model on +train_ids+. Returns a lambda that scores a raw feature row
+# Fit one model on train_ids. Returns a lambda that scores a raw feature row
 # and produces a probability, plus a symbol-keyed model hash for serialization.
 def fit_model(model, features_list, labels, weights, train_ids, options)
   x_train = train_ids.map { |i| features_list[i].dup }
@@ -536,9 +536,9 @@ raw_rows = CSV.parse(File.read(path, encoding: "UTF-8"), headers: true)
 # makes the predicate trivially-true for any pair where either side is
 # promiscuous, so these rows can't teach the classifier anything useful (they'd
 # just inject easy positives and confuse the negative half if labeled
-# +unrelated+). Filter on both surface form and lemma — users write "running"
-# but the short-circuit checks +semantically_promiscuous?("running")+ only
-# after the threshold gate computes +lemma+.
+# unrelated). Filter on both surface form and lemma — users write "running"
+# but the short-circuit checks semantically_promiscuous?("running") only
+# after the threshold gate computes lemma.
 skipped_promiscuous = 0
 rows = raw_rows.reject do |r|
   w1 = r["cue"]
@@ -554,8 +554,8 @@ labels = []
 weights = []
 ish_flags = []
 
-# Experimental knob: treat +whatever+ rows ("either answer is fine") as soft
-# negatives (+unrelated_ish+) instead of skipping them. Ish-strength, not
+# Experimental knob: treat whatever rows ("either answer is fine") as soft
+# negatives (unrelated_ish) instead of skipping them. Ish-strength, not
 # strong: the annotator specifically declined to make a confident call, so
 # strong-unrelated would over-claim. The hypothesis is that adding 200-ish
 # gentle negatives gives the classifier more middle-ground coverage without
@@ -579,25 +579,25 @@ rows.each do |r|
   w1 = r["cue"]
   w2 = r["related"]
   # Normalization mode (must agree with the runtime predicate in
-  # +lib/rhymecrime/related.rb+):
-  #   * +RELATED_SKIP_LEMMA=1+ -> raw surfaces.
-  #   * default                -> inflectional +lemma(w)+.
-  # Mismatch tanks TPR (see the +bin/_lemma_ablation+ writeup).
+  # lib/rhymecrime/related.rb):
+  #   * RELATED_SKIP_LEMMA=1 -> raw surfaces.
+  #   * default                -> inflectional lemma(w).
+  # Mismatch tanks TPR (see the bin/_lemma_ablation writeup).
   l1 = ENV["RELATED_SKIP_LEMMA"] == "1" ? w1 : lemma(w1)
   l2 = ENV["RELATED_SKIP_LEMMA"] == "1" ? w2 : lemma(w2)
 
-  # +PairSignals+ is now directional: the +cue+ column is the cue, +related+
-  # is the related candidate (see +curated/related.csv+'s 2026-04 orientation
+  # PairSignals is now directional: the cue column is the cue, related
+  # is the related candidate (see curated/related.csv's 2026-04 orientation
   # pass). Do NOT canonicalize lex-order here — that would feed lex order into
-  # the directional +sv_cue_to_related+ / +usf_direct_cue_to_related+ /
-  # unigram +cue+ / +related+ columns and turn them into noise that the GBT
+  # the directional sv_cue_to_related / usf_direct_cue_to_related /
+  # unigram cue / related columns and turn them into noise that the GBT
   # can only fit overfit-style.
   signals = PairSignals.new(l1, l2)
 
   y = (kind == "related" || kind == "related_ish") ? 1.0 : 0.0
   ish = (kind == "related_ish" || kind == "unrelated_ish")
   # Base weight encodes the "strong vs ish" confidence asymmetry (3× for strong labels).
-  # +fn_weight+ (CLI default 1.0) multiplies only positive-class rows, turning the historical
+  # fn_weight (CLI default 1.0) multiplies only positive-class rows, turning the historical
   # 3:1 pro-positive pull on the fit into a knob; the symmetric default means the gradients
   # see a balanced problem regardless of class-count drift as more data arrives.
   base_w = ish ? 1.0 : 3.0
@@ -667,7 +667,7 @@ scored = (0...features_list.size).map do |i|
   { y: labels[i], ish: ish_flags[i], p: predict.call(features_list[i]) }
 end
 swept = best_threshold(scored, fn_penalty: options[:fn_penalty])
-# +--threshold+ lets the operator pin the cutoff (e.g. to a previously deployed
+# --threshold lets the operator pin the cutoff (e.g. to a previously deployed
 # value) instead of taking whatever the in-sample sweep happens to land on.
 # We still print the swept optimum alongside so it's obvious how much the pin
 # is costing in-sample.
