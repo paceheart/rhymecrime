@@ -158,7 +158,7 @@ module Rhymecrime
     # rhyming friends" answer the caller renders normally, while nil
     # signals "we never computed this cue" and routes to the
     # friendly-message branch in crime.rb's goal dispatch
-    # (explicitly_forbidden? → "I don't like that word."; otherwise →
+    # (forbidden? → "I don't like that word."; otherwise →
     # "Oops, I don't know what words are related to <cue>...").
     #
     # In-process FIFO cache (@set_related_cache) covers warm-container
@@ -203,6 +203,13 @@ module Rhymecrime
 
     private
 
+    # DynamoDB / AWS SDK may hand back BINARY-tagged strings or malformed
+    # UTF-8. Those survive into HTML output and make the Lambda return
+    # payload fail JSON serialization → API Gateway "Internal Server Error".
+    def utf8_store_string(value)
+      value.to_s.encode(Encoding::UTF_8, Encoding::UTF_8, invalid: :replace, undef: :replace)
+    end
+
     # Shared decode for the words attribute on related#<lemma> items:
     # tolerate both List-typed (modern uploads) and legacy String-typed
     # (JSON-encoded) shapes, and treat any decode failure as [] so a single
@@ -212,10 +219,10 @@ module Rhymecrime
 
       w = item["words"]
       return [] unless w
-      return w.map(&:to_s) if w.is_a?(Array)
+      return w.map { |x| utf8_store_string(x) } if w.is_a?(Array)
 
       parsed = JSON.parse(w.to_s)
-      parsed.is_a?(Array) ? parsed.map(&:to_s) : []
+      parsed.is_a?(Array) ? parsed.map { |x| utf8_store_string(x) } : []
     rescue JSON::ParserError
       []
     end
@@ -243,7 +250,7 @@ module Rhymecrime
 
       return [] unless arr.is_a?(Array)
 
-      arr.map { |tup| tup.is_a?(Array) ? tup.map(&:to_s) : [] }.reject(&:empty?)
+      arr.map { |tup| tup.is_a?(Array) ? tup.map { |w| utf8_store_string(w) } : [] }.reject(&:empty?)
     rescue JSON::ParserError
       []
     end

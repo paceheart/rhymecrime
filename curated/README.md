@@ -69,8 +69,8 @@ pipelines:
     `word_dict` (and therefore every rime cohort) by `forbidden_scrub` in
     `lib/rhymecrime/dict/frequency.rb`. `find_rhyming_words`, `has_rhyming_
     word?`, `really_find_rhyming_tuples`, `find_rhyming_pairs`,
-    `find_related_words`, and `related?` all guard on `explicitly_
-    forbidden?` and return `[]` for forbidden inputs; the `set_related`
+    `find_related_words`, and `related?` all guard on `forbidden?` (absent
+    from `word_dict`) and return `[]` for those inputs; the `set_related`
     goal renders the curt "I don't like that word." message. Because the
     headword is gone after build, no downstream pipeline can produce a
     forbidden word as an output either.

@@ -79,16 +79,16 @@ RSpec.describe "deployed stack" do
       expect(response["location"]).to eq("https://www.#{HOST}/")
     end
 
-    it "GET http://<apex>/?w=crime preserves the query string in the redirect Location" do
-      response = http_get("http://#{HOST}/?w=crime")
+    it "GET http://<apex>/?word1=crime preserves the query string in the redirect Location" do
+      response = http_get("http://#{HOST}/?word1=crime")
       expect(response.code).to eq("301")
       # CloudFront redirect-to-https preserves both path and query — we rely
       # on this so bookmarks / pasted http:// links don't lose the lookup.
-      expect(response["location"]).to eq("https://#{HOST}/?w=crime")
+      expect(response["location"]).to eq("https://#{HOST}/?word1=crime")
     end
 
-    it "following the redirect for http://<apex>/?w=crime returns 200" do
-      response = http_get("https://#{HOST}/?w=crime")
+    it "following the redirect for http://<apex>/?word1=crime returns 200" do
+      response = http_get("https://#{HOST}/?word1=crime")
       expect(response.code).to eq("200")
       # Sanity: it's the rhymecrime page, not some interstitial.
       expect(response.body).to include("rhymecrime")
@@ -107,4 +107,5 @@ RSpec.describe "deployed stack" do
       expect(response.code).to eq("400")
     end
   end
+
 end

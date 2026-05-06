@@ -18,5 +18,6 @@ fi
 
 echo "==> upload related + set_related + score to DynamoDB (word_dict + rime_dict ship as msgpack in the Lambda bundle, not DDB)"
 bundle exec ruby bin/upload-to-dynamodb
+bin/deploy-aws
 
 echo "Done."

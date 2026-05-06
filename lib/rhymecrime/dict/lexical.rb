@@ -10,16 +10,30 @@ require_relative "utils_rhyme"
 # WordNet
 #
 
+# Lambda ships without corpora/wordnet (bin/stage-lambda); rwordnet would
+# ENOENT on index.noun. Dict-build / local dev have the tree under
+# WordNet::DB.path — consult only when the files exist.
+def wordnet_corpora_present?
+  return @wordnet_corpora_present if instance_variable_defined?(:@wordnet_corpora_present)
+
+  Inflect.configure_wordnet_db_path! if defined?(Inflect)
+  path = (defined?(WordNet::DB) && WordNet::DB.path) ? WordNet::DB.path.to_s : ""
+  @wordnet_corpora_present = !path.empty? && File.file?(File.join(path, "dict", "index.noun"))
+end
+
 # Memoize WordNet::Lemma.find_all per surface form. Dict rebuild clears this at entry so memory
 # does not grow unbounded across repeated builds in the same process.
 def clear_wordnet_lemma_cache!
   @wordnet_lemma_find_all_cache = {}
   @wordnet_synset_count_cache = {}
   $wn_synset_line_index_by_path = nil
+  remove_instance_variable(:@wordnet_corpora_present) if instance_variable_defined?(:@wordnet_corpora_present)
 end
 
 def wn_lemma_find_all_cached(form)
   cache = @wordnet_lemma_find_all_cache ||= {}
+  return cache[form] ||= [] unless wordnet_corpora_present?
+
   cache[form] ||= WordNet::Lemma.find_all(form)
 end
 

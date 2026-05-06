@@ -1,5 +1,11 @@
 # frozen_string_literal: true
 
+# Mirror lambda_handler.rb: under a minimal locale Rack may leave
+# Encoding.default_external as US-ASCII / ASCII-8BIT, which breaks
+# multibyte paths the same way the Lambda comment describes for the AWS SDK.
+Encoding.default_external = Encoding::UTF_8
+Encoding.default_internal = Encoding::UTF_8
+
 $LOAD_PATH.unshift File.expand_path("lib", __dir__)
 
 require "json"
@@ -15,7 +21,16 @@ before do
 end
 
 get "/" do
-  build_rhymecrime_page(params["word1"], params["word2"], debug: params["debug"] == "1")
+  debug = params["debug"] == "1"
+  begin
+    build_rhymecrime_page(params["word1"], params["word2"], debug: debug)
+  rescue StandardError => e
+    raise unless debug
+
+    content_type "text/plain"
+    status 500
+    "#{e.class}: #{e.message}\n#{e.backtrace&.join("\n")}"
+  end
 end
 
 get "/similar" do

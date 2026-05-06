@@ -15,7 +15,9 @@ require_relative "crime"
 
 # Per-request debug flag, set true iff ?debug=1 was on the URL. Two behaviors
 # are gated on this global because both fire deep inside the render path where
-# threading a kwarg through would touch dozens of call sites:
+# threading a kwarg through would touch dozens of call sites. (HTTP handlers
+# also use the same ?debug=1 flag to return a plaintext stack trace when
+# render raises — see lambda_handler.rb / app.rb.)
 #
 #   1. Pruning visualizer: prune_suffix_redundant_rhyming_tuples retains
 #      (rather than drops) its victims and records them in $debug_pruned_
@@ -40,10 +42,16 @@ def cgi_puts(string)
   end
 end
 
+# Rack and CGI may hand us BINARY or malformed UTF-8; String#downcase raises
+# ArgumentError on invalid UTF-8 ("input string invalid").
+def utf8_query_param(value)
+  value.to_s.encode(Encoding::UTF_8, Encoding::UTF_8, invalid: :replace, undef: :replace)
+end
+
 def parse_cgi_input
   cgi = CGI.new
-  word1 = cgi["word1"].downcase
-  word2 = cgi["word2"].downcase
+  word1 = utf8_query_param(cgi["word1"]).downcase
+  word2 = utf8_query_param(cgi["word2"]).downcase
 
   if word1 == "" && word2 != ""
     word1, word2 = word2, word1
@@ -52,8 +60,8 @@ def parse_cgi_input
 end
 
 def parse_query_words(word1, word2)
-  w1 = word1.to_s.downcase.strip
-  w2 = word2.to_s.downcase.strip
+  w1 = utf8_query_param(word1).downcase.strip
+  w2 = utf8_query_param(word2).downcase.strip
   if w1 == "" && w2 != ""
     w1, w2 = w2, w1
   end

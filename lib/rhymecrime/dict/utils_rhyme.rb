@@ -323,34 +323,39 @@ def non_ascii_only?(word)
   word.bytes.all? { |b| b >= 0x80 }
 end
 
-# explicitly_forbidden? unifies three policy sources:
-#   1. forbidden/forbidden_ish rows in curated/rarity.csv
-#      (the curated, hand-maintained block list)
-#   2. non_ascii_only? — any word with zero ASCII characters
-#      (catches emoji and other purely-pictographic surfaces that leak in via
-#      Wiktionary/Kaikki; we don't want them as headwords or as rhyme outputs).
-#   3. paradigm_noise_inflection? — Wiktionary/Kaikki paradigm-table
-#      inflections of curated stop-word / semantically_promiscuous lemmas
-#      (gots, nots, theyed, abouts, ...) that have no corpus
-#      attestation. Mirrors the build-time stopword_inflection_scrub in
-#      frequency.rb so the runtime classifier is correct even when the live
-#      word_dict on disk was generated before the scrub landed (or before
-#      a particular paradigm-noise surface was added to the seed list).
-# The build-time forbidden_scrub pass in frequency.rb iterates word_dict
-# keys against this predicate, so the policy-2 / policy-3 inputs are also
-# pruned from the generated dict on the next rebuild — no separate scrub needed.
+# explicitly_forbidden? unifies three policy sources for **dict-build and
+# offline tools only** (frequency.rb scrubs, audit_word, specs). It consults
+# rarity.csv, non_ascii_only?, and paradigm_noise_inflection? (WordNet-backed
+# in local dev). The published Lambda bundle omits corpora/ — do not call
+# this from the live rhyme / relatedness pipeline; use forbidden?
+# instead.
 #
-# wiktionary_overgenerated_abstract_nesses_plural? deliberately is NOT
-# wired into this runtime predicate: it lives downstream in frequency.rb's
-# wiktionary_nesses_overplural_scrub where the verdict bakes into the
-# generated word_dict (tombstoned). Same for the -ings demote rule
-# (wiktionary_gerund_overplural_scrub). The build-time scrubs are the
-# single source of truth; runtime stays cheap.
+# Policy sources:
+#   1. forbidden/forbidden_ish rows in curated/rarity.csv
+#   2. non_ascii_only? — zero ASCII bytes (emoji-only surfaces, etc.)
+#   3. paradigm_noise_inflection? — paradigm-table noise vs stop/promiscuous lemmas
+#
+# The build-time forbidden_scrub pass in frequency.rb iterates word_dict keys
+# against this predicate so scrubbed surfaces never ship in word_dict.msgpack.
+#
+# wiktionary_overgenerated_abstract_nesses_plural? is NOT wired here: it
+# tombstones in frequency.rb. Same for -ings demote (wiktionary_gerund_overplural_scrub).
 def explicitly_forbidden?(word)
   return true if non_ascii_only?(word)
   load_rarity_csv_word_sets! if $rarity_csv_forbidden_words_set.nil?
   return true if $rarity_csv_forbidden_words_set.include?(word)
   paradigm_noise_inflection?(word)
+end
+
+# Runtime lexicon gate: true when the surface is absent from the published
+# word_dict (never built, tombstoned, or scrubbed at dict-build via
+# explicitly_forbidden? and friends). Cheap Hash lookup only — no rarity.csv,
+# no WordNet, no paradigm_noise_inflection?.
+def forbidden?(word)
+  w = word.to_s
+  return true if w.empty?
+
+  !word_dict_includes_headword?(w)
 end
 
 # True when word looks like a Wiktionary/Kaikki paradigm-table inflection
@@ -369,9 +374,8 @@ end
 # would break the RHYMES tricky / RHYMES apostrophes /
 # RHYMES bad pronunciations specs in spec/rhyme_spec.rb.
 #
-# Returning true forwards through explicitly_forbidden? to allowed? /
-# rarity_category, dropping the surface from rhyme and set_related
-# output without requiring a dict rebuild.
+# Returning true forwards through explicitly_forbidden? during dict-build,
+# dropping the surface from the generated lexicon without a separate scrub.
 def paradigm_noise_inflection?(word)
   return false if word.nil? || word.empty?
   return false if semantically_promiscuous_words.include?(word)
@@ -477,8 +481,8 @@ end
 # rarity.csv / WN structure, just sliced for the -nesses pluralization
 # pattern. These are stronger junk than the -ings class — the build-time
 # wiktionary_nesses_overplural_scrub in frequency.rb tombstones them
-# entirely (vs. the -ings demote-to-rare). Build-time only; not wired
-# into explicitly_forbidden? at runtime.
+# entirely (vs. the -ings demote-to-rare). Build-time only; omission from
+# word_dict is what forbidden? reflects at runtime.
 def wiktionary_overgenerated_abstract_nesses_plural?(word)
   return false if word.nil? || word.empty?
   return false unless word.end_with?("nesses")
@@ -2295,7 +2299,7 @@ end
 def load_word_dict()
   pathname = generated_dict_path(WORD_DICT_FILENAME)
   unless File.exist?(pathname)
-    die "First run ./bin/dict-build to populate #{GENERATED_DIR}/"
+    raise "First run ./bin/dict-build to populate #{GENERATED_DIR}/"
   end
   word_dict = Hash.new
   File.foreach(pathname, encoding: "UTF-8") do |line|

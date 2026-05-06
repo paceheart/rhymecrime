@@ -75,14 +75,34 @@ def handler(event:, context:)
   params = event["queryStringParameters"] || {}
   word1 = params["word1"].to_s
   word2 = params["word2"].to_s
-  # ?debug=1 is the catch-all dev affordance: drives the pruning visualizer
-  # AND set_related per-word coloring. Mirrored in app.rb for local dev.
+  # ?debug=1 is the catch-all dev affordance: (1) pruning visualizer +
+  # set_related score coloring via build_rhymecrime_page(debug: true), and
+  # (2) if the page render raises, return text/plain 500 with exception +
+  # backtrace so curl/browser shows the failure instead of API Gateway's
+  # opaque {"message":"Internal Server Error"}. Mirrored in app.rb for local.
   debug = params["debug"].to_s == "1"
 
   case [method, path]
   when ["GET", "/"]
-    body = build_rhymecrime_page(word1, word2, debug: debug)
-    { statusCode: 200, headers: { "Content-Type" => "text/html; charset=utf-8" }, body: body }
+    begin
+      body = build_rhymecrime_page(word1, word2, debug: debug)
+      # API Gateway JSON-serializes the invocation response; malformed UTF-8
+      # in the HTML (e.g. rare bytes in DynamoDB attributes) would otherwise
+      # fail serialization and surface as a generic 500.
+      body = body.to_s.encode(Encoding::UTF_8, Encoding::UTF_8, invalid: :replace, undef: :replace)
+      { statusCode: 200, headers: { "Content-Type" => "text/html; charset=utf-8" }, body: body }
+    rescue StandardError => e
+      raise unless debug
+
+      warn "[rhymecrime] GET / render failed (debug=1): #{e.class}: #{e.message}\n#{e.backtrace&.join("\n")}"
+      detail = "#{e.class}: #{e.message}\n#{e.backtrace&.join("\n")}"
+      detail = detail.encode(Encoding::UTF_8, Encoding::UTF_8, invalid: :replace, undef: :replace)
+      {
+        statusCode: 500,
+        headers: { "Content-Type" => "text/plain; charset=utf-8" },
+        body: detail,
+      }
+    end
   when ["GET", "/health"]
     begin
       Rhymecrime::DynamoRuntime.instance.client.describe_table(table_name: Rhymecrime::DataSource.table_name)

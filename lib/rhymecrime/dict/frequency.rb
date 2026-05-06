@@ -1921,7 +1921,7 @@ def add_frequency_info(pronunciation_map, subtlex_hash, subtlex_total_hash, word
   # final word in the build pipeline.
   #
   # Bakes into word_dict via append_freq_tag! / mark_tombstoned! —
-  # runtime rare? / explicitly_forbidden? then read the result through
+  # runtime rare? / forbidden? then read the result through
   # plain frequency(word) <= RARE_FREQ_MAX / !word_dict.key?(word),
   # no live predicate needed.
   #

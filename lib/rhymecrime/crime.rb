@@ -148,7 +148,8 @@ def rime_dict
 end
 
 def load_rime_dict_as_hash()
-  load_string_hash(generated_dict_path(RIME_DICT_FILENAME)) or die "First run ./bin/dict-build to populate generated/"
+  load_string_hash(generated_dict_path(RIME_DICT_FILENAME)) or
+    raise "First run ./bin/dict-build to populate generated/"
 end
 
 def pronunciations(word)
@@ -587,17 +588,12 @@ def find_rhyming_words(word, homophone_ok=true)
   # merges multiple pronunciations of WORD
   # use our compiled rime dictionary
   #
-  # explicitly_forbidden? status is checked per spelling-variant form rather
-  # than gated on the input surface. This lets a query for a forbidden surface
-  # whose preferred form is allowed (e.g. okeydokey → okey-dokey) still
-  # return rhymes via the allowed canonical form. Forbidden forms have already
-  # been deleted from word_dict at build time, so they contribute zero prons
-  # in practice; the explicit per-form skip is a belt-and-braces guard against
-  # any forbidden form accidentally retaining prons (e.g. via the
-  # authoritative_pronunciations.txt override path).
+  # forbidden? is checked per spelling-variant form rather than gated
+  # on the input surface. Scrubbed / tombstoned forms are absent from
+  # word_dict; this skip is belt-and-braces for any stray variant.
   rhyming_words = Array.new
   for form in all_forms(word) # to increase the likelihood of a hit, try all spelling variants
-    next if explicitly_forbidden?(form)
+    next if forbidden?(form)
     debug "Finding rhyming words for #{form} #{debug_info(form)}:"
     for pron in pronunciations(form)
       for rhyme in find_rhyming_words_for_pronunciation(pron, homophone_ok)
@@ -706,7 +702,7 @@ def find_rhyming_words_for_pronunciation(pron, homophone_ok=true)
 end
 
 def has_rhyming_word?(word)
-  unless(explicitly_forbidden?(word))
+  unless forbidden?(word)
     for pron in pronunciations(word)
       rime = pron.rime
       if(! rime_dict_lookup(rime).empty?)
@@ -732,7 +728,7 @@ module Rhymecrime
 
       memoize def find_related_words(word, include_self, include_rhymeless = true, common_only = false, max_candidates = SIMILAR_MAX)
         words = []
-        unless explicitly_forbidden?(word)
+        unless forbidden?(word)
           words = RelatedWords.find_thematically_related_words(word, include_self, include_rhymeless, common_only, max_candidates)
           words = filter_out_dispreferred_words(words, word)
         end
@@ -1584,7 +1580,7 @@ def gloss_tokens_for_word(word)
       glosses = []
       wn_available = gloss_source_use_wordnet? &&
         defined?(WordNet::Lemma) &&
-        defined?(WordNet::DB) && !WordNet::DB.path.to_s.empty?
+        wordnet_corpora_present?
       forms.each do |f|
         if wn_available
           wn_g = WordNet::Lemma.find_all(f).flat_map { |l| l.synsets.map(&:gloss) }
@@ -2189,7 +2185,7 @@ def really_find_rhyming_tuples(input_rel1, common_only = false)
   # related#<lemma> + N batched gets), prefetch (rhyme-cohort fan-out), the
   # main rhyme-bucket loop (in-memory after prefetch), or prune (O(N^2) cross-
   # tuple suffix-redundancy check).
-  return [] if explicitly_forbidden?(input_rel1)
+  return [] if forbidden?(input_rel1)
 
   related_list = Rhymecrime::Timing.measure("set_related[#{input_rel1}] find+filter related") do
     filter_related_words_to_common_preferred(
@@ -2249,7 +2245,7 @@ def really_find_rhyming_pairs(input_rel1, input_rel2, common_only = false)
   # For each word REL1 in RELATEDS1,
   #   Get all non-homophone rhymes RHYME of REL1.
   #   If RHYME rhymes with REL1 and is related to INPUT_REL2, we win! "REL1 / RHYME" is a pair.
-  return [] if explicitly_forbidden?(input_rel1) || explicitly_forbidden?(input_rel2)
+  return [] if forbidden?(input_rel1) || forbidden?(input_rel2)
 
   # Semantically promiscuous words are thematically related to everything by
   # policy, which would otherwise flood the pair output with pairs like
@@ -2634,10 +2630,9 @@ def rhymecrime(word1, word2, goal, output_format='text', debug_mode=false)
       # path is authoritative (Lambda) and the cue has no set_related#<lemma>
       # row. Three reasons the cue might land here, each with its own copy:
       #
-      #   * explicitly_forbidden?(word1) — the word is on forbid_list.txt,
-      #     deleted from word_dict at build time, and the compute pass
-      #     deliberately skipped it. Curt response — we know about that word
-      #     and chose not to serve it.
+      #   * forbidden?(word1) — not in the published lexicon (scrubbed
+      #     forbidden / never built / OOV). Curt "I don't like that word."
+      #     for blocked cues; typos also land here.
       #   * unrhymable_stop_word?(word1) || semantically_promiscuous?(word1)
       #     — the word is a function word ("the", "of") or a generic
       #     emotional/discourse term ("nice", "good") that we explicitly
@@ -2660,7 +2655,7 @@ def rhymecrime(word1, word2, goal, output_format='text', debug_mode=false)
       #     rescue in FeedbackStore.record!) so a flaky feedback writer
       #     never 500s the user-visible response.
       result_header =
-        if explicitly_forbidden?(word1)
+        if forbidden?(word1)
           "I don't like that word."
         elsif unrhymable_stop_word?(word1) || semantically_promiscuous?(word1)
           "\"#{word1}\" is semantically promiscuous; can't compute related words"
@@ -2710,6 +2705,6 @@ def related?(word1, word2, include_self=false)
   # Is word1 thematically related to word2?
   word1 = preferred_form(word1)
   word2 = preferred_form(word2)
-  not explicitly_forbidden?(word1) and not explicitly_forbidden?(word2) and thematically_related?(word1, word2)
+  !forbidden?(word1) && !forbidden?(word2) && thematically_related?(word1, word2)
 end
 
