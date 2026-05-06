@@ -263,7 +263,7 @@ describe 'RHYMES' do
     ought_not_rhyme 'chromatic', 'achromatic' # a-
     ought_not_rhyme 'thermic', 'exothermic' # exo-
     ought_not_rhyme 'thermic', 'endothermic' # endo-
-    ought_not_rhyme 'social', 'anti' # anti-
+    ought_not_rhyme 'social', 'antisocial' # anti-
     ought_not_rhyme 'war', 'antiwar' # anti-
     ought_not_rhyme 'composition', 'decomposition' # de-
     ought_not_rhyme 'cycling', 'recycling' # re-
