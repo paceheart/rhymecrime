@@ -1528,6 +1528,23 @@ end
 def preferred_among_hyphen_equivalents(forms)
   n = forms.length
   return forms[0] if n <= 1
+  # Closed "nonplussed"/"nonprofit"/… beats editorial "non-plussed"/"non-profit"
+  # when both share a hyphen-fold (delete "-" groups them). The legacy branch
+  # below collected only "non-*" hyphenated forms and returned nons.min, which
+  # wrongly preferred "non-plussed" over "nonplussed" (the solid form never
+  # matched NON_HYPHEN_PREF_RE, so it was ignored).
+  forms_set = forms.each_with_object({}) { |x, h| h[x] = true }
+  twinned_solids = forms.select do |f|
+    next false if f.include?("-")
+    fd = f.downcase
+    next false unless fd.start_with?("non") && fd.length > 3
+    stem = fd.byteslice(3..-1)
+    next false if stem.empty?
+    forms_set["non-#{stem}"]
+  end
+  if twinned_solids.any?
+    return twinned_solids.min_by { |f| [-preferred_form_frequency_lookup(f), f.downcase] }
+  end
   nons = []
   i = 0
   while i < n

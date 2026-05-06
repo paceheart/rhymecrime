@@ -114,7 +114,13 @@ module Inflect
       add_cand.call(stem + "e") if stem.bytesize >= 1
     end
 
-    # consonant doubling undo (B + c + ed / ing / er / est)
+    # consonant doubling undo (B + c + ed / ing / er / est / es); -es covers
+    # sibilant-final bases like quiz → quizzes / fez → fezzes that take the
+    # -es plural allomorph after the doubled consonant.
+    if inflected.end_with?("es") && il >= 5 &&
+        inflected.getbyte(il - 3) == inflected.getbyte(il - 4)
+      add_cand.call(inflected.byteslice(0, il - 3))
+    end
     if inflected.end_with?("ed") && il >= 5 &&
         inflected.getbyte(il - 3) == inflected.getbyte(il - 4)
       add_cand.call(inflected.byteslice(0, il - 3))
@@ -233,7 +239,22 @@ module Inflect
     final_cons = !base[-1].match?(/\A[aeiouy]\z/i)
     cluster_final = base.match?(/[^aeiouy]{2}\z/i)
     long_double_letters = base.match?(/ee|oo/i)
-    structural_double = penult_vowel && final_cons && !cluster_final && !long_double_letters
+    # Vowel digraph + final consonant (VVC: third-from-last is also a vowel
+    # letter) doesn't trigger orthographic doubling in English. Generalizes the
+    # long_double_letters ee/oo guard to mixed-vowel digraphs: pour → poured
+    # (not pourred), pair → paired, boat → boated, rain → rained, fail →
+    # failed, tier → tiered. Without this guard, each_derivable_form leans on
+    # WordNet's wn_lemma_known check inside suppress_doubled to veto the
+    # doubled form, which silently fails for OOV bases like outpour (WN has
+    # neither outpour, outpoured, nor outpourred, so suppress_doubled returns
+    # false and outpourred is synthesized, then promoted by morph_expand_listed
+    # because outpour is in rarity.csv (common_ish)). Exempts the qu-prefix
+    # because "qu" spells /kw/, so the orthographic vowel before the final
+    # consonant is single, not a digraph (squat → squatted, quit → quitting).
+    vowel_digraph_final = cl >= 3 && base[-3].match?(/\A[aeiou]\z/i) &&
+                          !(cl >= 4 && base[-4] == "q")
+    structural_double = penult_vowel && final_cons && !cluster_final &&
+                        !long_double_letters && !vowel_digraph_final
     lc = base[-1]
 
     wn_lemma_known_memo = {}
@@ -361,6 +382,8 @@ module Inflect
     # - vowel-final bases (annualize+e+ed junk)
     # - final consonant cluster (*faint*→*fainttest*, *blank*→*blankker*)
     # - *ee* / *oo* in the spelling (*fleet*→*fleetter*, *need*→*needded*)
+    # - any vowel digraph + final consonant, qu-exempt (*pour*→*pourred*,
+    #   *pair*→*pairred*, *boat*→*boatted*, *rain*→*rainned*, *fail*→*failled*)
     # - WordNet says only the undoubled spelling is attested (*edited* vs *editted*)
     if cl >= 2 && !no_cmp_sup && structural_double
       unless lc.match?(/\A[aeiouy]\z/i)
@@ -542,11 +565,13 @@ module Inflect
       return :ful if inflected.end_with?("ful")
     end
 
-    # --- consonant doubling: stop → stopped / stopping / stopper / stoppest ---
+    # --- consonant doubling: stop → stopped / stopping / stopper / stoppest;
+    # quiz → quizzes (sibilant base needs the -es allomorph after the doubled z) ---
     return nil if bl < 2
     doubled = base.getbyte(bl - 1)
     return nil unless inflected.getbyte(bl) == doubled
 
+    return :s if inflected.end_with?("es") && il == bl + 1 + 2
     return :ed if inflected.end_with?("ed") && il == bl + 1 + 2
     return :ing if inflected.end_with?("ing") && il == bl + 1 + 3
     return :er if inflected.end_with?("er") && il == bl + 1 + 2

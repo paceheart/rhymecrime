@@ -86,8 +86,8 @@ FreqComputation = Struct.new(
 
 DeletionTag = Struct.new(
   :phase,    # Symbol; one of :possessive_scrub, :invariant_plural_scrub,
-             # :hyphenated_proper_scrub, :forbidden_scrub, :unrhymable_scrub,
-             # :gdrop_strip, :edge_hyphen_scrub, :disconnect, :classifier
+             # :double_plural_ses_scrub, :hyphenated_proper_scrub, :forbidden_scrub, :unrhymable_scrub,
+             # :spelling_variant_scrub, :gdrop_strip, :edge_hyphen_scrub, :disconnect, :classifier
   :reason,   # Symbol; more granular than phase (e.g. :stem_freq_zero,
              # :no_rhyme_partner_no_rescue, :forbidden_verdict, :shadowed_by_apostrophe_form)
   :detail,   # Hash or nil; per-reason context (stem_freq, lexnames, classifier_score,

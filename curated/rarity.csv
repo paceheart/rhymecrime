@@ -726,7 +726,6 @@ flim-flam,forbidden,hyphenated words / without existing final words
 savoir-faire,common_ish,hyphenated words / without existing final words
 papier-mache,common_ish,hyphenated words / without existing final words
 pince-nez,forbidden,hyphenated words / without existing final words
-cock-a-doodle-doo,common_ish,hyphenated words / without existing final words
 roly-poly,common_ish,hyphenated words / without existing final words
 ping-pong,common_ish,hyphenated words / with existing final words
 yo-yo,common,hyphenated words / with existing final words
@@ -4057,3 +4056,8 @@ upswings,common,wiktionary -ings overgeneration exception
 dey,rare,leming investigation
 deys,rare,leming investigation
 wes,rare,spot check
+pres,rare,transgender review
+aied,forbidden,transgender review
+cock-a-doodle-doo,rare,transgender review
+thrist,rare,transgender review
+thristing,rare,transgender review

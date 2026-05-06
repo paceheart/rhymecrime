@@ -416,6 +416,26 @@ def morph_base_is_already_plural_form?(base, hash, neol_words, common_words, wor
   end
 end
 
+# *ccses* / *cdses* / *idses*: Inflect's sibilant rule attaches *-es* to stems ending in *-s*,
+# but when that stem is already a regular *…+s* plural (*ccs*←*cc*, *ids*←*id*), English never
+# stacks another *-es*. Kaikki/CMU paradigm rows still show up; keep *buses* / *gases* via
+# Zipf ≥ COMMON (stems *bus* / *gas* are not “already plural” in the same sense — *bu*/*ga*
+# are spurious singular chops, but those surfaces are independently common in wordfreq).
+def morph_spurious_plural_ses_after_s_plural_stem?(word, hash, neol_words, common_words, wordfreq_hash, subtlex_hash)
+  return false if word.nil? || word.bytesize < 5
+  return false unless word.end_with?("ses")
+  bl = word.bytesize
+  stem = word.byteslice(0, bl - 2)
+  return false unless stem.end_with?("s") && !stem.end_with?("ss")
+  return false unless Inflect.match_suffix_kind(stem, word) == :s
+  return false unless morph_base_is_already_plural_form?(stem, hash, neol_words, common_words, wordfreq_hash)
+  wf = (wordfreq_hash[word] || 0).to_f
+  return false if wf >= WORDFREQ_COMMON_ZIPF
+  sub = (subtlex_hash[word] || 0).to_i
+  return false if sub >= MORPH_LEXICAL_NOUN_PLURAL_SUBTLEX_MIN
+  true
+end
+
 # Syllabified pronunciation for inflected_word from base_word's first CMU pron, or nil.
 # Same final-cluster whitelist gate as merge_inflected_forms! (common-list / SUBTLEX-anchored Inflect expansion).
 def morph_derived_syllabified_pronunciation(base_pron, base_word, inflected_word)

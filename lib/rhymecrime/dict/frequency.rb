@@ -842,6 +842,10 @@ def morph_inherit_listed_once!(word, listed, forward, hash, rare_words, common_w
     dict_trace_puts(infl, "morph_inherit_listed ← #{base} (listed=#{listed}): skip (plural :s not allowed)") if tr
     return false
   end
+  if inflection_suffix_kind == :s && morph_base_is_already_plural_form?(base, hash, neol_words, common_words, wordfreq_hash)
+    dict_trace_puts(infl, "morph_inherit_listed ← #{base} (listed=#{listed}): skip (:s on already-plural base)") if tr
+    return false
+  end
   if (inflection_suffix_kind == :ed || inflection_suffix_kind == :ing) && base.end_with?("ing")
     dict_trace_puts(infl, "morph_inherit_listed ← #{base} (listed=#{listed}): skip (#{inflection_suffix_kind} on -ing base)") if tr
     return false
@@ -1132,6 +1136,10 @@ def add_frequency_info(pronunciation_map, subtlex_hash, subtlex_total_hash, word
     end
     if inflection_suffix_kind == :s && !morph_base_allows_plural_s?(base, pos_map, forms_map, inflected, wordfreq_hash: wordfreq_hash, subtlex_hash: subtlex_hash)
       dict_trace_puts(inflected, "morph_inherit_kaikki ← #{base}: skip (plural :s not allowed)") if tr
+      next
+    end
+    if inflection_suffix_kind == :s && morph_base_is_already_plural_form?(base, hash, neol_words, common_words, wordfreq_hash)
+      dict_trace_puts(inflected, "morph_inherit_kaikki ← #{base}: skip (:s on already-plural base)") if tr
       next
     end
     # Non-standard consonant+y plurals: English pluralizes lady→ladies, teddy→teddies,
@@ -1779,6 +1787,18 @@ def add_frequency_info(pronunciation_map, subtlex_hash, subtlex_total_hash, word
   end
   puts "#{invariant_plural_scrub} spurious invariant/irregular plural headwords dropped" if invariant_plural_scrub > 0
 
+  double_plural_ses_scrub = 0
+  hash.keys.each do |word|
+    entry = hash[word]
+    next unless entry
+    next if entry.is_a?(BuildEntry) && entry.tombstoned?
+    next unless morph_spurious_plural_ses_after_s_plural_stem?(word, hash, neol_words, common_words, wordfreq_hash, subtlex_hash)
+    dict_trace_puts(word, "double_plural_ses_scrub: DELETE") if dict_trace_word?(word)
+    entry.mark_tombstoned!(phase: :double_plural_ses_scrub, reason: :spurious_s_plural_plus_es)
+    double_plural_ses_scrub += 1
+  end
+  puts "#{double_plural_ses_scrub} spurious *…s*+*-es* double-plural headwords dropped" if double_plural_ses_scrub > 0
+
   proper_lexfiles = Set.new(%w[noun.location noun.person noun.group noun.animal]).freeze
   hyphenated_proper_scrub = 0
   hash.keys.each do |word|
@@ -1993,6 +2013,7 @@ def build_word_dict(pronunciation_map, rime_dict, subtlex_hash, subtlex_total_ha
   inherit_prons_from_dispreferred_to_preferred!(word_dict)
   merge_word_dict_pronunciations_into_rime_dict!(rime_dict, word_dict)
   strip_dispreferred_headwords_from_rime_dict!(rime_dict, word_dict)
+  tombstone_dispreferred_spelling_headwords!(word_dict)
   delete_rare_only_rime_buckets!(rime_dict, word_dict)
   delete_common_rich_only_rime_buckets!(rime_dict, word_dict)
   filter_word_dict_disconnected!(word_dict, rime_dict, subtlex_hash, wordfreq_hash, pos_map, forms_map, pronunciation_map_seed_headwords, wiktionary_words)

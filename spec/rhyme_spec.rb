@@ -297,6 +297,8 @@ describe 'RHYMES' do
     ought_not_rhyme 'person', 'layperson'
     ought_not_rhyme 'businessperson', 'layperson'
     ought_not_rhyme 'man', 'layman'
+    ought_not_rhyme 'entity', 'nonentity'
+    ought_not_rhyme 'entity', 'non-entity'
     context "unless they're not derivationally related" do
       # Nested so before(:each) below does not skip these: hooks apply to the whole group.
       context "pairs that do not need pseudo-prefix deferral" do
@@ -318,6 +320,7 @@ describe 'RHYMES' do
       context "deferred pending better prefix-vs-opaque detection" do
         before(:each) { skip_if_not_working('pseudo-prefix: filter_out_prefix_words overfilters') }
         nwr = 'splash damage: filter_out_prefix_words treats the false re- as derivational'
+        oughta_rhyme 'parity', 'disparity', not_working_reason: nwr
         oughta_rhyme 'percussion', 'repercussion', not_working_reason: nwr
         oughta_rhyme 'lied', 'relied', not_working_reason: nwr
         oughta_rhyme 'quest', 'request', not_working_reason: nwr
@@ -1155,6 +1158,8 @@ describe 'RHYMES' do
   end
 
   context 'bad pronunciations' do
+    ought_not_rhyme 'egg', 'segue'
+    ought_not_rhyme 'employee', 'gay'
     oughta_rhyme 'duty', 'booty'
     oughta_rhyme 'sooty', 'hoodie'
     ought_not_rhyme 'duty', 'sooty'

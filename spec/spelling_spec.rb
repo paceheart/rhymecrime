@@ -127,6 +127,7 @@ describe "SPELLING VARIANTS" do
     prefer_spelling "parroted", "parrotted"
     prefer_spelling 'targeted', 'targetted'
     prefer_spelling 'riveted', 'rivetted'
+    prefer_spelling 'outpoured', 'outpourred'
   end
 
   context "-l/-ll US/UK" do

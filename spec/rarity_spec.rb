@@ -310,6 +310,9 @@ describe "RARITY" do
   # ensure that a common hyphenated word is deemed common
   context 'hyphens' do
     oughta_be_common 'so-so'
+    oughta_be_forbidden 'soso'
+    oughta_be_common 'nonplussed'
+    oughta_be_forbidden 'non-plussed'
   end
 
   # This is to verify that the classifier isn't training on the labels
@@ -347,6 +350,13 @@ describe "RARITY" do
     oughta_be_forbidden 'goodnesses'
     oughta_be_forbidden 'blandnesses'
     oughta_be_common 'baronesses' # noun.person base — predicate preserves
+  end
+
+  context "overpluralization" do
+    oughta_be_forbidden 'ccses'
+    oughta_be_forbidden 'cdses'
+    oughta_be_forbidden 'idses'
+    oughta_be_forbidden 'tolds'
   end
 
   context "csv sweep (curated/rarity.csv)" do

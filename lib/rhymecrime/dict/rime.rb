@@ -173,6 +173,35 @@ def strip_dispreferred_headwords_from_rime_dict!(rime_dict, word_dict, log: true
   dropped
 end
 
+# Tombstone headwords whose canonical surface is another live row (variants(),
+# US/UK morphology, hyphen-fold policy in preferred_form). The published
+# lexicon then matches forbidden? / rarity expectations for alternates like
+# non-plussed → nonplussed and soso → so-so without parallel :common rows.
+def tombstone_dispreferred_spelling_headwords!(word_dict, log: true)
+  n = 0
+  with_word_dict(word_dict) do
+    word_dict.keys.each do |w|
+      entry = word_dict[w]
+      next unless entry
+      next if word_dict_entry_tombstoned?(entry)
+      pref = preferred_form_in_build_lexicon(w, word_dict)
+      next if pref == w
+      pref_entry = word_dict[pref]
+      next unless pref_entry
+      next if word_dict_entry_tombstoned?(pref_entry)
+      next unless entry.is_a?(BuildEntry)
+      entry.mark_tombstoned!(
+        phase: :spelling_variant_scrub,
+        reason: :maps_to_preferred_headword,
+        detail: { preferred: pref },
+      )
+      n += 1
+    end
+  end
+  puts "#{n} dispreferred spelling headwords tombstoned (preferred sibling kept)" if log && n > 0
+  n
+end
+
 def word_dict_frequency_for_rime_bucket(word_dict, word)
   entry = word_dict[word]
   return 0 if entry.nil?
