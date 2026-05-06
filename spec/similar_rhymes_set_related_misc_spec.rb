@@ -115,6 +115,11 @@ describe 'SET_RELATED' do
     set_related_oughta_contain 'math', 'inferred', 'nerd'
   end
 
+  context 'water' do
+    set_related_oughta_contain 'water', 'surge', 'submerge'
+    set_related_ought_not_contain 'water', 'surge', 'merge'
+  end
+
   context 'no spelling variants' do
     set_related_ought_not_contain 'funeral', 'eulogize', 'eulogise'
     set_related_ought_not_contain 'courtroom', 'honor', 'honour'
