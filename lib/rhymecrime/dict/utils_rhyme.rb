@@ -1639,14 +1639,26 @@ def preferred_form(word)
   preferred_among_hyphen_equivalents(compatible)
 end
 
+# Run +block+ with +$word_dict+ pointing at +hash+, restoring the previous
+# value on exit (success or raise). Used by build-time call sites that need
+# helpers in this file (+preferred_form+, +word_dict_includes_headword?+,
+# the +wiktionary_*_overplural+ predicates, …) to read the in-flight build
+# +hash+ instead of the runtime-loaded msgpack: those helpers consult
+# +$word_dict+ unconditionally, so without this swap they'd see either
+# +nil+ (pre-runtime) or a stale prior-build dict during +bin/dict-build+.
+# Idempotent on nested calls (each call stashes/restores its own +previous+).
+def with_word_dict(hash)
+  previous = $word_dict
+  $word_dict = hash
+  yield
+ensure
+  $word_dict = previous
+end
+
 # Like +preferred_form+, but US/UK / hyphen resolution consults +word_dict+ (the build-time hash) via
 # +$word_dict+ so rime-bucket pruning sees the correct preferred surface before export.
 def preferred_form_in_build_lexicon(word, word_dict)
-  previous = $word_dict
-  $word_dict = word_dict
-  preferred_form(word)
-ensure
-  $word_dict = previous
+  with_word_dict(word_dict) { preferred_form(word) }
 end
 
 def all_forms(word)

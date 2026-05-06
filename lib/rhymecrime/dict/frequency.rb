@@ -1926,12 +1926,10 @@ def add_frequency_info(pronunciation_map, subtlex_hash, subtlex_total_hash, word
   # no live predicate needed.
   #
   # Predicates consult +$word_dict+ via +word_dict_includes_headword?+ —
-  # temporarily point that global at the in-flight +hash+ so the gate sees
-  # the mid-build dict (mirrors +preferred_form_in_build_lexicon+ /
+  # +with_word_dict+ points that global at the in-flight +hash+ so the gate
+  # sees the mid-build dict (mirrors +preferred_form_in_build_lexicon+ /
   # +emit_spelling_variants_auto!+).
-  previous_word_dict_for_overplural = $word_dict
-  $word_dict = hash
-  begin
+  with_word_dict(hash) do
     gerund_overplural_scrub = 0
     hash.keys.each do |word|
       next unless wiktionary_overgenerated_gerund_plural?(word)
@@ -1973,8 +1971,6 @@ def add_frequency_info(pronunciation_map, subtlex_hash, subtlex_total_hash, word
       nesses_overplural_scrub += 1
     end
     puts "#{nesses_overplural_scrub} Wiktionary -nesses overpluralization surfaces tombstoned" if nesses_overplural_scrub > 0
-  ensure
-    $word_dict = previous_word_dict_for_overplural
   end
 
   puts "#{count + extra + common_extra + floor_applied + inherited + cw_inherited + morph_inherited + morph_corpus} total entries with frequency data"

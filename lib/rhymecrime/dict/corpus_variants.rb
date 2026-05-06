@@ -114,33 +114,33 @@ HEADER
 #      axis, even when VarCon's +Cv+/+C+ tagging on the +megameter+ cluster disagrees with
 #      +meter+'s +A B+/+B C+ pattern). Pure re-direction; doesn't add new pairs.
 def emit_spelling_variants_auto!(word_dict, wordfreq_hash, kaikki_variant_map = nil, varcon_variant_map = nil)
-  previous_word_dict = $word_dict
-  previous_variants = $variants
-  $word_dict = word_dict
-  pairs = []
-  pairs.concat(diacritic_corpus_pairs(word_dict))
-  pairs.concat(o_plural_corpus_pairs(word_dict, wordfreq_hash))
-  pairs.concat(silent_e_drop_corpus_pairs(word_dict))
-  pairs.concat(consonant_doubling_corpus_pairs(word_dict))
-  pairs.concat(eys_ies_corpus_pairs(word_dict, wordfreq_hash))
-  pairs.concat(varcon_variant_pairs(word_dict, varcon_variant_map, wordfreq_hash)) if varcon_variant_map && !varcon_variant_map.empty?
-  pairs.concat(wiktionary_variant_pairs(word_dict, wordfreq_hash, kaikki_variant_map)) if kaikki_variant_map && !kaikki_variant_map.empty?
-  pairs.concat(apostrophe_stripped_corpus_pairs(word_dict))
-  pairs = dedupe_variant_pairs(pairs)
-  apply_compound_inheritance!(pairs)
-  ensure_generated_dict_dir!
-  path = generated_dict_path(SPELLING_VARIANTS_AUTO_FILENAME)
-  File.open(path, "w", encoding: "UTF-8") do |f|
-    f.print(SPELLING_VARIANTS_AUTO_HEADER)
-    pairs.each { |preferred, alt| f.puts("#{preferred} #{alt}") }
+  pairs = with_word_dict(word_dict) do
+    pairs = []
+    pairs.concat(diacritic_corpus_pairs(word_dict))
+    pairs.concat(o_plural_corpus_pairs(word_dict, wordfreq_hash))
+    pairs.concat(silent_e_drop_corpus_pairs(word_dict))
+    pairs.concat(consonant_doubling_corpus_pairs(word_dict))
+    pairs.concat(eys_ies_corpus_pairs(word_dict, wordfreq_hash))
+    pairs.concat(varcon_variant_pairs(word_dict, varcon_variant_map, wordfreq_hash)) if varcon_variant_map && !varcon_variant_map.empty?
+    pairs.concat(wiktionary_variant_pairs(word_dict, wordfreq_hash, kaikki_variant_map)) if kaikki_variant_map && !kaikki_variant_map.empty?
+    pairs.concat(apostrophe_stripped_corpus_pairs(word_dict))
+    pairs = dedupe_variant_pairs(pairs)
+    apply_compound_inheritance!(pairs)
+    ensure_generated_dict_dir!
+    path = generated_dict_path(SPELLING_VARIANTS_AUTO_FILENAME)
+    File.open(path, "w", encoding: "UTF-8") do |f|
+      f.print(SPELLING_VARIANTS_AUTO_HEADER)
+      pairs.each { |preferred, alt| f.puts("#{preferred} #{alt}") }
+    end
+    puts "Wrote #{pairs.size} auto-detected spelling variants to #{path}"
+    pairs
   end
-  puts "Wrote #{pairs.size} auto-detected spelling variants to #{path}"
-  pairs
-ensure
-  $word_dict = previous_word_dict
-  $variants = nil # force reload so downstream preferred_form sees the new pairs
+  # Force a reload so downstream +preferred_form+ sees the freshly-written
+  # pairs file. NOT inside the +with_word_dict+ block — these are
+  # forward actions, not restorations of pre-call state.
+  $variants = nil
   clear_spelling_variant_hyphen_caches!
-  _ = previous_variants # referenced to silence unused-var lint; callers re-derive via variants()
+  pairs
 end
 
 # Single-letter ligatures and stroked letters that Unicode NFD/NFKD does NOT split (they
