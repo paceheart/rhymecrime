@@ -43,6 +43,18 @@ module UniMorph
     "ADJ;SPRL" => :est,
   }.freeze
 
+  # UniMorph leaks noun-class tags into the form column on ~2k rows ("aba\tcountable\tN;PL",
+  # "lead\tcountable\tN;PL", "rue\tuncountable\tN;PL", …). These are not English plurals;
+  # ignore them at load time so they never enter by_base.
+  INVALID_FORMS = Set.new(%w[countable uncountable]).freeze
+
+  # Permissive English-orthography filter for both lemma and form columns. Excludes UniMorph's
+  # Middle / Early Modern English residue (æquivalent, advaunce, capitayn, posteriour) and
+  # alphanumeric IDs / Latin (4ktro, dioxindole-style chemistry runs we don't want as
+  # paradigm anchors). Lowercase letters, apostrophe, and hyphen only — matches what shows up
+  # in Kaikki's modern-English forms_map.
+  ENGLISH_SURFACE_RE = /\A[a-z][a-z'\-]*\z/.freeze
+
   # by_base[lemma] = { kind_symbol => Set<form_string> }. Loaded once on first access; the
   # build process never mutates the file mid-run, so memoization is safe across phases.
   def self.by_base
@@ -59,6 +71,9 @@ module UniMorph
       next if lemma == form
       kind = MSD_TO_KIND[msd]
       next unless kind
+      next if INVALID_FORMS.include?(form)
+      next unless ENGLISH_SURFACE_RE.match?(lemma)
+      next unless ENGLISH_SURFACE_RE.match?(form)
       ((@by_base[lemma] ||= {})[kind] ||= Set.new).add(form)
     end
     @by_base
