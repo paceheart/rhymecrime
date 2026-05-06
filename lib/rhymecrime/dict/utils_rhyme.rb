@@ -1506,7 +1506,22 @@ rescue JSON::ParserError, SystemCallError
 end
 
 def hyphen_multi_fold_map
-  @hyphen_multi_fold ||= (load_hyphen_multi_fold_map_from_disk || build_hyphen_multi_fold_map)
+  @hyphen_multi_fold ||= begin
+    # During a dict-build pass, $word_dict is set to the in-flight hash by with_word_dict.
+    # Prefer building from the live key-set so tombstone_dispreferred_spelling_headwords!
+    # and preferred_form() see the current build's headword population rather than the
+    # one-build-stale on-disk hyphen_variant_map.json.  Without this, a sequence of
+    # consecutive builds oscillates: the stale map is missing pairs for words tombstoned
+    # in the previous run (e.g. non-plussed), so those words escape tombstoning → they
+    # survive into the next saved map → they get tombstoned in that run → saved map is
+    # missing the pair again → infinite alternation.
+    in_build = defined?($word_dict) && $word_dict.is_a?(Hash) && !$word_dict.empty?
+    if in_build
+      build_hyphen_multi_fold_map($word_dict.keys)
+    else
+      load_hyphen_multi_fold_map_from_disk || build_hyphen_multi_fold_map
+    end
+  end
 end
 
 # Frequency lookup that works in both runtime and build contexts. Runtime

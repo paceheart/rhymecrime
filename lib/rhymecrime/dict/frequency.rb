@@ -1117,6 +1117,62 @@ def add_frequency_info(pronunciation_map, subtlex_hash, subtlex_total_hash, word
       dict_trace_puts(inflected, "morph_inherit_kaikki ← #{base}: skip (base_freq=#{base_freq} ≤ #{RARE_FREQ_MAX})") if tr
       next
     end
+    # Donor base is itself a Kaikki form_of of a different lemma (told ← tell, geese ← goose,
+    # went ← go, gotten ← get). Stacking another inflection on a non-lemma surface is paradigm
+    # noise — *tolds* on past tense, *geeses* on irregular plural, *gottens* on past participle —
+    # English never produces these surfaces, but Kaikki sometimes lists paradigm rows on the
+    # non-lemma headword as if it were its own stem. Mirrors the same predicate gates already
+    # used by morph_inherit_listed (line ~828), morph_expand_listed (~1343), and
+    # morph_expand_subtlex (~1465); without it, *tolds* (form_of told, itself form_of tell)
+    # inherits told's freq=5 and the rarity classifier rescores it up to :common.
+    #
+    # When the inflected surface has no independent corpus / lexicon evidence of its own
+    # (no WN entry, Zipf < RARE, no SUBTLEX dialogue, not in neol), it only exists in the
+    # build because Kaikki's paradigm table fabricated it — same shape as the abstract
+    # -nesses paradigm noise tombstoned by wiktionary_nesses_overplural_scrub. Mark it
+    # tombstoned here so finalize_build_entries! drops the row, otherwise the rarity
+    # classifier would rescore freq=0 → freq=2 (cat=:rare) and the row would survive,
+    # leaving rarity_spec's overpluralization context (`'tolds' oughta be forbidden`)
+    # red. Surfaces with their own anchor (real corpus / WN evidence) are left intact so
+    # we don't over-delete; the skip alone still spares them from the donor-anchored
+    # rescore boost.
+    if morph_kaikki_lists_surface_as_inflected_nonlemma?(base)
+      # Defer to dedicated overpluralization scrubs for shapes they already own:
+      #   * -ings (gerund + s) → wiktionary_gerund_overplural_scrub demotes to freq=4 (:rare)
+      #   * -nesses (abstract -ness + es) → wiktionary_nesses_overplural_scrub tombstones
+      # Both scrubs run later in this same compute_frequency pass and gate on their own
+      # WN-concreteness predicates (so morning/feeling/baroness/upswings still survive). We
+      # block the inheritance for them here (so the donor-anchored bump can't push them
+      # past RARE_FREQ_MAX before the dedicated scrub gets a chance) but leave the
+      # tombstone decision to those scrubs. Without this carve-out, addressings/lendings/
+      # pennings/wranglings would all be tombstoned here as :forbidden when rarity_spec
+      # expects them at :rare.
+      defers_to_dedicated_scrub =
+        (inflected.end_with?("ings") && base.end_with?("ing")) ||
+        (inflected.end_with?("nesses") && base.end_with?("ness"))
+
+      wf_inf = (wordfreq_hash[inflected] || 0).to_f
+      sub_inf = (subtlex_hash[inflected] || 0).to_i
+      inflected_has_own_anchor = wn_has_entry?(inflected) ||
+        wf_inf >= WORDFREQ_RARE_ZIPF ||
+        sub_inf > 0 ||
+        neol_words.include?(inflected)
+      entry = hash[inflected]
+      should_tombstone = entry.is_a?(BuildEntry) && !entry.tombstoned? &&
+        !inflected_has_own_anchor && !defers_to_dedicated_scrub
+      if should_tombstone
+        entry.mark_tombstoned!(
+          phase: :kaikki_overinflection_scrub,
+          reason: :paradigm_noise_inflection_of_kaikki_non_lemma_base,
+          detail: { base: base, base_lemma: $inflection_base_words[base] },
+        )
+      end
+      if tr
+        suffix = should_tombstone ? "; tombstoned (no own anchor)" : ""
+        dict_trace_puts(inflected, "morph_inherit_kaikki ← #{base}: skip (Kaikki form of #{$inflection_base_words[base]}, not an Inflect stem)#{suffix}")
+      end
+      next
+    end
     inflection_suffix_kind = Inflect.send(:match_suffix_kind, base, inflected)
     # Kaikki forms_map sometimes links archaic / dialectal / mock-Latinate surfaces to a modern
     # lemma with no regular-English suffix relationship (*house*→*hice*, *os*→*ossa*, *dye*→*dyce*,
