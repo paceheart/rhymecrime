@@ -1,0 +1,129 @@
+#!/usr/bin/env ruby
+# encoding: utf-8
+# frozen_string_literal: true
+#
+# Simulate morph_unimorph_paradigm_rejects? against generated/word_dict.txt to count
+# how many already-shipping forms the new pre-gate would have rejected at build time.
+#
+# Pure-static simulator: doesn't rebuild the dictionary, just walks every (lemma,
+# inflected_word) pair in word_dict.txt where the inflected_word's `,LEMMA` field is
+# populated, and asks the predicate. wordfreq_hash for the surface_zipf path is loaded
+# from generated/wordfreq.tsv so the rescue ("UniMorph rejects but corpus says it's
+# real") matches what the live build will see. Kaikki forms_map is NOT loaded (it's
+# heavy, and any Kaikki-attested form already has its LEMMA set via Kaikki's lemma
+# resolution — which means it's still in word_dict.txt either way).
+
+require "set"
+
+repo = File.expand_path("..", __dir__)
+$LOAD_PATH.unshift File.join(repo, "lib")
+
+require "rhymecrime/dict/utils_rhyme"
+require "rhymecrime/dict/inflect"
+require "rhymecrime/dict/lexical"
+require "rhymecrime/dict/wiktionary"
+require "rhymecrime/dict/morphology"
+
+WORD_DICT_PATH = File.join(repo, "generated", "word_dict.txt")
+WORDFREQ_PATH  = File.join(repo, "generated", "wordfreq.tsv")
+
+KIND_ORDER = %i[s ed ing er est].freeze
+
+def load_word_dict_inflections(path)
+  pairs = []
+  File.foreach(path, encoding: "UTF-8") do |line|
+    next if line.empty? || line.start_with?("#")
+    line.chomp!
+    fields = line.split(",")
+    next if fields.size < 4
+    word = fields[0]
+    lemma = fields[3]
+    next if word.empty? || lemma.nil? || lemma.empty? || lemma == word
+    pairs << [lemma, word]
+  end
+  pairs
+end
+
+def load_wordfreq(path)
+  h = Hash.new(0.0)
+  return h unless File.file?(path)
+  File.foreach(path, encoding: "UTF-8") do |line|
+    line.chomp!
+    next if line.empty?
+    w, z = line.split("\t")
+    next if w.nil? || z.nil?
+    h[w] = z.to_f
+  end
+  h
+end
+
+def doubled_consonant?(base, form)
+  return false if base.nil? || base.empty?
+  lc = base[-1]
+  return false unless lc && lc.match?(/\A[bcdfghjklmnpqrstvwxz]\z/i)
+  return false unless form.bytesize > base.bytesize
+  return false unless form.start_with?(base + lc)
+  rest = form.byteslice(base.bytesize + 1, form.bytesize - base.bytesize - 1)
+  %w[s es ed ing er est].include?(rest)
+end
+
+puts "Loading wordfreq..."
+wordfreq_hash = load_wordfreq(WORDFREQ_PATH)
+puts "  #{wordfreq_hash.size} entries."
+
+puts "Loading word_dict.txt..."
+pairs = load_word_dict_inflections(WORD_DICT_PATH)
+puts "  #{pairs.size} (lemma → inflected) live pairs."
+
+puts "Forcing UniMorph load..."
+UniMorph.by_base
+puts "  by_base: #{UniMorph.by_base.size} lemmas."
+
+# Real Kaikki forms_map — the build always passes this through to the gates, and the
+# Kaikki rescue catches most of UniMorph's US-only completeness gaps (daydreamed,
+# empaneled, dodos, diagrammed, facetted, gymmed, leafletted, ricochetted, …).
+puts "Loading Kaikki forms_map (~20s)..."
+_, forms_map, * = load_wiktionary
+puts "  forms_map: #{forms_map.size} bases."
+
+puts ""
+puts "Simulating morph_unimorph_paradigm_rejects? on every live (lemma, inflected) pair..."
+
+rejected = []
+rescued_by_kaikki = 0
+pairs.each do |lemma, inflected|
+  k = Inflect.send(:match_suffix_kind, lemma, inflected)
+  next unless KIND_ORDER.include?(k)
+  surface_zipf = wordfreq_hash[inflected] || 0.0
+  if morph_unimorph_paradigm_rejects?(lemma, inflected, k, forms_map, surface_zipf)
+    rejected << [lemma, inflected, k, surface_zipf]
+  elsif morph_unimorph_paradigm_rejects?(lemma, inflected, k, nil, surface_zipf)
+    rescued_by_kaikki += 1
+  end
+end
+
+puts ""
+puts "Rescues by Kaikki forms_map (would-be rejections that Kaikki saves): #{rescued_by_kaikki}"
+
+puts ""
+puts "=" * 78
+puts "Live (lemma, inflected) pairs the pre-gate would reject: #{rejected.size}"
+puts ""
+
+by_doubled = rejected.group_by { |l, f, _, _| doubled_consonant?(l, f) ? :doubled : :other }
+%i[doubled other].each do |k|
+  rs = by_doubled[k] || []
+  puts "  #{k == :doubled ? 'doubled-consonant (outpourred class)' : 'other'}: #{rs.size}"
+end
+
+puts ""
+puts "Sample doubled-consonant rejections (the outpourred class):"
+(by_doubled[:doubled] || []).first(40).each do |lemma, form, k, z|
+  printf "  %-22s → %-28s  (kind=%-4s, surface_zipf=%.2f)\n", lemma, form, k, z
+end
+
+puts ""
+puts "Sample other rejections:"
+(by_doubled[:other] || []).first(40).each do |lemma, form, k, z|
+  printf "  %-22s → %-28s  (kind=%-4s, surface_zipf=%.2f)\n", lemma, form, k, z
+end

@@ -1,0 +1,259 @@
+#!/usr/bin/env ruby
+# encoding: utf-8
+# frozen_string_literal: true
+#
+# Audit Inflect.each_derivable_form against English UniMorph 4.0 (corpora/unimorph/eng).
+# UniMorph treats English inflection as a curated lookup table — 399 575 lemmas, 579 293
+# unique forms — so for every base it lists, the right doubled / single / silent-e /
+# y-stem spelling is fixed by the data, not by a letter-pattern heuristic. This audit asks:
+# on the bases that already live in our generated/word_dict.txt, what does our generator
+# disagree with UniMorph about?
+#
+# Universe: bases in word_dict.txt with no LEMMA field (i.e., headwords that are their
+# own lemma) AND present as a UniMorph lemma. Reduces ~440k word_dict rows to the slice
+# where UniMorph has authoritative inflection paradigms.
+#
+# Per base, per suffix kind in {:s, :ed, :ing, :er, :est} we compare:
+#   I_k = forms yielded by Inflect.each_derivable_form whose match_suffix_kind == k
+#   U_k = forms UniMorph lists for the matching MSD tags
+#
+# Each form-level disagreement is classified into one of four buckets:
+#   spurious_doubling   Inflect produced base+C+suffix; UniMorph has base+suffix
+#   missed_doubling     UniMorph has base+C+suffix; Inflect produced base+suffix
+#   spurious_other      Inflect produced a form UniMorph rejects (other shape)
+#   missed_other        UniMorph has a form Inflect did not produce (other shape)
+#
+# Usage:
+#   bin/audit-unimorph                    # full report (counts + 25 sample rows / bucket)
+#   bin/audit-unimorph --samples N        # sample size per bucket
+#   bin/audit-unimorph --kind ed          # restrict to one suffix kind
+#   bin/audit-unimorph --base BASE        # diagnose a single base
+#   bin/audit-unimorph --bucket spurious_doubling   # only show one bucket
+
+require "optparse"
+require "set"
+
+repo = File.expand_path("..", __dir__)
+$LOAD_PATH.unshift File.join(repo, "lib")
+
+require "rhymecrime/dict/utils_rhyme"
+require "rhymecrime/dict/inflect"
+
+UNIMORPH_PATH = File.join(repo, "corpora", "unimorph", "eng")
+WORD_DICT_PATH = File.join(repo, "generated", "word_dict.txt")
+
+# UniMorph MSD → our Inflect.match_suffix_kind. Two MSDs collapse to :s, two to :ed.
+MSD_TO_KIND = {
+  "N;PL" => :s,
+  "V;PRS;3;SG" => :s,
+  "V;PST" => :ed,
+  "V;V.PTCP;PST" => :ed,
+  "V;V.PTCP;PRS" => :ing,
+  "ADJ;CMPR" => :er,
+  "ADJ;SPRL" => :est,
+}.freeze
+
+KIND_ORDER = %i[s ed ing er est].freeze
+BUCKETS = %i[spurious_doubling missed_doubling spurious_other missed_other].freeze
+
+opts = { samples: 25, kind: nil, base: nil, bucket: nil }
+OptionParser.new do |op|
+  op.banner = "Usage: bin/audit-unimorph [options]"
+  op.on("--samples N", Integer) { |v| opts[:samples] = v }
+  op.on("--kind K") { |v| opts[:kind] = v.to_sym }
+  op.on("--base WORD") { |v| opts[:base] = v.downcase }
+  op.on("--bucket B") { |v| opts[:bucket] = v.to_sym }
+end.parse!
+
+if opts[:kind] && !KIND_ORDER.include?(opts[:kind])
+  abort "--kind must be one of #{KIND_ORDER.join(', ')}"
+end
+if opts[:bucket] && !BUCKETS.include?(opts[:bucket])
+  abort "--bucket must be one of #{BUCKETS.join(', ')}"
+end
+
+def load_unimorph(path)
+  by_base = Hash.new { |h, k| h[k] = Hash.new { |hh, kk| hh[kk] = Set.new } }
+  File.foreach(path, encoding: "UTF-8") do |line|
+    line.chomp!
+    next if line.empty?
+    lemma, form, msd = line.split("\t")
+    next if lemma.nil? || form.nil? || msd.nil?
+    next if lemma == form
+    kind = MSD_TO_KIND[msd]
+    next unless kind
+    by_base[lemma][kind].add(form)
+  end
+  by_base
+end
+
+# Headwords whose word_dict.txt row has no LEMMA field: same as their own lemma.
+def load_word_dict_bases(path)
+  bases = Set.new
+  File.foreach(path, encoding: "UTF-8") do |line|
+    next if line.empty? || line.start_with?("#")
+    line.chomp!
+    fields = line.split(",")
+    next if fields.size < 3
+    next if fields.size >= 4 && !fields[3].empty?
+    bases.add(fields[0])
+  end
+  bases
+end
+
+# Doubled-consonant-class match for form against base+suffix:
+#   true iff form == base + base[-1] + suffix and base[-1] is a non-vowel letter.
+def doubled_consonant_form?(base, form, suffix)
+  return false if base.nil? || base.empty?
+  lc = base[-1]
+  return false unless lc && lc.match?(/\A[bcdfghjklmnpqrstvwxz]\z/i)
+  form == base + lc + suffix
+end
+
+# Plain-suffix-class match: form == base + suffix, no doubling, no silent-e / y-rule.
+def plain_suffix_form?(base, form, suffix)
+  form == base + suffix
+end
+
+def classify_disagreement(base, form, kind, side)
+  suffix_letters = case kind
+                   when :s then %w[s es]
+                   when :ed then %w[ed]
+                   when :ing then %w[ing]
+                   when :er then %w[er]
+                   when :est then %w[est]
+                   else []
+                   end
+  doubled = suffix_letters.any? { |s| doubled_consonant_form?(base, form, s) }
+  plain   = suffix_letters.any? { |s| plain_suffix_form?(base, form, s) }
+  case side
+  when :inflect_only
+    return :spurious_doubling if doubled
+    :spurious_other
+  when :unimorph_only
+    return :missed_doubling if doubled
+    return :missed_other if plain
+    :missed_other
+  end
+end
+
+puts "Loading UniMorph #{UNIMORPH_PATH}..."
+unimorph = load_unimorph(UNIMORPH_PATH)
+puts "  #{unimorph.size} lemmas with at least one inflected MSD row."
+
+puts "Loading word_dict bases..."
+word_dict_bases = load_word_dict_bases(WORD_DICT_PATH)
+puts "  #{word_dict_bases.size} headwords without LEMMA field."
+
+universe =
+  if opts[:base]
+    Set.new([opts[:base]]) & word_dict_bases & unimorph.keys.to_set
+  else
+    word_dict_bases & unimorph.keys.to_set
+  end
+
+if opts[:base] && universe.empty?
+  abort "Base #{opts[:base].inspect} is not present in both word_dict.txt and UniMorph."
+end
+
+puts "Comparing on #{universe.size} bases (intersection of word_dict bases ∩ UniMorph lemmas)..."
+
+# Required by Inflect.each_derivable_form for WordNet attestation lookups.
+Inflect.configure_wordnet_db_path!
+
+per_base_disagrees = 0
+per_kind_examples = Hash.new { |h, k| h[k] = [] }
+per_kind_counts   = Hash.new(0)
+totals = Hash.new(0)
+
+n = 0
+universe.each do |base|
+  n += 1
+  if (n % 5_000).zero?
+    $stderr.puts "  #{n} / #{universe.size} bases processed"
+  end
+
+  inflect_by_kind = Hash.new { |h, k| h[k] = Set.new }
+  Inflect.each_derivable_form(base) do |w|
+    next if w == base
+    k = Inflect.send(:match_suffix_kind, base, w)
+    next if k.nil?
+    next unless KIND_ORDER.include?(k)
+    inflect_by_kind[k].add(w)
+  end
+
+  unimorph_by_kind = unimorph[base]
+  base_had_disagreement = false
+
+  KIND_ORDER.each do |k|
+    next if opts[:kind] && opts[:kind] != k
+    i_set = inflect_by_kind[k]
+    u_set = unimorph_by_kind[k] || Set.new
+    next if i_set == u_set
+    next if u_set.empty? && i_set.empty?
+
+    inflect_only  = i_set - u_set
+    unimorph_only = u_set - i_set
+    next if inflect_only.empty? && unimorph_only.empty?
+
+    base_had_disagreement = true
+
+    inflect_only.each do |form|
+      bucket = classify_disagreement(base, form, k, :inflect_only)
+      next if opts[:bucket] && opts[:bucket] != bucket
+      per_kind_counts[[k, bucket]] += 1
+      totals[bucket] += 1
+      per_kind_examples[[k, bucket]] << [base, form, u_set.to_a.sort]
+    end
+    unimorph_only.each do |form|
+      bucket = classify_disagreement(base, form, k, :unimorph_only)
+      next if opts[:bucket] && opts[:bucket] != bucket
+      per_kind_counts[[k, bucket]] += 1
+      totals[bucket] += 1
+      per_kind_examples[[k, bucket]] << [base, form, i_set.to_a.sort]
+    end
+  end
+
+  per_base_disagrees += 1 if base_had_disagreement
+end
+
+puts ""
+puts "=" * 78
+puts "Disagreements: #{per_base_disagrees} / #{universe.size} bases (#{format('%.1f', per_base_disagrees * 100.0 / universe.size)}%)"
+puts ""
+puts "%-22s | %s" % ["bucket", "count"]
+puts "-" * 40
+BUCKETS.each do |b|
+  puts "%-22s | %d" % [b, totals[b]]
+end
+puts ""
+
+puts "Per kind × bucket:"
+puts "%-6s | %-22s | %s" % ["kind", "bucket", "count"]
+puts "-" * 50
+KIND_ORDER.each do |k|
+  next if opts[:kind] && opts[:kind] != k
+  BUCKETS.each do |b|
+    next if opts[:bucket] && opts[:bucket] != b
+    c = per_kind_counts[[k, b]]
+    next if c.zero?
+    puts "%-6s | %-22s | %d" % [k, b, c]
+  end
+end
+puts ""
+
+puts "Samples (up to #{opts[:samples]} per kind × bucket):"
+puts ""
+KIND_ORDER.each do |k|
+  next if opts[:kind] && opts[:kind] != k
+  BUCKETS.each do |b|
+    next if opts[:bucket] && opts[:bucket] != b
+    rows = per_kind_examples[[k, b]]
+    next if rows.empty?
+    puts "[#{k} / #{b}] #{rows.size} disagreement#{rows.size == 1 ? '' : 's'}"
+    rows.first(opts[:samples]).each do |base, form, other|
+      puts "  #{base.ljust(24)}  Inflect/UniMorph form: #{form.ljust(28)}  other-side: #{other.inspect}"
+    end
+    puts ""
+  end
+end

@@ -5,6 +5,7 @@ require_relative "inflect"
 require_relative "lexical"
 require_relative "phonology"
 require_relative "constants"
+require_relative "unimorph"
 
 def morph_part_of_speech_tags(pos_map, base)
   s = pos_map[base]
@@ -72,6 +73,34 @@ def morph_inflect_ck_double_k_junk?(base, inflected)
   return false unless base.end_with?("ck")
   inflected == base + "ked" || inflected == base + "king" ||
     inflected == base + "ker" || inflected == base + "kest"
+end
+
+# When UniMorph lists base's paradigm at this suffix kind, every other Inflect spelling for
+# that paradigm slot is rejected unless Kaikki forms_map or wordfreq independently attests
+# it. Retires the heuristic-doubling bug class without inventing yet another letter-pattern
+# guard: stress-conditioned doubling (prefer → preferred but offer → offered), VVC bases
+# (outpour → outpoured, not outpourred), suppletive irregulars (overbear → overbore, not
+# overbearred / overbeared), and noun-only bases that Inflect synthesizes verbal forms for
+# (mandolin → mandolined / mandolining) all fall out of the same one-line check.
+#
+# Silent when corpora/unimorph/eng is absent (lambda runtime, fresh clones before
+# bin/setup-corpora) so production behaviour with no UniMorph data is unchanged.
+#
+# Explicitly does NOT fire when:
+#   - UniMorph has no row for base (we have nothing to compare against — defer to existing
+#     POS / WordNet / Kaikki gates).
+#   - UniMorph attests this exact form (the form is not spurious).
+#   - Kaikki forms_map attests the form (Wiktionary's editors disagree with UniMorph;
+#     keep the form, since Kaikki is our existing primary attestation source).
+#   - The surface itself has Wordfreq Zipf ≥ RARE (corpus rescue: real-world spelling
+#     variants like *carolling* / *modelled* that UniMorph US-only paradigms omit).
+def morph_unimorph_paradigm_rejects?(base, inflected, suffix_kind, forms_map, surface_zipf)
+  return false unless suffix_kind
+  return false unless UniMorph.attests_kind?(base, suffix_kind)
+  return false if UniMorph.attests_form?(base, inflected)
+  return false if forms_map && wiktionary_surface_form_attested?(forms_map, base, inflected)
+  return false if surface_zipf && surface_zipf.to_f >= WORDFREQ_RARE_ZIPF
+  true
 end
 
 # True when Inflect *-ed* or *-ing* duplicates a role Kaikki already fills for the verb lexeme
@@ -167,6 +196,10 @@ def morph_base_allows_verb_forms?(base, inflected, pos_map, forms_map, zipf_inf,
     return false
   end
 
+  if morph_unimorph_paradigm_rejects?(base, inflected, inflection_suffix_kind, forms_map, zipf_inf)
+    return false
+  end
+
   return true if list_authoritative_base
 
   tags = morph_part_of_speech_tags(pos_map, base)
@@ -219,6 +252,10 @@ def morph_base_allows_comparative_er_est?(base, w, pos_map, base_first_pron, for
   return true unless inflection_suffix_kind == :er || inflection_suffix_kind == :est
 
   return false if morph_inflect_ck_double_k_junk?(base, w)
+
+  if morph_unimorph_paradigm_rejects?(base, w, inflection_suffix_kind, forms_map, zipf_w)
+    return false
+  end
 
   # Standard English uses *more/most* for many *-less* adjectives; block synthetic *-er/-est* unless Kaikki attests.
   if base.end_with?("less") && base.bytesize >= 6
@@ -332,6 +369,11 @@ end
 # the form. That blocks *nostalgias* / *chaoses* / *goodwills* and keeps *indifferences* from inheriting a
 # common base tier while *apples* (noun.plant) still promotes via Wiktionary / SUBTLEX / Zipf as before.
 def morph_base_allows_plural_s?(base, pos_map, forms_map, plural_word, wordfreq_hash: nil, subtlex_hash: nil)
+  surface_zipf_for_unimorph = wordfreq_hash && wordfreq_hash[plural_word]
+  if morph_unimorph_paradigm_rejects?(base, plural_word, :s, forms_map, surface_zipf_for_unimorph)
+    return false
+  end
+
   # Kaikki-attested plural of an otherwise adj/verb-coded base whose plural has corpus evidence
   # (*observables* zipf 2.11, *malignancies* zipf 2.53, *biopics* zipf 1.88): trust Wiktionary's
   # attestation of the exact plural surface. Requires corpus evidence (wordfreq Zipf ≥ RARE or
