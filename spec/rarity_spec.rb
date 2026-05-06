@@ -143,7 +143,7 @@ def find_contradictory_rarity_rows
       kind: row["kind"].to_s.strip,
       family: family,
       line: i + 2,
-      context: row["context"].to_s,
+      context: rarity_csv_section_path_from_notes(row["notes"]),
     }
   end
   by_word
@@ -164,7 +164,7 @@ def find_redundant_rarity_rows
     by_word[row["word"].to_s] << {
       kind: row["kind"].to_s.strip,
       line: i + 2,
-      context: row["context"].to_s,
+      context: rarity_csv_section_path_from_notes(row["notes"]),
     }
   end
   by_word
@@ -189,7 +189,7 @@ def find_rarity_rows_overlapping_curated_set(filename)
     by_word[word] << {
       kind: row["kind"].to_s.strip,
       line: i + 2,
-      context: row["context"].to_s,
+      context: rarity_csv_section_path_from_notes(row["notes"]),
     }
   end
   by_word.sort_by { |word, _| word }
@@ -234,7 +234,7 @@ def evaluate_rarity_csv
     next if expected.nil?
 
     word = row["word"].to_s
-    context = row["context"].to_s
+    context = rarity_csv_section_path_from_notes(row["notes"])
     weight = rarity_row_weight(kind)
     actual = rarity_category(word)
     score = rarity_mismatch_score(expected, actual)

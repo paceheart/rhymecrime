@@ -148,9 +148,14 @@ in `corpus_variants.rb` (US/UK -ize/-ise, -oes/-os plurals, …).
 
 ### `rarity.csv`
 
-Labeled rarity outcomes: `(context, word, kind, important, notes)`
-where `kind ∈ {common, common_ish, rare, rare_ish, uncommon, forbidden,
-forbidden_ish, common_no_rhymes, rare_no_rhymes, have_rhymes}`. The eval
+Labeled rarity outcomes: `(word, kind, notes)` where `kind ∈ {common,
+common_ish, rare, rare_ish, uncommon, forbidden, forbidden_ish,
+common_no_rhymes, rare_no_rhymes, have_rhymes}`. The `notes` cell is a
+**single line** (no newlines). It begins with the section path used for
+nested RSpec grouping (the old `context` column, including ` / `
+segments). If there is extra free-form text, it follows ` | ` (space,
+pipe, space) — that exact substring must not appear in the section path.
+The eval
 harness in `spec/rarity_spec.rb` consumes this file directly (sweeps every
 row against live `rarity_category`, prints a `FAIL …` line per mismatch, and
 gates on a single weighted-pass-rate aggregate spec). It also drives the
@@ -161,11 +166,12 @@ used to live in `common_words.txt` / `rare_words.txt` / `forbid_list.txt`:
 `rarity_csv_common_words`, `rarity_csv_rare_words`, and
 `rarity_csv_forbidden_words` (in `lib/rhymecrime/dict/utils_rhyme.rb`)
 project the matching `kind` rows into Sets. So a row like
-`stop words,a,common,1,""` is consulted by both the spec sweep AND
-`add_frequency_info` in `lib/rhymecrime/dict/frequency.rb`. Rows imported
-from the retired `*.txt` files carry an `imported from <file>` marker in
-the `notes` column and use the source filename as their `context`; future
-edits should pick a more specific context if you have one.
+`stop words,a,common` with notes beginning `stop words` is consulted by
+both the spec sweep AND `add_frequency_info` in
+`lib/rhymecrime/dict/frequency.rb`. Rows imported from the retired `*.txt`
+files use the source filename as the section path and append
+`imported from <file>` after ` | `; future edits should pick a more specific
+section path if you have one.
 
 ### `related.csv`
 

@@ -104,6 +104,11 @@ end
 
 # --- rarity.csv (curated/rarity.csv, exercised by spec/rarity_spec.rb) ---
 
+# Separates the section path (RSpec nesting / former `context`) from optional
+# trailing free-form notes inside the single-line `notes` column. Use this
+# exact substring (space-pipe-space); section paths must not contain it.
+RARITY_CSV_NOTES_SECTION_SEPARATOR = " | ".freeze
+
 RARITY_CSV_KINDS = %w[
   common common_ish rare rare_ish uncommon forbidden forbidden_ish
   common_no_rhymes rare_no_rhymes have_rhymes
@@ -118,12 +123,27 @@ def load_rarity_csv_rows
   CSV.parse(raw, headers: true, encoding: "UTF-8")
 end
 
+# Section path is the prefix of `notes` before RARITY_CSV_NOTES_SECTION_SEPARATOR
+# (if present); the rest is free-form notes. `notes` is a single line (no
+# newlines).
+def rarity_csv_section_path_from_notes(notes)
+  s = notes.to_s
+  i = s.index(RARITY_CSV_NOTES_SECTION_SEPARATOR)
+  return s.strip if i.nil?
+
+  s[0, i].strip
+end
+
 def validate_rarity_csv_row!(row, line_hint = nil)
-  ctx = row["context"]
   word = row["word"]
   kind = row["kind"]
+  notes = row["notes"]
   hint = line_hint ? " (#{line_hint})" : ""
-  raise "rarity.csv: empty context#{hint}" if ctx.nil? || ctx.strip.empty?
+  raise "rarity.csv: empty notes#{hint}" if notes.nil? || notes.strip.empty?
+  if notes.match?(/[\n\r]/)
+    raise "rarity.csv: notes must be a single line (no newlines)#{hint}"
+  end
+  raise "rarity.csv: empty section path (prefix of notes)#{hint}" if rarity_csv_section_path_from_notes(notes).empty?
   raise "rarity.csv: empty word#{hint}" if word.nil? || word.empty?
   raise "rarity.csv: unknown kind #{kind.inspect}#{hint}" unless RARITY_CSV_KINDS.include?(kind.to_s.strip)
 end
@@ -141,14 +161,13 @@ end
 def apply_rarity_csv_row(row)
   validate_rarity_csv_row!(row)
   word = row["word"]
-  important = row["important"].to_s.strip != "0"
   case row["kind"].strip
   when "common"
-    oughta_be_common word, important: important
+    oughta_be_common word, important: true
   when "common_ish"
     oughta_be_common_ish word
   when "rare"
-    oughta_be_rare word, important: important
+    oughta_be_rare word, important: true
   when "rare_ish"
     oughta_be_rare_ish word
   when "uncommon"
@@ -175,16 +194,12 @@ def load_and_define_rarity_test_cases_from_csv
   rows.each_with_index do |row, i|
     validate_rarity_csv_row!(row, "line #{i + 2}")
   end
-  order = []
-  rows.each do |row|
-    c = row["context"]
-    order << c unless order.include?(c)
-  end
-  order.each do |ctx|
+  section_paths = rows.map { |r| rarity_csv_section_path_from_notes(r["notes"]) }.uniq.sort
+  section_paths.each do |ctx|
     names = ctx.split(" / ").map(&:strip).reject(&:empty?)
-    grouped = rows.select { |r| r["context"] == ctx }
+    grouped = rows.select { |r| rarity_csv_section_path_from_notes(r["notes"]) == ctx }
     define_rarity_nested_contexts(names) do
-      grouped.each { |r| apply_rarity_csv_row(r) }
+      grouped.sort_by { |r| r["word"].to_s }.each { |r| apply_rarity_csv_row(r) }
     end
   end
 end

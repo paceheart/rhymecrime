@@ -14,7 +14,7 @@
 #     diagnostic only (referenced in confusion-row printout); for training
 #     purposes the relevant freq lives inside features as
 #     post_propagation_freq.
-#   curated/rarity.csv                     labeled rows (word, kind, ...).
+#   curated/rarity.csv                     labeled rows (word, kind, notes).
 #
 # Output:
 #   generated/rarity_classifier.json       best model on 5-fold CV weighted
