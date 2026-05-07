@@ -1786,23 +1786,46 @@ rescue Errno::ENOENT
   nil
 end
 
+# Two distinct contexts call this:
+#   1. Runtime / tests: $word_dict is the runtime-loaded msgpack, never swapped. The
+#      saved JSON cache (hyphen_variant_map.json) is the source of truth — load it
+#      once and reuse forever (~50 KB read; tens of thousands of calls per spec run).
+#   2. dict-build: $word_dict is the in-flight hash set by with_word_dict. Build from
+#      the live key-set so tombstone_dispreferred_spelling_headwords! and
+#      preferred_form() see the current build's headword population rather than the
+#      one-build-stale on-disk map. Without this, consecutive builds oscillate: stale
+#      map is missing tombstone pairs from the previous run (e.g. non-plussed) → those
+#      words escape tombstoning → they survive into the next saved map → they get
+#      tombstoned in that run → saved map is missing the pair again → infinite flip.
+#
+# We distinguish the two via RHYMECRIME_BUILD_MODE (set by bin/build for both bootstrap
+# and final dict-build invocations). The presence of $word_dict alone is not a reliable
+# in-build signal: crime.rb populates $word_dict at runtime too, on the first call to
+# word_dict() from any spec.
+#
+# Cache key:
+#   - runtime: the constant :runtime — populate once from disk, never invalidate.
+#   - build: $word_dict.object_id — invalidates whenever with_word_dict swaps the live
+#     hash, so a nested build pass with a different dict instance gets a fresh build.
+# Memoization is GLOBAL ($-prefixed) on purpose. A top-level @ivar would attach to
+# whichever self called this — fresh per RSpec ExampleGroup instance — so the cache
+# never persists across examples and every test pays a ~0.5 s rebuild against
+# $word_dict.keys (~430k entries). That was a 14+ minute regression on the suite.
+$hyphen_multi_fold = nil
+$hyphen_multi_fold_cache_key = nil
 def hyphen_multi_fold_map
-  @hyphen_multi_fold ||= begin
-    # During a dict-build pass, $word_dict is set to the in-flight hash by with_word_dict.
-    # Prefer building from the live key-set so tombstone_dispreferred_spelling_headwords!
-    # and preferred_form() see the current build's headword population rather than the
-    # one-build-stale on-disk hyphen_variant_map.json.  Without this, a sequence of
-    # consecutive builds oscillates: the stale map is missing pairs for words tombstoned
-    # in the previous run (e.g. non-plussed), so those words escape tombstoning → they
-    # survive into the next saved map → they get tombstoned in that run → saved map is
-    # missing the pair again → infinite alternation.
-    in_build = defined?($word_dict) && $word_dict.is_a?(Hash) && !$word_dict.empty?
-    if in_build
-      build_hyphen_multi_fold_map($word_dict.keys)
-    else
-      load_hyphen_multi_fold_map_from_disk || build_hyphen_multi_fold_map
-    end
+  in_build = ENV["RHYMECRIME_BUILD_MODE"] && $word_dict.is_a?(Hash) && !$word_dict.empty?
+  cache_key = in_build ? $word_dict.object_id : :runtime
+  if $hyphen_multi_fold_cache_key != cache_key
+    $hyphen_multi_fold_cache_key = cache_key
+    $hyphen_multi_fold =
+      if in_build
+        build_hyphen_multi_fold_map($word_dict.keys)
+      else
+        load_hyphen_multi_fold_map_from_disk || build_hyphen_multi_fold_map
+      end
   end
+  $hyphen_multi_fold
 end
 
 # Frequency lookup that works in both runtime and build contexts. Runtime
@@ -3084,8 +3107,9 @@ end
 # glosses extension. Memoized at first call: changing the env var mid-process won't take
 # effect (the four paths cache token sets and sense-vector matrices keyed on word, not on
 # source — a fresh process is the boundary).
+$gloss_source_set = nil
 def gloss_source_set
-  @gloss_source_set ||= begin
+  $gloss_source_set ||= begin
     raw = ENV["RHYMECRIME_GLOSS_SOURCE"].to_s.strip.downcase
     case raw
     when "", "both" then Set[:wordnet, :wiktionary]
@@ -3116,9 +3140,10 @@ end
 # The token-union and pooled-definition paths (gloss_word_token_set,
 # gloss_tokens_for_word, def_cos) are unaffected — they consume both sources
 # fully rather than bumping into a cap.
+$gloss_source_wk_first = nil
 def gloss_source_wk_first?
-  @gloss_source_wk_first ||= (ENV["RHYMECRIME_GLOSS_ORDER"].to_s.strip.downcase == "wk-first") ? :yes : :no
-  @gloss_source_wk_first == :yes
+  $gloss_source_wk_first ||= (ENV["RHYMECRIME_GLOSS_ORDER"].to_s.strip.downcase == "wk-first") ? :yes : :no
+  $gloss_source_wk_first == :yes
 end
 
 # Lazy $wiktionary_glosses load. Map shape is { headword => [gloss_text, ...] } where

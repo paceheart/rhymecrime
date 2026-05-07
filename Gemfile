@@ -43,4 +43,7 @@ group :development, :test do
                        # rhymes}_spec.rb split. Dev/test only.
   gem "rack-test"
   gem "rspec"
+  gem "stackprof" # CPU sampling profiler. Used ad-hoc via:
+                  #   STACKPROF_OUT=tmp/p.dump bundle exec ruby -rstackprof ...
+                  # Dev/test only.
 end

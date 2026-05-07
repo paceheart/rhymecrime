@@ -1053,15 +1053,17 @@ PAIR_REDUCTIONS = %i[min max diff cue related].freeze
 # LEARNED_FEATURE_NAMES and learned_feature_vector). Used to A/B test
 # whether confounder-y unigram features (length, cn_degree, usf_out_degree,
 # is_rare) are helping or hurting the GBT — see bin/_compare_feature_ablations.
+$dropped_unigram_set = nil
 def dropped_unigram_set
-  @dropped_unigram_set ||= begin
+  $dropped_unigram_set ||= begin
     raw = ENV["RELATED_DROP_UNIGRAMS"].to_s.strip
     raw.empty? ? [].to_set : raw.split(/\s*,\s*/).to_set
   end
 end
 
+$kept_unigram_indices = nil
 def kept_unigram_indices
-  @kept_unigram_indices ||= UNIGRAM_FEATURE_NAMES.each_index.reject do |i|
+  $kept_unigram_indices ||= UNIGRAM_FEATURE_NAMES.each_index.reject do |i|
     dropped_unigram_set.include?(UNIGRAM_FEATURE_NAMES[i])
   end
 end

@@ -387,8 +387,9 @@ WN_LEX_FILENUM_TO_LEXNAME = {
 
 # Map data.* lex_filenum (two-digit id) → lexicographer name. File format (Princeton): tab-separated
 # filenum, lexname, syntactic_category (1=noun …) — not lexname pos filenum.
+$wn_noun_lex_filenum_to_lexname = nil
 def wn_noun_lex_filenum_to_lexname
-  @wn_noun_lex_filenum_to_lexname ||= begin
+  $wn_noun_lex_filenum_to_lexname ||= begin
     m = {}
     root = WordNet::DB.path
     %w[dict/lexnames lexnames].each do |rel|
@@ -427,8 +428,9 @@ end
 # Lemma bases that WordNet’s noun.exc marks with the same surface as singular and plural (*deer deer*,
 # *sheep sheep*, …). A bare *…+s+* spelling (*deers*, *sheeps*) is then a spurious regular plural for
 # frequency and morph inheritance unless handled elsewhere.
+$wn_noun_exc_invariant_plural_bases = nil
 def wn_noun_exc_invariant_plural_bases
-  @wn_noun_exc_invariant_plural_bases ||= begin
+  $wn_noun_exc_invariant_plural_bases ||= begin
     s = Set.new
     root = WordNet::DB.path
     %w[dict/noun.exc noun.exc].each do |rel|
