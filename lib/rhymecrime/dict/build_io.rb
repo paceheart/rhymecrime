@@ -61,7 +61,31 @@ module BuildIo
     end
 
     def abs(path)
-      File.expand_path(path)
+      expanded = File.expand_path(path)
+      return File.realpath(expanded) if File.exist?(expanded)
+
+      # Walk up to the deepest existing ancestor, realpath it, and rejoin the
+      # unresolved suffix. Required because:
+      #  - REPO_ROOT (computed from __dir__) is auto-realpath'd by MRI's require, and
+      #  - RHYMECRIME_BUILD_DIR is set from a shell `pwd` (logical, not -P), which
+      #    does not follow symlinks.
+      # If the user reaches the repo via a symlink alias (e.g. ~/later → ~/GitHub),
+      # the two strings disagree even though they name the same file, and the
+      # string-prefix `under?` checks below misclassify legitimate writes as
+      # disallowed. realpath'ing through the symlink folds them back together.
+      cur = expanded
+      suffix = []
+      loop do
+        parent = File.dirname(cur)
+        break if parent == cur
+
+        if File.exist?(parent)
+          return File.join(File.realpath(parent), File.basename(cur), *suffix)
+        end
+        suffix.unshift(File.basename(cur))
+        cur = parent
+      end
+      expanded
     end
 
     def under?(path, root)
@@ -72,7 +96,11 @@ module BuildIo
 
     def tmpish?(p)
       pa = abs(p)
-      pa.start_with?("/tmp/") || pa.start_with?("/var/folders/")
+      # /tmp and /var/folders are the macOS system tmp roots; /private/tmp and
+      # /private/var/folders are their realpath'd canonical forms (since abs()
+      # now realpath's where possible). Linux's /tmp doesn't symlink, so the
+      # /private/* variants are no-ops there.
+      pa.start_with?("/tmp/", "/private/tmp/", "/var/folders/", "/private/var/folders/")
     end
 
     # Direct file under generated/ (not in generated/current/… or generated/<stamp>/…).

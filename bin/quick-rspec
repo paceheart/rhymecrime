@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
-# Run the full RSpec suite except spec/similar_rhymes_spec.rb, which is slow.
+# Run the full RSpec suite except the slow spec/similar_rhymes_*_spec.rb family
 #
 set -euo pipefail
 cd "$(dirname "$0")/.."
-exec bundle exec rspec --exclude-pattern 'spec/similar_rhymes_spec.rb' "$@"
+exec bundle exec rspec --exclude-pattern 'spec/similar_rhymes_*_spec.rb' "$@"

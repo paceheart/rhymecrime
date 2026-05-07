@@ -76,3 +76,5 @@ get rid of initialisms
 
 try retraining relatedness with whatever mapped to related_ish, or related_ish_ish
 try retraining relatedness with 5 classes: related, related_ish, whatever, unrelated_ish, unrelated
+
+try Float16

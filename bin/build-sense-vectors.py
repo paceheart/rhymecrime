@@ -7,14 +7,26 @@ Input JSONL (one object per line): {"word": str, "sense_idx": int, "text": str}
   sense_idx == -2  -> pooled-definition embedding ("{word}. {gloss1}. {gloss2}...")
   sense_idx >=  0  -> per-sense embedding (text is "{word}: {gloss}")
 
-Output msgpack:
+Output msgpack (format = "flat-fp32-v1"):
   {
-    "model":      str,            # e.g. "sentence-transformers/all-mpnet-base-v2"
+    "model":      str,                  # e.g. "sentence-transformers/all-mpnet-base-v2"
     "dim":        int,
-    "headword":   {word: [float,...]},
-    "definition": {word: [float,...]},   # pooled-gloss embedding, fallback = headword text
-    "senses":     {word: [[float,...], [float,...], ...]},  # ordered by sense_idx
+    "format":     "flat-fp32-v1",
+    "headword":   {"keys": [word,...], "values": <bytes>},
+    "definition": {"keys": [word,...], "values": <bytes>},   # pooled-gloss embedding, fallback = headword text
+    "senses":     {"keys": [word,...], "counts": [int,...], "values": <bytes>},
   }
+
+  - "values" is a contiguous little-endian fp32 buffer in row-major order: for headword/
+    definition, len(keys) rows of `dim` floats; for senses, sum(counts) rows of `dim`
+    floats with rows for keys[0] first (counts[0] rows), then keys[1] (counts[1] rows),
+    etc. — sense rows for each word are ordered by sense_idx.
+  - The Ruby loader (lib/rhymecrime/relatedness/signals.rb model_sense_vectors_table)
+    parses each "values" blob with Numo::SFloat.from_binary in one shot, then takes
+    zero-copy per-word views — so load time is dominated by the msgpack bin reads
+    rather than by 370k+ Ruby-array-to-Numo casts. fp32 host-endian on the writer
+    (numpy default on x86/arm64) and reader (Numo::SFloat.from_binary is host-endian)
+    matches our macOS/Linux-LE deployment.
 
 Vectors are L2-normalized, so Ruby can treat cosine-similarity as a dot product.
 
@@ -147,43 +159,71 @@ def main():
         file=sys.stderr,
     )
 
-    headword: dict[str, list[float]] = {}
-    definition: dict[str, list[float]] = {}
-    senses_raw: dict[str, dict[int, list[float]]] = {}
-    for item, vec in zip(items, embeddings):
+    # Bucket embedding row indices by output kind/word, so we can materialize each
+    # section as a single np.float32 buffer (no per-vector Python-list round-trips).
+    import numpy as np
+
+    embeddings = np.ascontiguousarray(embeddings, dtype=np.float32)
+
+    hw_row: dict[str, int] = {}
+    df_row: dict[str, int] = {}
+    sn_rows_by_word: dict[str, dict[int, int]] = {}
+    for row, item in enumerate(items):
         word = item["word"]
         idx = int(item["sense_idx"])
-        vf = [float(x) for x in vec.tolist()]
         if idx == -1:
-            headword[word] = vf
+            hw_row[word] = row
         elif idx == -2:
-            definition[word] = vf
+            df_row[word] = row
         else:
-            senses_raw.setdefault(word, {})[idx] = vf
+            sn_rows_by_word.setdefault(word, {})[idx] = row
 
-    senses: dict[str, list[list[float]]] = {}
-    for word, by_idx in senses_raw.items():
-        senses[word] = [by_idx[k] for k in sorted(by_idx)]
+    def _flatten(rows: list[int]) -> bytes:
+        if not rows:
+            return b""
+        # Fancy-indexing returns a copy; ascontiguousarray is then a no-op but keeps
+        # the contract explicit. Both numpy and Numo::SFloat.from_binary use host
+        # endianness; we deploy on LE-only platforms (macOS x86/arm64, Linux x86/arm64)
+        # so this is portable in practice.
+        sub = np.ascontiguousarray(embeddings[rows, :], dtype=np.float32)
+        return sub.tobytes(order="C")
+
+    hw_keys = list(hw_row.keys())
+    hw_bytes = _flatten([hw_row[k] for k in hw_keys])
+
+    df_keys = list(df_row.keys())
+    df_bytes = _flatten([df_row[k] for k in df_keys])
+
+    sn_keys = list(sn_rows_by_word.keys())
+    sn_counts: list[int] = []
+    sn_row_indices: list[int] = []
+    for k in sn_keys:
+        by_idx = sn_rows_by_word[k]
+        ordered_idxs = sorted(by_idx)
+        sn_counts.append(len(ordered_idxs))
+        sn_row_indices.extend(by_idx[s] for s in ordered_idxs)
+    sn_bytes = _flatten(sn_row_indices)
 
     out = {
         "model": args.model,
         "dim": dim,
-        "headword": headword,
-        "definition": definition,
-        "senses": senses,
+        "format": "flat-fp32-v1",
+        "headword": {"keys": hw_keys, "values": hw_bytes},
+        "definition": {"keys": df_keys, "values": df_bytes},
+        "senses": {"keys": sn_keys, "counts": sn_counts, "values": sn_bytes},
     }
 
     import msgpack
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
     with open(args.output, "wb") as f:
-        msgpack.pack(out, f)
+        msgpack.pack(out, f, use_bin_type=True)
 
     size_mb = args.output.stat().st_size / 1024.0 / 1024.0
     print(
-        f"wrote {args.output} ({size_mb:.1f} MB): "
-        f"{len(headword)} headwords, {len(definition)} definitions, "
-        f"{sum(len(v) for v in senses.values())} sense vectors",
+        f"wrote {args.output} ({size_mb:.1f} MB) format=flat-fp32-v1: "
+        f"{len(hw_keys)} headwords, {len(df_keys)} definitions, "
+        f"{sum(sn_counts)} sense vectors across {len(sn_keys)} words",
         file=sys.stderr,
     )
 

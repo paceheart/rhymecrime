@@ -410,33 +410,45 @@ end
 # generated/model_sense_vectors.msgpack for standalone scripts with no build dir).
 # Supplements (does not replace) Numberbatch:
 # Numberbatch is tiny and fast for the O(n) scan, while these contextualized vectors
-# carry richer sense distinctions for the per-pair yes/no decision. On-disk shape
-# (msgpack):
-#   { "model" => String, "dim" => Integer,
-#     "headword" => {lemma => [Float * dim]},
-#     "senses"   => {lemma => [[Float * dim], ...]} }
-# Vectors are pre-L2-normalized so cosine similarity is a plain dot product. Keys use
-# hyphen-form lemmas (matching lemma() output), not the underscore form Numberbatch
-# keys use. Strict-load policy: a missing msgpack raises — the relatedness pipeline
-# was trained against model_* features and the classifier doesn't know how to
-# behave when those features are silently zero. Bootstrap by running
-# bin/dump-sense-glosses → bin/build-sense-vectors.py before retraining /
-# computing. Per-word OOV is still handled gracefully: headword[word] /
-# senses[word] may legitimately be nil for words not in the encoder vocabulary,
-# and the in-vocab flag features (model_both_in_vocab?, def_both_in_vocab?)
-# let the classifier condition on that.
+# carry richer sense distinctions for the per-pair yes/no decision.
 #
-# At load time the per-word vectors get converted to Numo::SFloat (32-bit float):
-#   headword:  {lemma => Numo::SFloat(dim)}               or nil if OOV
-#   senses:    {lemma => Numo::SFloat(K, dim)}            or nil if no senses
+# On-disk shape (format = "flat-fp32-v1"):
+#   { "model"      => String,
+#     "dim"        => Integer,
+#     "format"     => "flat-fp32-v1",
+#     "headword"   => {"keys" => [lemma,...], "values" => <bin: fp32 LE row-major>},
+#     "definition" => {"keys" => [lemma,...], "values" => <bin: fp32 LE row-major>},
+#     "senses"     => {"keys" => [lemma,...], "counts" => [Int,...], "values" => <bin: fp32 LE row-major>} }
+# Each "values" blob is a single contiguous float32 buffer concatenating all the
+# section's vectors in key order (sense rows for a given word are contiguous and
+# ordered by sense_idx). Numo::SFloat.from_binary parses each buffer in one shot
+# and per-word Numo views are zero-copy slices into the parent buffer — so
+# load-time cost is dominated by the bin read and the BLAS ops at query time,
+# not by ~370k Ruby-array-to-Numo casts (the previous {lemma => [Float * dim]}
+# schema spent ~6 s here on quick-rspec cold start).
+#
+# Vectors are pre-L2-normalized by build-sense-vectors.py so cosine similarity is
+# a plain dot product. Keys use hyphen-form lemmas (matching lemma() output), not
+# the underscore form Numberbatch keys use. Strict-load policy: a missing or
+# wrong-format msgpack raises — the relatedness pipeline was trained against
+# model_* features and the classifier doesn't know how to behave when those
+# features are silently zero. Bootstrap by running bin/dump-sense-glosses →
+# bin/build-sense-vectors.py before retraining / computing. Per-word OOV is
+# still handled gracefully: headword[word] / senses[word] may legitimately be
+# nil for words not in the encoder vocabulary, and the in-vocab flag features
+# (model_both_in_vocab?, def_both_in_vocab?) let the classifier condition on that.
+#
+# At load time the per-word vectors are exposed as Numo::SFloat (32-bit float):
+#   headword:    {lemma => Numo::SFloat(dim)}               or nil if OOV
+#   definition:  {lemma => Numo::SFloat(dim)}               or nil if OOV
+#   senses:      {lemma => Numo::SFloat(K, dim)}            or nil if no senses
 # The cosine helpers below are then one Numo dot call apiece — each 768-dim
 # dot product offloads to the native BLAS shipped with numo-narray, giving a
 # ~12x speed-up over the previous pure-Ruby va.size.times { |i| ... } loops
-# (measured: 40 kpairs/s vs 3.3 kpairs/s on the pirate compute cue). The
-# float32 cast is lossless for cosine purposes: vectors are already stored as
-# Float in the msgpack but their dynamic range is well within float32's
-# precision, and the (* 100).round quantization at the call sites hides any
-# LSB drift.
+# (measured: 40 kpairs/s vs 3.3 kpairs/s on the pirate compute cue). The float32
+# representation is lossless for cosine purposes: the model emits fp32 directly
+# and the (* 100).round quantization at the call sites absorbs any LSB drift.
+MODEL_SENSE_VECTORS_FORMAT = "flat-fp32-v1"
 $model_sense_vectors = nil
 $model_sense_vectors_loaded = false
 def model_sense_vectors_table
@@ -451,27 +463,77 @@ def model_sense_vectors_table
   end
   # Stream-decode instead of one-shot binread: macOS' read(2) syscall caps a
   # single read at INT_MAX (2 GiB), so once the full-vocab msgpack passes that
-  # threshold (~136k headwords × 768 fp32 ≈ 2.3 GB), File.binread raises
-  # Errno::EINVAL. MessagePack::Unpacker on an open IO handles chunking.
+  # threshold, File.binread raises Errno::EINVAL. MessagePack::Unpacker on an
+  # open IO buffers in chunks and is fine with multi-GB bin payloads.
   raw = BuildIo.open(path, "rb", hint: "model_sense_vectors_table") do |f|
     MessagePack::Unpacker.new(f).read
   end
-  hw_raw = raw["headword"] || {}
-  df_raw = raw["definition"] || {}
-  sn_raw = raw["senses"] || {}
 
-  hw = {}
-  hw_raw.each { |k, v| hw[k] = Numo::SFloat.cast(v) if v && !v.empty? }
+  fmt = raw["format"]
+  unless fmt == MODEL_SENSE_VECTORS_FORMAT
+    raise "model sense vectors at #{path} have format=#{fmt.inspect}, expected " \
+          "#{MODEL_SENSE_VECTORS_FORMAT.inspect}. Rebuild via " \
+          "./bin/build-sense-vectors.py (or ./bin/retrain-relatedness)."
+  end
 
-  df = {}
-  df_raw.each { |k, v| df[k] = Numo::SFloat.cast(v) if v && !v.empty? }
+  dim = raw["dim"]
+  unless dim.is_a?(Integer) && dim.positive?
+    raise "model sense vectors at #{path} have invalid dim=#{dim.inspect}. " \
+          "Rebuild via ./bin/build-sense-vectors.py."
+  end
 
+  # Decode one flat fp32 buffer into a {key => Numo::SFloat(dim)} table whose
+  # values are zero-copy 1-D views into the parent (keys.size, dim) array.
+  decode_fixed_section = lambda do |section, label|
+    keys = (section || {})["keys"] || []
+    buf  = (section || {})["values"]
+    next [{}, 0] if keys.empty? || buf.nil? || buf.bytesize.zero?
+    expected = keys.size * dim * 4
+    if buf.bytesize != expected
+      raise "model sense vectors at #{path}: #{label} buffer size #{buf.bytesize} " \
+            "doesn't match keys=#{keys.size} * dim=#{dim} * 4 = #{expected}. " \
+            "File is corrupt; rebuild via ./bin/build-sense-vectors.py."
+    end
+    big = Numo::SFloat.from_binary(buf).reshape(keys.size, dim)
+    out = {}
+    keys.each_with_index { |k, i| out[k] = big[i, true] }
+    [out, keys.size]
+  end
+
+  hw, _ = decode_fixed_section.call(raw["headword"], "headword")
+  df, _ = decode_fixed_section.call(raw["definition"], "definition")
+
+  # Senses: one flat (sum(counts), dim) buffer; per-word slice spans `counts[i]` rows.
   sn = {}
   total_senses = 0
-  sn_raw.each do |k, vs|
-    next if vs.nil? || vs.empty?
-    sn[k] = Numo::SFloat.cast(vs)
-    total_senses += vs.size
+  sn_section = raw["senses"] || {}
+  sn_keys   = sn_section["keys"]   || []
+  sn_counts = sn_section["counts"] || []
+  sn_buf    = sn_section["values"]
+  unless sn_keys.empty?
+    if sn_keys.size != sn_counts.size
+      raise "model sense vectors at #{path}: senses keys.size=#{sn_keys.size} != " \
+            "counts.size=#{sn_counts.size}. Rebuild via ./bin/build-sense-vectors.py."
+    end
+    total_senses = sn_counts.sum
+    expected = total_senses * dim * 4
+    if sn_buf.nil? || sn_buf.bytesize != expected
+      raise "model sense vectors at #{path}: senses buffer size " \
+            "#{sn_buf.nil? ? 'nil' : sn_buf.bytesize} doesn't match sum(counts)=" \
+            "#{total_senses} * dim=#{dim} * 4 = #{expected}. " \
+            "File is corrupt; rebuild via ./bin/build-sense-vectors.py."
+    end
+    if total_senses.positive?
+      sn_big = Numo::SFloat.from_binary(sn_buf).reshape(total_senses, dim)
+      offset = 0
+      sn_keys.each_with_index do |k, i|
+        c = sn_counts[i]
+        if c.positive?
+          sn[k] = sn_big[offset...(offset + c), true]
+          offset += c
+        end
+      end
+    end
   end
 
   if hw.empty? && df.empty? && sn.empty?
@@ -481,13 +543,13 @@ def model_sense_vectors_table
 
   $model_sense_vectors = {
     "model" => raw["model"],
-    "dim" => raw["dim"],
+    "dim" => dim,
     "headword" => hw,
     "definition" => df,
     "senses" => sn,
   }
   puts "loaded model sense vectors from #{path} " \
-       "(model=#{raw['model']} dim=#{raw['dim']} " \
+       "(model=#{raw['model']} dim=#{dim} " \
        "headwords=#{hw.size} definitions=#{df.size} senses=#{total_senses})"
   $model_sense_vectors
 end

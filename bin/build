@@ -129,6 +129,46 @@ TIMESTAMP="$(date -u +%Y%m%dT%H%M%S)"
 BUILD_DIR="$REPO/generated/$TIMESTAMP"
 mkdir -p "$BUILD_DIR/bootstrap" "$BUILD_DIR/runtime"
 
+export RHYMECRIME_BUILD_DIR="$BUILD_DIR"
+# Enforce bootstrap/final read+write invariants (raises on violation). Default on; set RHYMECRIME_BUILD_IO_VALIDATE=0 to disable.
+export RHYMECRIME_BUILD_IO_VALIDATE="${RHYMECRIME_BUILD_IO_VALIDATE:-1}"
+
+echo "==> Preflight: checking BuildIo write validation"
+ruby -I"$REPO/lib" <<'RUBY'
+require "rhymecrime/dict/build_io"
+
+errors = []
+begin
+  [
+    ["bootstrap", File.join(ENV.fetch("RHYMECRIME_BUILD_DIR"), "bootstrap", ".build_io_preflight_write")],
+    ["final", File.join(ENV.fetch("RHYMECRIME_BUILD_DIR"), "runtime", ".build_io_preflight_write")],
+  ].each do |mode, path|
+    old_mode = ENV["RHYMECRIME_BUILD_MODE"]
+    ENV["RHYMECRIME_BUILD_MODE"] = mode
+    BuildIo.write(path, "ok\n", hint: "bin/build preflight write probe #{mode}")
+    File.delete(path) if File.exist?(path)
+  ensure
+    ENV["RHYMECRIME_BUILD_MODE"] = old_mode
+  end
+rescue StandardError => e
+  errors << "BuildIo write validation failed for RHYMECRIME_BUILD_DIR:\n" \
+            "  #{ENV.fetch("RHYMECRIME_BUILD_DIR", "(unset)")}\n" \
+            "  #{e.class}: #{e.message}\n" \
+            "  fix: ensure bin/build is using a canonical generated/<timestamp> path " \
+            "and BuildIo accepts writes under both bootstrap/ and runtime/"
+end
+
+if errors.any?
+  warn "bin/build preflight failed (#{errors.size} issue#{errors.size == 1 ? "" : "s"}):"
+  errors.each_with_index do |msg, i|
+    warn "\n#{i + 1}. #{msg}"
+  end
+  exit 1
+end
+
+puts "BuildIo write preflight ok"
+RUBY
+
 echo "==> Writing $BUILD_DIR/BUILD_INFO.json"
 ruby -rjson -rtime -rsocket -e '
 repo = ARGV[0]
@@ -156,13 +196,9 @@ info = {
 File.write(File.join(build_dir, "BUILD_INFO.json"), JSON.pretty_generate(info) + "\n")
 ' "$REPO" "$BUILD_DIR"
 
-export RHYMECRIME_BUILD_DIR="$BUILD_DIR"
-
 IO_AUDIT_LOG="$BUILD_DIR/io_audit.jsonl"
 : >"$IO_AUDIT_LOG"
 export RHYMECRIME_BUILD_IO_LOG="$IO_AUDIT_LOG"
-# Enforce bootstrap/final read+write invariants (raises on violation). Default on; set RHYMECRIME_BUILD_IO_VALIDATE=0 to disable.
-export RHYMECRIME_BUILD_IO_VALIDATE="${RHYMECRIME_BUILD_IO_VALIDATE:-1}"
 
 DUMP_PATH="$BUILD_DIR/bootstrap/rarity_signals_dump.jsonl"
 
