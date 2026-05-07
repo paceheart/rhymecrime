@@ -32,7 +32,7 @@ if [ $# -lt 1 ]; then
   exit 64
 fi
 
-REPO="$(cd "$(dirname "$0")/.." && pwd)"
+REPO="$(cd "$(dirname "$0")/.." && pwd -P)"
 RUNTIME="$1"
 shift
 

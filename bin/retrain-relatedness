@@ -47,7 +47,7 @@ for arg in "$@"; do
   esac
 done
 
-REPO="$(cd "$(dirname "$0")/.." && pwd)"
+REPO="$(cd "$(dirname "$0")/.." && pwd -P)"
 cd "$REPO"
 
 if [[ $REBUILD_VECTORS -eq 1 ]]; then

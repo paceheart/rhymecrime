@@ -12,7 +12,7 @@
 
 set -euo pipefail
 
-REPO="$(cd "$(dirname "$0")/.." && pwd)"
+REPO="$(cd "$(dirname "$0")/.." && pwd -P)"
 CURRENT="$REPO/generated/current"
 GOOD="$REPO/generated/last-known-good"
 

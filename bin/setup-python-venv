@@ -25,7 +25,7 @@
 
 set -euo pipefail
 
-REPO="$(cd "$(dirname "$0")/.." && pwd)"
+REPO="$(cd "$(dirname "$0")/.." && pwd -P)"
 cd "$REPO"
 
 VENV=".venv"

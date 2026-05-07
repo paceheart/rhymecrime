@@ -15,7 +15,7 @@
 #   STACKPROF_OUT=/path.dump  fixed output path
 #
 set -euo pipefail
-ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+ROOT="$(cd "$(dirname "$0")/.." && pwd -P)"
 cd "$ROOT"
 
 if ! ruby -e "require 'stackprof'" 2>/dev/null; then
