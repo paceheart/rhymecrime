@@ -136,11 +136,11 @@ end
 
 # --- Load dump and labels --------------------------------------------------
 
-dump_path = File.join(repo, "generated", "rarity_signals_dump.jsonl")
+build_dir = ENV.fetch("RHYMECRIME_BUILD_DIR")
+dump_path = File.join(build_dir, "bootstrap", "rarity_signals_dump.jsonl")
 unless File.exist?(dump_path)
   warn "missing signals dump: #{dump_path}"
-  warn "produce it with:"
-  warn "  RHYMECRIME_RARITY_DUMP_SIGNALS=#{dump_path} ./bin/dict-build"
+  warn "produce it with ./bin/build (or set RHYMECRIME_BUILD_DIR and run dict-build bootstrap with RHYMECRIME_RARITY_DUMP_SIGNALS)"
   exit 1
 end
 
@@ -152,7 +152,7 @@ end
 puts "loaded signals dump: #{dump_words.size} words"
 
 rarity_csv = File.join(repo, "curated", "rarity.csv")
-raw_rows = CSV.read(rarity_csv, headers: true, encoding: "UTF-8")
+raw_rows = CSV.parse(BuildIo.read(rarity_csv, encoding: "UTF-8", hint: "train-rarity-classifier rarity.csv"), headers: true)
 
 labeled_rows = []
 skipped_no_features = 0
@@ -685,8 +685,8 @@ out = model_data.merge(
 if options[:dry_run]
   puts "(--dry-run: not writing output file)"
 else
-  out_path = generated_dict_path(RARITY_CLASSIFIER_FILENAME)
-  File.write(out_path, JSON.generate(out), encoding: "UTF-8")
+  out_path = File.join(build_dir, "bootstrap", RARITY_CLASSIFIER_FILENAME)
+  BuildIo.write(out_path, JSON.generate(out), encoding: "UTF-8", hint: "train-rarity-classifier")
   size_kb = File.size(out_path) / 1024.0
   puts format("wrote %s (%.1f KB)", out_path, size_kb)
 end

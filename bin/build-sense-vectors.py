@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Encode the JSONL dumped by bin/dump-sense-glosses with a sentence-transformer
-and write generated/model_sense_vectors.msgpack.
+and write model_sense_vectors.msgpack.
 
 Input JSONL (one object per line): {"word": str, "sense_idx": int, "text": str}
   sense_idx == -1  -> headword embedding (text is usually just the word)
@@ -32,13 +32,24 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 import time
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
-DEFAULT_INPUT = REPO / "generated" / "sense_glosses.jsonl"
-DEFAULT_OUTPUT = REPO / "generated" / "model_sense_vectors.msgpack"
+
+
+def _default_io_paths():
+    bd = os.environ.get("RHYMECRIME_BUILD_DIR")
+    if bd:
+        root = Path(bd)
+        return root / "sense_glosses.jsonl", root / "model_sense_vectors.msgpack"
+    g = REPO / "generated"
+    return g / "sense_glosses.jsonl", g / "model_sense_vectors.msgpack"
+
+
+DEFAULT_INPUT, DEFAULT_OUTPUT = _default_io_paths()
 DEFAULT_MODEL = "sentence-transformers/all-mpnet-base-v2"
 
 

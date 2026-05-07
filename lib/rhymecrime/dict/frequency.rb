@@ -21,7 +21,7 @@ require_relative "rarity_classifier"
 
 def load_word_list_set(path)
   s = Set.new
-  File.foreach(path, chomp: true, encoding: "UTF-8") do |line|
+  BuildIo.foreach(path, chomp: true, encoding: "UTF-8", hint: "load_word_list_set") do |line|
     next if line.empty?
 
     s.add(line)
@@ -33,7 +33,7 @@ def load_subtlex()
   subtlex_hash = Hash.new(0)
   subtlex_total_hash = Hash.new(0)
   first = true
-  File.foreach(SUBTLEX_FILENAME, encoding: "UTF-8") do |line|
+  BuildIo.foreach(SUBTLEX_FILENAME, encoding: "UTF-8", hint: "load_subtlex") do |line|
     if first
       first = false
       next
@@ -148,7 +148,7 @@ def load_wordfreq()
     install_hyphen_collapse_fallback_default_proc!(wordfreq_hash, nil)
     return wordfreq_hash
   end
-  File.foreach(WORDFREQ_FILENAME, encoding: 'UTF-8') do |line|
+  BuildIo.foreach(WORDFREQ_FILENAME, encoding: 'UTF-8', hint: "load_wordfreq") do |line|
     word, zipf_str = line.chomp.split("\t")
     next if word.nil? || zipf_str.nil?
     wordfreq_hash[word] = zipf_str.to_f
@@ -895,8 +895,9 @@ def add_frequency_info(pronunciation_map, subtlex_hash, subtlex_total_hash, word
   common_words = rarity_csv_common_words
   pronunciation_map_seed = pronunciation_map_seed_headwords || Set.new
   ref_cn = conceptnet_vocab_for_attestation
-  ref_nb_path = numberbatch_txt_path
-  ref_nb = ref_nb_path ? numberbatch_corpus_token_set(ref_nb_path) : nil
+  # Both NB and USF read setup-produced caches in generated/ root; the heavy
+  # raw-corpus scans live in bin/setup-corpora, not bin/build.
+  ref_nb = numberbatch_corpus_token_set_cached
   ref_usf = usf_corpus_word_set
   for word, prons in pronunciation_map
     seed_phase = :pronunciation_map_seed

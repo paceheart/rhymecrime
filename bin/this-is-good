@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+#
+# Mark the build that generated/current currently points at as known-good by
+# pointing generated/last-known-good at the same runtime/ subdir.
+#
+#   generated/current          -> generated/<TIMESTAMP>/runtime   (set by bin/build)
+#   generated/last-known-good  -> generated/<TIMESTAMP>/runtime   (set by this script)
+#
+# Usage:
+#   ./bin/this-is-good
+#
+
+set -euo pipefail
+
+REPO="$(cd "$(dirname "$0")/.." && pwd)"
+CURRENT="$REPO/generated/current"
+GOOD="$REPO/generated/last-known-good"
+
+if [ ! -L "$CURRENT" ]; then
+  echo "ERROR: $CURRENT is not a symlink (or does not exist)." >&2
+  echo "       Run ./bin/build first; generated/current must be a symlink to <TIMESTAMP>/runtime." >&2
+  exit 1
+fi
+
+RUNTIME_TARGET="$(readlink -- "$CURRENT")"
+case "$RUNTIME_TARGET" in
+  /*) ;;
+  *)  RUNTIME_TARGET="$REPO/generated/$RUNTIME_TARGET" ;;
+esac
+
+if [ ! -d "$RUNTIME_TARGET" ]; then
+  echo "ERROR: resolved runtime dir does not exist: $RUNTIME_TARGET" >&2
+  exit 1
+fi
+
+ln -sfn "$RUNTIME_TARGET" "$GOOD"
+echo "marked good: $GOOD -> $RUNTIME_TARGET"

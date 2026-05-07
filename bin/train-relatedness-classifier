@@ -530,7 +530,7 @@ end
 ENV["RELATED_LEARNED_MODE"] = "off"
 
 path = File.join(repo, "curated", "related.csv")
-raw_rows = CSV.parse(File.read(path, encoding: "UTF-8"), headers: true)
+raw_rows = CSV.parse(BuildIo.read(path, encoding: "UTF-8", hint: "train-relatedness-classifier related.csv"), headers: true)
 
 # Drop semantically-promiscuous rows up front: the threshold-gate's short-circuit
 # makes the predicate trivially-true for any pair where either side is
@@ -765,8 +765,8 @@ end
 if options[:dry_run]
   puts "(--dry-run: not writing output file)"
 else
-  out_path = generated_dict_path(RELATEDNESS_CLASSIFIER_FILENAME)
-  File.write(out_path, JSON.generate(common), encoding: "UTF-8")
+  out_path = generated_stamp_path(RELATEDNESS_CLASSIFIER_FILENAME)
+  BuildIo.write(out_path, JSON.generate(common), encoding: "UTF-8", hint: "train-relatedness-classifier")
   size_kb = File.size(out_path) / 1024.0
   puts format("wrote %s (%.1f KB)", out_path, size_kb)
 end

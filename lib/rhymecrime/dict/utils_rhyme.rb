@@ -4,6 +4,7 @@ require "fileutils"
 require "json"
 require "msgpack"
 require "set"
+require_relative "build_io"
 require_relative "phoneme.rb"
 require_relative "../pace_utils"
 
@@ -62,16 +63,18 @@ LOCAL_STORE_FILENAME = "rhymecrime_local.sqlite3"
 PART_OF_SPEECH_FILENAME = "part_of_speech.json"
 # Multi-spelling hyphen folds (in-laws/inlaws, …); built in dict.rb, loaded at runtime.
 HYPHEN_VARIANT_MAP_FILENAME = "hyphen_variant_map.json"
-# ConceptNet-derived edge weights for topical relatedness; built in dict.rb, loaded at runtime.
-# Keys are underscore-normalized dictionary *base* lemmas (inflected headwords are folded at export).
-CONCEPTNET_EDGES_FILENAME = "conceptnet_edges.json"
-# English vocab on kept ConceptNet relations; built by bin/preprocess-conceptnet → generated/.
-CONCEPTNET_VOCAB_CACHE_SUFFIX = ".en-kept-vocab.txt.gz"
-# Pre-canonicalization English edge triples (w1, w2, weight) on kept relations; a pure function of
-# the assertions .csv.gz, so it can be reused across dict-build runs whose word_dict differs.
-# Saves ~15% of total build time by skipping the full gzip-decompress + line-parse pass of
-# save_conceptnet_edge_map! when the cache is fresh.
-CONCEPTNET_EDGES_CACHE_SUFFIX = ".en-kept-edges.msgpack.gz"
+# ConceptNet-derived edge weights for topical relatedness; corpus mirror at
+# generated/conceptnet_edges.msgpack — built once by ensure_conceptnet_edges_cache!
+# from corpora/conceptnet/conceptnet-assertions-*.csv.gz, then loaded with
+# load_conceptnet_edges_streaming + a build-time / runtime-time word_dict filter
+# (mirrors the numberbatch_vectors.msgpack pattern: stable corpus-derived
+# artifact, filtered + canonicalized at load). Records are raw (w1, w2, weight)
+# triples on kept relations with w1 < w2; canonicalization to dict spellings
+# happens at load time via relatedness_canonical_spelling_for_conceptnet_lemma.
+CONCEPTNET_EDGES_FILENAME = "conceptnet_edges.msgpack"
+CONCEPTNET_EDGES_STREAM_FORMAT = "cnedges_stream_v1"
+# English vocab on kept ConceptNet relations; built by bin/preprocess-conceptnet -> generated/.
+CONCEPTNET_VOCAB_CACHE_FILENAME = "conceptnet_assertions.txt.gz"
 # Numberbatch word vectors pre-filtered to dictionary *base* headwords only; built in dict.rb.
 NUMBERBATCH_VECTORS_FILENAME = "numberbatch_vectors.msgpack"
 # USF cue→target association strengths (FSG); place under generated/ for runtime (e.g. built from corpora/usf/).
@@ -85,7 +88,8 @@ SPELLING_VARIANTS_AUTO_FILENAME = "spelling_variants_auto.txt"
 # built by bin/train-relatedness-classifier, consumed in related.rb.
 RELATEDNESS_CLASSIFIER_FILENAME = "relatedness_classifier.json"
 # Contextualized sentence-transformer embeddings of dictionary-lemma headwords and their
-# WordNet gloss-per-sense (built by bin/dump-sense-glosses → bin/build-sense-vectors.py).
+# WordNet/Wiktionary gloss-per-sense. Built by bin/dump-sense-glosses ->
+# bin/build-sense-vectors.py into the active timestamped build directory.
 # MessagePack: { model:, dim:, headword: {lemma=>vec}, senses: {lemma=>[vec,…]} }.
 # Provides the modern-embedding signals in PairSignals that supplement Numberbatch.
 MODEL_SENSE_VECTORS_FILENAME = "model_sense_vectors.msgpack"
@@ -122,25 +126,150 @@ def dict_utils_debug(msg)
   debug(msg)
 end
 
-# Outputs of dict.rb (dictionary compiler); not hand-edited. Absolute paths under <repo>/generated/.
+# Outputs of dict.rb (dictionary compiler); not hand-edited.
+# GENERATED_ROOT_DIR — flat tree at <repo>/generated/ for stable corpus caches (ConceptNet
+# gz caches, numberbatch_vectors.msgpack, wordfreq.tsv).
+# GENERATED_DIR — <repo>/generated/current/ (symlink → latest build's runtime/); all
+# runtime lexicon artifacts dict-build emits and crime.rb loads live here.
 REPO_ROOT = File.expand_path("../../..", __dir__)
-GENERATED_DIR = File.join(REPO_ROOT, "generated")
+GENERATED_ROOT_DIR = File.join(REPO_ROOT, "generated")
+GENERATED_DIR = File.join(GENERATED_ROOT_DIR, "current")
 
 # Hand-curated inputs (lemma/spelling/related/rarity CSVs, common/rare/forbid/stop word
 # lists, authoritative pronunciation overrides, neol supplement). All ten files live
 # under <repo>/curated/ — see curated/README.md.
 CURATED_DIR = File.join(REPO_ROOT, "curated")
 
+def rhymecrime_build_dir
+  d = ENV["RHYMECRIME_BUILD_DIR"]
+  return nil if d.nil? || d.to_s.empty?
+
+  # dict-build chdirs to lib/rhymecrime/dict before loading dict.rb; relative
+  # RHYMECRIME_BUILD_DIR must anchor to repo root or File.join(bd, ...) and
+  # File.exist? resolve under dict/ and miss e.g. runtime/rarity_classifier.json.
+  File.expand_path(d, REPO_ROOT)
+end
+
+# Read-only override: point at any runtime/-shaped dir (e.g. generated/current
+# or generated/last-known-good) and dictionary loaders read from there instead
+# of generated/current. Use case: run two rspec jobs in parallel against
+# different runtimes (e.g. compare current vs. last-known-good). Anchored to
+# REPO_ROOT for the same reason rhymecrime_build_dir is.
+def rhymecrime_runtime_dir
+  d = ENV["RHYMECRIME_RUNTIME_DIR"]
+  return nil if d.nil? || d.to_s.empty?
+
+  File.expand_path(d, REPO_ROOT)
+end
+
+def bootstrap_mode?
+  ENV["RHYMECRIME_BUILD_MODE"].to_s == "bootstrap"
+end
+
+def final_mode?
+  ENV["RHYMECRIME_BUILD_MODE"].to_s == "final"
+end
+
+# Stable inputs / large vectors at generated/ root (not under generated/current/).
+def generated_root_path(basename)
+  File.join(GENERATED_ROOT_DIR, basename)
+end
+
+def generated_bootstrap_path(basename)
+  bd = rhymecrime_build_dir
+  raise "RHYMECRIME_BUILD_DIR is required for generated_bootstrap_path(#{basename.inspect})" unless bd
+
+  File.join(bd, "bootstrap", basename)
+end
+
+def generated_runtime_path(basename)
+  bd = rhymecrime_build_dir
+  raise "RHYMECRIME_BUILD_DIR is required for generated_runtime_path(#{basename.inspect})" unless bd
+
+  File.join(bd, "runtime", basename)
+end
+
+# Training / pedigree files at generated/<timestamp>/ when RHYMECRIME_BUILD_DIR is set;
+# otherwise generated/ root (solo scripts).
+def generated_stamp_path(basename)
+  bd = rhymecrime_build_dir
+  return generated_root_path(basename) unless bd
+
+  File.join(bd, basename)
+end
+
+# Build-scoped training artifacts live at generated/<timestamp>/, not in the
+# stable generated/ root. When no active build dir is exported, solo tools can
+# still find the latest completed build through generated/current -> <stamp>/runtime
+# (or, when comparing runtimes, through whatever RHYMECRIME_RUNTIME_DIR points at).
+def generated_build_artifact_path(basename)
+  bd = rhymecrime_build_dir
+  return File.join(bd, basename) if bd
+
+  resolve_via = rhymecrime_runtime_dir || GENERATED_DIR
+  begin
+    runtime_dir = File.realpath(resolve_via)
+    stamp_dir = File.dirname(runtime_dir)
+    candidate = File.join(stamp_dir, basename)
+    return candidate if File.exist?(candidate)
+  rescue SystemCallError
+    # generated/current (or RHYMECRIME_RUNTIME_DIR) may not exist in a fresh checkout.
+  end
+
+  generated_root_path(basename)
+end
+
+# Resolves runtime lexicon artifacts:
+#   * RHYMECRIME_RUNTIME_DIR set -> $RHYMECRIME_RUNTIME_DIR/<basename>     (read-only override; e.g. compare runs against last-known-good)
+#   * RHYMECRIME_BUILD_DIR set   -> $RHYMECRIME_BUILD_DIR/runtime/<basename>
+#   * otherwise                  -> generated/current/<basename>
+# This lets every in-build subprocess (dict-build bootstrap+final, train-rarity-classifier,
+# retrain-relatedness, dump-sense-glosses, ...) read in-flight runtime artifacts directly
+# from the active timestamped build dir, while solo tools and the deployed runtime keep
+# reading the symlinked generated/current/. The build orchestrator therefore only needs
+# to flip generated/current/ once, on success — no mid-build checkpoint swap.
+# Do not gate on RHYMECRIME_BUILD_MODE: bin/build only prefixes bootstrap/final for the
+# dict-build invocations, so MODE is often unset while BUILD_DIR still points at the
+# active stamp.
+# RUNTIME_DIR wins over BUILD_DIR when both are set: it's the more specific "I want to
+# read from exactly this directory" override, and tests that set it shouldn't accidentally
+# pick up a half-built tree from a still-running build process.
 def generated_dict_path(basename)
+  rd = rhymecrime_runtime_dir
+  return File.join(rd, basename) if rd
+
+  bd = rhymecrime_build_dir
+  return File.join(bd, "runtime", basename) if bd
+
   File.join(GENERATED_DIR, basename)
 end
 
+# Historical alias from when only a subset of dict-build call sites honored
+# RHYMECRIME_BUILD_DIR. generated_dict_path now does the same fallback itself,
+# so this is a thin wrapper kept for backward compatibility — new code should
+# call generated_dict_path directly.
 def generated_dict_path_under_dict_dir(basename)
-  File.join(GENERATED_DIR, basename)
+  generated_dict_path(basename)
 end
 
 def ensure_generated_dict_dir!
   FileUtils.mkdir_p(GENERATED_DIR)
+  bd = rhymecrime_build_dir
+  return unless bd
+
+  FileUtils.mkdir_p(File.join(bd, "bootstrap"))
+  FileUtils.mkdir_p(File.join(bd, "runtime"))
+end
+
+# Symlink runtime copies of spelling + hyphen maps to ../bootstrap/ (Pass 2).
+def link_runtime_spelling_hyphen_symlinks!
+  return unless rhymecrime_build_dir && final_mode?
+
+  %w[spelling_variants_auto.txt hyphen_variant_map.json].each do |fn|
+    dest = generated_runtime_path(fn)
+    FileUtils.rm_f(dest)
+    FileUtils.ln_sf(File.join("..", "bootstrap", fn), dest)
+  end
 end
 
 #
@@ -184,7 +313,7 @@ $semantically_promiscuous_words = nil
 def load_curated_word_set(filename)
   set = Set.new
   path = File.join(CURATED_DIR, filename)
-  File.foreach(path, chomp: true, encoding: "UTF-8") do |line|
+  BuildIo.foreach(path, chomp: true, encoding: "UTF-8", hint: "load_curated_word_set #{filename}") do |line|
     w = line.strip
     next if w.empty? || w.start_with?("#")
     set << w
@@ -281,7 +410,7 @@ def load_rarity_csv_word_sets!
   rare = Set.new
   forbidden = []
   forbidden_seen = Set.new
-  CSV.foreach(RARITY_CSV_PATH, headers: true, encoding: "UTF-8") do |row|
+  BuildIo.csv_foreach(RARITY_CSV_PATH, headers: true, encoding: "UTF-8", hint: "load_rarity_csv_word_sets!") do |row|
     word = row["word"].to_s.strip
     next if word.empty?
     kind = row["kind"].to_s.strip
@@ -964,9 +1093,9 @@ def build_hyphen_multi_fold_map(explicit_word_keys = nil)
   elsif defined?($word_dict) && $word_dict.is_a?(Hash) && !$word_dict.empty?
     $word_dict.each_key { |w| ingest_word_into_hyphen_fold_buckets!(buckets, w) }
   else
-    path = generated_dict_path(WORD_DICT_FILENAME)
+    path = generated_dict_path_under_dict_dir(WORD_DICT_FILENAME)
     if File.exist?(path)
-      IO.foreach(path, encoding: "UTF-8") do |line|
+      BuildIo.foreach(path, encoding: "UTF-8", hint: "build_hyphen_multi_fold_map") do |line|
         next if line =~ /\A;/ || line =~ /\A#/
         tok = line.split(",", 2).first
         next if tok.nil? || tok.empty?
@@ -990,11 +1119,18 @@ def save_hyphen_variant_map!(build_keys, exported_keys: nil)
   in_export = exported_keys.to_set
   map = map.reject { |_fold, forms| forms.none? { |w| in_export.include?(w) } }
   ensure_generated_dict_dir!
-  path = generated_dict_path_under_dict_dir(HYPHEN_VARIANT_MAP_FILENAME)
+  path =
+    if rhymecrime_build_dir
+      generated_bootstrap_path(HYPHEN_VARIANT_MAP_FILENAME)
+    else
+      generated_dict_path(HYPHEN_VARIANT_MAP_FILENAME)
+    end
   sorted = {}
   map.keys.sort.each { |k| sorted[k] = map[k].sort }
-  File.write(path, "#{JSON.generate(sorted)}\n", encoding: "UTF-8")
+  FileUtils.mkdir_p(File.dirname(path))
+  BuildIo.write(path, "#{JSON.generate(sorted)}\n", encoding: "UTF-8", hint: "save_hyphen_variant_map")
   puts "Wrote #{sorted.size} hyphen-variant folds to #{HYPHEN_VARIANT_MAP_FILENAME}"
+  link_runtime_spelling_hyphen_symlinks! if final_mode? && rhymecrime_build_dir
 end
 
 # --- ConceptNet edge map build ---
@@ -1007,7 +1143,7 @@ end
 #
 # Vocab list gzip when assertions exist: built by ensure_conceptnet_vocab_cache_for_build! (dict-build) or
 # setup.sh / bin/preprocess-conceptnet. conceptnet_headwords_intersecting aborts if cache still missing/stale.
-# Path: CONCEPTNET_VOCAB_CACHE_GZ, else <repo>/generated/<assertions-basename>.en-kept-vocab.txt.gz.
+# Path: CONCEPTNET_VOCAB_CACHE_GZ, else <repo>/generated/conceptnet_assertions.txt.gz.
 CONCEPTNET_ASSERTIONS_GZ = "conceptnet-assertions-5.7.0.csv.gz"
 CONCEPTNET_KEEP_RELATIONS = %w[
   /r/RelatedTo /r/Synonym /r/IsA /r/HasA /r/PartOf /r/UsedFor /r/CapableOf
@@ -1075,11 +1211,10 @@ end
 
 def conceptnet_vocab_cache_derived_gz_path(assertions_path)
   return nil unless assertions_path
-  stem = File.basename(assertions_path).sub(/\.csv\.gz\z/i, "").sub(/\.gz\z/i, "")
-  File.join(GENERATED_DIR, "#{stem}#{CONCEPTNET_VOCAB_CACHE_SUFFIX}")
+  File.join(GENERATED_ROOT_DIR, CONCEPTNET_VOCAB_CACHE_FILENAME)
 end
 
-# Canonical vocab-cache path (read + write): CONCEPTNET_VOCAB_CACHE_GZ if set, else under GENERATED_DIR.
+# Canonical vocab-cache path (read + write): CONCEPTNET_VOCAB_CACHE_GZ if set, else under GENERATED_ROOT_DIR.
 def conceptnet_vocab_cache_output_gz_path(assertions_path = nil)
   assertions_path ||= conceptnet_assertions_gz_path
   return nil unless assertions_path
@@ -1111,9 +1246,8 @@ end
 
 # Loads vocab entries from a cache built by build_conceptnet_vocab_cache! (skips # comments).
 def conceptnet_vocab_load(cache_gz_path)
-  require "zlib"
   s = Set.new
-  Zlib::GzipReader.open(cache_gz_path, encoding: "UTF-8") do |gz|
+  BuildIo.gzip_read(cache_gz_path, encoding: "UTF-8", hint: "conceptnet_vocab_load") do |gz|
     gz.each_line do |line|
       w = line.rstrip
       next if w.empty? || w.start_with?("#")
@@ -1139,8 +1273,7 @@ def each_conceptnet_kept_en_en_lemma_pair(gz_path)
   return enum_for(:each_conceptnet_kept_en_en_lemma_pair, gz_path) unless block_given?
 
   keep = CONCEPTNET_KEEP_RELATION_INDEX
-  require "zlib"
-  Zlib::GzipReader.open(gz_path, encoding: "UTF-8") do |gz|
+  BuildIo.gzip_read(gz_path, encoding: "UTF-8", hint: "each_conceptnet_kept_en_en_lemma_pair") do |gz|
     gz.each_line do |line|
       next unless line.include?("/c/en/")
       parts = line.split("\t", 5)
@@ -1185,24 +1318,15 @@ def build_conceptnet_vocab_cache!(output_path: nil)
   output_path
 end
 
-# Subset of dict_set that have a Numberbatch row (lowercase a-z and underscore in the embedding file).
+# Subset of dict_set that have a Numberbatch row. Reads the setup-produced
+# corpus mirror (generated/numberbatch_vectors.msgpack) — the entire 19.08
+# corpus is mirrored into msgpack at setup time, so build-time dict-attestation
+# probes never need to re-scan the raw .txt.
 def numberbatch_headwords_intersecting(dict_set)
   return Set.new if dict_set.nil? || dict_set.empty?
-  txt_path = numberbatch_txt_path
-  return Set.new unless txt_path
   by_nb = dict_set.group_by { |w| hyphens_to_underscores(w) }
   out = Set.new
-  first = true
-  File.foreach(txt_path, encoding: "UTF-8") do |line|
-    if first
-      first = false
-      next
-    end
-    line = line.scrub
-    sp = line.index(" ") || line.index("\t")
-    next unless sp && sp.positive?
-    token = line.byteslice(0, sp).scrub
-    next unless token.match?(/\A[a-z][a-z_]*\z/)
+  numberbatch_corpus_token_set_cached.each do |token|
     by_nb[token]&.each { |w| out.add(w) }
   end
   out
@@ -1212,7 +1336,11 @@ end
 def conceptnet_headwords_intersecting(dict_set)
   return Set.new if dict_set.nil? || dict_set.empty?
   gz_path = conceptnet_assertions_gz_path
-  return Set.new unless gz_path
+  unless gz_path
+    raise "ConceptNet assertions not found for headword intersection. " \
+          "Run ./bin/setup-corpora to download corpora/conceptnet/conceptnet-assertions-*.csv.gz " \
+          "(or set CONCEPTNET_ASSERTIONS_GZ to its absolute path)."
+  end
 
   cache_path = conceptnet_vocab_cache_output_gz_path(gz_path)
   unless cache_path
@@ -1243,13 +1371,6 @@ def conceptnet_headwords_intersecting(dict_set)
   end
 end
 
-# Path of the pre-canonicalization edges cache derived from assertions_path.
-def conceptnet_edges_cache_derived_path(assertions_path)
-  return nil unless assertions_path
-  stem = File.basename(assertions_path).sub(/\.csv\.gz\z/i, "").sub(/\.gz\z/i, "")
-  File.join(GENERATED_DIR, "#{stem}#{CONCEPTNET_EDGES_CACHE_SUFFIX}")
-end
-
 # Stable signature of the kept-relations set; embedded in the cache header so the cache invalidates
 # when the set changes (rebuilding with a wider/narrower keep list otherwise risks silent staleness).
 def conceptnet_keep_relations_signature
@@ -1257,25 +1378,37 @@ def conceptnet_keep_relations_signature
   Digest::SHA1.hexdigest(CONCEPTNET_KEEP_RELATION_INDEX.keys.sort.join(","))
 end
 
-def conceptnet_edges_cache_usable?(assertions_gz, cache_path)
-  return false unless cache_path && File.file?(cache_path) && !File.zero?(cache_path)
-  return false unless assertions_gz && File.file?(assertions_gz)
-  File.mtime(cache_path) >= File.mtime(assertions_gz)
-end
+# Mirror the entire kept-relation ConceptNet edge set to disk as a streaming msgpack file:
+#
+#   record 0 (header): {"format" => CONCEPTNET_EDGES_STREAM_FORMAT,
+#                       "keep_signature" => sha1(CONCEPTNET_KEEP_RELATIONS),
+#                       "n_triples" => N}
+#   records 1..N      : [w1, w2, weight]   # raw conceptnet lemmas, w1 < w2
+#
+# Independent of word_dict (matching numberbatch_vectors.msgpack: stable
+# corpus-derived artifact). Loaders apply hyphens_to_underscores +
+# relatedness_canonical_spelling_for_conceptnet_lemma at load time using the
+# current word_dict + lemma_map, so a word transitioning from forbidden to
+# common gains coverage without rebuilding this cache. Re-run only when the
+# corpus assertions file or the kept-relations set changes — see
+# ensure_conceptnet_edges_cache! for the setup-time staleness check.
+def save_conceptnet_edges!(out_path = nil)
+  gz_path = conceptnet_assertions_gz_path
+  unless gz_path
+    raise "ConceptNet assertions not found. Run ./bin/setup-corpora to fetch " \
+          "corpora/conceptnet/conceptnet-assertions-*.csv.gz (or set " \
+          "CONCEPTNET_ASSERTIONS_GZ to its absolute path)."
+  end
+  ensure_generated_dict_dir!
+  out_path ||= generated_root_path(CONCEPTNET_EDGES_FILENAME)
 
-# Streaming scan of assertions_gz → cache_path msgpack.gz with all kept English-English edges as
-# pre-canonicalization triples (w1, w2, weight) where w1 < w2. Output is a pure function of the
-# assertions file + CONCEPTNET_KEEP_RELATIONS, so it survives across dict builds that vary only in
-# word_dict. Header records the keep-relations signature so a relation-set change forces a rescan.
-def build_conceptnet_filtered_edges_cache!(assertions_gz, cache_path)
-  require 'zlib'
   keep = CONCEPTNET_KEEP_RELATION_INDEX
   triples = {}
   lines = 0
-  Zlib::GzipReader.open(assertions_gz, encoding: "UTF-8") do |gz|
+  BuildIo.gzip_read(gz_path, encoding: "UTF-8", hint: "save_conceptnet_edges") do |gz|
     gz.each_line do |line|
       lines += 1
-      print "." if lines % 5_000_000 == 0
+      print "." if (lines % 5_000_000).zero?
       next unless line.include?("/c/en/")
       parts = line.split("\t", 5)
       next if parts.length < 5
@@ -1295,86 +1428,149 @@ def build_conceptnet_filtered_edges_cache!(assertions_gz, cache_path)
       triples[key] = weight if prev.nil? || weight > prev
     end
   end
-  FileUtils.mkdir_p(File.dirname(cache_path))
-  Zlib::GzipWriter.open(cache_path) do |gz|
-    packer = MessagePack::Packer.new(gz)
-    packer.pack({
-      "version" => 1,
+  puts if lines >= 5_000_000
+
+  BuildIo.stream_write(out_path, hint: "save_conceptnet_edges") do |out|
+    packer = MessagePack::Packer.new(out)
+    packer.write({
+      "format" => CONCEPTNET_EDGES_STREAM_FORMAT,
       "keep_signature" => conceptnet_keep_relations_signature,
       "n_triples" => triples.size,
     })
+    written = 0
     triples.each do |key, weight|
       a, b = key.split("\x00", 2)
-      packer.pack(a)
-      packer.pack(b)
-      packer.pack(weight)
+      packer.write([a, b, weight])
+      written += 1
+      packer.flush if (written % 100_000).zero?
     end
     packer.flush
   end
-  puts "\nwrote ConceptNet filtered-edges cache #{cache_path} (#{triples.size} triples)"
+  size_mb = File.size(out_path) / 1024.0 / 1024.0
+  puts "Wrote #{triples.size} ConceptNet edges to #{CONCEPTNET_EDGES_FILENAME} (#{size_mb.round(1)} MB)"
   triples.size
 end
 
-# Yields each [w1, w2, weight] from a previously built cache. Returns nil if the cache's
-# keep_signature doesn't match current CONCEPTNET_KEEP_RELATIONS (so the caller falls back to
-# rebuilding); returns the triple count on success.
-def each_conceptnet_cached_edge(cache_path)
-  return enum_for(:each_conceptnet_cached_edge, cache_path) unless block_given?
-  require 'zlib'
-  Zlib::GzipReader.open(cache_path) do |gz|
-    unpacker = MessagePack::Unpacker.new(gz)
+# Yields [w1, w2, weight] for every record in the streaming ConceptNet edges
+# cache file. Caller decides what to do with each triple (filter, materialize,
+# count) — the on-disk file is never fully buffered. Raises if the file is
+# missing or its header doesn't match the current format / keep-signature
+# (operator must rerun ./bin/setup-corpora, which calls
+# ensure_conceptnet_edges_cache!).
+def each_conceptnet_edge_streaming(path)
+  return enum_for(:each_conceptnet_edge_streaming, path) unless block_given?
+  raise "ConceptNet edges file missing: #{path} (run save_conceptnet_edges!)" unless File.exist?(path)
+
+  BuildIo.stream_read(path, hint: "conceptnet_edges") do |io|
+    unpacker = MessagePack::Unpacker.new(io)
     header = unpacker.read
-    unless header.is_a?(Hash) && header["keep_signature"] == conceptnet_keep_relations_signature
-      return nil
+    unless header.is_a?(Hash) && header["format"] == CONCEPTNET_EDGES_STREAM_FORMAT
+      raise "ConceptNet edges file at #{path} has unexpected header #{header.inspect}; " \
+            "expected format=#{CONCEPTNET_EDGES_STREAM_FORMAT.inspect}. Regenerate via save_conceptnet_edges!."
     end
-    n = header["n_triples"].to_i
-    n.times do
-      w1 = unpacker.read
-      w2 = unpacker.read
-      weight = unpacker.read
-      yield w1, w2, weight
+    if header["keep_signature"] != conceptnet_keep_relations_signature
+      raise "ConceptNet edges file at #{path} has stale keep_signature " \
+            "#{header['keep_signature'].inspect} (expected #{conceptnet_keep_relations_signature.inspect}); " \
+            "CONCEPTNET_KEEP_RELATIONS changed. Regenerate via save_conceptnet_edges!."
     end
-    n
+    begin
+      loop do
+        rec = unpacker.read
+        yield rec[0], rec[1], rec[2]
+      end
+    rescue EOFError
+      # end of stream
+    end
   end
 end
 
-def save_conceptnet_edge_map!(full_word_dict_keys, lemma_map)
-  gz_path = conceptnet_assertions_gz_path
-  unless gz_path
-    puts "Skipping ConceptNet edge map: no conceptnet-assertions*.csv.gz under #{File.join(REPO_ROOT, 'corpora')} or repo root (set CONCEPTNET_ASSERTIONS_GZ=/path/to/file.gz)"
-    return
-  end
-  cache_path = conceptnet_edges_cache_derived_path(gz_path)
-  unless cache_path && conceptnet_edges_cache_usable?(gz_path, cache_path)
-    puts "ConceptNet filtered-edges cache missing or stale; building #{cache_path} (long scan)…"
-    build_conceptnet_filtered_edges_cache!(gz_path, cache_path)
-  end
-
-  dict_set = full_word_dict_keys.to_set
+# Stream-load the corpus-mirror ConceptNet edges and materialize the
+# per-build/per-runtime filtered + canonicalized {key => weight} hash that
+# signals.rb / rarity_classifier.rb consume.
+#
+# dict_set:      Set<String> of word_dict keys (any spelling — both hyphenated
+#                and underscored forms are looked up).
+# lemma_lookup:  Hash<String, String> mapping headword → its base lemma. At
+#                build time this is compute_lemma_map(word_dict); at runtime
+#                it's $word_to_lemma loaded from word_lemma_map.msgpack.
+#
+# Returns Hash<String, Float> with keys "u1|u2" where u1 < u2 are
+# hyphens_to_underscores'd dict-canonical spellings, matching the edge-map shape
+# that conceptnet_edge_weight / conceptnet_adjacency consume.
+def load_conceptnet_edges_streaming(path, dict_set:, lemma_lookup:)
   edges = {}
-  accumulate = lambda do |w1, w2, weight|
+  each_conceptnet_edge_streaming(path) do |w1, w2, weight|
     next unless conceptnet_dict_includes_lemma?(dict_set, w1) || conceptnet_dict_includes_lemma?(dict_set, w2)
-    c1 = relatedness_canonical_spelling_for_conceptnet_lemma(w1, dict_set, lemma_map)
-    c2 = relatedness_canonical_spelling_for_conceptnet_lemma(w2, dict_set, lemma_map)
+    c1 = relatedness_canonical_spelling_for_conceptnet_lemma(w1, dict_set, lemma_lookup)
+    c2 = relatedness_canonical_spelling_for_conceptnet_lemma(w2, dict_set, lemma_lookup)
     u1 = hyphens_to_underscores(c1)
     u2 = hyphens_to_underscores(c2)
     next if u1 == u2
     key = [u1, u2].sort.join("|")
     edges[key] = weight if weight > (edges[key] || 0)
   end
+  edges
+end
 
-  used_cache = each_conceptnet_cached_edge(cache_path, &accumulate)
-  if used_cache.nil?
-    puts "ConceptNet filtered-edges cache had stale keep-relations signature; rebuilding"
-    build_conceptnet_filtered_edges_cache!(gz_path, cache_path)
-    edges.clear
-    each_conceptnet_cached_edge(cache_path, &accumulate)
+# Decide whether the ConceptNet edges cache needs (re)building. Returns a
+# reason string, or nil if the cache is fresh and in the current streaming
+# format with the right keep-signature.
+def conceptnet_edges_cache_rebuild_reason
+  out_path = generated_root_path(CONCEPTNET_EDGES_FILENAME)
+  return "missing #{out_path}" unless File.exist?(out_path)
+
+  gz_path = conceptnet_assertions_gz_path
+  if gz_path && File.mtime(out_path) < File.mtime(gz_path)
+    return "stale (assertions newer than cache)"
   end
 
-  ensure_generated_dict_dir!
-  path = generated_dict_path_under_dict_dir(CONCEPTNET_EDGES_FILENAME)
-  File.write(path, JSON.generate(edges), encoding: "UTF-8")
-  puts "Wrote #{edges.size} ConceptNet edges to #{CONCEPTNET_EDGES_FILENAME}"
+  begin
+    BuildIo.stream_read(out_path, hint: "conceptnet_edges header_check") do |io|
+      header = MessagePack::Unpacker.new(io).read
+      unless header.is_a?(Hash) && header["format"] == CONCEPTNET_EDGES_STREAM_FORMAT
+        return "old format (header=#{header.inspect}); current format=#{CONCEPTNET_EDGES_STREAM_FORMAT.inspect}"
+      end
+      if header["keep_signature"] != conceptnet_keep_relations_signature
+        return "stale keep_signature (CONCEPTNET_KEEP_RELATIONS changed)"
+      end
+    end
+  rescue StandardError => e
+    return "header probe failed: #{e.class} #{e.message}"
+  end
+
+  nil
+end
+
+# Idempotent setup-time precondition: rebuild generated/conceptnet_edges.msgpack
+# from the corpora/conceptnet/* assertions when missing, stale, or
+# format/signature mismatch. Cheap mtime + header probe in steady state. Called
+# from bin/setup-corpora, not dict-build: dict builds should consume this stable
+# corpus mirror and fail if setup has not produced it.
+def ensure_conceptnet_edges_cache!
+  reason = conceptnet_edges_cache_rebuild_reason
+  return unless reason
+
+  out_path = generated_root_path(CONCEPTNET_EDGES_FILENAME)
+  if reason.start_with?("missing ")
+    puts "ConceptNet edges cache build: #{out_path}"
+  else
+    puts "ConceptNet edges cache rebuild: #{reason}"
+  end
+  save_conceptnet_edges!
+end
+
+def require_conceptnet_edges_cache!
+  out_path = generated_root_path(CONCEPTNET_EDGES_FILENAME)
+  reason = if File.exist?(out_path)
+             conceptnet_edges_cache_rebuild_reason
+           else
+             "missing #{out_path}"
+           end
+  return unless reason
+
+  raise "ConceptNet edges cache is not ready: #{reason}. Run ./bin/setup-corpora " \
+        "to create #{CONCEPTNET_EDGES_FILENAME}; bin/build intentionally does not " \
+        "rebuild corpus mirrors."
 end
 
 # --- Numberbatch vector build ---
@@ -1399,52 +1595,61 @@ def numberbatch_txt_path
   nil
 end
 
-# First-column headword tokens in the Numberbatch embedding file (underscore spelling, /c/en/-style).
-def numberbatch_corpus_token_set(txt_path)
-  s = Set.new
-  first = true
-  File.foreach(txt_path, encoding: "UTF-8") do |line|
-    if first
-      first = false
-      next
-    end
-    line = line.scrub
-    sp = line.index(" ") || line.index("\t")
-    next unless sp && sp.positive?
+# Set of every Numberbatch headword token (underscore spelling, /c/en/ shape).
+# Reads the setup-time corpus mirror at generated/numberbatch_vectors.msgpack
+# instead of streaming the raw 600 MB .txt during dict-build. Memoized per
+# process; the mirror itself is rebuilt only when the source corpus changes
+# (see ensure_numberbatch_vectors_cache!).
+def numberbatch_corpus_token_set_cached
+  return $numberbatch_corpus_token_set_cached unless $numberbatch_corpus_token_set_cached.nil?
 
-    token = line.byteslice(0, sp).scrub
-    next unless token.match?(/\A[a-z][a-z_]*\z/)
-
-    s.add(token)
+  path = generated_root_path(NUMBERBATCH_VECTORS_FILENAME)
+  unless File.exist?(path)
+    raise "Numberbatch corpus mirror not found at #{path}. " \
+          "Run ./bin/setup-corpora to create it."
   end
-  s
+
+  s = Set.new
+  BuildIo.stream_read(path, hint: "numberbatch_corpus_token_set_cached") do |io|
+    unpacker = MessagePack::Unpacker.new(io)
+    header = unpacker.read
+    unless header.is_a?(Hash) && header["format"] == NUMBERBATCH_STREAM_FORMAT
+      raise "Numberbatch vectors file at #{path} has unexpected header #{header.inspect}; " \
+            "expected #{NUMBERBATCH_STREAM_FORMAT.inspect}. Rerun ./bin/setup-corpora."
+    end
+    begin
+      loop do
+        rec = unpacker.read
+        word, _bin = rec
+        s.add(word)
+      end
+    rescue EOFError
+      # end of stream
+    end
+  end
+  $numberbatch_corpus_token_set_cached = s
 end
 
-# Cue and single-token target spellings from USF Cue_Target_Pairs shards under corpora/usf/.
+# Cue and single-token target spellings from the setup-produced USF cache
+# (generated/usf_associations.json) — every key, plus every per-cue target,
+# rather than re-parsing the raw Cue_Target_Pairs.* shards during dict-build.
+# Memoized per process.
 def usf_corpus_word_set
-  dir = File.join(REPO_ROOT, "corpora", "usf")
-  s = Set.new
-  return s unless Dir.exist?(dir)
+  return $usf_corpus_word_set_cached unless $usf_corpus_word_set_cached.nil?
 
-  Dir.glob(File.join(dir, "Cue_Target_Pairs.*")).sort.each do |path|
-    File.foreach(path, encoding: "UTF-8") do |line|
-      line = line.scrub
-      next if line.include?("CUE,")
-      next unless line.match?(/\A[A-Z]/)
-
-      parts = line.split(",", 3)
-      next if parts.length < 2
-
-      cue = parts[0]
-      target = parts[1]
-      next unless cue && target
-
-      s.add(cue.strip.downcase)
-      ts = target.strip.downcase
-      s.add(ts) if ts.match?(/\A[a-z][a-z0-9'-]*\z/)
-    end
+  path = generated_root_path(USF_ASSOCIATIONS_FILENAME)
+  unless File.exist?(path)
+    raise "USF associations cache not found at #{path}. " \
+          "Run ./bin/setup-corpora to create it."
   end
-  s
+
+  graph = JSON.parse(BuildIo.read(path, encoding: "UTF-8", hint: "usf_corpus_word_set"))
+  s = Set.new
+  graph.each do |cue, targets|
+    s.add(cue)
+    targets.each_key { |t| s.add(t) if t.match?(/\A[a-z][a-z0-9'-]*\z/) }
+  end
+  $usf_corpus_word_set_cached = s
 end
 
 # ConceptNet English vocab for attestation checks; nil if assertions/cache unavailable.
@@ -1459,49 +1664,125 @@ def conceptnet_vocab_for_attestation
   conceptnet_vocab_load_cached(cache_path)
 end
 
-def save_numberbatch_vectors!(word_keys)
+NUMBERBATCH_STREAM_FORMAT = "nbvec_stream_v1"
+
+# Mirror the entire numberbatch corpus to disk as a streaming msgpack file:
+#
+#   record 0 (header): {"format" => NUMBERBATCH_STREAM_FORMAT, "dtype" => "f4_le"}
+#   records 1..N      : [word_str, vec_binary]
+#                       vec_binary = Numo::SFloat.cast(L2-normalized vec).to_binary
+#                       (300 × 4 bytes for the 19.08 release; loader infers dim
+#                       from bytesize so other releases work without a config bump.)
+#
+# Independent of word_dict — covers every lowercase token in the source corpus.
+# Loaders (numberbatch_table, load_numberbatch_vectors_for_semantic_base_guard)
+# stream the file and only materialize entries matching their dict-membership
+# predicate, so a word transitioning from forbidden to common gains coverage
+# without rebuilding this cache. Re-run only when corpora/numberbatch/*.txt
+# changes — see ensure_numberbatch_vectors_cache! for the staleness check
+# triggered automatically by rebuild_rhymecrime_dictionaries.
+def save_numberbatch_vectors!
   txt_path = numberbatch_txt_path
   unless txt_path
     puts "Skipping Numberbatch vectors: no numberbatch*.txt under #{File.join(REPO_ROOT, 'corpora')} or repo root (set NUMBERBATCH_TXT=/path/to/file.txt)"
     return
   end
-  dict_set = word_keys.to_set
-  dict_by_nb = dict_set.group_by { |w| hyphens_to_underscores(w) }
-  vectors = {}
-  first = true
-  File.foreach(txt_path, encoding: "UTF-8") do |line|
-    if first
-      first = false
-      next
-    end
-    line = line.scrub
-    parts = line.rstrip.split(" ")
-    word = parts[0]&.scrub
-    next unless word&.match?(/\A[a-z][a-z_]*\z/)
-    next unless dict_by_nb[word]
-    vec = parts[1..].map(&:to_f)
-    mag = Math.sqrt(vec.sum { |v| v * v })
-    next if mag == 0
-    vec.map! { |v| (v / mag).round(5) }
-    vectors[word] = vec
-  end
+  require "numo/narray"
+
   ensure_generated_dict_dir!
-  path = generated_dict_path_under_dict_dir(NUMBERBATCH_VECTORS_FILENAME)
-  File.binwrite(path, vectors.to_msgpack)
-  size_mb = File.size(path) / 1024.0 / 1024.0
-  puts "Wrote #{vectors.size} Numberbatch vectors to #{NUMBERBATCH_VECTORS_FILENAME} (#{size_mb.round(1)} MB)"
+  out_path = generated_root_path(NUMBERBATCH_VECTORS_FILENAME)
+  count = 0
+  dim_seen = nil
+  BuildIo.stream_write(out_path, hint: "save_numberbatch_vectors") do |out|
+    packer = MessagePack::Packer.new(out)
+    packer.write({ "format" => NUMBERBATCH_STREAM_FORMAT, "dtype" => "f4_le" })
+    first = true
+    BuildIo.foreach(txt_path, encoding: "UTF-8",
+                             hint: "save_numberbatch_vectors corpus_scan") do |line|
+      if first
+        first = false
+        next
+      end
+      line = line.scrub
+      parts = line.rstrip.split(" ")
+      word = parts[0]&.scrub
+      next unless word && word.match?(/\A[a-z][a-z_]*\z/)
+      vec = parts[1..].map(&:to_f)
+      mag = Math.sqrt(vec.sum { |v| v * v })
+      next if mag == 0
+      vec.map! { |v| (v / mag).round(5) }
+      sf = Numo::SFloat.cast(vec)
+      dim_seen ||= sf.size
+      packer.write([word, sf.to_binary])
+      count += 1
+      packer.flush if (count % 50_000).zero?
+    end
+    packer.flush
+  end
+  size_mb = File.size(out_path) / 1024.0 / 1024.0
+  puts "Wrote #{count} Numberbatch corpus vectors (dim=#{dim_seen}) to #{NUMBERBATCH_VECTORS_FILENAME} (#{size_mb.round(1)} MB)"
+end
+
+# Yields [word_underscored, Numo::SFloat] for every record in the streaming
+# Numberbatch cache file. Caller decides what to do with each pair (filter,
+# materialize, count, etc.) — the on-disk file is never fully buffered.
+# Raises if the file is missing or its header doesn't match the current format
+# (operator must regenerate via save_numberbatch_vectors! /
+# ensure_numberbatch_vectors_cache!).
+def each_numberbatch_vector_streaming(path)
+  return enum_for(:each_numberbatch_vector_streaming, path) unless block_given?
+  raise "Numberbatch vectors file missing: #{path} (run save_numberbatch_vectors!)" unless File.exist?(path)
+
+  require "numo/narray"
+  BuildIo.stream_read(path, hint: "numberbatch_vectors") do |io|
+    unpacker = MessagePack::Unpacker.new(io)
+    header = unpacker.read
+    unless header.is_a?(Hash) && header["format"] == NUMBERBATCH_STREAM_FORMAT
+      raise "Numberbatch vectors file at #{path} has unexpected header #{header.inspect}; " \
+            "expected #{NUMBERBATCH_STREAM_FORMAT.inspect}. Regenerate via save_numberbatch_vectors!."
+    end
+    begin
+      loop do
+        rec = unpacker.read
+        word, bin = rec
+        yield word, Numo::SFloat.from_binary(bin)
+      end
+    rescue EOFError
+      # end of stream
+    end
+  end
+end
+
+# Stream-load the Numberbatch cache, materializing only entries whose underscored
+# spelling is in keep_underscored (a Set or Array). Returns Hash<String, Numo::SFloat>.
+# Pass nil to keep everything (rare; typically only useful for one-off audits — RAM
+# footprint is ~3.6 GB for the full 19.08 corpus).
+def load_numberbatch_vectors_streaming(path, keep_underscored: nil)
+  keep = keep_underscored.is_a?(Set) ? keep_underscored : (keep_underscored && Set.new(keep_underscored))
+  out = {}
+  each_numberbatch_vector_streaming(path) do |word, sf|
+    next if keep && !keep.include?(word)
+    out[word] = sf
+  end
+  out
 end
 
 def load_hyphen_multi_fold_map_from_disk
+  return nil if bootstrap_mode?
+
   path = generated_dict_path(HYPHEN_VARIANT_MAP_FILENAME)
   return nil unless File.exist?(path)
-  raw = JSON.parse(File.read(path, encoding: "UTF-8"))
+  raw = JSON.parse(BuildIo.read(path, encoding: "UTF-8", hint: "load_hyphen_multi_fold_map_from_disk"))
   out = {}
   raw.each do |fold, arr|
     out[fold] = arr.freeze
   end
   out.freeze
-rescue JSON::ParserError, SystemCallError
+rescue Errno::ENOENT
+  # File was removed between the exist? check and the read (e.g. another build
+  # invalidated the symlink). Caller falls back to rebuilding from $word_dict.
+  # JSON::ParserError used to be rescued here too, but a corrupt cache should
+  # halt instead of silently regenerating.
   nil
 end
 
@@ -1790,15 +2071,22 @@ end
 # are skipped at parse time, matching the legacy /A[[:alpha:]]/ filter.
 def load_variants_raw
   result = []
-  auto_path = generated_dict_path(SPELLING_VARIANTS_AUTO_FILENAME)
-  if File.exist?(auto_path)
-    File.foreach(auto_path, chomp: true, encoding: "UTF-8") do |line|
+  auto_path =
+    if bootstrap_mode?
+      nil
+    elsif rhymecrime_build_dir
+      generated_bootstrap_path(SPELLING_VARIANTS_AUTO_FILENAME)
+    else
+      generated_dict_path(SPELLING_VARIANTS_AUTO_FILENAME)
+    end
+  if auto_path && File.exist?(auto_path)
+    BuildIo.foreach(auto_path, chomp: true, encoding: "UTF-8", hint: "load_variants_raw spelling_variants_auto") do |line|
       next unless line =~ /\A[[:alpha:]]/
       forms = line.split.map(&:strip).reject(&:empty?)
       result << forms unless forms.empty?
     end
   end
-  File.foreach(SPELLING_CSV_PATH, chomp: true, encoding: "UTF-8") do |line|
+  BuildIo.foreach(SPELLING_CSV_PATH, chomp: true, encoding: "UTF-8", hint: "load_variants_raw spelling.csv") do |line|
     next unless line =~ /\A[[:alpha:]]/
     forms, _notes = split_spelling_row(line)
     result << forms unless forms.empty?
@@ -2270,7 +2558,7 @@ def load_string_hash(filename)
   # KEY  STRING1 STRING2 ...
   # substitutes "_" with " " in keys after loading
   hash = Hash.new # hash of strings
-  File.foreach(filename, encoding: "UTF-8") do |line|
+  BuildIo.foreach(filename, encoding: "UTF-8", hint: "load_string_hash") do |line|
     if useful_line?(line)
       tokens = line.split
       key = tokens.shift # now TOKENS contains only the value strings
@@ -2286,20 +2574,18 @@ end
 def save_string_hash(hash, filename, header="")
   # sanitizes spaces into underscores
   FileUtils.mkdir_p(File.dirname(filename))
-  @fh = File.open(filename, "w", encoding: "UTF-8")
-  unless header.empty?
-    @fh.puts(header)
-  end
-  hash.each do |key, values|
-    key = key.sanitize
-    @fh.print "#{key} "
-    for value in values do
-      value = value.sanitize
-      @fh.print " #{value}"
+  BuildIo.open(filename, "w", encoding: "UTF-8", hint: "save_string_hash") do |fh|
+    fh.puts(header) unless header.empty?
+    hash.each do |key, values|
+      key = key.sanitize
+      fh.print "#{key} "
+      for value in values do
+        value = value.sanitize
+        fh.print " #{value}"
+      end
+      fh.puts
     end
-    @fh.puts
   end
-  @fh.close
 end
 
 def useful_line?(line)
@@ -2329,12 +2615,12 @@ end
 #
 
 def load_word_dict()
-  pathname = generated_dict_path(WORD_DICT_FILENAME)
+  pathname = generated_dict_path_under_dict_dir(WORD_DICT_FILENAME)
   unless File.exist?(pathname)
     raise "First run ./bin/dict-build to populate #{GENERATED_DIR}/"
   end
   word_dict = Hash.new
-  File.foreach(pathname, encoding: "UTF-8") do |line|
+  BuildIo.foreach(pathname, encoding: "UTF-8", hint: "load_word_dict") do |line|
     next unless useful_line?(line)
 
     parts = line.chomp.split(",", 4)
@@ -2362,54 +2648,74 @@ def load_word_dict()
   word_dict
 end
 
-# Overridden in crime.rb for DynamoDB mode (lexicon_word_entry).
+# Overridden in crime.rb after load (same shape; crime uses lazy word_dict()).
+# Dict-build never loads crime.rb — use $word_dict when the word_dict helper
+# is not defined (see preferred_form_frequency_lookup).
 def lexicon_word_entry(word)
-  word_dict[word]
+  wd = defined?(word_dict) ? word_dict : $word_dict
+  return nil if wd.nil?
+  wd[word]
 end
 
 # Flat {word => lemma} lookup loaded from WORD_LEMMA_MAP_FILENAME (built by
 # dict-build). Only stores word != lemma pairs to keep the file small
 # (~40% of headwords have a non-self lemma); every missing key means "lemma
 # is the word itself", matching the nil-collapse rule in save_word_dict and
-# lexicon_word_entry. A false sentinel means "already checked and the
-# file isn't on disk" — avoids re-stat'ing on every lemma call.
+# lexicon_word_entry.
+#
+# Outside dict-build, missing on disk is fatal (raises) — that used to silently
+# degrade relatedness/rarity to a self-lemma-everywhere regime. Inside dict-build
+# (RHYMECRIME_BUILD_MODE set by bin/dict-build / bin/build), the file legitimately
+# may not exist yet — load_cmudict → semantically_promiscuous? → lemma() runs
+# before save_word_lemma_map! at the bottom of rebuild_rhymecrime_dictionaries.
+# In that window, an empty hash gives identity lemma() which is fine for
+# dict-build's own bootstrap consumers.
 #
 # Must stay a top-level global (not a module constant) so load_word_dict
 # can reset it as part of its invalidation handshake.
 $word_to_lemma = nil
 def load_word_to_lemma!
-  path = generated_dict_path(WORD_LEMMA_MAP_FILENAME)
-  $word_to_lemma = File.exist?(path) ? MessagePackUtils.load_and_unpack(path) : false
+  path = generated_dict_path_under_dict_dir(WORD_LEMMA_MAP_FILENAME)
+  if File.exist?(path)
+    $word_to_lemma = MessagePackUtils.load_and_unpack(path)
+    return
+  end
+  if ENV["RHYMECRIME_BUILD_MODE"].to_s.empty?
+    raise "word→lemma map not found at #{path}. Run ./bin/dict-build (or ./bin/build) " \
+          "to generate it."
+  end
+  $word_to_lemma = {}
 end
 
 # Hot-path inner loop for RelatedWords pair lookups (called thousands of
 # times per page render while coloring set_related tuples). The $word_to_
 # lemma global is checked inline rather than via a helper method so the
 # common warm-path case is one Hash lookup plus one nil check, not two method
-# dispatches. The lexicon_word_entry fallback only fires when the msgpack
-# hasn't been generated yet (pre-dict-build checkout).
+# dispatches. Missing-key collapse to `word` matches the in-memory representation
+# (only word != lemma pairs are stored). load_word_to_lemma! raises on missing
+# disk file unless we're inside dict-build (pre-save bootstrap window).
 def lemma(word)
-  map = $word_to_lemma
-  load_word_to_lemma! if map.nil?
-  map = $word_to_lemma
-  if map
-    m = map[word]
-    return m || word
-  end
-  entry = lexicon_word_entry(word)
-  return word unless entry
-  entry[2] || word
+  load_word_to_lemma! if $word_to_lemma.nil?
+  $word_to_lemma[word] || word
 end
 
 # Lazy $word_to_semantic_base load mirroring load_word_to_lemma!. Map keys
 # are self-lemmas (lookup composes lemma(w) first), values are derivational
-# roots. Missing on disk → false sentinel so subsequent semantic_base calls
-# don't re-stat the file. Reset by load_word_dict when the dictionary is
-# reloaded.
+# roots. Outside dict-build, missing on disk is fatal — was silently degrading
+# relatedness to inflectional-lemma-only previously. Inside dict-build, allow
+# empty so semantic_base() falls back to lemma() (identity in the same window).
 $word_to_semantic_base = nil
 def load_word_to_semantic_base!
-  path = generated_dict_path(WORD_SEMANTIC_BASE_MAP_FILENAME)
-  $word_to_semantic_base = File.exist?(path) ? MessagePackUtils.load_and_unpack(path) : false
+  path = generated_dict_path_under_dict_dir(WORD_SEMANTIC_BASE_MAP_FILENAME)
+  if File.exist?(path)
+    $word_to_semantic_base = MessagePackUtils.load_and_unpack(path)
+    return
+  end
+  if ENV["RHYMECRIME_BUILD_MODE"].to_s.empty?
+    raise "semantic-base map not found at #{path}. Run ./bin/dict-build (or ./bin/build) " \
+          "to generate it."
+  end
+  $word_to_semantic_base = {}
 end
 
 # Hot path for relatedness lookups (R3). Returns the derivational root when
@@ -2429,24 +2735,167 @@ def semantic_base(word)
   map = $word_to_semantic_base
   load_word_to_semantic_base! if map.nil?
   map = $word_to_semantic_base
-  return base unless map
   m = map[base]
   m || base
 end
 
-# One-shot loader for the Numberbatch cosine guard in
-# compute_semantic_base_map. Returns the word_underscored -> Array<Float>
-# hash from numberbatch_vectors.msgpack (already L2-normalized at save time
-# by save_numberbatch_vectors!, so cosine = dot product), or nil when the
-# file is absent. Independent of signals.rb's numberbatch_table — that
-# path casts to Numo::SFloat for hot-path BLAS, but the map build runs once
-# and only needs the dot product, so plain Ruby arrays are fine here. Skipping
-# Numo also keeps dict.rb free of the relatedness pipeline's heavy deps.
-def load_numberbatch_vectors_for_semantic_base_guard
-  path = generated_dict_path(NUMBERBATCH_VECTORS_FILENAME)
-  return nil unless File.exist?(path)
-  raw = MessagePack.unpack(File.binread(path))
-  raw
+# Stream loader for the Numberbatch cosine guard in compute_semantic_base_map.
+# Returns Hash<String, Numo::SFloat> keyed on hyphens-to-underscores word.
+# The cache file is corpus-derived (every Numberbatch token has a row), so we
+# filter by keep_words at load time so the guard only materializes vectors
+# for words actually in the build's word_dict. semantic_base_nb_cosine
+# accepts both Array<Float> and Numo::SFloat values (it dispatches on
+# `respond_to?(:dot)`); Numo is preferred — a single BLAS dot is faster
+# than the per-word fallback loop.
+#
+# Raises if the cache is missing — setup-corpora creates the corpus mirror
+# before bin/build / dict-build consume it.
+def load_numberbatch_vectors_for_semantic_base_guard(keep_words = nil)
+  path = generated_root_path(NUMBERBATCH_VECTORS_FILENAME)
+  unless File.exist?(path)
+    raise "Numberbatch vectors not found at #{path} for semantic-base guard. " \
+          "Run ./bin/setup-corpora to create #{NUMBERBATCH_VECTORS_FILENAME} " \
+          "from corpora/numberbatch/numberbatch-en-19.08.txt."
+  end
+
+  keep = keep_words && keep_words.each_with_object(Set.new) { |w, s| s.add(hyphens_to_underscores(w)) }
+  load_numberbatch_vectors_streaming(path, keep_underscored: keep)
+end
+
+# Locate sorted USF Cue_Target_Pairs.* shards under corpora/usf/. Returns []
+# when corpora/usf isn't on disk (USF data is optional but build-usf-associations
+# fails loudly if invoked anyway).
+def usf_corpus_shards
+  Dir.glob(File.join(REPO_ROOT, "corpora", "usf", "Cue_Target_Pairs.*")).sort
+end
+
+# Cue → {target => fsg} map built from the USF Cue_Target_Pairs.* shards. Used
+# by rarity_signals (build-time) and relatedness/signals (runtime). Mirrors the
+# bin/build-usf-associations script — kept inside utils_rhyme so
+# ensure_usf_associations_cache! can rebuild without spawning a subprocess.
+USF_LEMMA_RE = /\A[a-z][a-z0-9'-]*\z/.freeze
+
+def build_usf_associations!(out_path = nil)
+  out_path ||= generated_root_path(USF_ASSOCIATIONS_FILENAME)
+  shards = usf_corpus_shards
+  raise "no Cue_Target_Pairs.* shards under #{File.join(REPO_ROOT, 'corpora', 'usf')}" if shards.empty?
+
+  graph = Hash.new { |h, k| h[k] = {} }
+  pair_count = 0
+  shards.each do |path|
+    BuildIo.foreach(path, encoding: "UTF-8", hint: "build_usf_associations") do |line|
+      line = line.scrub
+      next if line.include?("CUE,")
+      next unless line.match?(/\A[A-Z]/)
+
+      parts = line.split(",")
+      next if parts.length < 6
+
+      cue = parts[0].strip.downcase
+      target = parts[1].strip.downcase
+      fsg = parts[5].to_s.strip
+      next unless cue.match?(USF_LEMMA_RE) && target.match?(USF_LEMMA_RE)
+      next if fsg.empty?
+
+      f = fsg.to_f
+      next unless f.positive?
+
+      graph[cue][target] = f
+      pair_count += 1
+    end
+  end
+  FileUtils.mkdir_p(File.dirname(out_path))
+  BuildIo.write(out_path, JSON.generate(graph), hint: "build_usf_associations")
+  puts "wrote #{graph.size} cues / #{pair_count} pairs to #{out_path}"
+  graph
+end
+
+# Decide whether the USF associations cache needs (re)building. Returns a
+# reason string, or nil if the cache is fresh.
+def usf_associations_cache_rebuild_reason
+  shards = usf_corpus_shards
+  return nil if shards.empty? # no source data; let downstream raise its own clear error
+
+  out_path = generated_root_path(USF_ASSOCIATIONS_FILENAME)
+  return "missing #{out_path}" unless File.exist?(out_path)
+
+  newest_shard_mtime = shards.map { |p| File.mtime(p) }.max
+  return "stale (USF shard newer than cache)" if File.mtime(out_path) < newest_shard_mtime
+
+  nil
+end
+
+# Idempotent precondition: rebuild generated/usf_associations.json from the
+# corpora/usf/* shards when missing or stale. Cheap mtime check in steady
+# state. Called from rebuild_rhymecrime_dictionaries so a single
+# ./bin/dict-build self-heals after `rm -rf generated/`.
+def ensure_usf_associations_cache!
+  reason = usf_associations_cache_rebuild_reason
+  return unless reason
+
+  out_path = generated_root_path(USF_ASSOCIATIONS_FILENAME)
+  if reason.start_with?("missing ")
+    puts "USF associations cache build: #{out_path}"
+  else
+    puts "USF associations cache rebuild: #{reason}"
+  end
+  build_usf_associations!
+end
+
+# Decide whether the Numberbatch cache needs (re)building. Returns a string
+# describing the reason, or nil if the cache is fresh and in the current
+# streaming format.
+def numberbatch_vectors_cache_rebuild_reason
+  out_path = generated_root_path(NUMBERBATCH_VECTORS_FILENAME)
+  return "missing #{out_path}" unless File.exist?(out_path)
+
+  txt_path = numberbatch_txt_path
+  if txt_path && File.mtime(out_path) < File.mtime(txt_path)
+    return "stale (corpus newer than cache)"
+  end
+
+  begin
+    BuildIo.stream_read(out_path, hint: "numberbatch_vectors header_check") do |io|
+      header = MessagePack::Unpacker.new(io).read
+      return nil if header.is_a?(Hash) && header["format"] == NUMBERBATCH_STREAM_FORMAT
+
+      return "old format (header=#{header.inspect}); current format=#{NUMBERBATCH_STREAM_FORMAT.inspect}"
+    end
+  rescue StandardError => e
+    return "unreadable header: #{e.class}: #{e.message}"
+  end
+end
+
+# Idempotent setup-time precondition for any code path that loads
+# numberbatch_vectors: rebuild from corpora/numberbatch/*.txt only when the
+# cache is missing, stale (corpus mtime > cache mtime), or in an older on-disk
+# format. Cheap mtime + header probe in the steady state. Called from
+# bin/setup-corpora, not dict-build.
+def ensure_numberbatch_vectors_cache!
+  reason = numberbatch_vectors_cache_rebuild_reason
+  return unless reason
+
+  out_path = generated_root_path(NUMBERBATCH_VECTORS_FILENAME)
+  if reason.start_with?("missing ")
+    puts "Numberbatch vectors cache build: #{out_path}"
+  else
+    puts "Numberbatch vectors cache rebuild: #{reason}"
+  end
+  save_numberbatch_vectors!
+end
+
+def require_numberbatch_vectors_cache!
+  out_path = generated_root_path(NUMBERBATCH_VECTORS_FILENAME)
+  reason = if File.exist?(out_path)
+             numberbatch_vectors_cache_rebuild_reason
+           else
+             "missing #{out_path}"
+           end
+  return unless reason
+
+  raise "Numberbatch vectors cache is not ready: #{reason}. Run ./bin/setup-corpora " \
+        "to create #{NUMBERBATCH_VECTORS_FILENAME}; bin/build intentionally does not " \
+        "rebuild corpus mirrors."
 end
 
 def save_word_semantic_base_map!(word_dict, semantic_base_map, transform_for: nil)
@@ -2463,7 +2912,7 @@ def save_word_semantic_base_map!(word_dict, semantic_base_map, transform_for: ni
   MessagePackUtils.pack_and_save(msgpack_path, obj)
   puts "Wrote #{obj.size} word→semantic_base entries to #{msgpack_path} (#{File.size(msgpack_path)} bytes)"
 
-  File.open(txt_path, "w", encoding: "UTF-8") do |f|
+  BuildIo.open(txt_path, "w", encoding: "UTF-8", hint: "save_word_semantic_base_map txt") do |f|
     f.puts "# word\tsemantic_base\ttransform"
     obj.keys.sort.each do |w|
       transform = transform_for ? transform_for[w] : ""
@@ -2493,7 +2942,7 @@ end
 def save_word_dict(word_dict, lemma_map = nil)
   ensure_generated_dict_dir!
   path = generated_dict_path_under_dict_dir(WORD_DICT_FILENAME)
-  f = File.open(path, "w", encoding: "UTF-8")
+  f = BuildIo.open(path, "w", encoding: "UTF-8", hint: "save_word_dict")
   f.puts(WORD_DICT_HEADER)
   for word, word_info in word_dict
     sanitized = word.sanitize
@@ -2570,7 +3019,7 @@ end
 # .txt loader for fresh checkouts pre-dict-build); raises through the
 # usual MessagePack errors otherwise.
 def load_word_dict_msgpack
-  path = generated_dict_path(WORD_DICT_MSGPACK_FILENAME)
+  path = generated_dict_path_under_dict_dir(WORD_DICT_MSGPACK_FILENAME)
   return nil unless File.exist?(path)
   raw = MessagePackUtils.load_and_unpack(path)
   word_dict = {}
@@ -2617,7 +3066,7 @@ end
 # or nil when the msgpack isn't on disk (caller falls back to the .txt
 # loader for fresh checkouts pre-dict-build).
 def load_rime_dict_msgpack
-  path = generated_dict_path(RIME_DICT_MSGPACK_FILENAME)
+  path = generated_dict_path_under_dict_dir(RIME_DICT_MSGPACK_FILENAME)
   return nil unless File.exist?(path)
   raw = MessagePackUtils.load_and_unpack(path)
   out = {}
@@ -2750,7 +3199,7 @@ def save_part_of_speech_map(pos_map)
   path = generated_dict_path_under_dict_dir(PART_OF_SPEECH_FILENAME)
   # word => sorted list of Kaikki-style POS strings (noun, verb, adj, …) after Layer A ∩ WordNet.
   obj = pos_map.keys.sort.to_h { |w| [w, pos_map[w].to_a.sort] }
-  File.write(path, JSON.generate(obj), encoding: "UTF-8")
+  BuildIo.write(path, JSON.generate(obj), encoding: "UTF-8", hint: "save_part_of_speech_map")
 end
 
 #

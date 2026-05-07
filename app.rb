@@ -66,7 +66,7 @@ get "/health" do
       halt 503, "dynamodb: #{e.message}"
     end
   else
-    path = File.join(REPO_ROOT, "generated", "word_dict.txt")
+    path = File.join(REPO_ROOT, "generated", "current", "word_dict.txt")
     halt 503, "missing word_dict" unless File.exist?(path)
 
     "ok file"

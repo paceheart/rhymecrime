@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 #
-# Fetch (and lightly pre-aggregate) every external corpus that bin/dict-build
-# consumes. Idempotent — downloads are skipped if the destination file is
-# already present and non-empty, so re-running this during pipeline testing
-# only re-does the cheap derivations.
+# Fetch (and pre-aggregate) every external corpus that bin/dict-build consumes.
+# Idempotent — downloads are skipped if the destination file is already present
+# and non-empty, and generated corpus mirrors are rebuilt only when missing,
+# stale, or in an older on-disk format.
 #
 # Normally invoked via ./setup.sh, which runs bundle install first and
-# ./bin/dict-build after. You can also run ./bin/setup-corpora directly if
+# ./bin/build after. You can also run ./bin/setup-corpora directly if
 # gems are already installed and you only want to refresh the inputs (e.g. to
 # pick up a new Wiktionary dump without re-resolving the Gemfile).
 #
@@ -60,9 +60,13 @@ if [ ! -s corpora/conceptnet/conceptnet-assertions-5.7.0.csv.gz ]; then
 fi
 ./bin/preprocess-conceptnet
 
+# --- ConceptNet corpus mirror → generated/conceptnet_edges.msgpack -----------
+# Stable full-corpus streamed MessagePack. Runtime/build readers filter it
+# against word_dict at load time, so dict-build never needs to regenerate it.
+bundle exec ruby -I lib -e 'require "rhymecrime/dict/utils_rhyme"; ensure_conceptnet_edges_cache!'
+
 # --- ConceptNet Numberbatch 19.08 English (CC-BY-SA 4.0) --------------------
 # → corpora/numberbatch/numberbatch-en-19.08.txt
-# (dict-build → generated/numberbatch_vectors.msgpack)
 # Official distribution is .txt.gz; gunzip leaves the plain .txt that
 # utils_rhyme.rb expects.
 # https://github.com/commonsense/conceptnet-numberbatch#downloads
@@ -72,3 +76,8 @@ if [ ! -s corpora/numberbatch/numberbatch-en-19.08.txt ]; then
     "https://conceptnet.s3.amazonaws.com/downloads/2019/numberbatch/numberbatch-en-19.08.txt.gz"
   gunzip -f corpora/numberbatch/numberbatch-en-19.08.txt.gz
 fi
+
+# --- Numberbatch corpus mirror → generated/numberbatch_vectors.msgpack -------
+# Stable full-corpus streamed MessagePack. Readers filter it against word_dict at
+# load time, so dict-build / bin/build treat it as a setup-produced input.
+bundle exec ruby -I lib -e 'require "rhymecrime/dict/utils_rhyme"; ensure_numberbatch_vectors_cache!'

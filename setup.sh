@@ -4,9 +4,9 @@
 # each can be re-run in isolation and self-detects already-done state:
 #
 #   bundle install              # Ruby gems pinned in Gemfile / Gemfile.lock
-#   ./bin/setup-corpora         # external corpora + small pre-aggregations
+#   ./bin/setup-corpora         # external corpora + stable corpus mirrors
 #   ./bin/setup-python-venv     # .venv/ for MPNet encoding (sentence-transformers + msgpack)
-#   ./bin/build                 # full pipeline: dict-build (CN+NB + rarity dump),
+#   ./bin/build                 # full pipeline: dict-build (rarity dump),
 #                               # rarity classifier, MPNet sense vectors,
 #                               # relatedness classifier, dict-build rescore
 #
@@ -21,8 +21,8 @@
 # GIL-enabled Python is found on PATH.
 #
 # End-to-end runtime is ~60 min on a fresh clone, dominated by Build Stage
-# 1/4 of bin/build (Numberbatch I/O, ~25 min) and Build Stage 3/4 (MPNet
-# encoding on CPU, ~20 min). Re-runs are much cheaper since each step
+# setup-corpora (Numberbatch + ConceptNet mirror I/O) and Build Stage 3/4
+# (MPNet encoding on CPU, ~20 min). Re-runs are much cheaper since each step
 # short-circuits when its outputs are already on disk and current.
 
 set -euo pipefail

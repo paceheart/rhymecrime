@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+#
+# Run rspec against a specific runtime/-shaped directory by setting
+# RHYMECRIME_RUNTIME_DIR. Lets you compare two builds in parallel — typically
+# generated/current vs. generated/last-known-good — without touching the
+# generated/current symlink.
+#
+# Usage:
+#   ./bin/rspec-against <runtime-dir> [rspec-args...]
+#
+# Examples:
+#   ./bin/rspec-against generated/current
+#   ./bin/rspec-against generated/last-known-good spec/rhyme_spec.rb
+#   ./bin/rspec-against generated/last-known-good -- -e "rhymes with"
+#
+# Run two in parallel from two terminals (or with &):
+#   ./bin/rspec-against generated/current           > /tmp/cur.log &
+#   ./bin/rspec-against generated/last-known-good   > /tmp/lkg.log &
+#   wait
+#   diff /tmp/cur.log /tmp/lkg.log
+#
+# parallel_rspec works too; just set the env var manually:
+#   RHYMECRIME_RUNTIME_DIR=generated/last-known-good \
+#     bundle exec parallel_rspec --runtime-log tmp/parallel_runtime_lkg.log
+# (use a separate --runtime-log per concurrent invocation, otherwise they
+# race on tmp/parallel_runtime_rspec.log).
+
+set -euo pipefail
+
+if [ $# -lt 1 ]; then
+  echo "usage: $0 <runtime-dir> [rspec-args...]" >&2
+  exit 64
+fi
+
+REPO="$(cd "$(dirname "$0")/.." && pwd)"
+RUNTIME="$1"
+shift
+
+case "$RUNTIME" in
+  /*) ABS="$RUNTIME" ;;
+  *)  ABS="$REPO/$RUNTIME" ;;
+esac
+
+if [ ! -e "$ABS" ]; then
+  echo "ERROR: runtime dir does not exist: $ABS" >&2
+  if [ "$(basename "$ABS")" = "last-known-good" ]; then
+    echo "       (run ./bin/this-is-good to bless the current build first)" >&2
+  fi
+  exit 1
+fi
+
+if [ "${1:-}" = "--" ]; then
+  shift
+fi
+
+cd "$REPO"
+echo "[rspec-against] RHYMECRIME_RUNTIME_DIR=$ABS" >&2
+RHYMECRIME_RUNTIME_DIR="$ABS" exec bundle exec rspec "$@"

@@ -19,6 +19,7 @@
 #      (i.e., the sibling that other Wiktionary editors treated as canonical). For
 #      misspelling, the target is always preferred.
 
+require "fileutils"
 require "set"
 require_relative "utils_rhyme"
 
@@ -127,8 +128,14 @@ def emit_spelling_variants_auto!(word_dict, wordfreq_hash, kaikki_variant_map = 
     pairs = dedupe_variant_pairs(pairs)
     apply_compound_inheritance!(pairs)
     ensure_generated_dict_dir!
-    path = generated_dict_path(SPELLING_VARIANTS_AUTO_FILENAME)
-    File.open(path, "w", encoding: "UTF-8") do |f|
+    path =
+      if rhymecrime_build_dir
+        generated_bootstrap_path(SPELLING_VARIANTS_AUTO_FILENAME)
+      else
+        generated_dict_path(SPELLING_VARIANTS_AUTO_FILENAME)
+      end
+    FileUtils.mkdir_p(File.dirname(path))
+    BuildIo.open(path, "w", encoding: "UTF-8", hint: "emit_spelling_variants_auto") do |f|
       f.print(SPELLING_VARIANTS_AUTO_HEADER)
       pairs.each { |preferred, alt| f.puts("#{preferred} #{alt}") }
     end

@@ -26,6 +26,7 @@
 # requiring callers to re-parse the tag syntax.
 
 require "set"
+require_relative "build_io"
 
 VARCON_DATA_PATH = File.expand_path("../../../corpora/varcon/varcon.txt", __dir__)
 
@@ -92,8 +93,8 @@ def load_varcon
   # VarCon has a handful of Latin-1-encoded headwords (fuehrer/führer, Roentgen/Röntgen).
   # Our dict only carries ASCII headwords, so we transcode with :replace to swallow the bad
   # bytes and then skip any spelling that still contains non-ASCII below.
-  File.foreach(VARCON_DATA_PATH, chomp: true, encoding: "ISO-8859-1:UTF-8",
-               invalid: :replace, undef: :replace) do |line|
+  BuildIo.foreach(VARCON_DATA_PATH, chomp: true, encoding: "ISO-8859-1:UTF-8",
+                          invalid: :replace, undef: :replace, hint: "load_varcon") do |line|
     stripped = line.strip
     next if stripped.empty?
 

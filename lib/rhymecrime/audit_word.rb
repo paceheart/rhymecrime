@@ -142,15 +142,15 @@ module Rhymecrime
       io.puts
 
       # --- generated/numberbatch_vectors.msgpack ---
-      nb_path = generated_dict_path(NUMBERBATCH_VECTORS_FILENAME)
+      nb_path = generated_root_path(NUMBERBATCH_VECTORS_FILENAME)
       if File.exist?(nb_path)
-        nb = MessagePack.unpack(File.binread(nb_path))
-        vec = nb[hyphens_to_underscores(w)]
+        wanted = hyphens_to_underscores(w)
+        nb = load_numberbatch_vectors_streaming(nb_path, keep_underscored: Set[wanted])
+        vec = nb[wanted]
+        io.puts "--- #{NUMBERBATCH_VECTORS_FILENAME} ---"
         if vec
-          io.puts "--- #{NUMBERBATCH_VECTORS_FILENAME} ---"
           io.puts "present: yes (dim=#{vec.size})"
         else
-          io.puts "--- #{NUMBERBATCH_VECTORS_FILENAME} ---"
           io.puts "generated corpus #{NUMBERBATCH_VECTORS_FILENAME.inspect} lacks word #{w.inspect}"
         end
       else
@@ -159,19 +159,26 @@ module Rhymecrime
       end
       io.puts
 
-      # --- generated/conceptnet_edges.json ---
-      cn_path = generated_dict_path(CONCEPTNET_EDGES_FILENAME)
+      # --- generated/conceptnet_edges.msgpack ---
+      # Streamed corpus mirror — read raw triples and probe directly for the
+      # word + its underscored form (avoids materializing the full edge map
+      # for what's a single-word audit query).
+      cn_path = generated_root_path(CONCEPTNET_EDGES_FILENAME)
       if File.exist?(cn_path)
-        edges = JSON.parse(File.read(cn_path, encoding: "UTF-8"))
         cnw = hyphens_to_underscores(w)
-        hits = edges.keys.select { |k| k.split("|").include?(w) || k.split("|").include?(cnw) }
+        targets = Set.new([w, cnw, w.tr("_", "-"), cnw.tr("_", "-")])
+        hits = []
+        each_conceptnet_edge_streaming(cn_path) do |w1, w2, _weight|
+          if targets.include?(w1) || targets.include?(w2)
+            hits << "#{w1}|#{w2}"
+            break if hits.size >= 32
+          end
+        end
+        io.puts "--- #{CONCEPTNET_EDGES_FILENAME} ---"
         if hits.any?
-          sample = hits.first(8)
-          io.puts "--- #{CONCEPTNET_EDGES_FILENAME} ---"
-          io.puts "present: #{hits.size} edge key(s); sample: #{sample.inspect}"
+          io.puts "present: #{hits.size}#{'+' if hits.size >= 32} raw corpus edge(s); sample: #{hits.first(8).inspect}"
         else
-          io.puts "--- #{CONCEPTNET_EDGES_FILENAME} ---"
-          io.puts "generated corpus #{CONCEPTNET_EDGES_FILENAME.inspect} has no edge key containing #{w.inspect}"
+          io.puts "corpus mirror #{CONCEPTNET_EDGES_FILENAME.inspect} has no edge containing #{w.inspect} / #{cnw.inspect}"
         end
       else
         io.puts "--- #{CONCEPTNET_EDGES_FILENAME} ---"

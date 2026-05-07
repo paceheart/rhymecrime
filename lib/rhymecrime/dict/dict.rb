@@ -23,11 +23,10 @@
 # ConceptNet vocab cache under generated/ is created by setup.sh after downloading assertions, or
 # automatically at the start of this rebuild if it is missing or older than assertions.gz.
 #
-# Fast-iteration default: bin/dict-build skips the slow ConceptNet edge-map and
-# Numberbatch vector exports at the end (hyphen map and word_dict still run).
-# Use bin/build (the full pipeline orchestrator) — or set
-# RHYMECRIME_DICT_BUILD_CONCEPTNET_NUMBERBATCH=1 explicitly — when those exports
-# need to be refreshed alongside the rhyming dict.
+# ConceptNet edges (generated/conceptnet_edges.msgpack) and Numberbatch vectors
+# (generated/numberbatch_vectors.msgpack) are corpus mirrors created by
+# bin/setup-corpora. dict-build only verifies they are present/current, then
+# readers stream + filter at load (signals.rb / rarity_classifier.rb).
 
 require "rwordnet"
 require "json"
@@ -98,11 +97,6 @@ end
 
 # Lazy path -> frozen Hash of 8-digit synset offset string -> full data-file line (wn_synset_line_for_offset).
 $wn_synset_line_index_by_path = nil
-
-def include_conceptnet_numberbatch_dict_exports?
-  v = ENV["RHYMECRIME_DICT_BUILD_CONCEPTNET_NUMBERBATCH"]
-  v && !v.empty? && %w[1 true yes on].include?(v.downcase)
-end
 
 # True when word and base share at least one WordNet synset (any POS).
 def wn_share_synset?(word, base)
@@ -837,6 +831,12 @@ end
 def rebuild_rhymecrime_dictionaries()
   clear_wordnet_lemma_cache!
   ensure_conceptnet_vocab_cache_for_build!
+  # Cheap generated-root cache checks. USF remains cheap enough to self-heal in
+  # dict-build; the large corpus mirrors are produced by bin/setup-corpora and
+  # treated as build inputs here.
+  ensure_usf_associations_cache!
+  require_numberbatch_vectors_cache!
+  require_conceptnet_edges_cache!
   pronunciation_map = load_cmudict
   pronunciation_map_seed_headwords = pronunciation_map.keys.each_with_object(Set.new) { |k, s| s.add(k) }
   wordfreq_hash = load_wordfreq
@@ -846,8 +846,12 @@ def rebuild_rhymecrime_dictionaries()
   apply_lexical_pos_layer_a!(pos_map)
   wn_seed_pos_map_for_pronunciation_map_gaps!(pos_map, pronunciation_map)
   apply_lexical_pos_layer_b!(pos_map, wordfreq_hash)
+  # POS map is required by crime.rb (part_of_speech_tags) for bin/dump-sense-glosses
+  # and relatedness/signals in Build Stage 3/4, before final dict-build runs.
   save_part_of_speech_map(pos_map)
-  save_wiktionary_glosses!(kaikki_glosses_map)
+  unless bootstrap_mode?
+    save_wiktionary_glosses!(kaikki_glosses_map)
+  end
   merge_wiktionary!(pronunciation_map, wiktionary_prons)
   wiktionary_prons.clear
   wiktionary_prons = nil
@@ -879,6 +883,21 @@ def rebuild_rhymecrime_dictionaries()
   word_dict = build_word_dict(pronunciation_map, rime_dict, subtlex_hash, subtlex_total_hash, wordfreq_hash, wiktionary_words, pos_map, forms_map, kaikki_verb_morph, pronunciation_map_seed_headwords, kaikki_capitalized_only, kaikki_variant_map, varcon_variant_map)
   prune_obsolete_alt_of_only_headwords!(word_dict, rime_dict, kaikki_obsolete_alt_of_only)
   hyphen_fold_build_keys = word_dict.keys
+  if bootstrap_mode?
+    # Minimal runtime checkpoint so bin/dump-sense-glosses (Build Stage 3/4) can
+    # load word_dict / lemma / part_of_speech_tags via crime.rb while generated/current
+    # still points at this build's runtime/ directory (updated by bin/build after pass 1).
+    # ConceptNet edges no longer need a per-build copy — Stage 3 reads the corpus
+    # mirror at generated/conceptnet_edges.msgpack and filters by word_lemma_map.msgpack
+    # at load time (see load_conceptnet_edges_streaming).
+    lemma_checkpoint = compute_lemma_map(word_dict)
+    save_word_dict_msgpack!(word_dict, lemma_checkpoint)
+    save_word_lemma_map!(word_dict, lemma_checkpoint)
+    save_hyphen_variant_map!(hyphen_fold_build_keys, exported_keys: word_dict.keys)
+    puts "bootstrap mode: wrote msgpack checkpoint + bootstrap spelling/hyphen; skipping full lexicon saves"
+    return
+  end
+
   lemma_map = compute_lemma_map(word_dict)
   save_string_hash(rime_dict, generated_dict_path_under_dict_dir(RIME_DICT_FILENAME), RIME_DICT_HEADER)
   save_word_dict(word_dict, lemma_map)
@@ -892,21 +911,16 @@ def rebuild_rhymecrime_dictionaries()
   save_word_dict_msgpack!(word_dict, lemma_map)
   save_rime_dict_msgpack!(rime_dict)
   save_hyphen_variant_map!(hyphen_fold_build_keys, exported_keys: word_dict.keys)
-  if include_conceptnet_numberbatch_dict_exports?
-    rel_bases = relatedness_export_base_headwords(word_dict.keys, lemma_map)
-    save_conceptnet_edge_map!(word_dict.keys, lemma_map)
-    save_numberbatch_vectors!(rel_bases)
-  else
-    puts "Skipping ConceptNet edge map and Numberbatch vectors " \
-         "(set RHYMECRIME_DICT_BUILD_CONCEPTNET_NUMBERBATCH=1 to rebuild, or run ./bin/build)"
-  end
+  # ConceptNet edges + Numberbatch vectors are setup-time corpus mirrors. Both
+  # are filtered + canonicalized at load time, so word_dict changes between
+  # bootstrap and final do not require regenerating either cache.
 
   # Build the semantic base map AFTER Numberbatch is on disk so the cosine
   # guard in compute_semantic_base_map has data to consult. First-run
   # bootstrap (no prior NB msgpack) is fine: when the file is missing the
   # guard silently no-ops and we get the surface-only filtered map; the next
   # build will tighten it.
-  nb_vectors_for_guard = load_numberbatch_vectors_for_semantic_base_guard
+  nb_vectors_for_guard = load_numberbatch_vectors_for_semantic_base_guard(word_dict.keys)
   semantic_base_map, semantic_base_transforms = compute_semantic_base_map(word_dict, lemma_map, nb_vectors: nb_vectors_for_guard)
   save_word_semantic_base_map!(word_dict, semantic_base_map, transform_for: semantic_base_transforms)
 

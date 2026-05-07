@@ -42,7 +42,7 @@ require "rhymecrime/feedback_store"
 # below or the deployed page silently degrades to default browser styling.
 ASSET_ROUTES = {
   "/crimestyle.css"      => ["text/css; charset=utf-8",               File.read(File.join(__dir__, "assets", "crimestyle.css"),      encoding: "UTF-8")],
-  "/crimestyle-wide.css" => ["text/css; charset=utf-8",               File.read(File.join(__dir__, "assets", "crimestyle-wide.css"), encoding: "UTF-8")],
+  "/crimestyle_wide.css" => ["text/css; charset=utf-8",               File.read(File.join(__dir__, "assets", "crimestyle_wide.css"), encoding: "UTF-8")],
   "/feedback.js"         => ["application/javascript; charset=utf-8", File.read(File.join(__dir__, "assets", "feedback.js"),         encoding: "UTF-8")],
 }.freeze
 

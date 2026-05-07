@@ -17,6 +17,8 @@
 # Apostrophe-like Unicode (U+2018/U+2019/U+2032) is folded to ASCII ' in the
 # sort key so a stray smart quote sorts where the ASCII version would.
 
+require_relative "build_io"
+
 module CmudictFileSort
   module_function
 
@@ -24,7 +26,7 @@ module CmudictFileSort
   # (e.g. DÉJÀ as 44 C9 4A C0); transcode only when the file isn't already
   # valid UTF-8 so we never double-encode by re-running this pipeline.
   def read_text(path)
-    raw = File.binread(path)
+    raw = BuildIo.binread(path, hint: "CmudictFileSort.read_text")
     text = raw.dup.force_encoding(Encoding::UTF_8)
     return text if text.valid_encoding?
 

@@ -243,7 +243,7 @@ curated_priority = Hash.new(0)
 related_csv_path = File.expand_path("../curated/related.csv", __dir__)
 if File.exist?(related_csv_path)
   surface_counts = Hash.new(0)
-  CSV.foreach(related_csv_path, headers: true, encoding: "UTF-8") do |row|
+  BuildIo.csv_foreach(related_csv_path, headers: true, encoding: "UTF-8", hint: "compute-relatedness curated priority") do |row|
     surface = row["cue"]&.strip&.downcase
     surface_counts[surface] += 1 if surface && !surface.empty?
   end

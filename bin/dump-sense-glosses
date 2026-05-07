@@ -3,7 +3,7 @@
 #
 # Dump (lemma, sense_idx, text) triples as JSONL for external sentence-transformer
 # encoding (bin/build-sense-vectors.py). Output feeds into
-# generated/model_sense_vectors.msgpack which supplies the modern-embedding
+# generated/<timestamp>/model_sense_vectors.msgpack which supplies the modern-embedding
 # signals in PairSignals (see MODEL_SENSE_VECTORS_FILENAME, related.rb).
 #
 # Each headword contributes:
@@ -64,12 +64,12 @@ require "rhymecrime/crime"
 require "rhymecrime/relatedness/signals"
 require "rwordnet"
 
-options[:output] ||= generated_dict_path("sense_glosses.jsonl")
+options[:output] ||= generated_stamp_path("sense_glosses.jsonl")
 
 lemmas = Set.new
 if options[:limit_csv]
   require "csv"
-  rows = CSV.parse(File.read(options[:limit_csv], encoding: "UTF-8"), headers: true)
+  rows = CSV.parse(BuildIo.read(options[:limit_csv], encoding: "UTF-8", hint: "dump-sense-glosses limit_csv"), headers: true)
   rows.each do |r|
     %w[cue related].each do |col|
       next unless r[col]
@@ -160,7 +160,7 @@ end
 
 written = 0
 headword_only = 0
-File.open(options[:output], "w") do |f|
+BuildIo.open(options[:output], "w", hint: "dump-sense-glosses jsonl") do |f|
   lemmas.sort.each do |word|
     f.puts JSON.generate("word" => word, "sense_idx" => -1, "text" => word)
     written += 1

@@ -4,7 +4,7 @@
 #
 # Importer: fold thumbs-up/down feedback into curated/related.csv as new
 # hand-tag rows. **Default:** scan the prod rhymecrime-feedback DynamoDB table
-# into generated/feedback-from-ddb.csv (or --ddb-out), then import from
+# into generated/feedback_from_ddb.csv (or --ddb-out), then import from
 # that file — the full loop from lib/rhymecrime/feedback_store.rb in one
 # command. Use --from-file to read the local-dev sink (generated/feedback.csv
 # or FEEDBACK_CSV) instead, without touching AWS.
@@ -49,7 +49,7 @@
 #   --export-only           After DDB scan: write --ddb-out CSV + summary
 #                           only; do not append RELATED_CSV. (--from-file
 #                           incompatible.)
-#   --ddb-out=PATH          DDB scan output (default: generated/feedback-from-ddb.csv)
+#   --ddb-out=PATH          DDB scan output (default: generated/feedback_from_ddb.csv)
 #   --table=NAME            Override feedback table name
 #   --region=REGION         AWS region (default: us-east-1 or AWS_REGION)
 #   --no-geo                Skip the ip-api.com geo lookup that annotates
@@ -76,9 +76,11 @@ require "fileutils"
 require "optparse"
 require "set"
 
+require_relative "../lib/rhymecrime/dict/build_io"
+
 ROOT = File.expand_path("..", __dir__)
 DEFAULT_FEEDBACK_CSV = File.join(ROOT, "generated", "feedback.csv")
-DEFAULT_DDB_OUT = File.join(ROOT, "generated", "feedback-from-ddb.csv")
+DEFAULT_DDB_OUT = File.join(ROOT, "generated", "feedback_from_ddb.csv")
 RELATED_CSV_DEFAULT = File.join(ROOT, "curated", "related.csv")
 
 dry_run = !ENV["DRY_RUN"].to_s.strip.empty? && ENV["DRY_RUN"] != "0"
@@ -315,7 +317,7 @@ end
 
 def load_existing_pairs(path)
   seen = Set.new
-  CSV.foreach(path, headers: true, encoding: "UTF-8") do |row|
+  BuildIo.csv_foreach(path, headers: true, encoding: "UTF-8", hint: "augment-related-from-feedback existing") do |row|
     cue = norm(row["cue"])
     rel = norm(row["related"])
     next if cue.empty? || rel.empty?
@@ -371,7 +373,7 @@ end
 
 def replay_feedback(path)
   by_cell = Hash.new { |h, k| h[k] = [] }
-  CSV.foreach(path, headers: true, encoding: "UTF-8") do |row|
+  BuildIo.csv_foreach(path, headers: true, encoding: "UTF-8", hint: "augment-related-from-feedback replay") do |row|
     cue = norm(row["cue"])
     rel = norm(row["related"])
     verdict = norm(row["verdict"])

@@ -156,7 +156,19 @@ def learned_rarity_feature_vector(sig)
 end
 
 RARITY_CLASSIFIER_FILENAME = "rarity_classifier.json"
-RARITY_CLASSIFIER_PATH = generated_dict_path(RARITY_CLASSIFIER_FILENAME) unless defined?(RARITY_CLASSIFIER_PATH)
+
+# Prefer runtime/ (canonical after bin/build cp), then bootstrap/ (trainer output),
+# then generated/current/ for pre-stamped checkouts.
+def rarity_classifier_json_path
+  bd = rhymecrime_build_dir
+  if bd
+    rt = generated_runtime_path(RARITY_CLASSIFIER_FILENAME)
+    return rt if File.exist?(rt)
+    boot = generated_bootstrap_path(RARITY_CLASSIFIER_FILENAME)
+    return boot if File.exist?(boot)
+  end
+  generated_dict_path(RARITY_CLASSIFIER_FILENAME)
+end
 
 $rarity_classifier = nil
 $rarity_classifier_loaded = false
@@ -175,17 +187,17 @@ def rarity_classifier
   return $rarity_classifier if $rarity_classifier_loaded
   $rarity_classifier_loaded = true
   return nil if rarity_classifier_disabled?
-  path = RARITY_CLASSIFIER_PATH
+  path = rarity_classifier_json_path
   unless File.exist?(path)
     raise "rarity classifier not found at #{path}. Train it via:\n" \
-          "  ./bin/build                                     # full four-Build-Stage pipeline (CN+NB + dump + train + relatedness)\n" \
+          "  ./bin/build                                     # full four-Build-Stage pipeline (dump + train + relatedness)\n" \
           "or just the rarity steps manually:\n" \
-          "  RHYMECRIME_RARITY_DUMP_SIGNALS=generated/rarity_signals_dump.jsonl ./bin/dict-build\n" \
+          "  RHYMECRIME_RARITY_DUMP_SIGNALS=<path> ./bin/dict-build\n" \
           "  ./bin/train-rarity-classifier\n" \
           "Or set RHYMECRIME_RARITY_CLASSIFIER=off to skip rescore."
   end
 
-  clf = JSON.parse(File.read(path, encoding: "UTF-8"))
+  clf = JSON.parse(BuildIo.read(path, encoding: "UTF-8", hint: "rarity_classifier"))
   got = clf["feature_names"]
   expected = LEARNED_RARITY_FEATURE_NAMES
   unless got == expected
@@ -423,40 +435,59 @@ RARITY_DUMP_LEAKY_FREQ_SOURCE_PHASES = Set[
 $rarity_usf_associations = nil
 def rarity_usf_associations_for_build
   return $rarity_usf_associations unless $rarity_usf_associations.nil?
-  path = generated_dict_path(USF_ASSOCIATIONS_FILENAME)
+  path = generated_root_path(USF_ASSOCIATIONS_FILENAME)
   unless File.exist?(path)
     raise "USF associations not found at #{path}. Run ./bin/setup-corpora (which calls ./bin/build-usf-associations)."
   end
-  data = JSON.parse(File.read(path, encoding: "UTF-8"))
+  data = JSON.parse(BuildIo.read(path, encoding: "UTF-8", hint: "rarity_usf_associations_for_build"))
   puts "loaded #{data.size} USF cues for rarity signals from #{path}"
   $rarity_usf_associations = data
 end
 
-# Build ConceptNet adjacency for the rarity signal pass from the PREVIOUS build's
-# edges file. First-ever build of a fresh clone: file is absent,
-# conceptnet_adjacency_loaded is false so the classifier can condition on
-# "data not available" rather than "0 degree". Steady-state builds use the prior
-# build's edges — degrees drift until the classifier converges.
+# Build ConceptNet adjacency for the rarity signal pass by streaming the
+# corpus mirror at generated/conceptnet_edges.msgpack and filtering /
+# canonicalizing against the in-memory word_dict being rebuilt (passed via
+# dict_set) plus the prior build's word_lemma_map.msgpack from runtime/
+# (loaded lazily into $word_to_lemma). First-ever build of a fresh clone has
+# no corpus mirror yet; we surface that via cn_adjacency_loaded=false so the
+# classifier can condition on "data not available" rather than "0 degree".
+# Outside dict-build, missing edges are fatal (silent degradation in
+# relatedness training was the bug that motivated this strictness).
 $rarity_cn_adjacency = nil
 $rarity_cn_adjacency_loaded = nil
-def rarity_conceptnet_adjacency_for_build
+def rarity_conceptnet_adjacency_for_build(dict_set:)
   return [$rarity_cn_adjacency, $rarity_cn_adjacency_loaded] unless $rarity_cn_adjacency.nil?
-  path = generated_dict_path(CONCEPTNET_EDGES_FILENAME)
-  if File.exist?(path)
-    edges = JSON.parse(File.read(path, encoding: "UTF-8"))
-    adj = {}
-    edges.each_key do |key|
-      a, b = key.split("|", 2)
-      (adj[a] ||= []) << b
-      (adj[b] ||= []) << a
+  path = generated_root_path(CONCEPTNET_EDGES_FILENAME)
+  unless File.exist?(path)
+    if ENV["RHYMECRIME_BUILD_MODE"].to_s.empty?
+      raise "ConceptNet edges not found at #{path} for rarity signal build. " \
+            "Run ./bin/setup-corpora before train-rarity-classifier."
     end
-    $rarity_cn_adjacency = adj
-    $rarity_cn_adjacency_loaded = true
-    puts "built prior-build ConceptNet adjacency for rarity signals: #{edges.size} edges over #{adj.size} nodes"
-  else
+    puts "rarity_conceptnet_adjacency_for_build: no prior #{path} — first-ever build, " \
+         "cn_adjacency_loaded=false (cn_degree_* features will be marked unavailable)"
     $rarity_cn_adjacency = {}
     $rarity_cn_adjacency_loaded = false
+    return [$rarity_cn_adjacency, $rarity_cn_adjacency_loaded]
   end
+  load_word_to_lemma! if $word_to_lemma.nil?
+  edges = load_conceptnet_edges_streaming(
+    path,
+    dict_set: dict_set,
+    lemma_lookup: $word_to_lemma || {},
+  )
+  if edges.empty?
+    raise "ConceptNet edges file at #{path} produced 0 in-dict edges for rarity signals — " \
+          "would silently zero out cn_degree_*."
+  end
+  adj = {}
+  edges.each_key do |key|
+    a, b = key.split("|", 2)
+    (adj[a] ||= []) << b
+    (adj[b] ||= []) << a
+  end
+  $rarity_cn_adjacency = adj
+  $rarity_cn_adjacency_loaded = true
+  puts "built ConceptNet adjacency for rarity signals: #{edges.size} edges over #{adj.size} nodes (filtered to #{dict_set.size} dict words)"
   [$rarity_cn_adjacency, $rarity_cn_adjacency_loaded]
 end
 
@@ -509,7 +540,7 @@ def rarity_rescore_and_dump!(hash, **ctx_kwargs)
   overrides = clf ? rarity_curated_overrides : {}
   announce_rarity_curated_overrides! if clf
 
-  cn_adj, cn_loaded = rarity_conceptnet_adjacency_for_build
+  cn_adj, cn_loaded = rarity_conceptnet_adjacency_for_build(dict_set: hash.keys.to_set)
   ctx = RarityContext.build(
     usf_associations: rarity_usf_associations_for_build,
     conceptnet_adjacency: cn_adj,
@@ -534,7 +565,7 @@ def rarity_rescore_and_dump!(hash, **ctx_kwargs)
   dump_file = nil
   if dump_enabled
     FileUtils.mkdir_p(File.dirname(dump_path))
-    dump_file = File.open(dump_path, "w", encoding: "UTF-8")
+    dump_file = BuildIo.open(dump_path, "w", encoding: "UTF-8", hint: "rarity_rescore_signals_dump")
   end
 
   # The dump path replaces the seeded/propagated entry[0] with a corpus-only

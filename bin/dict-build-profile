@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
 # Run bin/dict-build under StackProf (sampling profiler: periodic stack snapshots in CPU mode).
 #
-#   ./bin/dict-build-profile                                              # slim default
-#   RHYMECRIME_DICT_BUILD_CONCEPTNET_NUMBERBATCH=1 ./bin/dict-build-profile  # +CN+NB
+#   ./bin/dict-build-profile                       # slim default
 #
 # Output: tmp/stackprof-dict-build-YYYYMMDD-HHMMSS.dump (or STACKPROF_OUT if set).
 # Inspect:

@@ -30,9 +30,9 @@ require_relative "../dict/utils_rhyme"
 
 WordNet::DB.path = File.join(REPO_ROOT, "corpora", "wordnet", "3.1") unless defined?(WordNet::DB) && WordNet::DB.path
 
-CONCEPTNET_EDGES_PATH = generated_dict_path(CONCEPTNET_EDGES_FILENAME) unless defined?(CONCEPTNET_EDGES_PATH)
-NUMBERBATCH_VEC_PATH = generated_dict_path(NUMBERBATCH_VECTORS_FILENAME) unless defined?(NUMBERBATCH_VEC_PATH)
-USF_ASSOCIATIONS_PATH = generated_dict_path(USF_ASSOCIATIONS_FILENAME) unless defined?(USF_ASSOCIATIONS_PATH)
+CONCEPTNET_EDGES_PATH = generated_root_path(CONCEPTNET_EDGES_FILENAME) unless defined?(CONCEPTNET_EDGES_PATH)
+NUMBERBATCH_VEC_PATH = generated_root_path(NUMBERBATCH_VECTORS_FILENAME) unless defined?(NUMBERBATCH_VEC_PATH)
+USF_ASSOCIATIONS_PATH = generated_root_path(USF_ASSOCIATIONS_FILENAME) unless defined?(USF_ASSOCIATIONS_PATH)
 
 # --- Tunable parameters (optimized via anneal.rb / parameter sweeps) ---
 
@@ -109,16 +109,28 @@ $conceptnet_edges = nil
 def conceptnet_edges
   return $conceptnet_edges unless $conceptnet_edges.nil?
   path = CONCEPTNET_EDGES_PATH
-  if File.exist?(path)
-    $conceptnet_edges = JSON.parse(File.read(path, encoding: "UTF-8"))
-    puts "loaded #{$conceptnet_edges.size} ConceptNet edges from #{path}"
-  else
-    $conceptnet_edges = {}
+  unless File.exist?(path)
+    raise "ConceptNet edges not found at #{path}. Run ./bin/setup-corpora " \
+          "to create the setup-time corpus mirror before ./bin/build."
   end
+  # Streaming load filtered by current word_dict membership: the cache file is
+  # a full corpus mirror (every kept-relation edge has a record), so a word
+  # transitioning into word_dict gains coverage without rebuilding the file.
+  # Mirrors signals.rb's numberbatch loader. Caller must have crime.rb loaded
+  # so word_dict + $word_to_lemma are available.
+  load_word_to_lemma! if $word_to_lemma.nil?
+  dict_set = word_dict.keys.to_set
+  $conceptnet_edges = load_conceptnet_edges_streaming(
+    path,
+    dict_set: dict_set,
+    lemma_lookup: $word_to_lemma,
+  )
+  puts "loaded #{$conceptnet_edges.size} ConceptNet edges (filtered to word_dict) from #{path}"
   $conceptnet_edges
 end
 
-# Expects dictionary-lemma spellings (see similarity). Keys match save_conceptnet_edge_map! export.
+# Expects dictionary-lemma spellings (see similarity). Keys match
+# load_conceptnet_edges_streaming output.
 def conceptnet_edge_weight(word1, word2)
   key = [hyphens_to_underscores(word1), hyphens_to_underscores(word2)].sort.join("|")
   conceptnet_edges[key] || 0.0
@@ -135,6 +147,13 @@ def conceptnet_adjacency
     a, b = key.split("|", 2)
     (adj[a] ||= Set.new) << b
     (adj[b] ||= Set.new) << a
+  end
+  # Empty adjacency means the corpus mirror was loaded but no kept edges
+  # intersected word_dict — kills every cn_* feature in the relatedness
+  # classifier and quietly regresses CV accuracy by ~3 pp. Fail loudly.
+  if adj.empty?
+    raise "ConceptNet adjacency is empty: #{CONCEPTNET_EDGES_PATH} loaded but produced 0 " \
+          "in-dict edges. Check word_dict load and rerun ./bin/setup-corpora if the corpus changed."
   end
   $conceptnet_adjacency = adj
   puts "built ConceptNet adjacency index: #{adj.size} nodes"
@@ -282,12 +301,12 @@ $usf_associations = nil
 def usf_associations
   return $usf_associations unless $usf_associations.nil?
   path = USF_ASSOCIATIONS_PATH
-  if File.exist?(path)
-    $usf_associations = JSON.parse(File.read(path, encoding: "UTF-8"))
-    puts "loaded #{$usf_associations.size} USF cues from #{path}"
-  else
-    $usf_associations = {}
+  unless File.exist?(path)
+    raise "USF associations not found at #{path}. Run ./bin/setup-corpora (which calls " \
+          "./bin/build-usf-associations)."
   end
+  $usf_associations = JSON.parse(BuildIo.read(path, encoding: "UTF-8", hint: "usf_associations"))
+  puts "loaded #{$usf_associations.size} USF cues from #{path}"
   $usf_associations
 end
 
@@ -343,15 +362,23 @@ $numberbatch = nil
 def numberbatch
   return $numberbatch unless $numberbatch.nil?
   path = NUMBERBATCH_VEC_PATH
-  if File.exist?(path)
-    raw = MessagePack.unpack(File.binread(path))
-    nb = {}
-    raw.each { |k, v| nb[k] = Numo::SFloat.cast(v) if v && !v.empty? }
-    $numberbatch = nb
-    puts "loaded #{$numberbatch.size} Numberbatch vectors from #{path}"
-  else
-    $numberbatch = {}
+  unless File.exist?(path)
+    raise "Numberbatch vectors not found at #{path}. Run ./bin/setup-corpora " \
+          "to create the setup-time corpus mirror before ./bin/build."
   end
+  # Streaming load filtered by current word_dict membership: the cache file
+  # is a full corpus mirror (any lowercase numberbatch token has a row), so
+  # a word newly promoted into word_dict gets its vector without rebuilding
+  # the file — at the cost of streaming ~500k records to materialize the
+  # ~100k that are dict-relevant. Caller must have crime.rb loaded so
+  # word_dict is available (relatedness/signals.rb's load contract).
+  keep = word_dict.keys.each_with_object(Set.new) { |w, s| s.add(hyphens_to_underscores(w)) }
+  $numberbatch = load_numberbatch_vectors_streaming(path, keep_underscored: keep)
+  if $numberbatch.empty?
+    raise "Numberbatch vectors loaded 0 entries from #{path} after filtering against #{keep.size} " \
+          "word_dict keys — cache appears corrupt or word_dict has no Numberbatch overlap."
+  end
+  puts "loaded #{$numberbatch.size} Numberbatch vectors (filtered to word_dict) from #{path}"
   $numberbatch
 end
 
@@ -379,7 +406,9 @@ end
 
 # --- Modern sentence-transformer embeddings ---
 # Built offline by bin/dump-sense-glosses -> bin/build-sense-vectors.py, saved as
-# generated/model_sense_vectors.msgpack. Supplements (does not replace) Numberbatch:
+# generated/<timestamp>/model_sense_vectors.msgpack during bin/build (or
+# generated/model_sense_vectors.msgpack for standalone scripts with no build dir).
+# Supplements (does not replace) Numberbatch:
 # Numberbatch is tiny and fast for the O(n) scan, while these contextualized vectors
 # carry richer sense distinctions for the per-pair yes/no decision. On-disk shape
 # (msgpack):
@@ -413,18 +442,20 @@ $model_sense_vectors_loaded = false
 def model_sense_vectors_table
   return $model_sense_vectors if $model_sense_vectors_loaded
   $model_sense_vectors_loaded = true
-  path = generated_dict_path(MODEL_SENSE_VECTORS_FILENAME)
+  path = generated_build_artifact_path(MODEL_SENSE_VECTORS_FILENAME)
   unless File.exist?(path)
     raise "model sense vectors not found at #{path}. Build them via:\n" \
           "  ./bin/dump-sense-glosses\n" \
           "  ./bin/build-sense-vectors.py\n" \
           "(or ./bin/retrain-relatedness, which chains both)."
   end
-  # Stream-decode instead of File.binread(path): macOS' read(2) syscall caps a
+  # Stream-decode instead of one-shot binread: macOS' read(2) syscall caps a
   # single read at INT_MAX (2 GiB), so once the full-vocab msgpack passes that
   # threshold (~136k headwords × 768 fp32 ≈ 2.3 GB), File.binread raises
   # Errno::EINVAL. MessagePack::Unpacker on an open IO handles chunking.
-  raw = File.open(path, "rb") { |f| MessagePack::Unpacker.new(f).read }
+  raw = BuildIo.open(path, "rb", hint: "model_sense_vectors_table") do |f|
+    MessagePack::Unpacker.new(f).read
+  end
   hw_raw = raw["headword"] || {}
   df_raw = raw["definition"] || {}
   sn_raw = raw["senses"] || {}
@@ -441,6 +472,11 @@ def model_sense_vectors_table
     next if vs.nil? || vs.empty?
     sn[k] = Numo::SFloat.cast(vs)
     total_senses += vs.size
+  end
+
+  if hw.empty? && df.empty? && sn.empty?
+    raise "model sense vectors at #{path} contained 0 headword/definition/sense rows " \
+          "— file is empty or schema mismatch. Rebuild via ./bin/retrain-relatedness."
   end
 
   $model_sense_vectors = {

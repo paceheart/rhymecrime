@@ -29,6 +29,7 @@
 # every accessor returns the silent-default value so production stays unaffected.
 
 require "set"
+require_relative "build_io"
 
 module UniMorph
   PATH = File.expand_path("../../../corpora/unimorph/eng", __dir__)
@@ -63,7 +64,7 @@ module UniMorph
     @by_base = {}
     return @by_base unless corpus_present?
 
-    File.foreach(PATH, encoding: "UTF-8") do |line|
+    BuildIo.foreach(PATH, encoding: "UTF-8", hint: "UniMorph.by_base") do |line|
       line.chomp!
       next if line.empty?
       lemma, form, msd = line.split("\t")

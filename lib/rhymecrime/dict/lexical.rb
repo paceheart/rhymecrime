@@ -124,7 +124,7 @@ end
 
 def build_wn_synset_line_index(path)
   idx = {}
-  File.foreach(path, encoding: "UTF-8") do |ln|
+  BuildIo.foreach(path, encoding: "UTF-8", hint: "build_wn_synset_line_index") do |ln|
     next if ln.bytesize < 9
 
     off = ln.byteslice(0, 8)
@@ -395,7 +395,7 @@ def wn_noun_lex_filenum_to_lexname
       path = File.join(root, rel)
       next unless File.file?(path)
 
-      File.foreach(path, chomp: true, encoding: "UTF-8") do |line|
+      BuildIo.foreach(path, chomp: true, encoding: "UTF-8", hint: "wn_noun_lex_filenum_to_lexname") do |line|
         next if line.empty? || line.start_with?("#")
         parts = line.split("\t")
         parts = line.split if parts.size < 3
@@ -435,7 +435,7 @@ def wn_noun_exc_invariant_plural_bases
       path = File.join(root, rel)
       next unless File.file?(path)
 
-      File.foreach(path, chomp: true, encoding: "UTF-8") do |line|
+      BuildIo.foreach(path, chomp: true, encoding: "UTF-8", hint: "wn_noun_exc_invariant_plural_bases") do |line|
         next if line.empty? || line.start_with?("#")
         inf, lem = line.split
         next unless inf && lem && inf == lem

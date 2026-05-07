@@ -24,7 +24,7 @@ require "rhymecrime/dict/lexical"
 require "rhymecrime/dict/wiktionary"
 require "rhymecrime/dict/morphology"
 
-WORD_DICT_PATH = File.join(repo, "generated", "word_dict.txt")
+WORD_DICT_PATH = File.join(repo, "generated", "current", "word_dict.txt")
 WORDFREQ_PATH  = File.join(repo, "generated", "wordfreq.tsv")
 
 KIND_ORDER = %i[s ed ing er est].freeze

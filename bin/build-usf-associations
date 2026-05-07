@@ -19,50 +19,7 @@
 #   ./bin/build-usf-associations
 #   ./bin/build-usf-associations /path/to/out.json
 
-require "fileutils"
-require "json"
+$LOAD_PATH.unshift File.expand_path("../lib", __dir__)
+require "rhymecrime/dict/utils_rhyme"
 
-repo = File.expand_path("..", __dir__)
-shards = Dir.glob(File.join(repo, "corpora", "usf", "Cue_Target_Pairs.*")).sort
-if shards.empty?
-  abort "no Cue_Target_Pairs.* shards under #{File.join(repo, 'corpora', 'usf')}"
-end
-
-out_path = ARGV[0]
-out_path = File.join(repo, "generated", "usf_associations.json") if out_path.nil? || out_path.empty?
-FileUtils.mkdir_p(File.dirname(out_path))
-
-# Match dict.rb's headword shape (cf. utils_rhyme.rb#usf_corpus_word_set).
-LEMMA_RE = /\A[a-z][a-z0-9'-]*\z/.freeze
-
-graph = Hash.new { |h, k| h[k] = {} }
-pair_count = 0
-
-shards.each do |path|
-  File.foreach(path, encoding: "UTF-8") do |line|
-    line = line.scrub
-    # Skip the HTML/PRE wrapper and the column-header row at the top of each shard.
-    next if line.include?("CUE,")
-    next unless line.match?(/\A[A-Z]/)
-
-    # Columns: CUE, TARGET, NORMED?, #G, #P, FSG, BSG, MSG, ...
-    parts = line.split(",")
-    next if parts.length < 6
-
-    cue = parts[0].strip.downcase
-    target = parts[1].strip.downcase
-    fsg = parts[5].to_s.strip
-
-    next unless cue.match?(LEMMA_RE) && target.match?(LEMMA_RE)
-    next if fsg.empty?
-
-    f = fsg.to_f
-    next unless f.positive?
-
-    graph[cue][target] = f
-    pair_count += 1
-  end
-end
-
-File.write(out_path, JSON.generate(graph))
-puts "wrote #{graph.size} cues / #{pair_count} pairs to #{out_path}"
+build_usf_associations!(ARGV[0])

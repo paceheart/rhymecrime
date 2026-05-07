@@ -179,7 +179,7 @@ module Rhymecrime
         # the Lambda runtime path doesn't load. We're only ever instantiated
         # in dev, so the require here is safe.
         require_relative "dict/utils_rhyme"
-        generated_dict_path("feedback.csv")
+        generated_root_path("feedback.csv")
       end
     end
 

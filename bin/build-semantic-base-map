@@ -41,12 +41,10 @@ puts "  #{wd.size} headwords, #{lemma_map.size} have a non-self lemma"
 
 nb_vectors = nil
 unless no_cosine_guard
-  nb_path = generated_dict_path(NUMBERBATCH_VECTORS_FILENAME)
+  nb_path = generated_root_path(NUMBERBATCH_VECTORS_FILENAME)
   if File.exist?(nb_path)
-    require "msgpack"
-    raw = MessagePack.unpack(File.binread(nb_path))
-    nb_vectors = raw
-    puts "Loaded #{nb_vectors.size} Numberbatch vectors for cosine guard from #{nb_path}"
+    nb_vectors = load_numberbatch_vectors_for_semantic_base_guard(wd.keys)
+    puts "Loaded #{nb_vectors.size} Numberbatch vectors (filtered to word_dict) for cosine guard from #{nb_path}"
   else
     puts "WARN: #{nb_path} not present — skipping NB cosine guard. Run bin/dict-build once first."
   end

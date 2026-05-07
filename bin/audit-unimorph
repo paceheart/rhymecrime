@@ -40,7 +40,7 @@ require "rhymecrime/dict/utils_rhyme"
 require "rhymecrime/dict/inflect"
 
 UNIMORPH_PATH = File.join(repo, "corpora", "unimorph", "eng")
-WORD_DICT_PATH = File.join(repo, "generated", "word_dict.txt")
+WORD_DICT_PATH = File.join(repo, "generated", "current", "word_dict.txt")
 
 # UniMorph MSD → our Inflect.match_suffix_kind. Two MSDs collapse to :s, two to :ed.
 MSD_TO_KIND = {

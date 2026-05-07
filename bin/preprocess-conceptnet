@@ -6,9 +6,9 @@
 # cache if it is missing or older than assertions. Use this script to refresh the cache without a full dict-build.
 #
 #   ./bin/preprocess-conceptnet
-#   ./bin/preprocess-conceptnet /path/to/out.en-kept-vocab.txt.gz
+#   ./bin/preprocess-conceptnet /path/to/conceptnet_assertions.txt.gz
 #
-# Default output: <repo>/generated/<assertions-basename>.en-kept-vocab.txt.gz
+# Default output: <repo>/generated/conceptnet_assertions.txt.gz
 #
 # CONCEPTNET_ASSERTIONS_GZ=/path/to/file.csv.gz
 # CONCEPTNET_VOCAB_CACHE_GZ=/path/to/cache.gz

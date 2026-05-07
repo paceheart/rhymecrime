@@ -46,7 +46,7 @@
 #
 # What does NOT ship (intentional):
 #   corpora/                        build-time only; runtime reads DynamoDB
-#   generated/model_sense_vectors.msgpack   1.6 GB; relatedness training only
+#   generated/<timestamp>/model_sense_vectors.msgpack   1.6 GB; relatedness training only
 #   generated/relatedness_classifier.json   loaded into DDB, not Lambda
 #   generated/rarity_classifier.json        loaded into DDB, not Lambda
 #   generated/sense_glosses.jsonl           training intermediate
@@ -84,12 +84,15 @@ cp -R assets         "$STAGING/"
 cp -R curated        "$STAGING/"
 
 echo "==> copying generated/ runtime artifacts"
-cp generated/spelling_variants_auto.txt     "$STAGING/generated/"
-cp generated/hyphen_variant_map.json        "$STAGING/generated/"
-cp generated/word_lemma_map.msgpack         "$STAGING/generated/"
-cp generated/word_semantic_base_map.msgpack "$STAGING/generated/"
-cp generated/word_dict.msgpack              "$STAGING/generated/"
-cp generated/rime_dict.msgpack              "$STAGING/generated/"
+RUNTIME="${RHYMECRIME_BUILD_DIR:+$RHYMECRIME_BUILD_DIR/runtime}"
+RUNTIME="${RUNTIME:-$REPO/generated/current}"
+# Plain cp follows symlinks for files (spelling + hyphen may link to ../bootstrap/).
+cp "$RUNTIME/spelling_variants_auto.txt"     "$STAGING/generated/"
+cp "$RUNTIME/hyphen_variant_map.json"        "$STAGING/generated/"
+cp "$RUNTIME/word_lemma_map.msgpack"         "$STAGING/generated/"
+cp "$RUNTIME/word_semantic_base_map.msgpack" "$STAGING/generated/"
+cp "$RUNTIME/word_dict.msgpack"              "$STAGING/generated/"
+cp "$RUNTIME/rime_dict.msgpack"              "$STAGING/generated/"
 
 echo
 echo "staged. $(du -sh "$STAGING" | cut -f1) in $STAGING/"

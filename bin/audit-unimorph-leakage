@@ -30,7 +30,7 @@ require "rhymecrime/dict/utils_rhyme"
 require "rhymecrime/dict/inflect"
 
 UNIMORPH_PATH  = File.join(repo, "corpora", "unimorph", "eng")
-WORD_DICT_PATH = File.join(repo, "generated", "word_dict.txt")
+WORD_DICT_PATH = File.join(repo, "generated", "current", "word_dict.txt")
 
 MSD_TO_KIND = {
   "N;PL" => :s, "V;PRS;3;SG" => :s,

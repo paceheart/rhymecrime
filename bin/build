@@ -1,65 +1,209 @@
 #!/usr/bin/env bash
 #
-# Full RhymeCrime build pipeline. Runs every step bin/dict-build skips by
-# default — ConceptNet + Numberbatch exports, rarity signals dump — then
-# trains the rarity classifier and the entire relatedness pipeline (sense
-# vectors + classifier).
+# Full RhymeCrime build pipeline. One timestamped directory under generated/
+# holds bootstrap/, runtime/, training intermediates, and BUILD_INFO.json.
 #
 #   ./bin/build
 #
 # Build Stages:
-#   1/4. dict-build (full)
-#        - CN+NB exports rebuilt        (RHYMECRIME_DICT_BUILD_CONCEPTNET_NUMBERBATCH=1)
-#        - rarity signals dumped to     generated/rarity_signals_dump.jsonl
-#          (RHYMECRIME_RARITY_DUMP_SIGNALS=...; bootstrap-disables the rarity
-#          rescore for this pass — there's no classifier yet)
-#   2/4. train-rarity-classifier         → generated/rarity_classifier.json
-#   3/4. retrain-relatedness --rebuild-vectors
-#        a. dump-sense-glosses          → generated/sense_glosses.jsonl
-#        b. build-sense-vectors.py      → generated/model_sense_vectors.msgpack
-#        c. train-relatedness-classifier → generated/relatedness_classifier.json
-#   4/4. dict-build (slim, with classifier on)
-#        - re-runs the rarity-classifier rescore pass against word_dict.txt
-#          using the freshly-trained classifier. CN+NB exports are already
-#          on disk from Build Stage 1/4, so this pass uses the default slim
-#          flags.
+#   1/4. dict-build (bootstrap) — rarity signal dump → bootstrap/
+#   2/4. train-rarity-classifier → bootstrap/rarity_classifier.json
+#   3/4. retrain-relatedness --rebuild-vectors — sense_glosses + MPNet + relatedness classifier
+#   4/4. dict-build (final) — rarity classifier rescore, runtime artifacts → runtime/
 #
-# Prereqs (one-time): ./setup.sh, which provisions everything — gems,
-# corpora, and the .venv used by Build Stage 3/4's MPNet encoding sub-step
-# (3/4-b). setup.sh installs uv (https://astral.sh/uv) + a managed CPython
-# 3.12 if no GIL-enabled Python is on PATH, so this script never has to
-# think about Python at all.
-#
-# Build Stage 1/4 is ~25 min (mostly Numberbatch I/O). Build Stage 2/4 is
-# ~1 min. Build Stage 3/4 is ~20 min on CPU (MPNet encoding) + ~1 min for
-# the classifier fit. Build Stage 4/4 is ~10–15 min (skips CN+NB export I/O).
+# Prereqs (one-time): ./setup.sh
+#   (creates generated/conceptnet_edges.msgpack and
+#    generated/numberbatch_vectors.msgpack from their source corpora)
 
 set -euo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$REPO"
 
-# Absolute path: bin/dict-build chdir's into lib/rhymecrime/dict/, so a
-# relative DUMP_SIGNALS would resolve under that subtree rather than the
-# repo root. (The Ruby side now repo-anchors a relative path itself, but
-# absolute is unambiguous either way.)
-DEFAULT_DUMP_PATH="$REPO/generated/rarity_signals_dump.jsonl"
-DUMP_PATH="${RHYMECRIME_RARITY_DUMP_SIGNALS:-$DEFAULT_DUMP_PATH}"
+echo "==> Preflight: checking setup-produced inputs"
+ruby -I"$REPO/lib" <<'RUBY'
+require "rhymecrime/dict/utils_rhyme"
 
-echo "==> Build Stage 1/4 [3m]: dict-build (full: CN+NB exports + rarity signals dump)"
+repo = File.expand_path(Dir.pwd)
+errors = []
+
+require_nonempty = lambda do |label, path, fix|
+  unless File.file?(path) && File.size?(path)
+    errors << "#{label} missing or empty:\n  #{path}\n  fix: #{fix}"
+  end
+end
+
+require_any = lambda do |label, paths, fix|
+  ok = paths.any? { |p| File.file?(p) && File.size?(p) }
+  unless ok
+    errors << "#{label} missing or empty (checked #{paths.size} path(s)):\n  #{paths.join("\n  ")}\n  fix: #{fix}"
+  end
+end
+
+require_glob = lambda do |label, pattern, fix|
+  matches = Dir.glob(pattern).select { |p| File.file?(p) && File.size?(p) }
+  errors << "#{label} missing:\n  #{pattern}\n  fix: #{fix}" if matches.empty?
+end
+
+setup = "./bin/setup-corpora"
+require_nonempty["CMUdict", File.join(repo, "corpora", "cmudict", "cmudict-0.7c.txt"), "restore vendored corpora/cmudict or run #{setup} if this checkout is incomplete"]
+require_nonempty["Wiktionary filtered JSONL", File.join(repo, "corpora", "wiktionary", "kaikki-english-filtered.jsonl.gz"), "run #{setup}"]
+require_nonempty["SUBTLEX-US TSV", File.join(repo, "corpora", "subtlex", "SUBTLEXus.tsv"), "restore vendored corpora/subtlex or run #{setup} if this checkout is incomplete"]
+require_nonempty["VarCon data", File.join(repo, "corpora", "varcon", "varcon.txt"), "restore vendored corpora/varcon"]
+require_nonempty["NEOL word list", File.join(repo, "corpora", "neol", "neol2016.txt"), "restore vendored corpora/neol"]
+require_nonempty["wordfreq export", File.join(repo, "generated", "wordfreq.tsv"), "run #{setup}"]
+
+%w[data.noun data.verb data.adj data.adv index.noun index.verb index.adj index.adv].each do |fn|
+  require_nonempty["WordNet #{fn}", File.join(repo, "corpora", "wordnet", "3.1", "dict", fn), "restore vendored corpora/wordnet"]
+end
+
+%w[
+  authoritative_pronunciations.txt
+  neol_supplement.txt
+  rarity.csv
+  related.csv
+  semantic_base.csv
+  semantically_promiscuous.txt
+  spelling.csv
+  unrhymable_stop_words.txt
+].each do |fn|
+  require_nonempty["curated/#{fn}", File.join(repo, "curated", fn), "restore curated/#{fn}"]
+end
+
+require_any[
+  "ConceptNet assertions",
+  [
+    File.join(repo, "corpora", "conceptnet", "conceptnet-assertions-5.7.0.csv.gz"),
+    File.join(repo, "corpora", "conceptnet-assertions-5.7.0.csv.gz"),
+    File.join(repo, "conceptnet-assertions-5.7.0.csv.gz"),
+  ],
+  "run #{setup} or set CONCEPTNET_ASSERTIONS_GZ to an existing .csv.gz before running bin/build",
+]
+
+require_any[
+  "Numberbatch text corpus",
+  [
+    File.join(repo, "corpora", "numberbatch", "numberbatch-en-19.08.txt"),
+    File.join(repo, "corpora", "numberbatch-en-19.08.txt"),
+    File.join(repo, "numberbatch-en-19.08.txt"),
+  ],
+  "run #{setup} or set NUMBERBATCH_TXT to an existing .txt before running bin/build",
+]
+
+unless File.file?(generated_root_path(USF_ASSOCIATIONS_FILENAME)) && File.size?(generated_root_path(USF_ASSOCIATIONS_FILENAME))
+  require_glob["USF Cue_Target_Pairs shards", File.join(repo, "corpora", "usf", "Cue_Target_Pairs.*"), "restore vendored corpora/usf or run #{setup}"]
+end
+
+begin
+  require_numberbatch_vectors_cache!
+rescue StandardError => e
+  errors << e.message
+end
+
+begin
+  require_conceptnet_edges_cache!
+rescue StandardError => e
+  errors << e.message
+end
+
+venv_python = File.join(repo, ".venv", "bin", "python")
+if !File.executable?(venv_python)
+  errors << "Python venv missing:\n  #{venv_python}\n  fix: run ./bin/setup-python-venv"
+elsif !system(venv_python, "-c", "import sentence_transformers, msgpack", out: File::NULL, err: File::NULL)
+  errors << "Python venv dependencies are not importable from:\n  #{venv_python}\n  fix: run ./bin/setup-python-venv"
+end
+
+if errors.any?
+  warn "bin/build preflight failed (#{errors.size} issue#{errors.size == 1 ? "" : "s"}):"
+  errors.each_with_index do |msg, i|
+    warn "\n#{i + 1}. #{msg}"
+  end
+  warn "\nRun ./setup.sh for a full bootstrap, or the listed setup command(s) for targeted repair."
+  exit 1
+end
+
+puts "preflight ok"
+RUBY
+
+TIMESTAMP="$(date -u +%Y%m%dT%H%M%S)"
+BUILD_DIR="$REPO/generated/$TIMESTAMP"
+mkdir -p "$BUILD_DIR/bootstrap" "$BUILD_DIR/runtime"
+
+echo "==> Writing $BUILD_DIR/BUILD_INFO.json"
+ruby -rjson -rtime -rsocket -e '
+repo = ARGV[0]
+build_dir = ARGV[1]
+sha = `git -C #{repo} rev-parse HEAD 2>/dev/null`.strip
+sha = "unknown" if sha.empty?
+dirty = !`git -C #{repo} status --porcelain 2>/dev/null`.strip.empty?
+mt = {}
+%w[corpora/cmudict.dict generated/wordfreq.tsv].each do |rel|
+  begin
+    p = File.join(repo, rel)
+    mt[rel] = File.mtime(p).utc.iso8601 if File.exist?(p)
+  rescue StandardError
+  end
+end
+info = {
+  "build_id" => File.basename(build_dir),
+  "git_sha" => sha,
+  "git_dirty" => dirty,
+  "built_at" => Time.now.utc.iso8601,
+  "host" => Socket.gethostname,
+  "ruby_version" => RUBY_VERSION,
+  "corpus_mtimes" => mt,
+}
+File.write(File.join(build_dir, "BUILD_INFO.json"), JSON.pretty_generate(info) + "\n")
+' "$REPO" "$BUILD_DIR"
+
+export RHYMECRIME_BUILD_DIR="$BUILD_DIR"
+
+IO_AUDIT_LOG="$BUILD_DIR/io_audit.jsonl"
+: >"$IO_AUDIT_LOG"
+export RHYMECRIME_BUILD_IO_LOG="$IO_AUDIT_LOG"
+# Enforce bootstrap/final read+write invariants (raises on violation). Default on; set RHYMECRIME_BUILD_IO_VALIDATE=0 to disable.
+export RHYMECRIME_BUILD_IO_VALIDATE="${RHYMECRIME_BUILD_IO_VALIDATE:-1}"
+
+DUMP_PATH="$BUILD_DIR/bootstrap/rarity_signals_dump.jsonl"
+
+echo "==> Build Stage 1/4 [3m]: dict-build (bootstrap: rarity signals dump)"
 echo "                    dump path: $DUMP_PATH"
-RHYMECRIME_DICT_BUILD_CONCEPTNET_NUMBERBATCH=1 \
+# ConceptNet + Numberbatch corpus mirrors live at generated/<name>.msgpack and
+# are setup-produced inputs. dict-build verifies them but intentionally does
+# not rebuild them.
+RHYMECRIME_BUILD_MODE=bootstrap \
 RHYMECRIME_RARITY_DUMP_SIGNALS="$DUMP_PATH" \
   ./bin/dict-build
 
-echo "==> Build Stage 2/4 [7m]: training rarity classifier -> generated/rarity_classifier.json"
+# generated/current is intentionally NOT updated here — it stays pointing at
+# the previously-completed build (or is missing on a fresh checkout) until the
+# whole pipeline succeeds. Stages 2-4 read in-flight runtime artifacts directly
+# via RHYMECRIME_BUILD_DIR (see generated_dict_path in utils_rhyme.rb).
+
+echo "==> Build Stage 2/4 [7m]: training rarity classifier -> bootstrap/rarity_classifier.json"
 ruby ./bin/train-rarity-classifier
+# Symlink (not copy) the rarity classifier into runtime/ so there's only one
+# on-disk copy per build. Stage 4 dict-build reads runtime/rarity_classifier.json
+# and resolves transparently through the symlink.
+ln -sfn "../bootstrap/rarity_classifier.json" "$BUILD_DIR/runtime/rarity_classifier.json"
 
 echo "==> Build Stage 3/4: retrain-relatedness (sense glosses + MPNet vectors + classifier)"
 ./bin/retrain-relatedness --rebuild-vectors
+# Same symlink-don't-copy treatment for the relatedness classifier (written by
+# train-relatedness-classifier at $BUILD_DIR/relatedness_classifier.json).
+ln -sfn "../relatedness_classifier.json" "$BUILD_DIR/runtime/relatedness_classifier.json"
 
-echo "==> Build Stage 4/4: dict-build rescore (rarity-classifier rescore pass applies new classifier to word_dict.txt)"
-./bin/dict-build
+echo "==> Build Stage 4/4: dict-build (final: rarity-classifier rescore)"
+RHYMECRIME_BUILD_MODE=final \
+RHYMECRIME_BUILD_DIR="$BUILD_DIR" \
+  ./bin/dict-build
+
+echo "==> Linking generated/current -> $BUILD_DIR/runtime"
+ln -sfn "$BUILD_DIR/runtime" "$REPO/generated/current"
+
+echo
+echo "==> Generated I/O audit (unique paths touched via BuildIo)"
+ruby -I"$REPO/lib" -e 'require "rhymecrime/dict/build_io"; BuildIo.print_build_report'
 
 echo
 echo "build done. Run bundle exec rspec to validate."

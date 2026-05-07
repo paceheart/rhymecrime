@@ -136,7 +136,7 @@ end
 
 # --- Run loader ---------------------------------------------------------------
 
-raw_rows = CSV.parse(File.read(options[:csv_path], encoding: "UTF-8"), headers: true)
+raw_rows = CSV.parse(BuildIo.read(options[:csv_path], encoding: "UTF-8", hint: "diagnose-gloss-coverage"), headers: true)
 rows = raw_rows.each_with_index.filter_map do |r, i|
   cue = r["cue"].to_s.strip
   rel = r["related"].to_s.strip

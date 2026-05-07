@@ -1,34 +1,51 @@
 #!/usr/bin/env ruby
 # encoding: utf-8
 #
-# Rebuild RhymeCrime caches under <repo>/generated/. Fast-path default: skips
-# the slow ConceptNet edge-map and Numberbatch vector exports (~15-20 min)
-# and the rarity-signals dump (~30 s extra plus disk I/O). Use bin/build for
-# the full four-Build-Stage pipeline (dict-build full + rarity classifier +
-# relatedness training + rarity-classifier rescore) — or set the override env
-# vars below to opt in piecemeal.
+# Rebuild RhymeCrime caches. When RHYMECRIME_BUILD_DIR is unset, creates a new
+# generated/<UTC-timestamp>/ tree and runs in final mode (slim default).
+# Use bin/build for the full pipeline (bootstrap + train + relatedness + final).
 #
-# Loads lib/rhymecrime/dict/dict.rb (which requires constants, phonology, lexical,
-# morphology, rime, frequency) with cwd = that directory (relative list files),
-# then runs rebuild.
+# Loads lib/rhymecrime/dict/dict.rb with cwd = that directory, then runs rebuild.
 #
-#   ./bin/dict-build                                              # slim default
-#   RHYMECRIME_DICT_BUILD_CONCEPTNET_NUMBERBATCH=1 ./bin/dict-build  # +CN+NB exports
-#   RHYMECRIME_RARITY_DUMP_SIGNALS=PATH         ./bin/dict-build  # rarity signal dump
-#                                                                 # ( disables rescore)
+#   ./bin/dict-build                                # slim default
+#   RHYMECRIME_RARITY_DUMP_SIGNALS=PATH ./bin/dict-build  # rarity signal dump
 #
-# CPU sampling profile (StackProf): ./bin/dict-build-profile — see script header for STACKPROF_* env vars.
-#
-# ConceptNet vocab cache (generated/*.en-kept-vocab.txt.gz) is built by setup.sh after downloading
-# assertions, or automatically at the start of dict-build if missing/stale. Optional manual refresh:
-#   ./bin/preprocess-conceptnet
-#
+# Corpus-derived caches live under generated/ root, not generated/current/.
+# setup-corpora creates the large stable mirrors (numberbatch_vectors.msgpack,
+# conceptnet_edges.msgpack); dict-build only verifies those are present/current.
+
+require "fileutils"
 
 repo = File.expand_path("..", __dir__)
 dict_dir = File.join(repo, "lib", "rhymecrime", "dict")
 $LOAD_PATH.unshift File.join(repo, "lib")
 
+if !ENV["RHYMECRIME_BUILD_DIR"] || ENV["RHYMECRIME_BUILD_DIR"].empty?
+  ts = Time.now.utc.strftime("%Y%m%dT%H%M%S")
+  bd = File.join(repo, "generated", ts)
+  FileUtils.mkdir_p(File.join(bd, "bootstrap"))
+  FileUtils.mkdir_p(File.join(bd, "runtime"))
+  ENV["RHYMECRIME_BUILD_DIR"] = bd
+  # Preserve trained classifiers from the previous generated/current → runtime
+  # so solo dict-build (e.g. deploy-new-data) does not lose them before rescore.
+  cur = File.join(repo, "generated", "current")
+  if File.symlink?(cur)
+    old_rt = File.expand_path(File.readlink(cur), File.dirname(cur))
+    %w[rarity_classifier.json relatedness_classifier.json].each do |fn|
+      src = File.join(old_rt, fn)
+      FileUtils.cp(src, File.join(bd, "runtime", fn)) if File.exist?(src)
+    end
+  end
+end
+ENV["RHYMECRIME_BUILD_MODE"] = "final" if ENV["RHYMECRIME_BUILD_MODE"].to_s.empty?
+
 Dir.chdir(dict_dir) do
   load File.join(dict_dir, "dict.rb")
   rebuild_rhymecrime_dictionaries
+end
+
+if ENV["RHYMECRIME_BUILD_MODE"] == "final" && ENV["RHYMECRIME_BUILD_DIR"] && !ENV["RHYMECRIME_BUILD_DIR"].empty?
+  runtime = File.join(ENV["RHYMECRIME_BUILD_DIR"], "runtime")
+  cur = File.join(repo, "generated", "current")
+  FileUtils.ln_sf(runtime, cur)
 end

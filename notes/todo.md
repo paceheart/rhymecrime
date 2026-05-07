@@ -75,5 +75,4 @@ explain what it does
 get rid of initialisms
 
 try retraining relatedness with whatever mapped to related_ish, or related_ish_ish
-
-make a backup of word_dict each deploy, and diff it with the old version to find regressions
+try retraining relatedness with 5 classes: related, related_ish, whatever, unrelated_ish, unrelated

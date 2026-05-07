@@ -39,7 +39,7 @@ module Rhymecrime
                      :available?, :clear_session_cache!
 
       def database_path
-        generated_dict_path(LOCAL_STORE_FILENAME)
+        generated_root_path(LOCAL_STORE_FILENAME)
       end
 
       # Opens (or creates) a local store SQLite file for writing and yields a

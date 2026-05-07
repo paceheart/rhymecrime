@@ -148,7 +148,7 @@ def rime_dict
 end
 
 def load_rime_dict_as_hash()
-  load_string_hash(generated_dict_path(RIME_DICT_FILENAME)) or
+  load_string_hash(generated_dict_path_under_dict_dir(RIME_DICT_FILENAME)) or
     raise "First run ./bin/dict-build to populate generated/"
 end
 
@@ -186,13 +186,13 @@ def part_of_speech_tags(word)
   w = word.to_s.downcase.strip
   return [] if w.empty?
   if $part_of_speech_by_word.nil?
-    path = generated_dict_path(PART_OF_SPEECH_FILENAME)
+    path = generated_dict_path_under_dict_dir(PART_OF_SPEECH_FILENAME)
     unless File.exist?(path)
       raise "missing #{path}: run ./bin/dict-build to generate it. " \
             "If this fired inside Lambda, the file is excluded by design — see " \
             "bin/stage-lambda and the doc comment above part_of_speech_tags."
     end
-    $part_of_speech_by_word = JSON.parse(File.read(path, encoding: "UTF-8"))
+    $part_of_speech_by_word = JSON.parse(BuildIo.read(path, encoding: "UTF-8", hint: "part_of_speech_tags"))
   end
   tags = $part_of_speech_by_word[w]
   tags.is_a?(Array) ? tags : []

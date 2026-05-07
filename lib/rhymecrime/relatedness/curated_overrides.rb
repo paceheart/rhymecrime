@@ -90,7 +90,7 @@ def curated_relatedness_overrides
   rows_seen = 0
   malformed = 0
   whatever = 0
-  CSV.foreach(path, headers: true, encoding: "UTF-8") do |row|
+  BuildIo.csv_foreach(path, headers: true, encoding: "UTF-8", hint: "load_curated_relatedness_overrides") do |row|
     cue = row["cue"]&.strip
     rel = row["related"]&.strip
     kind = row["oughta be related?"].to_s.strip.downcase

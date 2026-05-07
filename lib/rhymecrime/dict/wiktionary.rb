@@ -70,9 +70,8 @@ end
 def load_wiktionary
   path = WIKTIONARY_DATA_PATH
   unless File.exist?(path)
-    puts "Wiktionary data not found at #{path}; skipping."
-    m = empty_kaikki_verb_morphology
-    return [{}, {}, {}, m, Set.new, {}, {}, {}]
+    raise "Wiktionary data not found at #{path}. Run ./bin/setup-corpora to fetch it " \
+          "(downloads kaikki-en-extract*.json.gz). Set WIKTIONARY_DATA_PATH to override the location."
   end
 
   pron_hash = Hash.new { |h, k| h[k] = [] }
@@ -92,7 +91,7 @@ def load_wiktionary
   obsolete_only_blocked = Set.new
   total = 0; converted = 0; skipped = 0
 
-  Zlib::GzipReader.open(path, encoding: 'UTF-8') do |gz|
+  BuildIo.gzip_read(path, encoding: 'UTF-8', hint: "load_wiktionary kaikki") do |gz|
     gz.each_line do |line|
       obj = JSON.parse(line) rescue next
 

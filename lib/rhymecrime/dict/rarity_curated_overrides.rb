@@ -108,7 +108,7 @@ def rarity_curated_overrides
   rows_seen = 0
   malformed = 0
   non_rarity_kind = 0
-  CSV.foreach(RARITY_CSV_PATH, headers: true, encoding: "UTF-8") do |row|
+  BuildIo.csv_foreach(RARITY_CSV_PATH, headers: true, encoding: "UTF-8", hint: "load_rarity_curated_overrides") do |row|
     word = row["word"].to_s.strip
     kind = row["kind"].to_s.strip
     if word.empty?

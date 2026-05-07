@@ -2,9 +2,9 @@
 #
 # Orchestrates the three stages of the relatedness pipeline:
 #
-#   1. bin/dump-sense-glosses            → generated/sense_glosses.jsonl
-#   2. bin/build-sense-vectors.py        → generated/model_sense_vectors.msgpack
-#   3. bin/train-relatedness-classifier  → generated/relatedness_classifier.json
+#   1. bin/dump-sense-glosses            → $RHYMECRIME_BUILD_DIR/sense_glosses.jsonl
+#   2. bin/build-sense-vectors.py        → $RHYMECRIME_BUILD_DIR/model_sense_vectors.msgpack
+#   3. bin/train-relatedness-classifier  → $RHYMECRIME_BUILD_DIR/relatedness_classifier.json
 #
 # Default invocation only runs stage 3 (fast; ~1 min). Stages 1-2 are ~20 min on
 # CPU for the full dictionary, so we only redo them when told to.
@@ -27,6 +27,11 @@
 #   - you modify curated/related.csv (the training labels)
 
 set -euo pipefail
+
+if [[ -z "${RHYMECRIME_BUILD_DIR:-}" ]]; then
+  echo "error: RHYMECRIME_BUILD_DIR is not set. Run ./bin/build or export it to a timestamp directory under generated/." >&2
+  exit 1
+fi
 
 REBUILD_VECTORS=0
 PASSTHROUGH=()
@@ -61,13 +66,13 @@ if [[ $REBUILD_VECTORS -eq 1 ]]; then
   # from bin/build (which prints its own "Build Stage N/4:" parent banners)
   # and don't masquerade as a competing top-level numbering scheme when run
   # standalone.
-  echo "==> (a) dumping sense glosses -> generated/sense_glosses.jsonl"
+  echo "==> (a) dumping sense glosses -> ${RHYMECRIME_BUILD_DIR}/sense_glosses.jsonl"
   ruby bin/dump-sense-glosses
-  echo "==> (b) encoding sense vectors -> generated/model_sense_vectors.msgpack"
+  echo "==> (b) encoding sense vectors -> ${RHYMECRIME_BUILD_DIR}/model_sense_vectors.msgpack"
   .venv/bin/python bin/build-sense-vectors.py
 fi
 
-echo "==> (c) training classifier -> generated/relatedness_classifier.json"
+echo "==> (c) training classifier -> ${RHYMECRIME_BUILD_DIR}/relatedness_classifier.json"
 if [[ ${#PASSTHROUGH[@]} -eq 0 ]]; then
   exec ruby bin/train-relatedness-classifier
 else
