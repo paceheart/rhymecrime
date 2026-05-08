@@ -28,7 +28,7 @@
 # What ships:
 #   lambda_handler.rb               request entry point
 #   Gemfile, Gemfile.lock           bundler input (RubyBundlerBuilder consumes)
-#   lib/                            all of lib/rhymecrime
+#   lib/                            lib/rhymecrime except build/ + dev/ (see rm below)
 #   assets/                         CSS / JS / images served from /
 #   curated/                        hand-curated data files (rarity.csv, etc.)
 #   generated/spelling_variants_auto.txt    \ small files query.rb /
@@ -55,6 +55,8 @@
 #                                           Lambda-reachable caller; query.rb
 #                                           part_of_speech_tags +raise+s if
 #                                           anything ever does try to read it
+#   lib/rhymecrime/build/           dict-build + corpus tooling; not on Lambda require graph
+#   lib/rhymecrime/dev/             LocalStore + audit helpers; DDB Lambda never requires these
 #   bin/                            build / training scripts
 #   spec/, notes/, experiments/     tests + scratch
 #   .venv/, .git/, .aws-sam/        local-dev / build state
@@ -80,6 +82,7 @@ cp lambda_handler.rb "$STAGING/"
 cp Gemfile           "$STAGING/"
 cp Gemfile.lock      "$STAGING/"
 cp -R lib            "$STAGING/"
+rm -rf "$STAGING/lib/rhymecrime/build" "$STAGING/lib/rhymecrime/dev"
 cp -R assets         "$STAGING/"
 cp -R curated        "$STAGING/"
 
