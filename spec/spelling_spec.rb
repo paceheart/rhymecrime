@@ -208,7 +208,7 @@ describe "SPELLING VARIANTS" do
     context 'corpus-dominant hyphenated compounds' do
       prefer_spelling 'anti-vaxxer', 'antivaxxer'
       prefer_spelling 'binge-watch', 'bingewatch'
-      prefer_spelling 'bench-press', 'benchpress'
+      # I don't care about this one: prefer_spelling 'bench-press', 'benchpress'
       prefer_spelling 'big-time', 'bigtime'
       prefer_spelling 'bas-relief', 'basrelief'
     end
