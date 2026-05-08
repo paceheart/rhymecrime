@@ -13,16 +13,16 @@ RSpec.describe "Runtime require graph" do
     expect(system(RbConfig.ruby, "-e", script)).to eq(true)
   end
 
-  it "does not load dict/build_io.rb when requiring rhymecrime/crime" do
+  it "does not load build/build_io.rb when requiring rhymecrime/crime" do
     assert_features_absent(
-      "/rhymecrime/dict/build_io.rb",
+      "/rhymecrime/build/build_io.rb",
       'require "rhymecrime/crime"',
     )
   end
 
-  it "does not load dict/build_io.rb when requiring rhymecrime/related" do
+  it "does not load build/build_io.rb when requiring rhymecrime/related" do
     assert_features_absent(
-      "/rhymecrime/dict/build_io.rb",
+      "/rhymecrime/build/build_io.rb",
       'require "rhymecrime/related"',
     )
   end

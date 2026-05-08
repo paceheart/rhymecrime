@@ -5,7 +5,7 @@
 # whose curated/related.csv rows actually changed since HEAD (auto-detected
 # via git diff, overridable with --cues=W,W,W). bin/dict-build always
 # runs, since curated/rarity.csv overrides are folded in there during the
-# rarity-classifier rescore (see lib/rhymecrime/dict/rarity_curated_overrides.rb).
+# rarity-classifier rescore (see lib/rhymecrime/build/rarity_curated_overrides.rb).
 #
 # What runs:
 #   0. AWS pre-flight              — sts:GetCallerIdentity round-trip (fails

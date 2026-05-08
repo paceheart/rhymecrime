@@ -88,9 +88,9 @@ ENV.delete("RHYMECRIME_DATA_SOURCE")
 require "csv"
 require "etc"
 require "optparse"
-require_relative "../lib/rhymecrime/dict/utils_rhyme"
+require_relative "../lib/rhymecrime/build/utils_rhyme"
 require_relative "../lib/rhymecrime/frontend"
-require_relative "../lib/rhymecrime/dict/rime"
+require_relative "../lib/rhymecrime/build/rime"
 require_relative "../lib/rhymecrime/local_store"
 # Full-compute pipeline (Numberbatch, ConceptNet, WordNet, USF, MPNet,
 # classifier): load via related.rb's relatedness_lazy_load_compute! so this
@@ -215,7 +215,7 @@ wd = word_dict
 rd = rime_dict
 before_n = rep.size
 # Asymmetric cue / relateds filtering: see cue_word? vs
-# relatedness_target_word? in lib/rhymecrime/dict/rime.rb. Cues include
+# relatedness_target_word? in lib/rhymecrime/build/rime.rb. Cues include
 # rhymeless lemmas (music, concerto, algebra, quarterback) so any
 # question thematically_related? might be asked at runtime has a row; the
 # rhyme-partner check lives in relatedness_target_word? and only governs the
@@ -355,7 +355,7 @@ threads = 1 if threads < 1
 # pirate's *related* words rhyme with each other — [handsome, ransom],
 # [acquire, crier, entire, squire] — even though pirate itself has no
 # rhyme partners). See cue_word? vs relatedness_target_word? in
-# lib/rhymecrime/dict/rime.rb.
+# lib/rhymecrime/build/rime.rb.
 curated_count = lemmas.count { |l| curated_priority[l].positive? }
 puts "Compute cues: #{n} preferred common lemmas (#{before_n} distinct common lemmas in word_dict before filter; rhymeless cues kept — see comment above)"
 puts "Ordering: by curated/related.csv row count desc, alpha tiebreak (#{curated_count} cues with ≥1 curated row run first; remaining #{n - curated_count} run alphabetically)."
@@ -482,7 +482,7 @@ else
   # but peak RSS stays closer to 1x than Nx.
   #
   # The words_we_care_about(false, true) call relies on the memo in
-  # lib/rhymecrime/dict/utils_rhyme.rb to actually persist; without that
+  # lib/rhymecrime/build/utils_rhyme.rb to actually persist; without that
   # memo the parent would return and discard the ~20k-element filtered list
   # and every worker would rebuild it from scratch on every cue
   # (~4000 has_rhyming_word? / rare? probes per element per cue).

@@ -16,11 +16,11 @@ bundle exec rspec      # all tests should pass
 
 ## Repository layout
 
-Data and build artifacts are split so **sources** stay under `corpora/` and **regenerable caches** under `generated/` at the repo root. Ruby code resolves paths via `REPO_ROOT` / `GENERATED_DIR` in `lib/rhymecrime/dict/utils_rhyme.rb`, so loading works even when the process cwd is not the repository root (e.g. CGI).
+Data and build artifacts are split so **sources** stay under `corpora/` and **regenerable caches** under `generated/` at the repo root. Ruby code resolves paths via `REPO_ROOT` / `GENERATED_DIR` in `lib/rhymecrime/build/utils_rhyme.rb`, so loading works even when the process cwd is not the repository root (e.g. CGI).
 
 | Location | Role |
 |----------|------|
-| **`lib/`** | On the load path. `lib/rhymecrime.rb` defines `Rhymecrime::ROOT`; application code lives under **`lib/rhymecrime/`** (`crime.rb`, `related.rb`, `frontend.rb`, helpers, and the **`dict/`** subtree). Use `require "rhymecrime/..."` from `bin/` and specs (after unshifting `lib/`). |
+| **`lib/`** | On the load path. `lib/rhymecrime.rb` defines `Rhymecrime::ROOT`; application code lives under **`lib/rhymecrime/`** (`crime.rb`, `related.rb`, `frontend.rb`, helpers, and the **`build/`** subtree). Use `require "rhymecrime/..."` from `bin/` and specs (after unshifting `lib/`). |
 | **`bin/`** | **Executables**: `rhyme.rb`, `similar.rb`, `debug.rb`, `anneal.rb`, `dict-build` (dictionary rebuild). Each prepends `lib/` to `$LOAD_PATH` as needed. |
 | **`assets/`** | Static fragments and CSS for the CGI UI (`header.html`, `footer.html`, `*.css`). Loaded via `File.join(REPO_ROOT, "assets", ...)`. |
 | **`corpora/`** | Upstream or hand-maintained **inputs** (versioned when license/size allow). |
@@ -34,8 +34,8 @@ Data and build artifacts are split so **sources** stay under `corpora/` and **re
 | **`corpora/conceptnet/`** | Optional **ConceptNet** assertions gzip (`conceptnet-assertions-5.7.0.csv.gz`) for thematic edge weights in `generated/conceptnet_edges.msgpack` (large; **gitignored**). |
 | **`corpora/numberbatch/`** | Optional **Numberbatch** English vectors (`numberbatch-en-19.08.txt`) for `generated/numberbatch_vectors.msgpack` (large; **gitignored**). |
 | **`curated/`** | All hand-edited inputs in one flat directory: stop-word lists (`semantically_promiscuous.txt`, `unrhymable_stop_words.txt`, `neol_supplement.txt`), the `authoritative_pronunciations.txt` overrides, the manually-declared `spelling.csv` variant clusters, and the labeled `semantic_base.csv` / `rarity.csv` / `related.csv` test/training sets. `rarity.csv` doubles as the source of truth for the common / rare / forbidden curated word lists (the retired `common_words.txt` / `rare_words.txt` / `forbid_list.txt`); rows are projected by `kind` into `rarity_csv_common_words` / `rarity_csv_rare_words` / `rarity_csv_forbidden_words`. See `curated/README.md`. |
-| **`generated/`** | **Outputs** of `./bin/dict-build` (see `lib/rhymecrime/dict/dict.rb`): `word_dict.txt`, `rime_dict.txt`, `part_of_speech.json`, `hyphen_variant_map.json`, `wordfreq.tsv`, and when source corpora are present `conceptnet_edges.msgpack`, `numberbatch_vectors.msgpack`. Semantic relatedness also reads `usf_associations.json` here if present. Entire directory is **gitignored**; clone → run `setup.sh` (wordfreq, Kaikki, …) then `./bin/dict-build`. |
-| **`lib/rhymecrime/dict/`** | Dictionary compiler (`dict.rb`), pronunciation / inflection / Wiktionary loaders, and `dict/wordfreq/export_wordfreq_tsv.py`. (Hand-edited word lists previously kept here now live under `curated/`.) |
+| **`generated/`** | **Outputs** of `./bin/dict-build` (see `lib/rhymecrime/build/dict.rb`): `word_dict.txt`, `rime_dict.txt`, `part_of_speech.json`, `hyphen_variant_map.json`, `wordfreq.tsv`, and when source corpora are present `conceptnet_edges.msgpack`, `numberbatch_vectors.msgpack`. Semantic relatedness also reads `usf_associations.json` here if present. Entire directory is **gitignored**; clone → run `setup.sh` (wordfreq, Kaikki, …) then `./bin/dict-build`. |
+| **`lib/rhymecrime/build/`** | Dictionary compiler (`dict.rb`), pronunciation / inflection / Wiktionary loaders, and `build/wordfreq/export_wordfreq_tsv.py`. (Hand-edited word lists previously kept here now live under `curated/`.) |
 | **`spec/`** | RSpec examples and supporting harnesses. Hand-labeled CSVs (`related.csv`, `rarity.csv`, `semantic_base.csv`, `spelling.csv`) live under `curated/`. |
 
 ## Command Line Usage

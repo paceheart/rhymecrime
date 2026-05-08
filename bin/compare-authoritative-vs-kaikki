@@ -346,7 +346,7 @@ if options[:md]
   md << "Authoritative ARPAbet is the rhymecrime-canonical pronunciation. IPA from Kaikki is"
   md << "shown raw, with the original `sounds.tags` (so you can see GA vs RP, accent labels,"
   md << "etc.). The **proposed GA IPA** is back-converted from the *raw* (pre-normalization)"
-  md << "authoritative phones via `lib/rhymecrime/dict/arpabet_to_ipa.rb`. Treat it as a"
+  md << "authoritative phones via `lib/rhymecrime/build/arpabet_to_ipa.rb`. Treat it as a"
   md << "starting point: paste, then adjust syllable boundaries, ties, or vowel quality as"
   md << "you see fit. Two known caveats:"
   md << ""

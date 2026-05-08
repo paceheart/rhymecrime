@@ -523,9 +523,9 @@ end
 def rarity_rescore_and_dump!(hash, **ctx_kwargs)
   dump_path = ENV["RHYMECRIME_RARITY_DUMP_SIGNALS"]
   dump_enabled = !dump_path.nil? && !dump_path.empty?
-  # bin/dict-build Dir.chdir's into lib/rhymecrime/dict/ before invoking
+  # bin/dict-build Dir.chdir's into lib/rhymecrime/build/ before invoking
   # us, so a relative RHYMECRIME_RARITY_DUMP_SIGNALS would land under
-  # lib/rhymecrime/dict/generated/ instead of the repo's generated/. Anchor
+  # lib/rhymecrime/build/generated/ instead of the repo's generated/. Anchor
   # to REPO_ROOT so the path the operator passes (and the path the trainer
   # later reads — see bin/train-rarity-classifier) line up.
   dump_path = File.expand_path(dump_path, REPO_ROOT) if dump_enabled

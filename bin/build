@@ -22,7 +22,7 @@ cd "$REPO"
 
 echo "==> Preflight: checking setup-produced inputs"
 ruby -I"$REPO/lib" <<'RUBY'
-require "rhymecrime/dict/utils_rhyme"
+require "rhymecrime/build/utils_rhyme"
 
 repo = File.expand_path(Dir.pwd)
 errors = []
@@ -135,7 +135,7 @@ export RHYMECRIME_BUILD_IO_VALIDATE="${RHYMECRIME_BUILD_IO_VALIDATE:-1}"
 
 echo "==> Preflight: checking BuildIo write validation"
 ruby -I"$REPO/lib" <<'RUBY'
-require "rhymecrime/dict/build_io"
+require "rhymecrime/build/build_io"
 
 errors = []
 begin
@@ -239,7 +239,7 @@ ln -sfn "$BUILD_DIR/runtime" "$REPO/generated/current"
 
 echo
 echo "==> Generated I/O audit (unique paths touched via BuildIo)"
-ruby -I"$REPO/lib" -e 'require "rhymecrime/dict/build_io"; BuildIo.print_build_report'
+ruby -I"$REPO/lib" -e 'require "rhymecrime/build/build_io"; BuildIo.print_build_report'
 
 echo
 echo "build done. Run bundle exec rspec to validate."

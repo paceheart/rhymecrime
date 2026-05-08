@@ -42,7 +42,7 @@
 #                                            | once the msgpacks proved small
 #                                            | enough to bundle (~6 MB total);
 #                                            | see WORD_DICT_MSGPACK_FILENAME
-#                                            | in dict/utils_rhyme.rb.
+#                                            | in build/utils_rhyme.rb.
 #
 # What does NOT ship (intentional):
 #   corpora/                        build-time only; runtime reads DynamoDB

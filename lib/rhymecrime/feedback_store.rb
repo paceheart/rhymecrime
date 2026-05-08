@@ -178,7 +178,7 @@ module Rhymecrime
         # Late-bound: generated_dict_path lives in utils_rhyme, which
         # the Lambda runtime path doesn't load. We're only ever instantiated
         # in dev, so the require here is safe.
-        require_relative "dict/utils_rhyme"
+        require_relative "build/utils_rhyme"
         generated_root_path("feedback.csv")
       end
     end

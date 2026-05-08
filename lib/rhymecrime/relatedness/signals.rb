@@ -25,7 +25,7 @@ require "numo/narray"
 require "rwordnet"
 require "set"
 require_relative "../pace_utils"
-require_relative "../dict/utils_rhyme"
+require_relative "../build/utils_rhyme"
 
 WordNet::DB.path = File.join(REPO_ROOT, "corpora", "wordnet", "3.1") unless defined?(WordNet::DB) && WordNet::DB.path
 

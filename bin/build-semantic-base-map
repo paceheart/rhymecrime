@@ -6,7 +6,7 @@
 # re-running the full bin/dict-build pipeline.
 #
 # Useful for iterating on SEMANTIC_BASE_SUFFIX_RULES / the gates in
-# lib/rhymecrime/dict/dict.rb: edit, run this, diff the .txt against the
+# lib/rhymecrime/build/dict.rb: edit, run this, diff the .txt against the
 # previous version, repeat. The full bin/dict-build regenerates the same
 # artefacts as a side-effect of rebuild_rhymecrime_dictionaries — this is a
 # fast path that skips ConceptNet / Numberbatch / SUBTLEX I/O.
@@ -18,10 +18,10 @@ $LOAD_PATH.unshift File.expand_path("../lib", __dir__)
 ENV.delete("RHYMECRIME_DATA_SOURCE")
 
 require "optparse"
-require_relative "../lib/rhymecrime/dict/utils_rhyme"
+require_relative "../lib/rhymecrime/build/utils_rhyme"
 require_relative "../lib/rhymecrime/frontend"
-require_relative "../lib/rhymecrime/dict/lexical"
-require_relative "../lib/rhymecrime/dict/dict"
+require_relative "../lib/rhymecrime/build/lexical"
+require_relative "../lib/rhymecrime/build/dict"
 
 dry_run = false
 no_cosine_guard = false

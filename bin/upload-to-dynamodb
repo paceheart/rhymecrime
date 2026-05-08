@@ -24,7 +24,7 @@
 #
 # The lexicon (word_dict) and rime cohort (rime_dict) live entirely in the
 # Lambda deploy bundle as word_dict.msgpack / rime_dict.msgpack — see
-# bin/stage-lambda and lib/rhymecrime/dict/utils_rhyme.rb's
+# bin/stage-lambda and lib/rhymecrime/build/utils_rhyme.rb's
 # WORD_DICT_MSGPACK_FILENAME / RIME_DICT_MSGPACK_FILENAME constants.
 # Eliminating the word# / rime# partitions cuts ~217K DDB rows from the
 # data deploy and removes the per-request BatchGetItem fan-out that
@@ -64,7 +64,7 @@ require "aws-sdk-dynamodb"
 require "sqlite3"
 require_relative "_aws_preflight"
 require_relative "../lib/rhymecrime/data_source"
-require_relative "../lib/rhymecrime/dict/utils_rhyme"
+require_relative "../lib/rhymecrime/build/utils_rhyme"
 
 skip_related = false
 related_path = generated_dict_path(LOCAL_STORE_FILENAME)

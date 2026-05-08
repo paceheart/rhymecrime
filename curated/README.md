@@ -27,7 +27,7 @@ and the runtime read from `rarity.csv` directly:
     `rarity_csv_forbidden_words` / `forbid_list()` /
     `explicitly_forbidden?`.
 
-All three accessors live in `lib/rhymecrime/dict/utils_rhyme.rb`. See the
+All three accessors live in `lib/rhymecrime/build/utils_rhyme.rb`. See the
 `rarity.csv` section below for column layout, all valid `kind` values, and
 how the spec/eval harness consumes the same file.
 
@@ -37,7 +37,7 @@ How the three rarity categories interact with the rhyme and relatedness
 pipelines:
 
   * **`common` / `common_ish` — valid both ways.** Get `freq = 99` floored
-    in `add_frequency_info` (`lib/rhymecrime/dict/frequency.rb`), keep
+    in `add_frequency_info` (`lib/rhymecrime/build/frequency.rb`), keep
     their pronunciations and rime cohort, and are eligible to appear in
     every output (rhymes, related lists, rhyming tuples, rhyming pairs).
     Also act as relatedness cues — *unless* the headword is in
@@ -52,7 +52,7 @@ pipelines:
     the `forbidden_scrub` pass with `freq = 0` and intact prons, so
     `find_rhyming_words` happily processes them as input. The compute cue
     universe in `bin/compute-relatedness` is `cue_word?`
-    (`lib/rhymecrime/dict/rime.rb`), which requires `freq > RARE_FREQ_MAX`,
+    (`lib/rhymecrime/build/rime.rb`), which requires `freq > RARE_FREQ_MAX`,
     so rare words have no precomputed `related#<lemma>` row: in DDB-
     authoritative mode they yield the "Oops, I don't know what words are
     related to ..." bad-input branch in `rhymecrime` (and a feedback-store
@@ -67,7 +67,7 @@ pipelines:
 
   * **`forbidden` / `forbidden_ish` — invalid both ways.** Deleted from
     `word_dict` (and therefore every rime cohort) by `forbidden_scrub` in
-    `lib/rhymecrime/dict/frequency.rb`. `find_rhyming_words`, `has_rhyming_
+    `lib/rhymecrime/build/frequency.rb`. `find_rhyming_words`, `has_rhyming_
     word?`, `really_find_rhyming_tuples`, `find_rhyming_pairs`,
     `find_related_words`, and `related?` all guard on `forbidden?` (absent
     from `word_dict`) and return `[]` for those inputs; the `set_related`
@@ -81,7 +81,7 @@ Function words and apostrophe-heavy contractions that are valid English but
 would make awful rhyme targets — articles / possessives (`the`, `a`, `my`),
 contractions (`he'd've`, `couldn't've`, `they're`), interjections (`huh`,
 `mm`, `oh`). **Deleted from `word_dict` entirely** at dict-build time by
-`delete_unrhymable_stop_words_from_hash` in `lib/rhymecrime/dict/phonology.rb`,
+`delete_unrhymable_stop_words_from_hash` in `lib/rhymecrime/build/phonology.rb`,
 alongside `forbid_list.txt` — the runtime never sees these words as
 headwords. Predicate: `unrhymable_stop_word?`. Conceptually parallel to
 `forbid_list.txt`: both lists name words to delete, but `forbid_list.txt`
@@ -103,7 +103,7 @@ moved to `unrhymable_stop_words.txt` and local additions.
 
 Both files use `#` for comment / blank lines. Loaded lazily via
 `unrhymable_stop_words` / `semantically_promiscuous_words` in
-`lib/rhymecrime/dict/utils_rhyme.rb`.
+`lib/rhymecrime/build/utils_rhyme.rb`.
 
 A small overlap (currently seven entries: `eh`, `mhm`, `mm`, `thees`,
 `thou'd`, `thou'll`, `ye`) between the two files is intentional and
@@ -118,7 +118,7 @@ entries that were supposed to be deleted.
 Local additions to the 12dicts `neol2016.txt` neologism list (acai,
 blockchain, doomscroll, yeet, …) — words that either post-date the 2016
 snapshot or were absent from it. Loaded alongside `corpora/neol/neol2016.txt`
-in the neol-promotion pass of `lib/rhymecrime/dict/frequency.rb` to floor the frequency of
+in the neol-promotion pass of `lib/rhymecrime/build/frequency.rb` to floor the frequency of
 recent additions to English so they survive the rare-word threshold and seed
 morphological expansion. Plain newline-delimited list. Add words that are
 (a) absent from SUBTLEX-US / wordfreq at meaningful frequency, and
@@ -131,7 +131,7 @@ morphological expansion. Plain newline-delimited list. Add words that are
 Hand-curated CMUdict-format pronunciations that always win over CMU,
 Wiktionary/Kaikki, and inflectional fallbacks. Same format as CMUdict
 (`WORD  PH PH PH`, `;;;` comments). Loaded as `AUTHORITATIVE_PRONUNCIATIONS_PATH`
-in `lib/rhymecrime/dict/phonology.rb`; the contract (downstream loaders skip
+in `lib/rhymecrime/build/phonology.rb`; the contract (downstream loaders skip
 words listed here) is documented in detail at the load site.
 
 ### `spelling.csv`
@@ -140,7 +140,7 @@ Manually declared spelling-variant clusters — pairs (or n-tuples) where two
 forms mean the same thing AND have the same pronunciation, with the first
 column being the preferred surface form. Free-form trailing notes column is
 silently dropped at load time (see `split_spelling_row` in
-`lib/rhymecrime/dict/utils_rhyme.rb`). Loaded at runtime as
+`lib/rhymecrime/build/utils_rhyme.rb`). Loaded at runtime as
 `SPELLING_CSV_PATH`; complemented by automatically-detected morphology pairs
 in `corpus_variants.rb` (US/UK -ize/-ise, -oes/-os plurals, …).
 
@@ -164,11 +164,11 @@ rarity classifier training in `bin/train-rarity-classifier`.
 The file doubles as the input for the build-time + runtime word lists that
 used to live in `common_words.txt` / `rare_words.txt` / `forbid_list.txt`:
 `rarity_csv_common_words`, `rarity_csv_rare_words`, and
-`rarity_csv_forbidden_words` (in `lib/rhymecrime/dict/utils_rhyme.rb`)
+`rarity_csv_forbidden_words` (in `lib/rhymecrime/build/utils_rhyme.rb`)
 project the matching `kind` rows into Sets. So a row like
 `stop words,a,common` with notes beginning `stop words` is consulted by
 both the spec sweep AND `add_frequency_info` in
-`lib/rhymecrime/dict/frequency.rb`. Rows imported from the retired `*.txt`
+`lib/rhymecrime/build/frequency.rb`. Rows imported from the retired `*.txt`
 files use the source filename as the section path and append
 `imported from <file>` after ` | `; future edits should pick a more specific
 section path if you have one.

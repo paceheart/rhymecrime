@@ -5,7 +5,7 @@
 # generated/<UTC-timestamp>/ tree and runs in final mode (slim default).
 # Use bin/build for the full pipeline (bootstrap + train + relatedness + final).
 #
-# Loads lib/rhymecrime/dict/dict.rb with cwd = that directory, then runs rebuild.
+# Loads lib/rhymecrime/build/dict.rb with cwd = that directory, then runs rebuild.
 #
 #   ./bin/dict-build                                # slim default
 #   RHYMECRIME_RARITY_DUMP_SIGNALS=PATH ./bin/dict-build  # rarity signal dump
@@ -17,7 +17,7 @@
 require "fileutils"
 
 repo = File.expand_path("..", __dir__)
-dict_dir = File.join(repo, "lib", "rhymecrime", "dict")
+dict_dir = File.join(repo, "lib", "rhymecrime", "build")
 $LOAD_PATH.unshift File.join(repo, "lib")
 
 if !ENV["RHYMECRIME_BUILD_DIR"] || ENV["RHYMECRIME_BUILD_DIR"].empty?

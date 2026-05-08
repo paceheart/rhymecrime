@@ -116,3 +116,5 @@ ought_not_rhyme erotic homoerotic
 ought_not_rhyme sexual homosexual
 retard retarded forbidden
 ought_not_rhyme shat nut
+
+unsuspend electrode alert

@@ -79,7 +79,7 @@ require "json"
 require "optparse"
 require "set"
 require "sqlite3"
-require_relative "../lib/rhymecrime/dict/utils_rhyme"
+require_relative "../lib/rhymecrime/build/utils_rhyme"
 require_relative "../lib/rhymecrime/frontend"
 require_relative "../lib/rhymecrime/local_store"
 

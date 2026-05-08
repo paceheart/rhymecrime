@@ -12,7 +12,7 @@ module Rhymecrime
   # / set_related#<lemma> partitions in DynamoDB. The lexicon (word#)
   # and rime cohort (rime#) partitions were retired once the corresponding
   # .msgpack files got small enough (~5.5 MB and ~700 KB respectively) to
-  # ship in the Lambda deploy bundle — see lib/rhymecrime/dict/utils_rhyme.rb
+  # ship in the Lambda deploy bundle — see lib/rhymecrime/build/utils_rhyme.rb
   # (WORD_DICT_MSGPACK_FILENAME, RIME_DICT_MSGPACK_FILENAME) and
   # bin/upload-to-dynamodb (which now writes related#, score#, and
   # set_related#).

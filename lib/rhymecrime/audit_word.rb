@@ -10,9 +10,9 @@ require "json"
 require "msgpack"
 require "open3"
 
-require_relative "dict/phoneme"
-require_relative "dict/pronunciation"
-require_relative "dict/utils_rhyme"
+require_relative "build/phoneme"
+require_relative "build/pronunciation"
+require_relative "build/utils_rhyme"
 
 module Rhymecrime
   module AuditWord

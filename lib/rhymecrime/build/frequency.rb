@@ -1955,7 +1955,7 @@ def add_frequency_info(pronunciation_map, subtlex_hash, subtlex_total_hash, word
 
   # Rarity classifier rescore: post-propagation rescore / signal dump (no-op when the
   # classifier JSON is absent AND dump is not enabled). See
-  # lib/rhymecrime/dict/rarity_classifier.rb for the rescore semantics; the dump
+  # lib/rhymecrime/build/rarity_classifier.rb for the rescore semantics; the dump
   # path is driven by RHYMECRIME_RARITY_DUMP_SIGNALS.
   rarity_rescore_and_dump!(
     hash,

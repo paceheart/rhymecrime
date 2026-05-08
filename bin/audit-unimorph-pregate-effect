@@ -18,11 +18,11 @@ require "set"
 repo = File.expand_path("..", __dir__)
 $LOAD_PATH.unshift File.join(repo, "lib")
 
-require "rhymecrime/dict/utils_rhyme"
-require "rhymecrime/dict/inflect"
-require "rhymecrime/dict/lexical"
-require "rhymecrime/dict/wiktionary"
-require "rhymecrime/dict/morphology"
+require "rhymecrime/build/utils_rhyme"
+require "rhymecrime/build/inflect"
+require "rhymecrime/build/lexical"
+require "rhymecrime/build/wiktionary"
+require "rhymecrime/build/morphology"
 
 WORD_DICT_PATH = File.join(repo, "generated", "current", "word_dict.txt")
 WORDFREQ_PATH  = File.join(repo, "generated", "wordfreq.tsv")

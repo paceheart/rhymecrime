@@ -37,9 +37,9 @@ fi
 # (gitignored; used by dict.rb / dict-build)
 # Use python3 -m pip so wordfreq installs for the same interpreter as
 # python3 (asdf/pyenv).
-python3 -m pip install --user -r lib/rhymecrime/dict/wordfreq/requirements.txt
+python3 -m pip install --user -r lib/rhymecrime/build/wordfreq/requirements.txt
 mkdir -p generated
-python3 lib/rhymecrime/dict/wordfreq/export_wordfreq_tsv.py
+python3 lib/rhymecrime/build/wordfreq/export_wordfreq_tsv.py
 
 # --- USF Free Association Norms → generated/usf_associations.json ----------
 # Runtime graph compiled from the raw Cue_Target_Pairs.* shards that are
@@ -63,7 +63,7 @@ fi
 # --- ConceptNet corpus mirror → generated/conceptnet_edges.msgpack -----------
 # Stable full-corpus streamed MessagePack. Runtime/build readers filter it
 # against word_dict at load time, so dict-build never needs to regenerate it.
-bundle exec ruby -I lib -e 'require "rhymecrime/dict/utils_rhyme"; ensure_conceptnet_edges_cache!'
+bundle exec ruby -I lib -e 'require "rhymecrime/build/utils_rhyme"; ensure_conceptnet_edges_cache!'
 
 # --- ConceptNet Numberbatch 19.08 English (CC-BY-SA 4.0) --------------------
 # → corpora/numberbatch/numberbatch-en-19.08.txt
@@ -80,4 +80,4 @@ fi
 # --- Numberbatch corpus mirror → generated/numberbatch_vectors.msgpack -------
 # Stable full-corpus streamed MessagePack. Readers filter it against word_dict at
 # load time, so dict-build / bin/build treat it as a setup-produced input.
-bundle exec ruby -I lib -e 'require "rhymecrime/dict/utils_rhyme"; ensure_numberbatch_vectors_cache!'
+bundle exec ruby -I lib -e 'require "rhymecrime/build/utils_rhyme"; ensure_numberbatch_vectors_cache!'

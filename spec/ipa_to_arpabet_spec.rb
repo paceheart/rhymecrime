@@ -1,5 +1,5 @@
 # encoding: utf-8
-require "rhymecrime/dict/ipa_to_arpabet"
+require "rhymecrime/build/ipa_to_arpabet"
 
 def converts(ipa, expected)
   it "converts #{ipa}" do

@@ -26,8 +26,8 @@ require "set"
 repo = File.expand_path("..", __dir__)
 $LOAD_PATH.unshift File.join(repo, "lib")
 
-require "rhymecrime/dict/utils_rhyme"
-require "rhymecrime/dict/inflect"
+require "rhymecrime/build/utils_rhyme"
+require "rhymecrime/build/inflect"
 
 UNIMORPH_PATH  = File.join(repo, "corpora", "unimorph", "eng")
 WORD_DICT_PATH = File.join(repo, "generated", "current", "word_dict.txt")

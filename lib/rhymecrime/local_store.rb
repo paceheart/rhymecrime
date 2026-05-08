@@ -25,7 +25,7 @@ require "json"
 require "singleton"
 require "sqlite3"
 require_relative "data_source"
-require_relative "dict/utils_rhyme"
+require_relative "build/utils_rhyme"
 
 module Rhymecrime
   class LocalStore

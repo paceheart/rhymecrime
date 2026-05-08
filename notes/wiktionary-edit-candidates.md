@@ -8,7 +8,7 @@ matches the table the script prints to stdout.
 Authoritative ARPAbet is the rhymecrime-canonical pronunciation. IPA from Kaikki is
 shown raw, with the original `sounds.tags` (so you can see GA vs RP, accent labels,
 etc.). The **proposed GA IPA** is back-converted from the *raw* (pre-normalization)
-authoritative phones via `lib/rhymecrime/dict/arpabet_to_ipa.rb`. Treat it as a
+authoritative phones via `lib/rhymecrime/build/arpabet_to_ipa.rb`. Treat it as a
 starting point: paste, then adjust syllable boundaries, ties, or vowel quality as
 you see fit. Two known caveats:
 

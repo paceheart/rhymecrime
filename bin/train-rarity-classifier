@@ -10,7 +10,7 @@
 #     once with the classifier disabled. One record per headword:
 #       {"word": "foo", "features": [...one float per feature, leading 1.0 bias...], "freq": 10}
 #     Feature ordering and count must match LEARNED_RARITY_FEATURE_NAMES in
-#     lib/rhymecrime/dict/rarity_classifier.rb. The freq column is a
+#     lib/rhymecrime/build/rarity_classifier.rb. The freq column is a
 #     diagnostic only (referenced in confusion-row printout); for training
 #     purposes the relevant freq lives inside features as
 #     post_propagation_freq.
@@ -18,7 +18,7 @@
 #
 # Output:
 #   generated/rarity_classifier.json       best model on 5-fold CV weighted
-#     accuracy. See rarity_classify in lib/rhymecrime/dict/rarity_classifier.rb
+#     accuracy. See rarity_classify in lib/rhymecrime/build/rarity_classifier.rb
 #     for the consumer format.
 #
 # Training combos (3 total; the 2class target and the regressor-logreg variant
@@ -96,9 +96,9 @@ Dir.chdir(repo)
 
 # Load constants + feature names without pulling in crime.rb (which loads the full
 # dict; the trainer only needs the signal dump).
-require "rhymecrime/dict/constants"
-require "rhymecrime/dict/utils_rhyme"
-require "rhymecrime/dict/rarity_classifier"
+require "rhymecrime/build/constants"
+require "rhymecrime/build/utils_rhyme"
+require "rhymecrime/build/rarity_classifier"
 
 # --- Constants -------------------------------------------------------------
 
@@ -207,7 +207,7 @@ end
 # Feature-group index map: lists of feature-names per group. Used by --ablate-
 # group to zero out groups before training so we can measure which groups pull
 # their weight (re-run vs baseline weighted pct). Groups align with the sections
-# of RaritySignals in lib/rhymecrime/dict/rarity_signals.rb.
+# of RaritySignals in lib/rhymecrime/build/rarity_signals.rb.
 FEATURE_GROUPS = {
   # common_words_flag / rare_words_flag used to live here too — see the long
   # comment above LEARNED_RARITY_FEATURE_NAMES in rarity_classifier.rb.

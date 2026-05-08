@@ -76,7 +76,7 @@ require "fileutils"
 require "optparse"
 require "set"
 
-require_relative "../lib/rhymecrime/dict/build_io"
+require_relative "../lib/rhymecrime/build/build_io"
 
 ROOT = File.expand_path("..", __dir__)
 DEFAULT_FEEDBACK_CSV = File.join(ROOT, "generated", "feedback.csv")

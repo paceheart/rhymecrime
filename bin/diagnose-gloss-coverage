@@ -36,7 +36,7 @@ require "csv"
 require "optparse"
 require "set"
 
-require_relative "../lib/rhymecrime/dict/utils_rhyme"
+require_relative "../lib/rhymecrime/build/utils_rhyme"
 require_relative "../lib/rhymecrime/frontend"
 require_relative "../lib/rhymecrime/relatedness/signals"
 require_relative "../lib/rhymecrime/relatedness/score"
