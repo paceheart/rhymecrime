@@ -46,7 +46,7 @@ def oughta_be_related(word1, word2, not_working_reason: nil)
   it test_name do
     skip_if_not_working(not_working_reason)
     sim = similarity(word1, word2).round
-    expect(related?(word1, word2, false)).to eql(true), "'#{word1}' / '#{word2}': expected related but related? was false. similarity=#{sim} (Numberbatch+ConceptNet centiles, threshold #{similarity_threshold()}); gloss/sense-vector/USF paths can still pass when sim is lower. #{debug_info(word1)} / #{debug_info(word2)}"
+    expect(thematically_related?(word1, word2, false)).to eql(true), "'#{word1}' / '#{word2}': expected related but thematically_related? was false. similarity=#{sim} (stored relatedness score, threshold #{RELATEDNESS_SCORE_THRESHOLD}); gloss/sense-vector/USF paths can still pass when sim is lower. #{debug_info(word1)} / #{debug_info(word2)}"
   end
 end
 
@@ -55,7 +55,7 @@ def ought_not_be_related(word1, word2, not_working_reason: nil)
   it test_name do
     skip_if_not_working(not_working_reason)
     sim = similarity(word1, word2).round
-    expect(related?(word1, word2, false)).to eql(false), "'#{word1}' / '#{word2}': expected unrelated but related? was true. similarity=#{sim} (threshold #{similarity_threshold()}). If sim is below threshold, a rescue path matched (WordNet gloss containment, sense vectors, or USF two-hop). #{debug_info(word1)} / #{debug_info(word2)}"
+    expect(thematically_related?(word1, word2, false)).to eql(false), "'#{word1}' / '#{word2}': expected unrelated but thematically_related? was true. similarity=#{sim} (stored relatedness score, threshold #{RELATEDNESS_SCORE_THRESHOLD}). If sim is below threshold, a rescue path matched (WordNet gloss containment, sense vectors, or USF two-hop). #{debug_info(word1)} / #{debug_info(word2)}"
   end
 end
 
@@ -155,6 +155,27 @@ end
 $related_csv_sweep_results = nil
 def related_csv_sweep_results
   $related_csv_sweep_results ||= evaluate_relatedness_csv
+end
+
+$related_csv_sweep_results_without_overrides = nil
+def related_csv_sweep_results_without_overrides
+  return $related_csv_sweep_results_without_overrides if $related_csv_sweep_results_without_overrides
+
+  override_key = Rhymecrime::Env::RELATED_CSV_OVERRIDE_ENV
+  old_override = ENV[override_key]
+  old_bypass = ENV["RELATED_BYPASS_STORE"]
+  begin
+    ENV[override_key] = "0"
+    ENV["RELATED_BYPASS_STORE"] = "1"
+    reset_curated_relatedness_overrides! if defined?(reset_curated_relatedness_overrides!)
+    $thematically_related_memo = nil if defined?($thematically_related_memo)
+    $related_csv_sweep_results_without_overrides = evaluate_relatedness_csv
+  ensure
+    old_bypass.nil? ? ENV.delete("RELATED_BYPASS_STORE") : ENV["RELATED_BYPASS_STORE"] = old_bypass
+    old_override.nil? ? ENV.delete(override_key) : ENV[override_key] = old_override
+    reset_curated_relatedness_overrides! if defined?(reset_curated_relatedness_overrides!)
+    $thematically_related_memo = nil if defined?($thematically_related_memo)
+  end
 end
 
 describe 'RELATED' do
@@ -317,9 +338,11 @@ describe 'RELATED' do
       expect(rate).to be >= RELATED_PASS_RATE_FLOOR
     end
 
-    # This is to verify that the classifier isn't training on the labels
-    it "has < #{format('%g', RELATED_PASS_RATE_SUSPICIOUS * 100)}% weighted pass rate" do
-      _evaluated, total_weight, weighted_correct = related_csv_sweep_results
+    # Verify the raw classifier/rules are not simply memorizing curated labels.
+    # The default runtime predicate intentionally applies curated/related.csv
+    # overrides now, so this guard disables them for the diagnostic sweep.
+    it "has < #{format('%g', RELATED_PASS_RATE_SUSPICIOUS * 100)}% weighted pass rate without curated overrides" do
+      _evaluated, total_weight, weighted_correct = related_csv_sweep_results_without_overrides
       rate = total_weight.positive? ? weighted_correct / total_weight : 0.0
       expect(rate).to be < RELATED_PASS_RATE_SUSPICIOUS
     end

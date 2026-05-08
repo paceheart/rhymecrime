@@ -19,7 +19,7 @@ CMUDICT_FILENAME = File.join(CORPORA_ROOT, "cmudict", "cmudict-0.7c.txt")
 NEOL2016_FILENAME = File.join(CORPORA_ROOT, "neol", "neol2016.txt")
 NEOL_SUPPLEMENT_FILENAME = File.join(CURATED_DIR, "neol_supplement.txt")
 
-WordNet::DB.path = File.join(CORPORA_ROOT, "wordnet", "3.1")
+WordNet::DB.path = WORDNET_3_1_PATH
 SUBTLEX_FILENAME = File.join(CORPORA_ROOT, "subtlex", "SUBTLEXus.tsv")
 SUBTLEX_PRESENCE_BONUS = 4
 

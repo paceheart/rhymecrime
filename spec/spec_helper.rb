@@ -37,9 +37,7 @@ def skip_if_not_working(not_working_reason)
 end
 
 def rhymecrime_run_skipped_examples?
-  v = ENV.fetch("RHYMECRIME_RUN_SKIPPED", "")
-  v = v.strip.downcase
-  !v.empty? && %w[1 true yes on].include?(v)
+  Rhymecrime::Env.run_skipped_examples?
 end
 
 # Rarity specs tagged :rarity_ish (oughta_be_*_ish) are lower priority. To run only stricter

@@ -13,14 +13,14 @@ require "json"
 require "fileutils"
 
 require_relative "../build_io_utils"
+require_relative "../paths"
 
 module BuildIo
-  REPO_ROOT = File.expand_path("../../..", __dir__).freeze
   CORPORA_ROOT = File.join(REPO_ROOT, "corpora").freeze
-  CURATED_ROOT = File.join(REPO_ROOT, "curated").freeze
+  CURATED_ROOT = CURATED_DIR
   LIB_ROOT = File.join(REPO_ROOT, "lib").freeze
-  GENERATED_ROOT = File.join(REPO_ROOT, "generated").freeze
-  GENERATED_CURRENT = File.join(GENERATED_ROOT, "current").freeze
+  GENERATED_ROOT = GENERATED_ROOT_DIR
+  GENERATED_CURRENT = GENERATED_DIR
   LEGACY_VARIANT_BASENAMES = %w[spelling_variants_auto.txt hyphen_variant_map.json].freeze
   BUILD_STAMP_RE = /\A\d{8}T\d{6}\z/.freeze
 
@@ -28,10 +28,7 @@ module BuildIo
 
   class << self
     def validate?
-      v = ENV["RHYMECRIME_BUILD_IO_VALIDATE"]
-      return true if v.nil? || v.to_s.strip.empty?
-
-      truthy?(v)
+      Rhymecrime::Env.build_io_validate?
     end
 
     def log_path
@@ -39,23 +36,16 @@ module BuildIo
       (p && !p.empty?) ? File.expand_path(p) : nil
     end
 
-    def truthy?(v)
-      v && !%w[0 false no off].include?(v.to_s.strip.downcase)
-    end
-
     def build_dir
-      d = ENV["RHYMECRIME_BUILD_DIR"]
-      return nil if d.nil? || d.to_s.empty?
-
-      File.expand_path(d, REPO_ROOT)
+      TOPLEVEL_BINDING.receiver.send(:rhymecrime_build_dir)
     end
 
     def bootstrap_mode?
-      ENV["RHYMECRIME_BUILD_MODE"].to_s == "bootstrap"
+      TOPLEVEL_BINDING.receiver.send(:bootstrap_mode?)
     end
 
     def final_mode?
-      ENV["RHYMECRIME_BUILD_MODE"].to_s == "final"
+      TOPLEVEL_BINDING.receiver.send(:final_mode?)
     end
 
     def abs(path)

@@ -1,4 +1,5 @@
-require 'csv'
+require "csv"
+require "rhymecrime/env"
 require "rhymecrime/pace_utils"
 
 # True when RHYMECRIME_VERBOSE_CSV_SWEEP is set to a truthy value (1/true/yes/on,
@@ -10,8 +11,7 @@ require "rhymecrime/pace_utils"
 #
 #   RHYMECRIME_VERBOSE_CSV_SWEEP=1 bundle exec rspec spec/related_spec.rb
 def csv_sweep_verbose?
-  v = ENV.fetch("RHYMECRIME_VERBOSE_CSV_SWEEP", "").strip.downcase
-  !v.empty? && %w[1 true yes on].include?(v)
+  Rhymecrime::Env.verbose_csv_sweep?
 end
 
 # Valid values for the oughta be related? column in curated/related.csv. Rows marked whatever are

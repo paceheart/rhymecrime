@@ -28,7 +28,7 @@ require_relative "../pace_utils"
 require_relative "../utils"
 require_relative "../dev/corpus_caches"
 
-WordNet::DB.path = File.join(REPO_ROOT, "corpora", "wordnet", "3.1") unless defined?(WordNet::DB) && WordNet::DB.path
+WordNet::DB.path = WORDNET_3_1_PATH unless defined?(WordNet::DB) && WordNet::DB.path
 
 CONCEPTNET_EDGES_PATH = generated_root_path(CONCEPTNET_EDGES_FILENAME) unless defined?(CONCEPTNET_EDGES_PATH)
 NUMBERBATCH_VEC_PATH = generated_root_path(NUMBERBATCH_VECTORS_FILENAME) unless defined?(NUMBERBATCH_VEC_PATH)

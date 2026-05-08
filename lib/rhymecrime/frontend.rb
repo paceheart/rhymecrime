@@ -31,24 +31,25 @@ def utf8_query_param(value)
   value.to_s.encode(Encoding::UTF_8, Encoding::UTF_8, invalid: :replace, undef: :replace)
 end
 
-def parse_cgi_input
-  cgi = CGI.new
-  word1 = utf8_query_param(cgi["word1"]).downcase
-  word2 = utf8_query_param(cgi["word2"]).downcase
-
-  if word1 == "" && word2 != ""
-    word1, word2 = word2, word1
-  end
-  [word1, word2]
-end
-
-def parse_query_words(word1, word2)
-  w1 = utf8_query_param(word1).downcase.strip
-  w2 = utf8_query_param(word2).downcase.strip
+# Shared by parse_cgi_input (CGI params, no strip) and parse_query_words (Rack, strip).
+def normalize_query_word_pair(word1, word2, strip:)
+  w1 = utf8_query_param(word1).downcase
+  w2 = utf8_query_param(word2).downcase
+  w1 = w1.strip if strip
+  w2 = w2.strip if strip
   if w1 == "" && w2 != ""
     w1, w2 = w2, w1
   end
   [w1, w2]
+end
+
+def parse_cgi_input
+  cgi = CGI.new
+  normalize_query_word_pair(cgi["word1"], cgi["word2"], strip: false)
+end
+
+def parse_query_words(word1, word2)
+  normalize_query_word_pair(word1, word2, strip: true)
 end
 
 def print_html_header(word1, word2, title = "RhymeCrime", handler = "/")

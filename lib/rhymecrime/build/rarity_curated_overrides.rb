@@ -77,7 +77,7 @@ $rarity_curated_overrides_stats = nil
 
 # Returns true unless explicitly disabled via env var. Default ON.
 def rarity_curated_overrides_enabled?
-  ENV["RHYMECRIME_RARITY_CSV_OVERRIDE"].to_s != "0"
+  Rhymecrime::Env.rarity_csv_override_enabled?
 end
 
 # Drop the memoized override map. Used by tests and by tooling that mutates

@@ -4,6 +4,7 @@
 
 require "set"
 require "rwordnet"
+require_relative "paths"
 require_relative "pronunciation"
 
 module Inflect
@@ -435,7 +436,7 @@ module Inflect
     return unless defined?(WordNet::DB)
 
     if WordNet::DB.path.nil? || WordNet::DB.path.to_s.empty?
-      WordNet::DB.path = File.expand_path("../../../corpora/wordnet/3.1", __dir__)
+      WordNet::DB.path = WORDNET_3_1_PATH
     end
   rescue StandardError
     nil

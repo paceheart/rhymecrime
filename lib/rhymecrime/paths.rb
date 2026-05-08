@@ -5,6 +5,7 @@ require "json"
 require "msgpack"
 require "set"
 require_relative "build_io_utils"
+require_relative "env"
 require_relative "phoneme.rb"
 require_relative "pace_utils"
 
@@ -113,10 +114,7 @@ RARE_FREQ_MAX = 4
 
 # Rime dict build: when false (default), drop buckets where every pair of common headwords (freq>RARE_FREQ_MAX)
 # rhymes only as rich rhymes for this rime. Set INCLUDE_RICH_RHYMES=1 to keep those buckets.
-INCLUDE_RICH_RHYMES = begin
-  v = ENV["INCLUDE_RICH_RHYMES"]
-  v && !v.empty? && %w[1 true yes on].include?(v.downcase)
-end
+INCLUDE_RICH_RHYMES = Rhymecrime::Env.strict_truthy?(ENV["INCLUDE_RICH_RHYMES"])
 
 # debug comes from runtime (e.g. pace_utils via crime); dict-build loads this file alone.
 # Do not use respond_to?(:debug) — it can be true without a callable debug on main in some loads.
@@ -132,6 +130,7 @@ end
 # GENERATED_DIR — <repo>/generated/current/ (symlink → latest build's runtime/); all
 # runtime lexicon artifacts dict-build emits and query.rb loads live here.
 REPO_ROOT = File.expand_path("../..", __dir__)
+WORDNET_3_1_PATH = File.join(REPO_ROOT, "corpora", "wordnet", "3.1").freeze
 GENERATED_ROOT_DIR = File.join(REPO_ROOT, "generated")
 GENERATED_DIR = File.join(GENERATED_ROOT_DIR, "current")
 
