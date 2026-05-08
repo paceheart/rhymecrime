@@ -24,7 +24,6 @@ require "msgpack"
 require "numo/narray"
 require "rwordnet"
 require "set"
-require_relative "../pace_utils"
 require_relative "../utils"
 require_relative "../build/corpus_caches"
 

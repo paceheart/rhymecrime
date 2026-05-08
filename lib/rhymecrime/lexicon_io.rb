@@ -1,5 +1,20 @@
 # frozen_string_literal: true
 
+require "msgpack"
+require_relative "io_utils"
+
+# Msgpack read/write for dictionary artifacts (word_dict, rime_dict, lemma maps, glosses).
+class MessagePackUtils
+  def self.load_and_unpack(filename)
+    bytes = IoUtils.binread(filename, hint: "MessagePackUtils.load_and_unpack")
+    MessagePack.unpack(bytes)
+  end
+
+  def self.pack_and_save(filename, object)
+    IoUtils.binwrite(filename, object.to_msgpack, hint: "MessagePackUtils.pack_and_save")
+  end
+end
+
 #
 # file utilities
 #
