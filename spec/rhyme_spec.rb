@@ -138,6 +138,10 @@ describe 'RHYMES' do
   end
   
   context "you can't just add a prefix and call it a rhyme" do
+    ought_not_rhyme 'racial', 'biracial'
+    ought_not_rhyme 'erotic', 'homoerotic'
+    ought_not_rhyme 'sexual', 'homosexual'
+    ought_not_rhyme 'sexing', 'unsexing'
     ought_not_rhyme 'sex', 'same-sex'
     ought_not_rhyme 'orient', 'reorient'
     ought_not_rhyme 'orient', 'disorient'
@@ -321,6 +325,7 @@ describe 'RHYMES' do
         before(:each) { skip_if_not_working('pseudo-prefix: filter_out_prefix_words overfilters') }
         nwr = 'splash damage: filter_out_prefix_words treats the false re- as derivational'
         oughta_rhyme 'parity', 'disparity', not_working_reason: nwr
+        oughta_rhyme 'dress', 'redress', not_working_reason: nwr
         oughta_rhyme 'percussion', 'repercussion', not_working_reason: nwr
         oughta_rhyme 'lied', 'relied', not_working_reason: nwr
         oughta_rhyme 'quest', 'request', not_working_reason: nwr
@@ -1158,6 +1163,9 @@ describe 'RHYMES' do
   end
 
   context 'bad pronunciations' do
+    ought_not_rhyme 'lances', 'nancies'
+    ought_not_rhyme 'us', 'yes'
+    ought_not_rhyme 'shat', 'nut'
     ought_not_rhyme 'egg', 'segue'
     ought_not_rhyme 'employee', 'gay'
     oughta_rhyme 'duty', 'booty'

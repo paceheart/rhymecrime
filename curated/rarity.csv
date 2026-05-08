@@ -796,8 +796,6 @@ tranny,forbidden,explicitly forbidden
 trannys,forbidden,explicitly forbidden
 trannies,forbidden,explicitly forbidden
 trannying,forbidden,explicitly forbidden
-faggot,forbidden,explicitly forbidden
-fag,common,explicitly forbidden | this is fine I guess
 spic,forbidden,explicitly forbidden
 spics,forbidden,explicitly forbidden
 spice,common,explicitly forbidden | naive prefix matching is too broad
@@ -3493,6 +3491,9 @@ degos,forbidden,forbid_list.txt | imported from forbid_list.txt
 dego's,forbidden,forbid_list.txt | imported from forbid_list.txt
 dothead,forbidden,forbid_list.txt | imported from forbid_list.txt
 est,forbidden,forbid_list.txt | imported from forbid_list.txt
+fag,forbidden,forbid_list.txt | imported from forbid_list.txt
+fags,forbidden,forbid_list.txt | imported from forbid_list.txt
+faggot,forbidden,explicitly forbidden
 faggots,forbidden,forbid_list.txt | imported from forbid_list.txt
 faggotty,forbidden,forbid_list.txt | imported from forbid_list.txt
 faggotry,forbidden,forbid_list.txt | imported from forbid_list.txt
@@ -3655,6 +3656,11 @@ raghead's,forbidden,forbid_list.txt | imported from forbid_list.txt
 redskin,forbidden,forbid_list.txt | imported from forbid_list.txt
 redskins,forbidden,forbid_list.txt | imported from forbid_list.txt
 redskin's,forbidden,forbid_list.txt | imported from forbid_list.txt
+retard,forbidden,forbid_list.txt | imported from forbid_list.txt
+retard's,forbidden,forbid_list.txt | imported from forbid_list.txt
+retards,forbidden,forbid_list.txt | imported from forbid_list.txt
+retarded,forbidden,forbid_list.txt | imported from forbid_list.txt
+retardedness,forbidden,forbid_list.txt | imported from forbid_list.txt
 shelta,forbidden,forbid_list.txt | imported from forbid_list.txt
 sheltas,forbidden,forbid_list.txt | imported from forbid_list.txt
 shelta's,forbidden,forbid_list.txt | imported from forbid_list.txt
@@ -4061,3 +4067,10 @@ aied,forbidden,transgender review
 cock-a-doodle-doo,rare,transgender review
 thrist,rare,transgender review
 thristing,rare,transgender review
+petit,rare,cheese/fuck review
+nighest,rare,cheese/fuck review
+uts,rare,cheese/fuck review
+superimposition,rare,cheese/fuck review
+super-imposition,rare,cheese/fuck review
+superposition,common,cheese/fuck review
+werning,rare,cheese/fuck review

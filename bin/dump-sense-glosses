@@ -57,6 +57,7 @@ end.parse!
 repo = File.expand_path("..", __dir__)
 Dir.chdir(repo)
 
+require "rhymecrime/build/build_io"
 require "rhymecrime/frontend/query"
 # Numberbatch loader + WordNet setup live in relatedness/signals (they're not
 # pulled in by rhymecrime/frontend/query anymore); this script iterates Numberbatch

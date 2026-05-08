@@ -112,5 +112,6 @@ describe "SEMANTIC_BASE" do
     oughta_have_semantic_base 'iciest', 'icy', not_working_reason: reason
     oughta_have_semantic_base 'wavier', 'wavy', not_working_reason: reason
     oughta_have_semantic_base 'waviest', 'wavy', not_working_reason: reason
+    oughta_have_semantic_base 'lances', 'lance', not_working_reason: "it's 'lanx' for some reason"
   end
 end

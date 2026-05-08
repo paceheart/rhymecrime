@@ -359,6 +359,10 @@ describe "RARITY" do
     oughta_be_forbidden 'tolds'
   end
 
+  context '-ed overgeneration' do
+    oughta_be_forbidden 'aied'
+  end
+
   context "csv sweep (curated/rarity.csv)" do
     it "covers >= #{RARITY_MIN_EVALUATED_ROWS} rows" do
       expect(RARITY_EVALUATED).to be >= RARITY_MIN_EVALUATED_ROWS
