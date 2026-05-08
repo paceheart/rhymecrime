@@ -58,6 +58,8 @@ bin/run-local              # http://localhost:9292/
 
 `config.ru` boots `app.rb`, a small Sinatra app exposing `/`, `/similar`, `/feedback`, and `/health`.
 
+**Bundler groups:** Puma, Sinatra, and sqlite3 are not in the default Gemfile group (they are omitted from the Lambda bundle). Use a normal `bundle install` on your dev machine before `bin/run-local`, before using file-backed SQLite (`RHYMECRIME_DATA_SOURCE` unset), or before `bundle exec rspec`. A install with `--without 'development:test'` reproduces the production gem set only; it will not satisfy those workflows until you run `bundle install` again without that setting. Details are in the `Gemfile` header comment.
+
 **On AWS** (Lambda + HTTP API + DynamoDB):
 
 The deploy is described by `template.yaml` (AWS SAM). The Lambda bundle ships the lexicon (`word_dict.msgpack` / `rime_dict.msgpack`) and reads the larger relatedness cache from DynamoDB — see `bin/stage-lambda`, `bin/upload-to-dynamodb`, and `RHYMECRIME_DATA_SOURCE=dynamodb`. The full pipeline that produces those artifacts is described in [Data pipeline](#data-pipeline) below.

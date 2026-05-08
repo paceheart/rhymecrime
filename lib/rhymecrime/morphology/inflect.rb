@@ -3,7 +3,6 @@
 # Uses English suffix phonology rules to append the correct phonemes.
 
 require "set"
-require "rwordnet"
 require_relative "../paths"
 require_relative "../pronunciation"
 

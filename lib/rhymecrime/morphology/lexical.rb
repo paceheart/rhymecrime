@@ -33,6 +33,7 @@ end
 def wn_lemma_find_all_cached(form)
   cache = @wordnet_lemma_find_all_cache ||= {}
   return cache[form] ||= [] unless wordnet_corpora_present?
+  return cache[form] ||= [] unless defined?(WordNet::Lemma)
 
   cache[form] ||= WordNet::Lemma.find_all(form)
 end
@@ -115,8 +116,12 @@ WN_DERIVATION_PTR_SYMBOLS = Set.new(%w[+ < \\])
 def wn_dict_data_path(pos_char)
   fn = WN_DICT_DATA_FILE[pos_char]
   return nil if fn.nil?
+  return nil unless defined?(WordNet::DB)
 
-  File.join(WordNet::DB.path, "dict", fn)
+  root = WordNet::DB.path
+  return nil if root.nil? || root.to_s.empty?
+
+  File.join(root.to_s, "dict", fn)
 end
 
 # One full scan per WordNet data file, then O(1) lookup. Global $wn_synset_line_index_by_path
@@ -265,6 +270,7 @@ def wn_verb_stem_via_morphy?(word, base)
   kind = Inflect.send(:match_suffix_kind, base, word)
   return false unless %i[ed ing s].include?(kind)
   return false unless wn_base_has_verb?(base)
+  return false unless wordnet_corpora_present? && defined?(WordNet::Synset)
 
   stems = (WordNet::Synset.morphy(word, "verb") rescue [])
   return false if stems.empty?
@@ -307,6 +313,7 @@ def wn_noun_plural_via_morphy?(word, base)
   # kisses→kiss) end in -sses/-ms/-tions, never -ss over -s, so
   # this guard doesn't touch them.
   return false if word.end_with?("ss") && base.end_with?("s")
+  return false unless wordnet_corpora_present? && defined?(WordNet::Synset)
 
   stems = (WordNet::Synset.morphy(word, "noun") rescue [])
   return false if stems.empty?
@@ -391,8 +398,15 @@ $wn_noun_lex_filenum_to_lexname = nil
 def wn_noun_lex_filenum_to_lexname
   $wn_noun_lex_filenum_to_lexname ||= begin
     m = {}
-    root = WordNet::DB.path
+    root =
+      if defined?(WordNet::DB) && WordNet::DB.path && !WordNet::DB.path.to_s.empty?
+        WordNet::DB.path.to_s
+      else
+        ""
+      end
     %w[dict/lexnames lexnames].each do |rel|
+      next if root.empty?
+
       path = File.join(root, rel)
       next unless File.file?(path)
 
@@ -432,8 +446,15 @@ $wn_noun_exc_invariant_plural_bases = nil
 def wn_noun_exc_invariant_plural_bases
   $wn_noun_exc_invariant_plural_bases ||= begin
     s = Set.new
-    root = WordNet::DB.path
+    root =
+      if defined?(WordNet::DB) && WordNet::DB.path && !WordNet::DB.path.to_s.empty?
+        WordNet::DB.path.to_s
+      else
+        ""
+      end
     %w[dict/noun.exc noun.exc].each do |rel|
+      next if root.empty?
+
       path = File.join(root, rel)
       next unless File.file?(path)
 

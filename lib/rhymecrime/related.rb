@@ -215,11 +215,12 @@ class RelatedWords
     # Call sites: every request entry point (Sinatra, Lambda, CLI) plus the
     # bin/compute-relatedness shard loop that invalidates between cues
     # to keep worker RSS bounded. Keep this list in sync with the caches
-    # below so freshly-added memoization doesn't accidentally survive across
-    # invalidations.
+    # below (and Rhymecrime::FindRelatedWordsMemo in query.rb) so freshly-added
+    # memoization doesn't accidentally survive across invalidations.
     def reset_caches!
       @related_word_cache = {}
       $rhyming_tuple_word_bases_cache = {} if defined?($rhyming_tuple_word_bases_cache)
+      Rhymecrime::FindRelatedWordsMemo.clear! if defined?(Rhymecrime::FindRelatedWordsMemo)
     end
 
     # Membership test for a directional lemma pair: is lemma_b a computed

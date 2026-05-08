@@ -1,6 +1,7 @@
 # encoding: utf-8
 # Inflection policy (Kaikki attestation, morph_base_allows_*), Kaikki-derived surface pronunciations.
 
+require "rwordnet"
 require_relative "../morphology/inflect"
 require_relative "../morphology/lexical"
 require_relative "phonology"

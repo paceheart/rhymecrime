@@ -3,6 +3,10 @@
 # Run RhymeCrime locally via Puma. Thin wrapper around bundle exec puma:
 # all arguments pass through to puma unchanged.
 #
+# Requires the :development Bundler group (puma, sinatra). If you ever ran
+# `bundle config set without 'development:test'` or equivalent, run a plain
+# `bundle install` first — see the Gemfile header comment.
+#
 # Usage:
 #   bin/run-local                    # defaults (port 9292, development env)
 #   bin/run-local -p 3000            # choose a port

@@ -1,4 +1,5 @@
 # encoding: utf-8
+require "rwordnet"
 require "rhymecrime/morphology/inflect"
 
 def inflects(base_phonemes, base_word, inflected_word, expected)

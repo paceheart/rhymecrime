@@ -40,7 +40,6 @@ $debug_pruned_tuples = nil
 # see bin/rhyme.rb for documentation
 #
 
-require "rwordnet"
 require "net/http"
 require "uri"
 require "json"
@@ -52,7 +51,6 @@ require_relative "../morphology/inflect"
 require_relative "../morphology/lexical"
 require_relative "../pronunciation.rb"
 require_relative "../timing"
-require "memery"
 
 #
 # utilities (defined before related.rb so cgi_print exists for helpers there)
@@ -100,17 +98,38 @@ require_relative "display"
 #
 
 module Rhymecrime
+  # Process-global memo for find_related_words (same role as the former memery
+  # memoize). Mutex: Puma serves concurrent threads; Lambda is single-threaded
+  # per invocation. Cleared from RelatedWords.reset_caches! so inner-store
+  # invalidation cannot return stale outer results.
   module FindRelatedWordsMemo
     class << self
-      include Memery
+      def clear!
+        mutex.synchronize { cache.clear }
+      end
 
-      memoize def find_related_words(word, include_self, include_rhymeless = true, common_only = false, max_candidates = SIMILAR_MAX)
-        words = []
-        unless forbidden?(word)
-          words = RelatedWords.find_thematically_related_words(word, include_self, include_rhymeless, common_only, max_candidates)
-          words = filter_out_dispreferred_words(words, word)
+      def find_related_words(word, include_self, include_rhymeless = true, common_only = false, max_candidates = SIMILAR_MAX)
+        key = [word, include_self, include_rhymeless, common_only, max_candidates]
+        mutex.synchronize do
+          return cache[key] if cache.key?(key)
+
+          words = []
+          unless forbidden?(word)
+            words = RelatedWords.find_thematically_related_words(word, include_self, include_rhymeless, common_only, max_candidates)
+            words = filter_out_dispreferred_words(words, word)
+          end
+          cache[key] = words
         end
-        words
+      end
+
+      private
+
+      def cache
+        @cache ||= {}
+      end
+
+      def mutex
+        @mutex ||= Mutex.new
       end
     end
   end

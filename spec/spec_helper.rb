@@ -14,6 +14,7 @@
 #
 # See http://rubydoc.info/gems/rspec-core/RSpec/Core/Configuration
 $LOAD_PATH.unshift File.expand_path("../lib", __dir__)
+require "rwordnet"
 require "rhymecrime/frontend/query"
 
 # Skip an example when not_working_reason is truthy (except false).
