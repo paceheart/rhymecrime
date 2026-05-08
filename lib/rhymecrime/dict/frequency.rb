@@ -2,6 +2,7 @@
 # SUBTLEX / wordfreq I/O, compute_frequency, add_frequency_info phases, build_word_dict.
 
 require "set"
+require_relative "build_io"
 require_relative "utils_rhyme"
 require_relative "constants"
 require_relative "lexical"

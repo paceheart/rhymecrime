@@ -94,3 +94,25 @@ env var sweep — May 2026 (done; this list is the audit trail):
 
 still on the audit list:
 RHYMECRIME_VERBOSE_CSV_SWEEP
+
+impatiens 
+fix pron for cabernet
+petit rare
+sexing / unsexing
+dress / redress
+lances / nancies
+aied
+cassavas / guavas, why not cassava / guava?
+nighest rare
+super-imposition rare
+superimposition rare
+superposition common
+werning rare
+ought_not_rhyme racial / biracial
+uts rare
+ought_not_rhyme us / yes
+fag forbidden
+ought_not_rhyme erotic homoerotic
+ought_not_rhyme sexual homosexual
+retard retarded forbidden
+ought_not_rhyme shat nut

@@ -3,12 +3,31 @@
 
 #
 # control parameters
-# Don't tweak these here, tweak them in frontend.rb
+# Display toggles for CLI / tests live here. HTML output format is set in frontend.rb (OUTPUT_FORMAT).
 #
 
 $output_format = 'cgi'
 $display_word_frequencies = false
 $display_word_similarities = false
+
+require "set"
+
+# Optional per-request debug pruning context (set by build_rhymecrime_page when ?debug=1).
+# When unset, falls back to globals so CLI and specs can flip $debug_pruning without the frontend.
+RHYMECRIME_REQUEST_DEBUG = :rhymecrime_request_debug
+
+def debug_pruning?
+  ctx = Thread.current[RHYMECRIME_REQUEST_DEBUG]
+  ctx ? ctx[:pruning] : $debug_pruning
+end
+
+def debug_pruned_tuples
+  ctx = Thread.current[RHYMECRIME_REQUEST_DEBUG]
+  ctx ? ctx[:pruned] : $debug_pruned_tuples
+end
+
+$debug_pruning = false
+$debug_pruned_tuples = nil
 
 # When set to a String (e.g. by build_rhymecrime_page), HTML fragments append to
 # Thread.current[:html_output_buffer] instead of stdout. MUST be thread-local: Sinatra on Puma
@@ -192,7 +211,7 @@ def part_of_speech_tags(word)
             "If this fired inside Lambda, the file is excluded by design — see " \
             "bin/stage-lambda and the doc comment above part_of_speech_tags."
     end
-    $part_of_speech_by_word = JSON.parse(BuildIo.read(path, encoding: "UTF-8", hint: "part_of_speech_tags"))
+    $part_of_speech_by_word = JSON.parse(BuildIoUtils.read(path, encoding: "UTF-8", hint: "part_of_speech_tags"))
   end
   tags = $part_of_speech_by_word[w]
   tags.is_a?(Array) ? tags : []
@@ -1327,7 +1346,7 @@ end
 #
 # When $debug_pruning is true (set per-request from the debug=1 URL param), tuples that
 # would normally be dropped are instead retained in the returned array AND recorded in
-# $debug_pruned_tuples, so the renderer can display them inline, greyed out, alongside
+# debug_pruned_tuples, so the renderer can display them inline, greyed out, alongside
 # the kept tuples.
 # Within a single rhyming tuple, drop members that are morphological COMMON_PREFIXES
 # derivations of another member already present in the tuple, when the two share an
@@ -1774,7 +1793,7 @@ end
 # whole pair. Called from really_find_rhyming_pairs after the rhyme-cross.
 def prune_trivial_rhyming_pairs(pairs)
   return pairs if pairs.empty?
-  verbose_prunes = $debug_mode || $debug_pruning
+  verbose_prunes = $debug_mode || debug_pruning?
   pairs.reject do |(a, b)|
     trivial = rhyming_pair_trivial?(a, b)
     puts "pruned rhyming pair (trivial rhyme: prefix or homophone): #{a} / #{b}" if trivial && verbose_prunes
@@ -1870,8 +1889,8 @@ end
 # negatives would silently change pruning output (regression in
 # spec/prune_redundant_tuples_spec.rb).
 def prune_cross_tuple_redundancy_sweep(sorted_tuples)
-  verbose_prunes = $debug_mode || $debug_pruning
-  debug_pruning = $debug_pruning
+  verbose_prunes = $debug_mode || debug_pruning?
+    debug_pruning = debug_pruning?
 
   base_index = Hash.new { |h, k| h[k] = Set.new }
   kept = {}
@@ -1895,7 +1914,7 @@ def prune_cross_tuple_redundancy_sweep(sorted_tuples)
         puts "pruned rhyming tuple (suffix-redundant): #{tup.join(' / ')}  [kept: #{kept[keeper_idx].join(' / ')}]"
       end
       if debug_pruning
-        $debug_pruned_tuples << tup
+        debug_pruned_tuples << tup
         # Under debug, the pruned tuple still flows through to the output (the
         # renderer paints it grey via output_tuple_pruned). Index it like any
         # other survivor so later candidates can find it as a keeper too —
@@ -1922,7 +1941,7 @@ def prune_cross_tuple_redundancy_sweep(sorted_tuples)
         puts "pruned rhyming tuple (suffix-redundant): #{ear.join(' / ')}  [kept: #{tup.join(' / ')}]"
       end
       if debug_pruning
-        $debug_pruned_tuples << ear
+        debug_pruned_tuples << ear
         # Retain ear (marked pruned) instead of rejecting it — matches the
         # original next false branch in kept.reject!.
       else
@@ -1999,11 +2018,11 @@ end
 #
 # When $debug_pruning is true (set per-request from the debug=1 URL param), tuples that
 # would normally be dropped are instead retained in the returned array AND recorded in
-# $debug_pruned_tuples, so the renderer can display them inline, greyed out, alongside
+# debug_pruned_tuples, so the renderer can display them inline, greyed out, alongside
 # the kept tuples.
 def prune_suffix_redundant_rhyming_tuples(tuples, focal_word = nil)
-  verbose_prunes = $debug_mode || $debug_pruning
-  debug_pruning = $debug_pruning
+  verbose_prunes = $debug_mode || debug_pruning?
+    debug_pruning = debug_pruning?
 
   # Cue-independent per-tuple steps via the pure helper (stop-word
   # wholesale drop, spelling-variant wholesale drop, within-tuple
@@ -2016,13 +2035,13 @@ def prune_suffix_redundant_rhyming_tuples(tuples, focal_word = nil)
       # Wholesale drop (semantically-promiscuous or spelling-variant).
       reason = tup.all? { |w| semantically_promiscuous?(w) } ? "all semantically promiscuous" : "all spelling variants of one root"
       puts "pruned rhyming tuple (#{reason}): #{tup.join(' / ')}" if verbose_prunes
-      $debug_pruned_tuples << tup if debug_pruning
+      debug_pruned_tuples << tup if debug_pruning
       next debug_pruning ? [tup] : []
     end
     # Within-tuple derivation condensation may have shortened the tuple.
     # Under debug we retain the original tup so the renderer keeps
     # showing it (with the dropped member recorded as a singleton in
-    # $debug_pruned_tuples); the downstream homophone condensation then
+    # debug_pruned_tuples); the downstream homophone condensation then
     # runs on the retained original, which is semantically equivalent
     # because prefix-derivation drops and full-pronunciation homophone
     # clusters are disjoint by construction (a prefix derivation has an
@@ -2033,7 +2052,7 @@ def prune_suffix_redundant_rhyming_tuples(tuples, focal_word = nil)
       puts "condensed rhyming tuple (dropped #{dropped.inspect}, derived forms): #{tup.join(' / ')} -> #{survivor.join(' / ')}"
     end
     if debug_pruning
-      (tup - survivor).each { |w| $debug_pruned_tuples << [w] }
+      (tup - survivor).each { |w| debug_pruned_tuples << [w] }
       [tup]
     else
       [survivor]
@@ -2054,7 +2073,7 @@ def prune_suffix_redundant_rhyming_tuples(tuples, focal_word = nil)
       puts "condensed rhyming tuple (dropped #{dropped.inspect}, parallel derivations): #{tup.join(' / ')} -> #{condensed.join(' / ')}"
     end
     if debug_pruning
-      (tup - condensed).each { |w| $debug_pruned_tuples << [w] }
+      (tup - condensed).each { |w| debug_pruned_tuples << [w] }
       tup
     else
       condensed
@@ -2071,7 +2090,7 @@ def prune_suffix_redundant_rhyming_tuples(tuples, focal_word = nil)
       puts "condensed rhyming tuple (dropped #{dropped.inspect}, homophones): #{tup.join(' / ')} -> #{condensed.join(' / ')}"
     end
     if debug_pruning
-      (tup - condensed).each { |w| $debug_pruned_tuples << [w] }
+      (tup - condensed).each { |w| debug_pruned_tuples << [w] }
       tup
     else
       condensed
@@ -2084,7 +2103,7 @@ def prune_suffix_redundant_rhyming_tuples(tuples, focal_word = nil)
     if verbose_prunes
       puts "pruned rhyming tuple (collapsed below 2 members during condensation): #{tup.join(' / ')}"
     end
-    $debug_pruned_tuples << tup if debug_pruning
+    debug_pruned_tuples << tup if debug_pruning
     !debug_pruning
   end
 
@@ -2138,14 +2157,14 @@ end
 $rhyming_tuple_cache = {}
 def find_rhyming_tuples(input_rel1, common_only = false)
   # Skip the computed-store and LRU paths when $debug_pruning is true:
-  # the pruner side-effects $debug_pruned_tuples (a per-request Set consulted
+  # the pruner side-effects debug_pruned_tuples (a per-request Set consulted
   # by print_tuple for the grey pruning color), and returning cached results
   # (whether from $rhyming_tuple_cache or the computed set_related# row)
   # would bypass that population, leaving retained-pruned tuples un-colored.
   # Debug requests are rare so recomputing is fine. We also avoid populating
   # $rhyming_tuple_cache from debug-mode results, since those include tuples
   # that non-debug callers expect to have been dropped.
-  return really_find_rhyming_tuples(input_rel1, common_only) if $debug_pruning
+  return really_find_rhyming_tuples(input_rel1, common_only) if debug_pruning?
   return really_find_rhyming_tuples(input_rel1, common_only) if $disable_cross_tuple_redundancy_pruning
 
   # Computed-store path: bin/compute-set-related stashes the fully
@@ -2230,7 +2249,7 @@ $rhyming_pair_cache = {}
 def find_rhyming_pairs(input_rel1, input_rel2, common_only = false)
   # Mirrors find_rhyming_tuples's caching policy: bypass the cache whenever
   # $debug_pruning is true so pruning side-effects still populate.
-  return really_find_rhyming_pairs(input_rel1, input_rel2, common_only) if $debug_pruning
+  return really_find_rhyming_pairs(input_rel1, input_rel2, common_only) if debug_pruning?
   return really_find_rhyming_pairs(input_rel1, input_rel2, common_only) if $disable_cross_tuple_redundancy_pruning
 
   lru_cache_fetch($rhyming_pair_cache, [input_rel1, input_rel2, common_only], RHYMING_LRU_CACHE_SIZE) do
@@ -2328,7 +2347,7 @@ end
 
 def print_tuple(tuple, focal_word=false, cues: nil)
   # this basically just pushes the rare words to the end, but we could do something snazzier if we want
-  pruned_class = ($debug_pruning && $debug_pruned_tuples&.include?(tuple)) ? " output_tuple_pruned" : ""
+  pruned_class = (debug_pruning? && debug_pruned_tuples&.include?(tuple)) ? " output_tuple_pruned" : ""
   cgi_print "<div class='output_tuple#{pruned_class}'><p class='output_p'>"
   # Sub-tuples (good/bad) inherit a sliced view of cues when cues is an
   # Array, so the per-slot cue stays aligned with the rare-word reordering.

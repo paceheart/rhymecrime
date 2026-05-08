@@ -50,6 +50,7 @@
 require "csv"
 require "set"
 require_relative "utils_rhyme"
+require_relative "build_io"
 
 # Rarity-relevant kind values mapped to the verdict the override emits.
 # Other kinds (uncommon, *_no_rhymes, have_rhymes) are intentionally absent —

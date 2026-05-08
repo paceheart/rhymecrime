@@ -2,7 +2,8 @@
 
 # Central gate for generated-data pipeline file I/O: optional invariant checks
 # and optional append-only JSONL audit log (shared across subprocesses when
-# bin/build sets RHYMECRIME_BUILD_IO_LOG).
+# bin/build sets RHYMECRIME_BUILD_IO_LOG). Actual bytes flow through
+# BuildIoUtils; this module adds validation + logging only.
 #
 # Env:
 #   RHYMECRIME_BUILD_IO_VALIDATE — default ON (unset or empty). Set to 0 / false / no / off to disable.
@@ -10,6 +11,8 @@
 
 require "json"
 require "fileutils"
+
+require_relative "build_io_utils"
 
 module BuildIo
   REPO_ROOT = File.expand_path("../../..", __dir__).freeze
@@ -174,22 +177,22 @@ module BuildIo
     def validate_read!(path, hint)
       return unless validate?
       if sibling_timestamped_build_read?(path)
+        raise BuildIoInvariantError,
+              "disallowed READ from sibling timestamped build #{abs(path).inspect} " \
+              "hint=#{hint.inspect} (active_build_dir=#{build_dir.inspect})"
+      end
+      return unless read_forbidden?(abs(path))
+
       raise BuildIoInvariantError,
-            "disallowed READ from sibling timestamped build #{abs(path).inspect} " \
-            "hint=#{hint.inspect} (active_build_dir=#{build_dir.inspect})"
+            "disallowed READ #{abs(path).inspect} hint=#{hint.inspect} " \
+            "(bootstrap=#{bootstrap_mode?} build_dir=#{build_dir.inspect})"
     end
-    return unless read_forbidden?(abs(path))
 
-    raise BuildIoInvariantError,
-          "disallowed READ #{abs(path).inspect} hint=#{hint.inspect} " \
-          "(bootstrap=#{bootstrap_mode?} build_dir=#{build_dir.inspect})"
-  end
+    def validate_write!(path, hint)
+      return unless validate?
+      return unless write_forbidden?(path)
 
-  def validate_write!(path, hint)
-    return unless validate?
-    return unless write_forbidden?(path)
-
-    raise BuildIoInvariantError,
+      raise BuildIoInvariantError,
             "disallowed WRITE #{abs(path).inspect} hint=#{hint.inspect} " \
             "(bootstrap=#{bootstrap_mode?} final=#{final_mode?} build_dir=#{build_dir.inspect})"
     end
@@ -219,28 +222,28 @@ module BuildIo
 
     def read(path, encoding: "UTF-8", hint: nil)
       record!(:read, path, hint)
-      File.read(path, encoding: encoding)
+      BuildIoUtils.read(path, encoding: encoding, hint: hint)
     end
 
     def foreach(path, **kwargs, &block)
       hint = kwargs.delete(:hint) || "foreach"
       record!(:read, path, hint)
-      File.foreach(path, **kwargs, &block)
+      BuildIoUtils.foreach(path, **kwargs, &block)
     end
 
     def binread(path, hint: nil)
       record!(:read, path, hint)
-      File.binread(path)
+      BuildIoUtils.binread(path, hint: hint)
     end
 
     def write(path, content, encoding: "UTF-8", hint: nil)
       record!(:write, path, hint)
-      File.write(path, content, encoding: encoding)
+      BuildIoUtils.write(path, content, encoding: encoding, hint: hint)
     end
 
     def binwrite(path, content, hint: nil)
       record!(:write, path, hint)
-      File.binwrite(path, content)
+      BuildIoUtils.binwrite(path, content, hint: hint)
     end
 
     # Prefer explicit mode string ("r", "rb", "w", "w+", …); hint should name the operation.
@@ -253,13 +256,9 @@ module BuildIo
         record!(:read, path, hint) if first == "r" || (plus && %w[w a].include?(first))
         record!(:write, path, hint) if %w[w a].include?(first) || (plus && first == "r")
       end
-      File.open(path, *args, **kwargs, &block)
+      BuildIoUtils.open(path, *args, hint: hint, **kwargs, &block)
     end
 
-    # Block-form helpers for streaming reads/writes (e.g. msgpack streaming).
-    # The IO is yielded; caller drives parsing/encoding without ever materializing
-    # the whole file. One audit record is logged at open time with a "stream_*"
-    # hint so the bin/build report shows these alongside one-shot read/writes.
     def stream_read(path, hint: nil, &block)
       open(path, "rb", hint: "stream_read #{hint}".strip, &block)
     end
@@ -268,22 +267,14 @@ module BuildIo
       open(path, "wb", hint: "stream_write #{hint}".strip, &block)
     end
 
-    # Audit-aware wrapper around CSV.foreach. Records one read for `path` then
-    # streams rows through the supplied block exactly like CSV.foreach does
-    # (same kwargs: headers:, encoding:, etc.).
     def csv_foreach(path, hint: nil, **csv_opts, &block)
-      require "csv"
       record!(:read, path, hint || "csv_foreach")
-      CSV.foreach(path, **csv_opts, &block)
+      BuildIoUtils.csv_foreach(path, hint: hint, **csv_opts, &block)
     end
 
-    # Audit-aware wrapper around Zlib::GzipReader.open. Records the read up
-    # front, then yields the open GzipReader IO to the caller. encoding:
-    # defaults to UTF-8 to match the existing call sites that wanted text.
     def gzip_read(path, encoding: "UTF-8", hint: nil, &block)
-      require "zlib"
       record!(:read, path, hint || "gzip_read")
-      Zlib::GzipReader.open(path, encoding: encoding, &block)
+      BuildIoUtils.gzip_read(path, encoding: encoding, hint: hint, &block)
     end
 
     # Pretty summary for bin/build (reads stdin or path to JSONL).

@@ -14,10 +14,9 @@
 # PairSignals class live here so the runtime graph can stay free of the
 # hundreds of MB of data files these modules pull in.
 #
-# Callers are expected to have already loaded rhymecrime/frontend (or
-# rhymecrime/crime) so helpers like lemma, semantically_promiscuous?,
-# frequency, rare?, word_dict_includes_headword?, and
-# part_of_speech_tags are available.
+# Callers are expected to have already loaded rhymecrime/crime (or the full
+# frontend stack) so helpers like lemma, semantically_promiscuous?,
+# frequency, rare?, word_dict_includes_headword?, and part_of_speech_tags are available.
 #
 
 require "json"
@@ -305,7 +304,7 @@ def usf_associations
     raise "USF associations not found at #{path}. Run ./bin/setup-corpora (which calls " \
           "./bin/build-usf-associations)."
   end
-  $usf_associations = JSON.parse(BuildIo.read(path, encoding: "UTF-8", hint: "usf_associations"))
+  $usf_associations = JSON.parse(BuildIoUtils.read(path, encoding: "UTF-8", hint: "usf_associations"))
   puts "loaded #{$usf_associations.size} USF cues from #{path}"
   $usf_associations
 end
@@ -465,7 +464,7 @@ def model_sense_vectors_table
   # single read at INT_MAX (2 GiB), so once the full-vocab msgpack passes that
   # threshold, File.binread raises Errno::EINVAL. MessagePack::Unpacker on an
   # open IO buffers in chunks and is fine with multi-GB bin payloads.
-  raw = BuildIo.open(path, "rb", hint: "model_sense_vectors_table") do |f|
+  raw = BuildIoUtils.open(path, "rb", hint: "model_sense_vectors_table") do |f|
     MessagePack::Unpacker.new(f).read
   end
 

@@ -181,8 +181,8 @@ end
 class MessagePackUtils
   def self.load_and_unpack(filename)
     bytes =
-      if defined?(BuildIo)
-        BuildIo.binread(filename, hint: "MessagePackUtils.load_and_unpack")
+      if defined?(BuildIoUtils)
+        BuildIoUtils.binread(filename, hint: "MessagePackUtils.load_and_unpack")
       else
         File.binread(filename)
       end
@@ -190,8 +190,8 @@ class MessagePackUtils
   end
 
   def self.pack_and_save(filename, object)
-    if defined?(BuildIo)
-      BuildIo.binwrite(filename, object.to_msgpack, hint: "MessagePackUtils.pack_and_save")
+    if defined?(BuildIoUtils)
+      BuildIoUtils.binwrite(filename, object.to_msgpack, hint: "MessagePackUtils.pack_and_save")
     else
       File.binwrite(filename, object.to_msgpack)
     end

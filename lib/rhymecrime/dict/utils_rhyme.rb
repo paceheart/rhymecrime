@@ -4,7 +4,7 @@ require "fileutils"
 require "json"
 require "msgpack"
 require "set"
-require_relative "build_io"
+require_relative "build_io_utils"
 require_relative "phoneme.rb"
 require_relative "../pace_utils"
 
@@ -313,7 +313,7 @@ $semantically_promiscuous_words = nil
 def load_curated_word_set(filename)
   set = Set.new
   path = File.join(CURATED_DIR, filename)
-  BuildIo.foreach(path, chomp: true, encoding: "UTF-8", hint: "load_curated_word_set #{filename}") do |line|
+  BuildIoUtils.foreach(path, chomp: true, encoding: "UTF-8", hint: "load_curated_word_set #{filename}") do |line|
     w = line.strip
     next if w.empty? || w.start_with?("#")
     set << w
@@ -410,7 +410,7 @@ def load_rarity_csv_word_sets!
   rare = Set.new
   forbidden = []
   forbidden_seen = Set.new
-  BuildIo.csv_foreach(RARITY_CSV_PATH, headers: true, encoding: "UTF-8", hint: "load_rarity_csv_word_sets!") do |row|
+  BuildIoUtils.csv_foreach(RARITY_CSV_PATH, headers: true, encoding: "UTF-8", hint: "load_rarity_csv_word_sets!") do |row|
     word = row["word"].to_s.strip
     next if word.empty?
     kind = row["kind"].to_s.strip
@@ -1095,7 +1095,7 @@ def build_hyphen_multi_fold_map(explicit_word_keys = nil)
   else
     path = generated_dict_path_under_dict_dir(WORD_DICT_FILENAME)
     if File.exist?(path)
-      BuildIo.foreach(path, encoding: "UTF-8", hint: "build_hyphen_multi_fold_map") do |line|
+      BuildIoUtils.foreach(path, encoding: "UTF-8", hint: "build_hyphen_multi_fold_map") do |line|
         next if line =~ /\A;/ || line =~ /\A#/
         tok = line.split(",", 2).first
         next if tok.nil? || tok.empty?
@@ -1128,7 +1128,7 @@ def save_hyphen_variant_map!(build_keys, exported_keys: nil)
   sorted = {}
   map.keys.sort.each { |k| sorted[k] = map[k].sort }
   FileUtils.mkdir_p(File.dirname(path))
-  BuildIo.write(path, "#{JSON.generate(sorted)}\n", encoding: "UTF-8", hint: "save_hyphen_variant_map")
+  BuildIoUtils.write(path, "#{JSON.generate(sorted)}\n", encoding: "UTF-8", hint: "save_hyphen_variant_map")
   puts "Wrote #{sorted.size} hyphen-variant folds to #{HYPHEN_VARIANT_MAP_FILENAME}"
   link_runtime_spelling_hyphen_symlinks! if final_mode? && rhymecrime_build_dir
 end
@@ -1247,7 +1247,7 @@ end
 # Loads vocab entries from a cache built by build_conceptnet_vocab_cache! (skips # comments).
 def conceptnet_vocab_load(cache_gz_path)
   s = Set.new
-  BuildIo.gzip_read(cache_gz_path, encoding: "UTF-8", hint: "conceptnet_vocab_load") do |gz|
+  BuildIoUtils.gzip_read(cache_gz_path, encoding: "UTF-8", hint: "conceptnet_vocab_load") do |gz|
     gz.each_line do |line|
       w = line.rstrip
       next if w.empty? || w.start_with?("#")
@@ -1273,7 +1273,7 @@ def each_conceptnet_kept_en_en_lemma_pair(gz_path)
   return enum_for(:each_conceptnet_kept_en_en_lemma_pair, gz_path) unless block_given?
 
   keep = CONCEPTNET_KEEP_RELATION_INDEX
-  BuildIo.gzip_read(gz_path, encoding: "UTF-8", hint: "each_conceptnet_kept_en_en_lemma_pair") do |gz|
+  BuildIoUtils.gzip_read(gz_path, encoding: "UTF-8", hint: "each_conceptnet_kept_en_en_lemma_pair") do |gz|
     gz.each_line do |line|
       next unless line.include?("/c/en/")
       parts = line.split("\t", 5)
@@ -1405,7 +1405,7 @@ def save_conceptnet_edges!(out_path = nil)
   keep = CONCEPTNET_KEEP_RELATION_INDEX
   triples = {}
   lines = 0
-  BuildIo.gzip_read(gz_path, encoding: "UTF-8", hint: "save_conceptnet_edges") do |gz|
+  BuildIoUtils.gzip_read(gz_path, encoding: "UTF-8", hint: "save_conceptnet_edges") do |gz|
     gz.each_line do |line|
       lines += 1
       print "." if (lines % 5_000_000).zero?
@@ -1430,7 +1430,7 @@ def save_conceptnet_edges!(out_path = nil)
   end
   puts if lines >= 5_000_000
 
-  BuildIo.stream_write(out_path, hint: "save_conceptnet_edges") do |out|
+  BuildIoUtils.stream_write(out_path, hint: "save_conceptnet_edges") do |out|
     packer = MessagePack::Packer.new(out)
     packer.write({
       "format" => CONCEPTNET_EDGES_STREAM_FORMAT,
@@ -1461,7 +1461,7 @@ def each_conceptnet_edge_streaming(path)
   return enum_for(:each_conceptnet_edge_streaming, path) unless block_given?
   raise "ConceptNet edges file missing: #{path} (run save_conceptnet_edges!)" unless File.exist?(path)
 
-  BuildIo.stream_read(path, hint: "conceptnet_edges") do |io|
+  BuildIoUtils.stream_read(path, hint: "conceptnet_edges") do |io|
     unpacker = MessagePack::Unpacker.new(io)
     header = unpacker.read
     unless header.is_a?(Hash) && header["format"] == CONCEPTNET_EDGES_STREAM_FORMAT
@@ -1525,7 +1525,7 @@ def conceptnet_edges_cache_rebuild_reason
   end
 
   begin
-    BuildIo.stream_read(out_path, hint: "conceptnet_edges header_check") do |io|
+    BuildIoUtils.stream_read(out_path, hint: "conceptnet_edges header_check") do |io|
       header = MessagePack::Unpacker.new(io).read
       unless header.is_a?(Hash) && header["format"] == CONCEPTNET_EDGES_STREAM_FORMAT
         return "old format (header=#{header.inspect}); current format=#{CONCEPTNET_EDGES_STREAM_FORMAT.inspect}"
@@ -1610,7 +1610,7 @@ def numberbatch_corpus_token_set_cached
   end
 
   s = Set.new
-  BuildIo.stream_read(path, hint: "numberbatch_corpus_token_set_cached") do |io|
+  BuildIoUtils.stream_read(path, hint: "numberbatch_corpus_token_set_cached") do |io|
     unpacker = MessagePack::Unpacker.new(io)
     header = unpacker.read
     unless header.is_a?(Hash) && header["format"] == NUMBERBATCH_STREAM_FORMAT
@@ -1643,7 +1643,7 @@ def usf_corpus_word_set
           "Run ./bin/setup-corpora to create it."
   end
 
-  graph = JSON.parse(BuildIo.read(path, encoding: "UTF-8", hint: "usf_corpus_word_set"))
+  graph = JSON.parse(BuildIoUtils.read(path, encoding: "UTF-8", hint: "usf_corpus_word_set"))
   s = Set.new
   graph.each do |cue, targets|
     s.add(cue)
@@ -1693,11 +1693,11 @@ def save_numberbatch_vectors!
   out_path = generated_root_path(NUMBERBATCH_VECTORS_FILENAME)
   count = 0
   dim_seen = nil
-  BuildIo.stream_write(out_path, hint: "save_numberbatch_vectors") do |out|
+  BuildIoUtils.stream_write(out_path, hint: "save_numberbatch_vectors") do |out|
     packer = MessagePack::Packer.new(out)
     packer.write({ "format" => NUMBERBATCH_STREAM_FORMAT, "dtype" => "f4_le" })
     first = true
-    BuildIo.foreach(txt_path, encoding: "UTF-8",
+    BuildIoUtils.foreach(txt_path, encoding: "UTF-8",
                              hint: "save_numberbatch_vectors corpus_scan") do |line|
       if first
         first = false
@@ -1734,7 +1734,7 @@ def each_numberbatch_vector_streaming(path)
   raise "Numberbatch vectors file missing: #{path} (run save_numberbatch_vectors!)" unless File.exist?(path)
 
   require "numo/narray"
-  BuildIo.stream_read(path, hint: "numberbatch_vectors") do |io|
+  BuildIoUtils.stream_read(path, hint: "numberbatch_vectors") do |io|
     unpacker = MessagePack::Unpacker.new(io)
     header = unpacker.read
     unless header.is_a?(Hash) && header["format"] == NUMBERBATCH_STREAM_FORMAT
@@ -1772,7 +1772,7 @@ def load_hyphen_multi_fold_map_from_disk
 
   path = generated_dict_path(HYPHEN_VARIANT_MAP_FILENAME)
   return nil unless File.exist?(path)
-  raw = JSON.parse(BuildIo.read(path, encoding: "UTF-8", hint: "load_hyphen_multi_fold_map_from_disk"))
+  raw = JSON.parse(BuildIoUtils.read(path, encoding: "UTF-8", hint: "load_hyphen_multi_fold_map_from_disk"))
   out = {}
   raw.each do |fold, arr|
     out[fold] = arr.freeze
@@ -2103,13 +2103,13 @@ def load_variants_raw
       generated_dict_path(SPELLING_VARIANTS_AUTO_FILENAME)
     end
   if auto_path && File.exist?(auto_path)
-    BuildIo.foreach(auto_path, chomp: true, encoding: "UTF-8", hint: "load_variants_raw spelling_variants_auto") do |line|
+    BuildIoUtils.foreach(auto_path, chomp: true, encoding: "UTF-8", hint: "load_variants_raw spelling_variants_auto") do |line|
       next unless line =~ /\A[[:alpha:]]/
       forms = line.split.map(&:strip).reject(&:empty?)
       result << forms unless forms.empty?
     end
   end
-  BuildIo.foreach(SPELLING_CSV_PATH, chomp: true, encoding: "UTF-8", hint: "load_variants_raw spelling.csv") do |line|
+  BuildIoUtils.foreach(SPELLING_CSV_PATH, chomp: true, encoding: "UTF-8", hint: "load_variants_raw spelling.csv") do |line|
     next unless line =~ /\A[[:alpha:]]/
     forms, _notes = split_spelling_row(line)
     result << forms unless forms.empty?
@@ -2581,7 +2581,7 @@ def load_string_hash(filename)
   # KEY  STRING1 STRING2 ...
   # substitutes "_" with " " in keys after loading
   hash = Hash.new # hash of strings
-  BuildIo.foreach(filename, encoding: "UTF-8", hint: "load_string_hash") do |line|
+  BuildIoUtils.foreach(filename, encoding: "UTF-8", hint: "load_string_hash") do |line|
     if useful_line?(line)
       tokens = line.split
       key = tokens.shift # now TOKENS contains only the value strings
@@ -2597,7 +2597,7 @@ end
 def save_string_hash(hash, filename, header="")
   # sanitizes spaces into underscores
   FileUtils.mkdir_p(File.dirname(filename))
-  BuildIo.open(filename, "w", encoding: "UTF-8", hint: "save_string_hash") do |fh|
+  BuildIoUtils.open(filename, "w", encoding: "UTF-8", hint: "save_string_hash") do |fh|
     fh.puts(header) unless header.empty?
     hash.each do |key, values|
       key = key.sanitize
@@ -2643,7 +2643,7 @@ def load_word_dict()
     raise "First run ./bin/dict-build to populate #{GENERATED_DIR}/"
   end
   word_dict = Hash.new
-  BuildIo.foreach(pathname, encoding: "UTF-8", hint: "load_word_dict") do |line|
+  BuildIoUtils.foreach(pathname, encoding: "UTF-8", hint: "load_word_dict") do |line|
     next unless useful_line?(line)
 
     parts = line.chomp.split(",", 4)
@@ -2800,7 +2800,7 @@ def build_usf_associations!(out_path = nil)
   graph = Hash.new { |h, k| h[k] = {} }
   pair_count = 0
   shards.each do |path|
-    BuildIo.foreach(path, encoding: "UTF-8", hint: "build_usf_associations") do |line|
+    BuildIoUtils.foreach(path, encoding: "UTF-8", hint: "build_usf_associations") do |line|
       line = line.scrub
       next if line.include?("CUE,")
       next unless line.match?(/\A[A-Z]/)
@@ -2822,7 +2822,7 @@ def build_usf_associations!(out_path = nil)
     end
   end
   FileUtils.mkdir_p(File.dirname(out_path))
-  BuildIo.write(out_path, JSON.generate(graph), hint: "build_usf_associations")
+  BuildIoUtils.write(out_path, JSON.generate(graph), hint: "build_usf_associations")
   puts "wrote #{graph.size} cues / #{pair_count} pairs to #{out_path}"
   graph
 end
@@ -2872,7 +2872,7 @@ def numberbatch_vectors_cache_rebuild_reason
   end
 
   begin
-    BuildIo.stream_read(out_path, hint: "numberbatch_vectors header_check") do |io|
+    BuildIoUtils.stream_read(out_path, hint: "numberbatch_vectors header_check") do |io|
       header = MessagePack::Unpacker.new(io).read
       return nil if header.is_a?(Hash) && header["format"] == NUMBERBATCH_STREAM_FORMAT
 
@@ -2929,7 +2929,7 @@ def save_word_semantic_base_map!(word_dict, semantic_base_map, transform_for: ni
   MessagePackUtils.pack_and_save(msgpack_path, obj)
   puts "Wrote #{obj.size} word→semantic_base entries to #{msgpack_path} (#{File.size(msgpack_path)} bytes)"
 
-  BuildIo.open(txt_path, "w", encoding: "UTF-8", hint: "save_word_semantic_base_map txt") do |f|
+  BuildIoUtils.open(txt_path, "w", encoding: "UTF-8", hint: "save_word_semantic_base_map txt") do |f|
     f.puts "# word\tsemantic_base\ttransform"
     obj.keys.sort.each do |w|
       transform = transform_for ? transform_for[w] : ""
@@ -2959,7 +2959,7 @@ end
 def save_word_dict(word_dict, lemma_map = nil)
   ensure_generated_dict_dir!
   path = generated_dict_path_under_dict_dir(WORD_DICT_FILENAME)
-  f = BuildIo.open(path, "w", encoding: "UTF-8", hint: "save_word_dict")
+  f = BuildIoUtils.open(path, "w", encoding: "UTF-8", hint: "save_word_dict")
   f.puts(WORD_DICT_HEADER)
   for word, word_info in word_dict
     sanitized = word.sanitize
@@ -3209,7 +3209,7 @@ def save_part_of_speech_map(pos_map)
   path = generated_dict_path_under_dict_dir(PART_OF_SPEECH_FILENAME)
   # word => sorted list of Kaikki-style POS strings (noun, verb, adj, …) after Layer A ∩ WordNet.
   obj = pos_map.keys.sort.to_h { |w| [w, pos_map[w].to_a.sort] }
-  BuildIo.write(path, JSON.generate(obj), encoding: "UTF-8", hint: "save_part_of_speech_map")
+  BuildIoUtils.write(path, JSON.generate(obj), encoding: "UTF-8", hint: "save_part_of_speech_map")
 end
 
 #

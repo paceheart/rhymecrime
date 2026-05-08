@@ -93,11 +93,10 @@ require_relative "../lib/rhymecrime/frontend"
 require_relative "../lib/rhymecrime/dict/rime"
 require_relative "../lib/rhymecrime/local_store"
 # Full-compute pipeline (Numberbatch, ConceptNet, WordNet, USF, MPNet,
-# classifier): not required at Lambda runtime, explicitly pulled in here
-# because this script's whole job is to produce the cache the runtime reads.
-require_relative "../lib/rhymecrime/relatedness/signals"
-require_relative "../lib/rhymecrime/relatedness/score"
-require_relative "../lib/rhymecrime/relatedness/scan"
+# classifier): load via related.rb's relatedness_lazy_load_compute! so this
+# script and the test/local-dev fallback share one entry point — update only
+# there when adding pipeline files.
+relatedness_lazy_load_compute!
 
 output_path = Rhymecrime::LocalStore.database_path
 dry_run = false

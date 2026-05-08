@@ -13,30 +13,8 @@ DEBUG_MODE = false
 require "set"
 require_relative "crime"
 
-# Per-request debug flag, set true iff ?debug=1 was on the URL. Two behaviors
-# are gated on this global because both fire deep inside the render path where
-# threading a kwarg through would touch dozens of call sites. (HTTP handlers
-# also use the same ?debug=1 flag to return a plaintext stack trace when
-# render raises — see lambda_handler.rb / app.rb.) build_rhymecrime_page also
-# flips $debug_mode (pace_utils.rb) on for the duration of the request so
-# DEBUG-gated diagnostics fire under ?debug=1 too — see the env-var
-# consolidation note in pace_utils.rb.
-#
-#   1. Pruning visualizer: prune_suffix_redundant_rhyming_tuples retains
-#      (rather than drops) its victims and records them in $debug_pruned_
-#      tuples; print_tuple then renders them inline with kept tuples but
-#      tagged with the output_tuple_pruned CSS class.
-#   2. set_related coloring: tuple_focal_word_for_goal returns nil in
-#      production so set_related slots render in the default text color, and
-#      returns word1 under debug so each slot is tinted by its stored
-#      relatedness_score vs word1 (the diagnostic view).
-#   3. Verbose-prune logging in crime.rb's tuple sweepers (via $debug_mode,
-#      which build_rhymecrime_page sets to true for the request).
-#
-# Name is $debug_pruning (rather than $debug_request) for git-blame
-# stability — pruning was the original behavior; coloring piggybacked.
-$debug_pruning = false
-$debug_pruned_tuples = nil
+# Per-request debug pruning lives in Thread.current[RHYMECRIME_REQUEST_DEBUG] (see crime.rb).
+# build_rhymecrime_page sets it when ?debug=1; $debug_mode (pace_utils) is flipped for the same request.
 
 def cgi_puts(string)
   buf = Thread.current[:html_output_buffer]
@@ -181,10 +159,9 @@ end
 # Production default returns nil for every goal — set_related slots render in
 # the page's default text color so the visual hierarchy of the page (headers,
 # links, body text) reads cleanly without per-word color noise. Pass ?debug=1
-# on the URL to flip back to the diagnostic view; see $debug_pruning's
-# doc comment above for why this gate is shared with the pruning visualizer.
+# on the URL to flip back to the diagnostic view; see debug_pruning? in crime.rb.
 def tuple_focal_word_for_goal(goal, word1)
-  return nil unless $debug_pruning
+  return nil unless debug_pruning?
   goal == "set_related" ? word1 : nil
 end
 
@@ -271,13 +248,8 @@ end
 # Full HTML page (Sinatra / Lambda). Uses a thread-local buffer so cgi_print / emit_* accumulate
 # without contaminating concurrent requests on other Puma threads.
 #
-# debug: true (passed from the debug=1 URL param) turns on $debug_pruning,
-# the catch-all per-request debug gate. Two behaviors fire from it: (1) suffix-
-# redundant tuples are rendered inline with kept tuples (greyed out via
-# output_tuple_pruned) instead of being silently dropped, and (2) set_related
-# slots are colored by stored relatedness_score vs word1 instead of rendering
-# in the default text color. See the $debug_pruning doc comment for the full
-# list of behaviors gated on this flag.
+# debug: true (passed from the debug=1 URL param) turns on debug pruning (crime.rb):
+# suffix-redundant tuples render inline (output_tuple_pruned), set_related slots tint by score, etc.
 #
 # Cache lifetime: we deliberately do NOT call Rhymecrime::DynamoRuntime
 # .clear_session_cache! or RelatedWords.reset_caches! on entry. The
@@ -296,8 +268,7 @@ end
 # distinct-cue scan) where retention has no upside.
 def build_rhymecrime_page(word1, word2, debug: false)
   prev_debug_mode = $debug_mode
-  $debug_pruning = debug
-  $debug_pruned_tuples = debug ? Set.new : nil
+  Thread.current[RHYMECRIME_REQUEST_DEBUG] = { pruning: debug, pruned: (debug ? Set.new : nil) }
   # Per-request DEBUG override: ?debug=1 turns on the same gate that
   # ENV["DEBUG"]=1 sets at boot, so verbose-prune logging in the tuple
   # sweepers (crime.rb) and any future $debug_mode-gated diagnostic fires
@@ -314,8 +285,7 @@ def build_rhymecrime_page(word1, word2, debug: false)
   buf
 ensure
   Thread.current[:html_output_buffer] = nil
-  $debug_pruning = false
-  $debug_pruned_tuples = nil
+  Thread.current[RHYMECRIME_REQUEST_DEBUG] = nil
   $debug_mode = prev_debug_mode
 end
 

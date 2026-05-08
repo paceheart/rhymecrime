@@ -21,6 +21,7 @@
 
 require "fileutils"
 require "set"
+require_relative "build_io"
 require_relative "utils_rhyme"
 
 CORPUS_ZIPF_DECISIVE_DELTA = Math.log10(3.0)
