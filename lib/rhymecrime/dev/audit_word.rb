@@ -13,7 +13,7 @@ require "open3"
 require_relative "../phoneme"
 require_relative "../pronunciation"
 require_relative "../utils"
-require_relative "corpus_caches"
+require_relative "../build/corpus_caches"
 
 module Rhymecrime
   module AuditWord

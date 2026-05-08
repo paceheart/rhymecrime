@@ -2,7 +2,7 @@
 
 # Offline ConceptNet / Numberbatch / USF corpus mirrors and streaming loaders.
 # Not loaded by Lambda: required from build_utils, relatedness/signals, and dev tools.
-require_relative "../utils"
+require_relative "../utils" # paths + morphology + lexicon readers (no build_io gate)
 require "json"
 require "msgpack"
 

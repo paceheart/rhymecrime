@@ -26,7 +26,7 @@ require "rwordnet"
 require "set"
 require_relative "../pace_utils"
 require_relative "../utils"
-require_relative "../dev/corpus_caches"
+require_relative "../build/corpus_caches"
 
 WordNet::DB.path = WORDNET_3_1_PATH unless defined?(WordNet::DB) && WordNet::DB.path
 

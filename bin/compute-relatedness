@@ -482,7 +482,7 @@ else
   # but peak RSS stays closer to 1x than Nx.
   #
   # The words_we_care_about(false, true) call relies on the memo in
-  # lib/rhymecrime/corpus_caches.rb to actually persist; without that
+  # lib/rhymecrime/build/corpus_caches.rb to actually persist; without that
   # memo the parent would return and discard the ~20k-element filtered list
   # and every worker would rebuild it from scratch on every cue
   # (~4000 has_rhyming_word? / rare? probes per element per cue).

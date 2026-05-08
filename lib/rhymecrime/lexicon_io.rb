@@ -22,22 +22,6 @@ def load_string_hash(filename)
   dict_utils_debug "Loaded #{hash.length} entries from #{filename}"
   hash
 end
-def save_string_hash(hash, filename, header="")
-  # sanitizes spaces into underscores
-  FileUtils.mkdir_p(File.dirname(filename))
-  BuildIoUtils.open(filename, "w", encoding: "UTF-8", hint: "save_string_hash") do |fh|
-    fh.puts(header) unless header.empty?
-    hash.each do |key, values|
-      key = key.sanitize
-      fh.print "#{key} "
-      for value in values do
-        value = value.sanitize
-        fh.print " #{value}"
-      end
-      fh.puts
-    end
-  end
-end
 
 def useful_line?(line)
   # ignore entries that start with ; or #
@@ -214,159 +198,6 @@ def usf_corpus_shards
   Dir.glob(File.join(REPO_ROOT, "corpora", "usf", "Cue_Target_Pairs.*")).sort
 end
 
-# Cue → {target => fsg} map built from the USF Cue_Target_Pairs.* shards. Used
-# by rarity_signals (build-time) and relatedness/signals (runtime). Mirrors the
-# bin/build-usf-associations script — kept inside lexicon_io so
-# ensure_usf_associations_cache! can rebuild without spawning a subprocess.
-USF_LEMMA_RE = /\A[a-z][a-z0-9'-]*\z/.freeze
-
-def build_usf_associations!(out_path = nil)
-  out_path ||= generated_root_path(USF_ASSOCIATIONS_FILENAME)
-  shards = usf_corpus_shards
-  raise "no Cue_Target_Pairs.* shards under #{File.join(REPO_ROOT, 'corpora', 'usf')}" if shards.empty?
-
-  graph = Hash.new { |h, k| h[k] = {} }
-  pair_count = 0
-  shards.each do |path|
-    BuildIoUtils.foreach(path, encoding: "UTF-8", hint: "build_usf_associations") do |line|
-      line = line.scrub
-      next if line.include?("CUE,")
-      next unless line.match?(/\A[A-Z]/)
-
-      parts = line.split(",")
-      next if parts.length < 6
-
-      cue = parts[0].strip.downcase
-      target = parts[1].strip.downcase
-      fsg = parts[5].to_s.strip
-      next unless cue.match?(USF_LEMMA_RE) && target.match?(USF_LEMMA_RE)
-      next if fsg.empty?
-
-      f = fsg.to_f
-      next unless f.positive?
-
-      graph[cue][target] = f
-      pair_count += 1
-    end
-  end
-  FileUtils.mkdir_p(File.dirname(out_path))
-  BuildIoUtils.write(out_path, JSON.generate(graph), hint: "build_usf_associations")
-  puts "wrote #{graph.size} cues / #{pair_count} pairs to #{out_path}"
-  graph
-end
-
-# Decide whether the USF associations cache needs (re)building. Returns a
-# reason string, or nil if the cache is fresh.
-def usf_associations_cache_rebuild_reason
-  shards = usf_corpus_shards
-  return nil if shards.empty? # no source data; let downstream raise its own clear error
-
-  out_path = generated_root_path(USF_ASSOCIATIONS_FILENAME)
-  return "missing #{out_path}" unless File.exist?(out_path)
-
-  newest_shard_mtime = shards.map { |p| File.mtime(p) }.max
-  return "stale (USF shard newer than cache)" if File.mtime(out_path) < newest_shard_mtime
-
-  nil
-end
-
-# Idempotent precondition: rebuild generated/usf_associations.json from the
-# corpora/usf/* shards when missing or stale. Cheap mtime check in steady
-# state. Called from rebuild_rhymecrime_dictionaries so a single
-# ./bin/dict-build self-heals after `rm -rf generated/`.
-def ensure_usf_associations_cache!
-  reason = usf_associations_cache_rebuild_reason
-  return unless reason
-
-  out_path = generated_root_path(USF_ASSOCIATIONS_FILENAME)
-  if reason.start_with?("missing ")
-    puts "USF associations cache build: #{out_path}"
-  else
-    puts "USF associations cache rebuild: #{reason}"
-  end
-  build_usf_associations!
-end
-
-# Decide whether the Numberbatch cache needs (re)building. Returns a string
-# describing the reason, or nil if the cache is fresh and in the current
-# streaming format.
-def numberbatch_vectors_cache_rebuild_reason
-  out_path = generated_root_path(NUMBERBATCH_VECTORS_FILENAME)
-  return "missing #{out_path}" unless File.exist?(out_path)
-
-  txt_path = numberbatch_txt_path
-  if txt_path && File.mtime(out_path) < File.mtime(txt_path)
-    return "stale (corpus newer than cache)"
-  end
-
-  begin
-    BuildIoUtils.stream_read(out_path, hint: "numberbatch_vectors header_check") do |io|
-      header = MessagePack::Unpacker.new(io).read
-      return nil if header.is_a?(Hash) && header["format"] == NUMBERBATCH_STREAM_FORMAT
-
-      return "old format (header=#{header.inspect}); current format=#{NUMBERBATCH_STREAM_FORMAT.inspect}"
-    end
-  rescue StandardError => e
-    return "unreadable header: #{e.class}: #{e.message}"
-  end
-end
-
-# Idempotent setup-time precondition for any code path that loads
-# numberbatch_vectors: rebuild from corpora/numberbatch/*.txt only when the
-# cache is missing, stale (corpus mtime > cache mtime), or in an older on-disk
-# format. Cheap mtime + header probe in the steady state. Called from
-# bin/setup-corpora, not dict-build.
-def ensure_numberbatch_vectors_cache!
-  reason = numberbatch_vectors_cache_rebuild_reason
-  return unless reason
-
-  out_path = generated_root_path(NUMBERBATCH_VECTORS_FILENAME)
-  if reason.start_with?("missing ")
-    puts "Numberbatch vectors cache build: #{out_path}"
-  else
-    puts "Numberbatch vectors cache rebuild: #{reason}"
-  end
-  save_numberbatch_vectors!
-end
-
-def require_numberbatch_vectors_cache!
-  out_path = generated_root_path(NUMBERBATCH_VECTORS_FILENAME)
-  reason = if File.exist?(out_path)
-             numberbatch_vectors_cache_rebuild_reason
-           else
-             "missing #{out_path}"
-           end
-  return unless reason
-
-  raise "Numberbatch vectors cache is not ready: #{reason}. Run ./bin/setup-corpora " \
-        "to create #{NUMBERBATCH_VECTORS_FILENAME}; bin/build intentionally does not " \
-        "rebuild corpus mirrors."
-end
-
-def save_word_semantic_base_map!(word_dict, semantic_base_map, transform_for: nil)
-  ensure_generated_dict_dir!
-  msgpack_path = generated_dict_path_under_dict_dir(WORD_SEMANTIC_BASE_MAP_FILENAME)
-  txt_path = generated_dict_path_under_dict_dir(WORD_SEMANTIC_BASE_MAP_TXT_FILENAME)
-
-  obj = {}
-  semantic_base_map.each do |w, target|
-    next unless target && target != w
-    next unless word_dict.key?(w) && word_dict.key?(target)
-    obj[w] = target
-  end
-  MessagePackUtils.pack_and_save(msgpack_path, obj)
-  puts "Wrote #{obj.size} word→semantic_base entries to #{msgpack_path} (#{File.size(msgpack_path)} bytes)"
-
-  BuildIoUtils.open(txt_path, "w", encoding: "UTF-8", hint: "save_word_semantic_base_map txt") do |f|
-    f.puts "# word\tsemantic_base\ttransform"
-    obj.keys.sort.each do |w|
-      transform = transform_for ? transform_for[w] : ""
-      f.puts "#{w}\t#{obj[w]}\t#{transform}"
-    end
-  end
-  puts "Wrote sorted dump to #{txt_path}"
-end
-
 # Reverse map: lemma → array of all word_dict headwords that share that lemma (including the lemma
 # itself when it is in word_dict). Built lazily on first access; cleared when word_dict is reloaded.
 $lemma_to_words = nil
@@ -382,74 +213,6 @@ def lemma_to_words
     $lemma_to_words[base] << w
   end
   $lemma_to_words
-end
-
-def save_word_dict(word_dict, lemma_map = nil)
-  ensure_generated_dict_dir!
-  path = generated_dict_path_under_dict_dir(WORD_DICT_FILENAME)
-  f = BuildIoUtils.open(path, "w", encoding: "UTF-8", hint: "save_word_dict")
-  f.puts(WORD_DICT_HEADER)
-  for word, word_info in word_dict
-    sanitized = word.sanitize
-    f.print(sanitized)
-    f.print(',')
-    frequency, prons = word_info
-    f.print(frequency)
-    f.print(',')
-    isFirstPron = true
-    for pron in prons
-      unless isFirstPron
-        f.print('|')
-      end
-      isFirstPron = false
-      f.print(pron)
-    end
-    if lemma_map
-      lemma = lemma_map[word]
-      if lemma && lemma != word
-        f.print(',')
-        f.print(lemma.sanitize)
-      end
-    end
-    f.puts
-  end
-  f.close
-end
-
-# Emit the runtime-canonical word_dict.msgpack — same [freq, prons, lemma]
-# triple shape as the in-memory hash returned by load_word_dict, with two
-# storage tweaks:
-#
-#   * prons on disk is an Array of space-joined ARPABET strings (e.g.
-#     ["K AE1 T", "K AE2 T"]) rather than an Array of Pronunciation
-#     objects — keeps the file ~30% smaller than the equivalent nested array
-#     of phoneme strings (one msgpack string header per pronunciation rather
-#     than per phoneme) and matches the pron1|pron2 wire format we already
-#     use in word_dict.txt, so load_word_dict_msgpack can pass each
-#     element straight to pronstr.split → Pronunciation.new.
-#   * lemma is stored as nil when it equals the headword (matches
-#     save_word_lemma_map!'s "drop self-lemmas" policy). load_word_dict_
-#     msgpack resolves nil back to the headword so the runtime contract
-#     ("entry[2] is always a non-nil string equal to lemma or word") holds.
-#
-# Called right after save_word_dict in rebuild_rhymecrime_dictionaries so
-# a single dict-build refreshes both the human-readable .txt and the
-# runtime-loaded .msgpack. The Pronunciation#to_s join is cheap (~200K
-# entries × 1-2 prons of 4-8 phonemes), well under the rest of the build.
-def save_word_dict_msgpack!(word_dict, lemma_map = nil)
-  ensure_generated_dict_dir!
-  path = generated_dict_path_under_dict_dir(WORD_DICT_MSGPACK_FILENAME)
-  obj = {}
-  word_dict.each do |word, info|
-    freq, prons = info
-    lem = lemma_map ? lemma_map[word] : (info[2] || word)
-    pron_strs = (prons || []).map(&:to_s)
-    stored_lemma = (lem && lem != word) ? lem : nil
-    obj[word] = [freq.to_i, pron_strs, stored_lemma]
-  end
-  MessagePackUtils.pack_and_save(path, obj)
-  size_mb = (File.size(path).to_f / 1024 / 1024).round(2)
-  puts "Wrote #{obj.size} word_dict entries to #{WORD_DICT_MSGPACK_FILENAME} (#{size_mb} MB)"
 end
 
 # Runtime mirror of load_word_dict that reads word_dict.msgpack instead
@@ -485,26 +248,6 @@ def load_word_dict_msgpack
   $wiktionary_glosses = nil
   $thematically_related_memo = nil
   word_dict
-end
-
-# Emit the runtime-canonical rime_dict.msgpack — same {rime => [word, ...]}
-# shape as load_string_hash(rime_dict.txt), but native MessagePack for fast
-# Lambda cold-start load and an order-of-magnitude smaller bundle hit than
-# the txt + .sanitize round-trip. Keys / values are stored verbatim (the txt
-# surface uses .sanitize to fold " " → "_" for the whitespace-delimited
-# format; msgpack doesn't need the fold so we keep raw spaces). Called from
-# rebuild_rhymecrime_dictionaries alongside save_string_hash(... rime_dict
-# ...).
-def save_rime_dict_msgpack!(rime_dict)
-  ensure_generated_dict_dir!
-  path = generated_dict_path_under_dict_dir(RIME_DICT_MSGPACK_FILENAME)
-  obj = {}
-  rime_dict.each do |rime, words|
-    obj[rime.to_s] = (words || []).map(&:to_s)
-  end
-  MessagePackUtils.pack_and_save(path, obj)
-  size_mb = (File.size(path).to_f / 1024 / 1024).round(2)
-  puts "Wrote #{obj.size} rime_dict buckets to #{RIME_DICT_MSGPACK_FILENAME} (#{size_mb} MB)"
 end
 
 # Runtime mirror of load_rime_dict_as_hash. Returns {rime => [word, ...]}
@@ -595,49 +338,6 @@ def wiktionary_glosses_raw_for(word)
   map = $wiktionary_glosses
   return [] unless map
   map[word.to_s] || []
-end
-
-# Save the headword → [gloss, ...] map as WIKTIONARY_GLOSSES_FILENAME. Called from
-# rebuild_rhymecrime_dictionaries alongside the other generated/-msgpack writers.
-# Drops empty headword entries so the file size is bounded by the headword count that
-# actually carries gloss text.
-def save_wiktionary_glosses!(glosses_map)
-  ensure_generated_dict_dir!
-  path = generated_dict_path_under_dict_dir(WIKTIONARY_GLOSSES_FILENAME)
-  obj = {}
-  glosses_map.each do |word, glosses|
-    next if word.nil? || word.empty?
-    next if glosses.nil? || glosses.empty?
-    obj[word] = glosses
-  end
-  MessagePackUtils.pack_and_save(path, obj)
-  size_mb = (File.size(path).to_f / 1024 / 1024).round(2)
-  total_glosses = obj.each_value.sum(&:size)
-  puts "Wrote #{obj.size} headwords (#{total_glosses} glosses) to #{WIKTIONARY_GLOSSES_FILENAME} (#{size_mb} MB)"
-end
-
-# Emit the runtime word → canonical_lemma msgpack consumed by word_to_lemma.
-# Called right after save_word_dict in dict-build; only stores entries where
-# the lemma differs from the word (matches lemma(w)'s "unknown → word"
-# collapse and keeps the file small — ~40% of headwords have a non-self lemma).
-def save_word_lemma_map!(word_dict, lemma_map)
-  ensure_generated_dict_dir!
-  path = generated_dict_path_under_dict_dir(WORD_LEMMA_MAP_FILENAME)
-  obj = {}
-  word_dict.each_key do |word|
-    lem = lemma_map ? lemma_map[word] : word_dict[word][2]
-    obj[word] = lem if lem && lem != word
-  end
-  MessagePackUtils.pack_and_save(path, obj)
-  puts "Wrote #{obj.size} word→lemma entries to #{path} (#{File.size(path)} bytes)"
-end
-
-def save_part_of_speech_map(pos_map)
-  ensure_generated_dict_dir!
-  path = generated_dict_path_under_dict_dir(PART_OF_SPEECH_FILENAME)
-  # word => sorted list of Kaikki-style POS strings (noun, verb, adj, …) after Layer A ∩ WordNet.
-  obj = pos_map.keys.sort.to_h { |w| [w, pos_map[w].to_a.sort] }
-  BuildIoUtils.write(path, JSON.generate(obj), encoding: "UTF-8", hint: "save_part_of_speech_map")
 end
 
 #
