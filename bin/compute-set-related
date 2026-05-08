@@ -5,7 +5,7 @@
 # computed related# universe and stash it as a set_related#<lemma>
 # row in generated/rhymecrime_local.sqlite3.
 #
-# Why: the runtime set_related goal in lib/rhymecrime/crime.rb used to
+# Why: the runtime set_related goal in lib/rhymecrime/query.rb used to
 # run four phases live on every request (~6s/cue: find+filter related,
 # prefetch, rhyme-bucket loop, suffix-redundancy prune). That's blown up
 # the Lambda 29s budget for hub cues and made cold-start latency worse
@@ -53,7 +53,7 @@
 #
 #   2. Cross-cue prune memoization. rhyming_tuple_redundant_with? is
 #      pure over (ear, tup) — see the comment over its definition in
-#      crime.rb — so we enable a global memo ($rhyming_tuple_redundant_
+#      query.rb — so we enable a global memo ($rhyming_tuple_redundant_
 #      memo) for the duration of this script. Tuple pairs that recur
 #      across cues (animal / transport / emotion clusters share heavily)
 #      hit the memo on the second cue onward. Drops the prune phase from
@@ -79,9 +79,9 @@ require "json"
 require "optparse"
 require "set"
 require "sqlite3"
-require_relative "../lib/rhymecrime/build/utils_rhyme"
+require_relative "../lib/rhymecrime/build/build_utils"
 require_relative "../lib/rhymecrime/frontend"
-require_relative "../lib/rhymecrime/local_store"
+require_relative "../lib/rhymecrime/dev/local_store"
 
 # Compact "Xh Ym Z.Zs" / "Ym Z.Zs" / "Z.Zs" formatter for the elapsed-
 # time prints below. Mirrors bin/compute-relatedness's final
@@ -270,7 +270,7 @@ puts "Rime walk complete in #{format_duration(rime_walk_elapsed)} — #{buckets.
 
 # 4. Per-cue dedupe + prune. Enable the cross-cue redundancy memo for
 #    the prune sweep — see $rhyming_tuple_redundant_memo over the
-#    rhyming_tuple_redundant_with? definition in crime.rb. The memo
+#    rhyming_tuple_redundant_with? definition in query.rb. The memo
 #    is only correct in the en-masse offline pass: the runtime never
 #    sets it, so the predicate stays a pure call on the hot path.
 $rhyming_tuple_redundant_memo = {}

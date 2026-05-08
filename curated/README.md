@@ -27,7 +27,7 @@ and the runtime read from `rarity.csv` directly:
     `rarity_csv_forbidden_words` / `forbid_list()` /
     `explicitly_forbidden?`.
 
-All three accessors live in `lib/rhymecrime/build/utils_rhyme.rb`. See the
+All three accessors live in `lib/rhymecrime/curated_rarity.rb`. See the
 `rarity.csv` section below for column layout, all valid `kind` values, and
 how the spec/eval harness consumes the same file.
 
@@ -103,7 +103,7 @@ moved to `unrhymable_stop_words.txt` and local additions.
 
 Both files use `#` for comment / blank lines. Loaded lazily via
 `unrhymable_stop_words` / `semantically_promiscuous_words` in
-`lib/rhymecrime/build/utils_rhyme.rb`.
+`lib/rhymecrime/curated_rarity.rb`.
 
 A small overlap (currently seven entries: `eh`, `mhm`, `mm`, `thees`,
 `thou'd`, `thou'll`, `ye`) between the two files is intentional and
@@ -140,7 +140,7 @@ Manually declared spelling-variant clusters — pairs (or n-tuples) where two
 forms mean the same thing AND have the same pronunciation, with the first
 column being the preferred surface form. Free-form trailing notes column is
 silently dropped at load time (see `split_spelling_row` in
-`lib/rhymecrime/build/utils_rhyme.rb`). Loaded at runtime as
+`lib/rhymecrime/spelling.rb`). Loaded at runtime as
 `SPELLING_CSV_PATH`; complemented by automatically-detected morphology pairs
 in `corpus_variants.rb` (US/UK -ize/-ise, -oes/-os plurals, …).
 
@@ -164,7 +164,7 @@ rarity classifier training in `bin/train-rarity-classifier`.
 The file doubles as the input for the build-time + runtime word lists that
 used to live in `common_words.txt` / `rare_words.txt` / `forbid_list.txt`:
 `rarity_csv_common_words`, `rarity_csv_rare_words`, and
-`rarity_csv_forbidden_words` (in `lib/rhymecrime/build/utils_rhyme.rb`)
+`rarity_csv_forbidden_words` (in `lib/rhymecrime/curated_rarity.rb`)
 project the matching `kind` rows into Sets. So a row like
 `stop words,a,common` with notes beginning `stop words` is consulted by
 both the spec sweep AND `add_frequency_info` in

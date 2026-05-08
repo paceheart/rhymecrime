@@ -5,7 +5,7 @@
 # flipped to true per-request by build_rhymecrime_page when ?debug=1 is on
 # the URL (so the same flag drives CLI debug output and request-scoped
 # diagnostic rendering — pruning visualizer, score-tinted set_related,
-# verbose-prune logging in crime.rb's tuple sweepers). Reset in the request
+# verbose-prune logging in query.rb's tuple sweepers). Reset in the request
 # ensure block. The legacy VERBOSE env var was folded in here in May 2026.
 $debug_mode = ENV["DEBUG"].to_s == "1"
 

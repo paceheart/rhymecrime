@@ -1,8 +1,8 @@
 # encoding: utf-8
 # Rime index: build, merge word_dict prons, rare-only bucket prune, filter_pronunciation_map.
 
-require_relative "utils_rhyme"
-require_relative "pronunciation.rb"
+require_relative "build_utils"
+require_relative "../pronunciation.rb"
 require_relative "constants"
 
 def build_rime_dict(pronunciation_map)
@@ -346,7 +346,7 @@ def filter_pronunciation_map(pronunciation_map, rime_dict)
   return filtered_pronunciation_map
 end
 
-# Parallels homophone_rhyme? in crime.rb (with rich-rime-only matching, not full-phoneme): true when every target_rime pronunciation of rhyme_word matches target_rich_rime_array,
+# Parallels homophone_rhyme? in query.rb (with rich-rime-only matching, not full-phoneme): true when every target_rime pronunciation of rhyme_word matches target_rich_rime_array,
 # or when there is no such pronunciation (vacuous; candidate is filtered out for homophone_ok=false).
 def headword_rich_rhyme?(rhyme_word, target_rich_rime_array, target_rime, word_dict)
   entry = word_dict[rhyme_word]

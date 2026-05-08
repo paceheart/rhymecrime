@@ -31,16 +31,16 @@
 require "rwordnet"
 require "json"
 require "set"
-require_relative "utils_rhyme"
-require_relative "phoneme.rb"
-require_relative "pronunciation.rb"
+require_relative "build_utils"
+require_relative "../phoneme.rb"
+require_relative "../pronunciation.rb"
 require_relative "wiktionary"
 require_relative "varcon"
-require_relative "inflect"
+require_relative "../inflect"
 
 require_relative "constants"
 require_relative "phonology"
-require_relative "lexical"
+require_relative "../lexical"
 require_relative "morphology"
 require_relative "rime"
 require_relative "frequency"
@@ -846,7 +846,7 @@ def rebuild_rhymecrime_dictionaries()
   apply_lexical_pos_layer_a!(pos_map)
   wn_seed_pos_map_for_pronunciation_map_gaps!(pos_map, pronunciation_map)
   apply_lexical_pos_layer_b!(pos_map, wordfreq_hash)
-  # POS map is required by crime.rb (part_of_speech_tags) for bin/dump-sense-glosses
+  # POS map is required by query.rb (part_of_speech_tags) for bin/dump-sense-glosses
   # and relatedness/signals in Build Stage 3/4, before final dict-build runs.
   save_part_of_speech_map(pos_map)
   unless bootstrap_mode?
@@ -885,7 +885,7 @@ def rebuild_rhymecrime_dictionaries()
   hyphen_fold_build_keys = word_dict.keys
   if bootstrap_mode?
     # Minimal runtime checkpoint so bin/dump-sense-glosses (Build Stage 3/4) can
-    # load word_dict / lemma / part_of_speech_tags via crime.rb while generated/current
+    # load word_dict / lemma / part_of_speech_tags via query.rb while generated/current
     # still points at this build's runtime/ directory (updated by bin/build after pass 1).
     # ConceptNet edges no longer need a per-build copy — Stage 3 reads the corpus
     # mirror at generated/conceptnet_edges.msgpack and filters by word_lemma_map.msgpack
@@ -903,9 +903,9 @@ def rebuild_rhymecrime_dictionaries()
   save_word_dict(word_dict, lemma_map)
   save_word_lemma_map!(word_dict, lemma_map)
   # Runtime-canonical msgpack mirrors of the two .txt artifacts above.
-  # word_dict() / rime_dict() in crime.rb load these in BOTH local-dev and
+  # word_dict() / rime_dict() in query.rb load these in BOTH local-dev and
   # Lambda mode; the .txt files are kept on disk for human inspection only.
-  # See the WORD_DICT_MSGPACK_FILENAME doc comment in utils_rhyme.rb for
+  # See the WORD_DICT_MSGPACK_FILENAME doc comment in paths.rb for
   # the storage format and the rationale behind retiring the DDB word# /
   # rime# partitions.
   save_word_dict_msgpack!(word_dict, lemma_map)

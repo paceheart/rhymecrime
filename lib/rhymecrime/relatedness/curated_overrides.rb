@@ -40,7 +40,7 @@
 # have rescued.
 
 require "csv"
-require_relative "../build/utils_rhyme"
+require_relative "../utils"
 
 # Fixed scores assigned to curated related / related_ish overrides. Picked so
 # that strong-curated overrides outrank borderline classifier hits (which cluster

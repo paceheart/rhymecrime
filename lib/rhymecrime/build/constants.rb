@@ -1,62 +1,21 @@
 # encoding: utf-8
 
-require_relative "utils_rhyme"
-require_relative "../pace_utils"
+require_relative "../paths"
+require_relative "../dict_trace"
+require_relative "../wordfreq_zipf_constants"
 require "rwordnet"
-
-# TRACE_WORDS is defined in pace_utils.rb so every layer (runtime relatedness
-# predicates, dict-build) shares one parse of ENV["TRACE_WORDS"] and the same
-# trace_word? / trace_pair? helpers. The dict_trace_* aliases below preserve
-# the build-side naming; new call sites should prefer trace_word?.
-
-def dict_trace_word?(word)
-  trace_word?(word)
-end
-
-# Kaikki morph inheritance / common-list + SUBTLEX-anchored Inflect expansion: base →
-# infl inflection row touches any word in TRACE_WORDS.
-def dict_trace_morph?(base, infl)
-  trace_pair?(base, infl)
-end
-
-# List-pivot Inflect inheritance: hash key word, common_words candidate listed,
-# morph base → infl.
-def dict_trace_morph_inherit_listed?(word, listed, base, infl)
-  return false if TRACE_WORDS.empty?
-
-  TRACE_WORDS.include?(word) || TRACE_WORDS.include?(listed) || TRACE_WORDS.include?(base) || TRACE_WORDS.include?(infl)
-end
-
-# CMU line preprocessing: line changed and mentions a traced substring (token is first field).
-def dict_trace_preprocess_line?(original_line, line)
-  return false if TRACE_WORDS.empty? || line == original_line
-
-  TRACE_WORDS.any? { |w| line.include?(w) }
-end
-
-# body must not include a leading "TRACE". Pass word to print TRACE(word) before the message;
-# pass nil or "" for an unscoped TRACE line only.
-def dict_trace_format(word, body)
-  b = body.to_s
-  w = word.is_a?(String) && !word.empty? ? word : nil
-  w ? "TRACE(#{w}) #{b}" : "TRACE #{b}"
-end
-
-def dict_trace_puts(word, body)
-  puts dict_trace_format(word, body)
-end
 
 DICT_BUILD_VERBOSE = false
 
 CORPORA_ROOT = File.join(REPO_ROOT, "corpora")
 
 CMUDICT_FILENAME = File.join(CORPORA_ROOT, "cmudict", "cmudict-0.7c.txt")
-# Hand-curated inputs live under curated/; CURATED_DIR is defined in utils_rhyme.rb
+# Hand-curated inputs live under curated/; CURATED_DIR is defined in paths.rb
 # (parallel to REPO_ROOT / GENERATED_DIR) and shared by every loader. The
 # common / rare / forbidden word sets are not surfaced as *_FILENAME
 # constants any more — they're consumed by kind out of curated/rarity.csv
 # via rarity_csv_common_words / rarity_csv_rare_words /
-# rarity_csv_forbidden_words in utils_rhyme.rb.
+# rarity_csv_forbidden_words in curated_rarity.rb.
 NEOL2016_FILENAME = File.join(CORPORA_ROOT, "neol", "neol2016.txt")
 NEOL_SUPPLEMENT_FILENAME = File.join(CURATED_DIR, "neol_supplement.txt")
 
@@ -65,11 +24,9 @@ SUBTLEX_FILENAME = File.join(CORPORA_ROOT, "subtlex", "SUBTLEXus.tsv")
 SUBTLEX_PRESENCE_BONUS = 4
 
 WORDFREQ_FILENAME = File.join(REPO_ROOT, "generated", "wordfreq.tsv")
-WORDFREQ_COMMON_ZIPF = 3.0
 # OOV headwords with weak SUBTLEX (below SUBTLEX_OVERRIDE_PROPER_MIN): allow wordfreq boost when Zipf is
 # clearly conversational web, not just encyclopedic (*poly* ~3.6, *trans* ~4.4 vs surname-fragment band).
 WORDFREQ_OOV_STRONG_MODERN_ZIPF = 3.5
-WORDFREQ_RARE_ZIPF = 2.0
 # Kaikki inflections of a Wiktionary lemma: rescue at freq==0 disconnect when base Zipf is below
 # WORDFREQ_RARE_ZIPF but still shows measurable corpus use (e.g. *throuple* ~1.3 → *throuples*).
 WORDFREQ_KAIKKI_FORM_BASE_MIN = 1.0

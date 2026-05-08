@@ -12,7 +12,7 @@ require "tmpdir"
 require "sqlite3"
 require "json"
 require_relative "spec_helper"
-require "rhymecrime/local_store"
+require "rhymecrime/dev/local_store"
 
 RSpec.describe Rhymecrime::LocalStore do
   let(:tmpdir) { Dir.mktmpdir("rhymecrime-localstore-spec") }

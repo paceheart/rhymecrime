@@ -4,7 +4,7 @@
 # score#<lemma>, and set_related#<lemma> partitions. Picks
 # DynamoRuntime in Lambda (RHYMECRIME_DATA_SOURCE=dynamodb) and
 # LocalStore (SQLite) everywhere else. Both backends expose the same
-# API so related.rb / crime.rb don't branch on data source:
+# API so related.rb / query.rb don't branch on data source:
 #
 #   * cheap (hot path) — fetch_related_words, find_all_related_computed:
 #     pull just the cue's word list, no relatedness_score work. The non-debug
@@ -15,7 +15,7 @@
 #   * set_related — fetch_set_related_tuples: returns the computed
 #     post-prune rhyming-tuple list for the cue, or nil when the cue
 #     wasn't in the compute universe. The runtime set_related goal in
-#     crime.rb goes through here; nil routes the caller to the
+#     query.rb goes through here; nil routes the caller to the
 #     friendly "Oops, I don't know..." / "I don't like that word."
 #     bad_input branch.
 #
@@ -45,7 +45,7 @@ module Rhymecrime
         require_relative "dynamo_store"
         Rhymecrime::DynamoRuntime
       else
-        require_relative "local_store"
+        require_relative "dev/local_store"
         Rhymecrime::LocalStore
       end
     end

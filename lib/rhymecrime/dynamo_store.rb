@@ -12,7 +12,7 @@ module Rhymecrime
   # / set_related#<lemma> partitions in DynamoDB. The lexicon (word#)
   # and rime cohort (rime#) partitions were retired once the corresponding
   # .msgpack files got small enough (~5.5 MB and ~700 KB respectively) to
-  # ship in the Lambda deploy bundle — see lib/rhymecrime/build/utils_rhyme.rb
+  # ship in the Lambda deploy bundle — see lib/rhymecrime/paths.rb
   # (WORD_DICT_MSGPACK_FILENAME, RIME_DICT_MSGPACK_FILENAME) and
   # bin/upload-to-dynamodb (which now writes related#, score#, and
   # set_related#).
@@ -157,7 +157,7 @@ module Rhymecrime
     # nil vs [] matters: an empty array is a valid "this cue has no
     # rhyming friends" answer the caller renders normally, while nil
     # signals "we never computed this cue" and routes to the
-    # friendly-message branch in crime.rb's goal dispatch
+    # friendly-message branch in query.rb's goal dispatch
     # (forbidden? → "I don't like that word."; otherwise →
     # "Oops, I don't know what words are related to <cue>...").
     #
@@ -183,7 +183,7 @@ module Rhymecrime
     # (rime_dict_lookup) are now in-process from the bundled msgpacks, so the
     # filter is a pure CPU loop — no DDB round-trip. Mirrors
     # LocalStore#filter_related_words; the defined? guard keeps this
-    # module importable by tools that don't load crime.rb (e.g.
+    # module importable by tools that don't load query.rb (e.g.
     # bin/upload-to-dynamodb).
     def filter_related_words(words, include_rhymeless, common_only)
       return words.dup unless defined?(lexicon_word_entry) && defined?(rime_dict_lookup)

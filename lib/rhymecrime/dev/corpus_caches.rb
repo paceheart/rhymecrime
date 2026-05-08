@@ -1,54 +1,10 @@
 # frozen_string_literal: true
 
-def build_hyphen_multi_fold_map(explicit_word_keys = nil)
-  buckets = {}
-  load_variants_raw.each do |forms|
-    forms.each { |w| ingest_word_into_hyphen_fold_buckets!(buckets, w) }
-  end
-  if explicit_word_keys
-    explicit_word_keys.each { |w| ingest_word_into_hyphen_fold_buckets!(buckets, w) }
-  elsif defined?($word_dict) && $word_dict.is_a?(Hash) && !$word_dict.empty?
-    $word_dict.each_key { |w| ingest_word_into_hyphen_fold_buckets!(buckets, w) }
-  else
-    path = generated_dict_path_under_dict_dir(WORD_DICT_FILENAME)
-    if File.exist?(path)
-      BuildIoUtils.foreach(path, encoding: "UTF-8", hint: "build_hyphen_multi_fold_map") do |line|
-        next if line =~ /\A;/ || line =~ /\A#/
-        tok = line.split(",", 2).first
-        next if tok.nil? || tok.empty?
-        ingest_word_into_hyphen_fold_buckets!(buckets, tok.desanitize)
-      end
-    end
-  end
-  out = {}
-  buckets.each do |fold, set|
-    next if set.size < 2
-    out[fold] = set.to_a.freeze
-  end
-  out.freeze
-end
-
-# build_keys: headwords used to discover fold groups (include rare spellings when pairing hyphen/solid variants).
-# exported_keys: final lexicon; a fold is written only when at least one of its spellings remains exported.
-def save_hyphen_variant_map!(build_keys, exported_keys: nil)
-  exported_keys = build_keys if exported_keys.nil?
-  map = build_hyphen_multi_fold_map(build_keys)
-  in_export = exported_keys.to_set
-  map = map.reject { |_fold, forms| forms.none? { |w| in_export.include?(w) } }
-  ensure_generated_dict_dir!
-  path =
-    if rhymecrime_build_dir
-      generated_bootstrap_path(HYPHEN_VARIANT_MAP_FILENAME)
-    else
-      generated_dict_path(HYPHEN_VARIANT_MAP_FILENAME)
-    end
-  sorted = {}
-  map.keys.sort.each { |k| sorted[k] = map[k].sort }
-  FileUtils.mkdir_p(File.dirname(path))
-  BuildIoUtils.write(path, "#{JSON.generate(sorted)}\n", encoding: "UTF-8", hint: "save_hyphen_variant_map")
-  puts "Wrote #{sorted.size} hyphen-variant folds to #{HYPHEN_VARIANT_MAP_FILENAME}"
-  link_runtime_spelling_hyphen_symlinks! if final_mode? && rhymecrime_build_dir
-end
+# Offline ConceptNet / Numberbatch / USF corpus mirrors and streaming loaders.
+# Not loaded by Lambda: required from build_utils, relatedness/signals, and dev tools.
+require_relative "../utils"
+require "json"
+require "msgpack"
 
 # --- ConceptNet edge map build ---
 # Source: conceptnet-assertions-5.7.0.csv.gz (CC-BY-SA 4.0). Resolved by conceptnet_assertions_gz_path:
@@ -80,11 +36,6 @@ def conceptnet_en_lemma_from_uri(uri)
   w = uri.byteslice(6, len - 6)
   return nil if w.empty?
   w.each_byte.all? { |b| b >= 97 && b <= 122 } ? w : nil
-end
-
-# CMU-style compounds use hyphens; Numberbatch, ConceptNet /c/en/, etc. use underscores.
-def hyphens_to_underscores(word)
-  word.to_s.tr("-", "_")
 end
 
 # True if dict_set contains this ConceptNet lemma spelling or the hyphenated CMU-style variant.

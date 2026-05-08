@@ -99,8 +99,8 @@ def load_word_dict()
   word_dict
 end
 
-# Overridden in crime.rb after load (same shape; crime uses lazy word_dict()).
-# Dict-build never loads crime.rb — use $word_dict when the word_dict helper
+# Overridden in query.rb after load (same shape; crime uses lazy word_dict()).
+# Dict-build never loads query.rb — use $word_dict when the word_dict helper
 # is not defined (see preferred_form_frequency_lookup).
 def lexicon_word_entry(word)
   wd = defined?(word_dict) ? word_dict : $word_dict
@@ -216,7 +216,7 @@ end
 
 # Cue → {target => fsg} map built from the USF Cue_Target_Pairs.* shards. Used
 # by rarity_signals (build-time) and relatedness/signals (runtime). Mirrors the
-# bin/build-usf-associations script — kept inside utils_rhyme so
+# bin/build-usf-associations script — kept inside lexicon_io so
 # ensure_usf_associations_cache! can rebuild without spawning a subprocess.
 USF_LEMMA_RE = /\A[a-z][a-z0-9'-]*\z/.freeze
 
@@ -522,7 +522,7 @@ end
 # Source-selection ablation gate. Env var RHYMECRIME_GLOSS_SOURCE ∈ {wordnet, wiktionary,
 # both} (default both); the four gloss-using code paths (gloss_word_token_set /
 # sense_vectors / sense_vectors_morphy in signals.rb, gloss_tokens_for_word in
-# crime.rb, combined_glosses_for in bin/dump-sense-glosses) consult these helpers
+# query.rb, combined_glosses_for in bin/dump-sense-glosses) consult these helpers
 # before walking either corpus, so flipping the env var produces a clean A/B without code
 # edits. Used to retrain WN-only or WK-only baselines for direct classifier comparisons —
 # see bin/diagnose-gloss-coverage and the experimental program around the Wiktionary-
@@ -573,7 +573,7 @@ end
 # Returns Array<String> of Wiktionary glosses for word (one entry per definitional sense
 # in the filtered Kaikki dump), or [] when the headword has no Wiktionary glosses, the
 # msgpack isn't on disk yet, or RHYMECRIME_GLOSS_SOURCE excludes Wiktionary. Same
-# conservative no-signal contract as gloss_tokens_for_word in crime.rb: callers fall
+# conservative no-signal contract as gloss_tokens_for_word in query.rb: callers fall
 # back to WordNet-only behavior when this returns empty.
 def wiktionary_glosses_for(word)
   return [] if word.nil? || word.to_s.empty?

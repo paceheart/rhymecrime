@@ -29,7 +29,7 @@
 #
 
 require_relative "pace_utils"
-require_relative "build/utils_rhyme"
+require_relative "utils"
 require_relative "store"
 
 SIMILAR_MAX = 50000 # O_o

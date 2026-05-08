@@ -31,8 +31,8 @@
 #   lib/                            all of lib/rhymecrime
 #   assets/                         CSS / JS / images served from /
 #   curated/                        hand-curated data files (rarity.csv, etc.)
-#   generated/spelling_variants_auto.txt    \ small files crime.rb /
-#   generated/hyphen_variant_map.json       | utils_rhyme.rb open with
+#   generated/spelling_variants_auto.txt    \ small files query.rb /
+#   generated/hyphen_variant_map.json       | paths.rb open with
 #   generated/word_lemma_map.msgpack        | File.read at runtime.
 #   generated/word_semantic_base_map.msgpack/ See the require-graph audit
 #                                            below if you're tempted to add.
@@ -42,7 +42,7 @@
 #                                            | once the msgpacks proved small
 #                                            | enough to bundle (~6 MB total);
 #                                            | see WORD_DICT_MSGPACK_FILENAME
-#                                            | in build/utils_rhyme.rb.
+#                                            | in lib/rhymecrime/paths.rb.
 #
 # What does NOT ship (intentional):
 #   corpora/                        build-time only; runtime reads DynamoDB
@@ -52,7 +52,7 @@
 #   generated/sense_glosses.jsonl           training intermediate
 #   generated/rarity_signals_dump.jsonl     training intermediate
 #   generated/part_of_speech.json           DDB-mode short-circuits its only
-#                                           Lambda-reachable caller; crime.rb
+#                                           Lambda-reachable caller; query.rb
 #                                           part_of_speech_tags +raise+s if
 #                                           anything ever does try to read it
 #   bin/                            build / training scripts

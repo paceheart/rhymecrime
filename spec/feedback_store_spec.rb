@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 # Coverage for the Rhymecrime::FeedbackStore "uncomputed cue" path —
-# the runtime call site in crime.rb's set_related goal dispatch logs
+# the runtime call site in query.rb's set_related goal dispatch logs
 # a feedback row whenever Store.fetch_set_related_tuples misses on an
 # authoritative store, so a follow-up export step can surface the most-
 # asked-about cues outside the computed universe and feed them to

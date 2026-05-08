@@ -3,10 +3,10 @@
 
 # CMU ingest, ARPAbet normalization, syllabification, Wiktionary pronunciation merge.
 
-require_relative "utils_rhyme"
-require_relative "build_io_utils"
-require_relative "phoneme.rb"
-require_relative "pronunciation.rb"
+require_relative "build_utils"
+require_relative "../build_io_utils"
+require_relative "../phoneme.rb"
+require_relative "../pronunciation.rb"
 require_relative "constants"
 
 def delete_explicitly_forbidden_keys_from_hash(pronunciation_map)

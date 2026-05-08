@@ -14,7 +14,7 @@
 # PairSignals class live here so the runtime graph can stay free of the
 # hundreds of MB of data files these modules pull in.
 #
-# Callers are expected to have already loaded rhymecrime/crime (or the full
+# Callers are expected to have already loaded rhymecrime/query (or the full
 # frontend stack) so helpers like lemma, semantically_promiscuous?,
 # frequency, rare?, word_dict_includes_headword?, and part_of_speech_tags are available.
 #
@@ -25,7 +25,8 @@ require "numo/narray"
 require "rwordnet"
 require "set"
 require_relative "../pace_utils"
-require_relative "../build/utils_rhyme"
+require_relative "../utils"
+require_relative "../dev/corpus_caches"
 
 WordNet::DB.path = File.join(REPO_ROOT, "corpora", "wordnet", "3.1") unless defined?(WordNet::DB) && WordNet::DB.path
 
@@ -115,7 +116,7 @@ def conceptnet_edges
   # Streaming load filtered by current word_dict membership: the cache file is
   # a full corpus mirror (every kept-relation edge has a record), so a word
   # transitioning into word_dict gains coverage without rebuilding the file.
-  # Mirrors signals.rb's numberbatch loader. Caller must have crime.rb loaded
+  # Mirrors signals.rb's numberbatch loader. Caller must have query.rb loaded
   # so word_dict + $word_to_lemma are available.
   load_word_to_lemma! if $word_to_lemma.nil?
   dict_set = word_dict.keys.to_set
@@ -369,7 +370,7 @@ def numberbatch
   # is a full corpus mirror (any lowercase numberbatch token has a row), so
   # a word newly promoted into word_dict gets its vector without rebuilding
   # the file — at the cost of streaming ~500k records to materialize the
-  # ~100k that are dict-relevant. Caller must have crime.rb loaded so
+  # ~100k that are dict-relevant. Caller must have query.rb loaded so
   # word_dict is available (relatedness/signals.rb's load contract).
   keep = word_dict.keys.each_with_object(Set.new) { |w, s| s.add(hyphens_to_underscores(w)) }
   $numberbatch = load_numberbatch_vectors_streaming(path, keep_underscored: keep)

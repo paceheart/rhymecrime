@@ -96,7 +96,7 @@ a:visited {
 }
 
 /* Semantically promiscuous words (perhaps, however, ...) are rendered
-   without an <a> wrap in print_word (lib/rhymecrime/crime.rb): clicking
+   without an <a> wrap in print_word (lib/rhymecrime/query.rb): clicking
    would land on relatedness columns that frontend.rb short-circuits — dead-end
    UX. The visual signal (no link) needs a color cue: inside .output_p cyan
    #22dce1 inherits to bare text, so without an override they'd match links.
@@ -106,7 +106,7 @@ a:visited {
 }
 
 /* Inline thumbs-up / thumbs-down widget rendered after every "related word"
-   surface (see emit_relatedness_feedback_widget in lib/rhymecrime/crime.rb).
+   surface (see emit_relatedness_feedback_widget in lib/rhymecrime/query.rb).
    Icons are inline SVGs whose fill is currentColor, so the color rules
    below (mint #00fa9a for up, hot pink-red #ff355e for down) drive both the
    resting and voted states without any tinting/filter tricks. The buttons

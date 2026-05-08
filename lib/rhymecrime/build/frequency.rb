@@ -3,9 +3,9 @@
 
 require "set"
 require_relative "build_io"
-require_relative "utils_rhyme"
+require_relative "build_utils"
 require_relative "constants"
-require_relative "lexical"
+require_relative "../lexical"
 require_relative "morphology"
 require_relative "phonology"
 require_relative "rime"

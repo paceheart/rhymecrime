@@ -94,10 +94,10 @@ end.parse!
 repo = File.expand_path("..", __dir__)
 Dir.chdir(repo)
 
-# Load constants + feature names without pulling in crime.rb (which loads the full
+# Load constants + feature names without pulling in query.rb (which loads the full
 # dict; the trainer only needs the signal dump).
 require "rhymecrime/build/constants"
-require "rhymecrime/build/utils_rhyme"
+require "rhymecrime/build/build_utils"
 require "rhymecrime/build/rarity_classifier"
 
 # --- Constants -------------------------------------------------------------

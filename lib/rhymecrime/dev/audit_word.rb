@@ -2,17 +2,18 @@
 
 # Inspect one headword across RhymeCrime corpora and generated artifacts.
 #
-#   ruby -I lib -e 'require "rhymecrime/audit_word"; audit_word("washington")'
+#   ruby -I lib -e 'require "rhymecrime/dev/audit_word"; audit_word("washington")'
 #   Rhymecrime.audit_word("pirate", io: $stderr)
 #
-require_relative "../rhymecrime"
+require_relative "../../rhymecrime"
 require "json"
 require "msgpack"
 require "open3"
 
-require_relative "build/phoneme"
-require_relative "build/pronunciation"
-require_relative "build/utils_rhyme"
+require_relative "../phoneme"
+require_relative "../pronunciation"
+require_relative "../utils"
+require_relative "corpus_caches"
 
 module Rhymecrime
   module AuditWord
@@ -34,7 +35,7 @@ module Rhymecrime
       io.puts "=== Rhymecrime::audit_word #{w.inspect} (repo #{Rhymecrime::ROOT}) ==="
       io.puts
 
-      # --- Lexicon / runtime helpers (no full crime.rb) ---
+      # --- Lexicon / runtime helpers (no full query.rb) ---
       io.puts "--- Spelling / policy ---"
       if explicitly_forbidden?(w)
         if non_ascii_only?(w)

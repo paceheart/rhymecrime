@@ -47,7 +47,7 @@ require "json"
 require "fileutils"
 require_relative "rarity_signals"
 require_relative "rarity_curated_overrides"
-require_relative "utils_rhyme"
+require_relative "build_utils"
 require_relative "constants"
 
 # Keep in lock-step with bin/train-rarity-classifier. The JSON records its own
@@ -363,7 +363,7 @@ end
 # Returns [category_symbol, integer_freq] for sig. Integer freq in {0, 2, 10}
 # so downstream preference code that compares integer freqs keeps working.
 #
-# :forbidden => 0 (the rarity gate rare? in crime.rb treats freq <=
+# :forbidden => 0 (the rarity gate rare? in query.rb treats freq <=
 # RARE_FREQ_MAX as rare, so 0 is "rare but deletable"; the caller deletes the
 # headword). :rare => 2 (below RARE_FREQ_MAX=4). :common => 10 (above the
 # cutoff). Extend this mapping if the build needs more resolution in the common

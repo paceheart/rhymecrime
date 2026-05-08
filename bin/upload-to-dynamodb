@@ -12,7 +12,7 @@
 #                                                runtime hot-path answer for the
 #                                                set_related goal — collapses a
 #                                                4-phase live compute into one
-#                                                GetItem; see crime.rb's
+#                                                GetItem; see query.rb's
 #                                                find_rhyming_tuples)
 #   3. rhymecrime_local.sqlite3 (from bin/compute-relatedness):
 #        + related_scores table → score#…      (lazy parallel scores; runtime
@@ -24,7 +24,7 @@
 #
 # The lexicon (word_dict) and rime cohort (rime_dict) live entirely in the
 # Lambda deploy bundle as word_dict.msgpack / rime_dict.msgpack — see
-# bin/stage-lambda and lib/rhymecrime/build/utils_rhyme.rb's
+# bin/stage-lambda and lib/rhymecrime/paths.rb's
 # WORD_DICT_MSGPACK_FILENAME / RIME_DICT_MSGPACK_FILENAME constants.
 # Eliminating the word# / rime# partitions cuts ~217K DDB rows from the
 # data deploy and removes the per-request BatchGetItem fan-out that
@@ -64,7 +64,7 @@ require "aws-sdk-dynamodb"
 require "sqlite3"
 require_relative "_aws_preflight"
 require_relative "../lib/rhymecrime/data_source"
-require_relative "../lib/rhymecrime/build/utils_rhyme"
+require_relative "../lib/rhymecrime/build/build_utils"
 
 skip_related = false
 related_path = generated_dict_path(LOCAL_STORE_FILENAME)
@@ -248,13 +248,13 @@ else
     puts "  #{n_related} related# items"
 
     # Set_related#<lemma> stream — uploaded second because it's the runtime
-    # hot path: the set_related goal in crime.rb collapses a multi-phase
+    # hot path: the set_related goal in query.rb collapses a multi-phase
     # live compute into a single GetItem on this row, so it's the one we
     # most want already in DDB by the time anything reads from the table.
     # Independent loop (rather than a JOIN) so the related# phase isn't
     # held back by the second table scan. Empty tuples values are legal:
     # the runtime treats a missing row as the friendly "Oops, I don't
-    # know..." / "I don't like that word." bad_input branch (in crime.rb's
+    # know..." / "I don't like that word." bad_input branch (in query.rb's
     # set_related goal dispatch), so we want every cue computed by
     # bin/compute-set-related to land in DDB — including the empty-tuples
     # rows that mean "we know this cue but nothing rhymes among its

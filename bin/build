@@ -22,7 +22,7 @@ cd "$REPO"
 
 echo "==> Preflight: checking setup-produced inputs"
 ruby -I"$REPO/lib" <<'RUBY'
-require "rhymecrime/build/utils_rhyme"
+require "rhymecrime/build/build_utils"
 
 repo = File.expand_path(Dir.pwd)
 errors = []
@@ -214,7 +214,7 @@ RHYMECRIME_RARITY_DUMP_SIGNALS="$DUMP_PATH" \
 # generated/current is intentionally NOT updated here — it stays pointing at
 # the previously-completed build (or is missing on a fresh checkout) until the
 # whole pipeline succeeds. Stages 2-4 read in-flight runtime artifacts directly
-# via RHYMECRIME_BUILD_DIR (see generated_dict_path in utils_rhyme.rb).
+# via RHYMECRIME_BUILD_DIR (see generated_dict_path in paths.rb).
 
 echo "==> Build Stage 2/4 [7m]: training rarity classifier -> bootstrap/rarity_classifier.json"
 ruby ./bin/train-rarity-classifier

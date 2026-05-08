@@ -4,6 +4,11 @@
 # spelling variants
 #
 
+# CMU-style compounds use hyphens; Numberbatch, ConceptNet /c/en/, etc. use underscores.
+def hyphens_to_underscores(word)
+  word.to_s.tr("-", "_")
+end
+
 $variants = nil
 
 # Cleared when spelling-variant file is reloaded or word_dict is re-read.
@@ -79,7 +84,7 @@ end
 
 # Lexicon headwords (+ optional WORDS_NEEDED_FOR_TESTING). When include_rhymeless is false,
 # keep only words for which has_rhyming_word? is true. When common_only is true, drop rare?
-# headwords (frequency at or below RARE_FREQ_MAX). Both predicates need crime.rb loaded.
+# headwords (frequency at or below RARE_FREQ_MAX). Both predicates need query.rb loaded.
 #
 # Memoized per (include_rhymeless, common_only) flag combination (4 possible
 # keys total) because the hot path in bin/compute-relatedness calls

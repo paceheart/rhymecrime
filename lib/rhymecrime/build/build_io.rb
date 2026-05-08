@@ -12,7 +12,7 @@
 require "json"
 require "fileutils"
 
-require_relative "build_io_utils"
+require_relative "../build_io_utils"
 
 module BuildIo
   REPO_ROOT = File.expand_path("../../..", __dir__).freeze

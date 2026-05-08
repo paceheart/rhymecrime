@@ -24,8 +24,8 @@ require "forwardable"
 require "json"
 require "singleton"
 require "sqlite3"
-require_relative "data_source"
-require_relative "build/utils_rhyme"
+require_relative "../data_source"
+require_relative "../utils"
 
 module Rhymecrime
   class LocalStore
@@ -162,7 +162,7 @@ module Rhymecrime
       # Stash the post-prune rhyming-tuple list for lemma_key. tuples is
       # an Array of Arrays — each inner Array is a sorted list of headwords
       # that rhyme with each other and are all related to the cue. Mirrors
-      # the runtime contract of really_find_rhyming_tuples in crime.rb:
+      # the runtime contract of really_find_rhyming_tuples in query.rb:
       # tuples are sorted-uniq, contain at least 2 entries, and are
       # cross-tuple-redundancy-pruned. Empty tuples array is a valid
       # "this cue has no rhyming friends" answer (rare but real — e.g.
@@ -337,7 +337,7 @@ module Rhymecrime
     # the cueniverse filter but has no rhyming friends" answer that the
     # caller will render normally, while nil signals "we never
     # computed this cue" and routes to the friendly-message branch in
-    # crime.rb's goal dispatch.
+    # query.rb's goal dispatch.
     def fetch_set_related_tuples(lemma_key)
       return @set_related_cache[lemma_key] if @set_related_cache.key?(lemma_key)
       return @set_related_cache[lemma_key] = nil unless available?
@@ -345,7 +345,7 @@ module Rhymecrime
       # but before bin/compute-set-related has populated the table,
       # the schema upgrade hasn't happened on the dev's local SQLite
       # file yet. Treat that as "no row" silently — the live-compute
-      # fallback in crime.rb's find_rhyming_tuples still produces
+      # fallback in query.rb's find_rhyming_tuples still produces
       # results — and only reach for the warn-on-corruption branch on
       # real read failures.
       return @set_related_cache[lemma_key] = nil unless set_related_table_exists?
@@ -393,7 +393,7 @@ module Rhymecrime
     # Mirror of DynamoRuntime.find_all_related_computed: returns the word
     # list filtered by the caller's visibility flags, without fetching scores.
     # Uses the in-process Ruby dict helpers (lexicon_word_entry,
-    # rime_dict_lookup) loaded by crime.rb.
+    # rime_dict_lookup) loaded by query.rb.
     def find_all_related_computed(lemma_key, include_rhymeless, common_only)
       words = fetch_related_words(lemma_key)
       return [] if words.empty?
@@ -418,7 +418,7 @@ module Rhymecrime
 
     # Shared filter step. defined? guard so this module is importable in
     # isolation (e.g. by bin/upload-to-dynamodb which doesn't load
-    # crime.rb); callers that actually need filtering will have those
+    # query.rb); callers that actually need filtering will have those
     # helpers in scope. Returns surviving words in the input order so a
     # caller zipping against scores can preserve alignment via Set
     # membership.

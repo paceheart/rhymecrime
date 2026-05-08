@@ -8,7 +8,7 @@
 # compute_frequency / Wiktionary existence floor / filter_word_dict_disconnected! rescue)
 # consumes the RaritySignals struct only — it must not reach back into the raw corpora.
 #
-# Rarity gate (stage 3: rare? / allowed? in crime.rb) compares final freq against
+# Rarity gate (stage 3: rare? / allowed? in query.rb) compares final freq against
 # RARE_FREQ_MAX; it's a pure threshold.
 #
 # Feature surface intentionally kept small: raw corpus scalars, WordNet presence /
@@ -29,9 +29,9 @@
 #   sig = extract_rarity_signals(word, ctx)
 
 require "set"
-require_relative "lexical"
+require_relative "../lexical"
 require_relative "constants"
-require_relative "utils_rhyme"
+require_relative "build_utils"
 
 RarityContext = Struct.new(
   :subtlex_hash, :subtlex_total_hash, :wordfreq_hash,

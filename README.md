@@ -16,11 +16,11 @@ bundle exec rspec      # all tests should pass
 
 ## Repository layout
 
-Data and build artifacts are split so **sources** stay under `corpora/` and **regenerable caches** under `generated/` at the repo root. Ruby code resolves paths via `REPO_ROOT` / `GENERATED_DIR` in `lib/rhymecrime/build/utils_rhyme.rb`, so loading works even when the process cwd is not the repository root (e.g. CGI).
+Data and build artifacts are split so **sources** stay under `corpora/` and **regenerable caches** under `generated/` at the repo root. Ruby code resolves paths via `REPO_ROOT` / `GENERATED_DIR` in `lib/rhymecrime/paths.rb`, so loading works even when the process cwd is not the repository root (e.g. CGI).
 
 | Location | Role |
 |----------|------|
-| **`lib/`** | On the load path. `lib/rhymecrime.rb` defines `Rhymecrime::ROOT`; application code lives under **`lib/rhymecrime/`** (`crime.rb`, `related.rb`, `frontend.rb`, helpers, and the **`build/`** subtree). Use `require "rhymecrime/..."` from `bin/` and specs (after unshifting `lib/`). |
+| **`lib/`** | On the load path. `lib/rhymecrime.rb` defines `Rhymecrime::ROOT`; application code lives under **`lib/rhymecrime/`** (`query.rb`, `related.rb`, `frontend.rb`, helpers, and the **`build/`** subtree). Use `require "rhymecrime/..."` from `bin/` and specs (after unshifting `lib/`). |
 | **`bin/`** | **Executables**: `rhyme.rb`, `similar.rb`, `debug.rb`, `anneal.rb`, `dict-build` (dictionary rebuild). Each prepends `lib/` to `$LOAD_PATH` as needed. |
 | **`assets/`** | Static fragments and CSS for the CGI UI (`header.html`, `footer.html`, `*.css`). Loaded via `File.join(REPO_ROOT, "assets", ...)`. |
 | **`corpora/`** | Upstream or hand-maintained **inputs** (versioned when license/size allow). |

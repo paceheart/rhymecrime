@@ -18,9 +18,9 @@ require "set"
 repo = File.expand_path("..", __dir__)
 $LOAD_PATH.unshift File.join(repo, "lib")
 
-require "rhymecrime/build/utils_rhyme"
-require "rhymecrime/build/inflect"
-require "rhymecrime/build/lexical"
+require "rhymecrime/build/build_utils"
+require "rhymecrime/inflect"
+require "rhymecrime/lexical"
 require "rhymecrime/build/wiktionary"
 require "rhymecrime/build/morphology"
 

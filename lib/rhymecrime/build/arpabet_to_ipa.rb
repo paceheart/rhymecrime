@@ -1,8 +1,8 @@
 # frozen_string_literal: true
 # encoding: utf-8
 
-require_relative "pronunciation"
-require_relative "utils_rhyme"
+require_relative "../pronunciation"
+require_relative "build_utils"
 
 # General American ARPAbet → IPA back-converter, used by dev tools that surface
 # proposed phonemic IPA (e.g. bin/compare-authoritative-vs-kaikki) so a

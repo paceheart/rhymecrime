@@ -100,7 +100,7 @@ module Rhymecrime
     # Log an "uncomputed cue" event — the runtime asked Store.fetch_set_
     # related_tuples for a cue that has no computed row, so the user
     # got the friendly "Oops, I don't know what words are related to X,
-    # sorry! I'll make a note." message in crime.rb's set_related
+    # sorry! I'll make a note." message in query.rb's set_related
     # goal dispatch. The "make a note" half of that message is literally
     # this call: it emits one feedback row whose cue is the user's
     # surface input and whose related slot is UNCOMPUTED_RELATED_TOKEN,
@@ -175,10 +175,10 @@ module Rhymecrime
       private
 
       def default_path
-        # Late-bound: generated_dict_path lives in utils_rhyme, which
+        # Late-bound: generated_dict_path lives in rhymecrime/utils (paths), which
         # the Lambda runtime path doesn't load. We're only ever instantiated
         # in dev, so the require here is safe.
-        require_relative "build/utils_rhyme"
+        require_relative "utils"
         generated_root_path("feedback.csv")
       end
     end

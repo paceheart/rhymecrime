@@ -6,7 +6,7 @@ require 'json'
 require 'zlib'
 require 'set'
 require_relative 'ipa_to_arpabet'
-require_relative 'pronunciation'
+require_relative '../pronunciation'
 
 # Kaikki extract (large; often gitignored) under corpora/wiktionary/.
 WIKTIONARY_DATA_PATH = File.expand_path("../../../corpora/wiktionary/kaikki-english-filtered.jsonl.gz", __dir__)

@@ -6,7 +6,7 @@ require "msgpack"
 require "set"
 require_relative "build_io_utils"
 require_relative "phoneme.rb"
-require_relative "../pace_utils"
+require_relative "pace_utils"
 
 # Rhyming utilities for RhymeCrime
 # Used both in preprocessing and at runtime
@@ -21,7 +21,7 @@ WORD_DICT_FILENAME = "word_dict.txt"
 # materialized back to the headword on load.
 #
 # These are the runtime-canonical artifacts: word_dict() / rime_dict() in
-# crime.rb load these in BOTH local-dev and Lambda mode (the DDB word# /
+# query.rb load these in BOTH local-dev and Lambda mode (the DDB word# /
 # rime# partitions were retired — see bin/upload-to-dynamodb and
 # bin/stage-lambda). The .txt files are kept on disk for human inspection
 # and for tools like bin/audit-word that grep them, but the runtime never
@@ -104,11 +104,11 @@ MODEL_SENSE_VECTORS_FILENAME = "model_sense_vectors.msgpack"
 # Loaded lazily into $wiktionary_glosses on first call to wiktionary_glosses_for, with the
 # usual nil-loader / false-sentinel pattern so a missing file (fresh checkout pre-dict-build,
 # or Lambda runtime where corpora aren't shipped) collapses to "no glosses" instead of raising.
-# Same conservative-on-no-signal contract as gloss_tokens_for_word in crime.rb and
+# Same conservative-on-no-signal contract as gloss_tokens_for_word in query.rb and
 # gloss_word_token_set in signals.rb: callers default to the WordNet-only behavior when
 # this map is empty.
 WIKTIONARY_GLOSSES_FILENAME = "wiktionary_glosses.msgpack"
-# Word-frequency rare ceiling: treat as rare when frequency is at or below this (see rare? in crime.rb).
+# Word-frequency rare ceiling: treat as rare when frequency is at or below this (see rare? in query.rb).
 RARE_FREQ_MAX = 4
 
 # Rime dict build: when false (default), drop buckets where every pair of common headwords (freq>RARE_FREQ_MAX)
@@ -130,8 +130,8 @@ end
 # GENERATED_ROOT_DIR — flat tree at <repo>/generated/ for stable corpus caches (ConceptNet
 # gz caches, numberbatch_vectors.msgpack, wordfreq.tsv).
 # GENERATED_DIR — <repo>/generated/current/ (symlink → latest build's runtime/); all
-# runtime lexicon artifacts dict-build emits and crime.rb loads live here.
-REPO_ROOT = File.expand_path("../../..", __dir__)
+# runtime lexicon artifacts dict-build emits and query.rb loads live here.
+REPO_ROOT = File.expand_path("../..", __dir__)
 GENERATED_ROOT_DIR = File.join(REPO_ROOT, "generated")
 GENERATED_DIR = File.join(GENERATED_ROOT_DIR, "current")
 

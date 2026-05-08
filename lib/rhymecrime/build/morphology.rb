@@ -1,8 +1,8 @@
 # encoding: utf-8
 # Inflection policy (Kaikki attestation, morph_base_allows_*), Kaikki-derived surface pronunciations.
 
-require_relative "inflect"
-require_relative "lexical"
+require_relative "../inflect"
+require_relative "../lexical"
 require_relative "phonology"
 require_relative "constants"
 require_relative "unimorph"

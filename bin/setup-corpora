@@ -63,12 +63,12 @@ fi
 # --- ConceptNet corpus mirror → generated/conceptnet_edges.msgpack -----------
 # Stable full-corpus streamed MessagePack. Runtime/build readers filter it
 # against word_dict at load time, so dict-build never needs to regenerate it.
-bundle exec ruby -I lib -e 'require "rhymecrime/build/utils_rhyme"; ensure_conceptnet_edges_cache!'
+bundle exec ruby -I lib -e 'require "rhymecrime/build/build_utils"; ensure_conceptnet_edges_cache!'
 
 # --- ConceptNet Numberbatch 19.08 English (CC-BY-SA 4.0) --------------------
 # → corpora/numberbatch/numberbatch-en-19.08.txt
 # Official distribution is .txt.gz; gunzip leaves the plain .txt that
-# utils_rhyme.rb expects.
+# corpus_caches / paths expect.
 # https://github.com/commonsense/conceptnet-numberbatch#downloads
 mkdir -p corpora/numberbatch
 if [ ! -s corpora/numberbatch/numberbatch-en-19.08.txt ]; then
@@ -80,4 +80,4 @@ fi
 # --- Numberbatch corpus mirror → generated/numberbatch_vectors.msgpack -------
 # Stable full-corpus streamed MessagePack. Readers filter it against word_dict at
 # load time, so dict-build / bin/build treat it as a setup-produced input.
-bundle exec ruby -I lib -e 'require "rhymecrime/build/utils_rhyme"; ensure_numberbatch_vectors_cache!'
+bundle exec ruby -I lib -e 'require "rhymecrime/build/build_utils"; ensure_numberbatch_vectors_cache!'

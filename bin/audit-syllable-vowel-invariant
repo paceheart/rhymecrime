@@ -3,7 +3,7 @@
 #
 # Audit generated/word_dict.txt for the "every syllable has exactly one
 # vowel" invariant (see Pronunciation#syllable_vowel_invariant_ok? in
-# lib/rhymecrime/build/pronunciation.rb). CMU encodes syllabic consonants
+# lib/rhymecrime/pronunciation.rb). CMU encodes syllabic consonants
 # as a vowel symbol, so any well-formed syllabification — whether produced
 # by Pronunciation#syllabify or assembled by syllabify_with_common_prefix_split —
 # satisfies this. Violations indicate a build-time bug: the canonical example
@@ -23,9 +23,9 @@
 # guard once the dict has been cleaned up.
 
 $LOAD_PATH.unshift File.expand_path("../lib", __dir__)
-require "rhymecrime/build/phoneme"
-require "rhymecrime/build/pronunciation"
-require "rhymecrime/build/utils_rhyme"
+require "rhymecrime/phoneme"
+require "rhymecrime/pronunciation"
+require "rhymecrime/build/build_utils"
 
 WORD_DICT_PATH = File.expand_path("../generated/word_dict.txt", __dir__)
 PREFIXES_BY_LEN = COMMON_PREFIXES.sort_by { |p| -p.length }

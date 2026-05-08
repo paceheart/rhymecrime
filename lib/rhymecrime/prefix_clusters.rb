@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 #
-# Single morphological prefixes used by prefix_words (crime.rb) for the rhyme filter
+# Single morphological prefixes used by prefix_words (query.rb) for the rhyme filter
 # and by syllabify_with_common_prefix_split (phonology.rb) for the syllabifier's prefix
 # split. Order: longer before shorter where one contains another (inter before in).
 # Overlaps HYPHEN_COMPOUND_LEADING_PARTICLES only on in, out, up — those serve
@@ -9,7 +9,7 @@
 #
 # Intentionally restricted to *single* prefixes. Compound shapes like insub- in
 # insubordinate are handled by recursive stripping in recursive_prefix_ancestors
-# (crime.rb), which iterates this list at each step. Don't add compound entries here as
+# (query.rb), which iterates this list at each step. Don't add compound entries here as
 # a band-aid — that's the smell that motivated the recursive refactor.
 #
 
@@ -90,7 +90,7 @@ COMMON_PREFIXES = [
   'intra',
   'kilo',    # SI prefix 10^3 (kilometer, kilogram, kilowatt). The historical
              # rationale for excluding kilo- was that kilometer/thermometer should
-             # rhyme — handled now by PREFIX_FILTER_SIBLING_ANCHOR_TAILS in crime.rb,
+             # rhyme — handled now by PREFIX_FILTER_SIBLING_ANCHOR_TAILS in query.rb,
              # which preserves the stress-shifted kilometer↔thermometer pairing
              # (and friends: speedometer, barometer, etc.) while still correctly
              # filtering kilometer↔meter and kilogram↔gram. centimeter and the

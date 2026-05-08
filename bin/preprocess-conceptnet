@@ -15,11 +15,11 @@
 #
 
 repo = File.expand_path("..", __dir__)
-dict_dir = File.join(repo, "lib", "rhymecrime", "dict")
+build_dir = File.join(repo, "lib", "rhymecrime", "build")
 $LOAD_PATH.unshift File.join(repo, "lib")
 
-Dir.chdir(dict_dir) do
-  load File.join(dict_dir, "utils_rhyme.rb")
+Dir.chdir(build_dir) do
+  load File.join(build_dir, "build_utils.rb")
   out = ARGV[0]
   build_conceptnet_vocab_cache!(output_path: (out && !out.empty? ? out : nil))
 end
