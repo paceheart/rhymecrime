@@ -68,7 +68,7 @@ heraldry,herald
 cherubic,cherub
 cherubim,cherub
 seraphim,seraph
-serifs,serif,1,base 'serif' is not in word_dict so the semantic_base map can't point to it
+serifs,serif,,
 bookkeeper,bookkeeping
 bookkeeping,bookkeeping
 apologize,apology

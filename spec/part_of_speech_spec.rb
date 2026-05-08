@@ -25,7 +25,7 @@ PART_OF_SPEECH_EXPECTED = [
   %w[fox noun],
   %w[foxy adj],
   %w[foxily adv],
-  { word: "foxiness", expect: %w[noun], not_working_reason: true },
+  %w[foxiness noun],
   %w[very adv adj], # the very (adj) best
   { word: "downtown", expect: %w[noun adj], not_working_reason: true },
   %w[central adj],

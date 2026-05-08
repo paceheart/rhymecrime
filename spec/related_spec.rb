@@ -207,7 +207,7 @@ describe 'RELATED' do
       end
       context 'set_related: pirate -> shore / tor' do
         oughta_be_related 'pirate', 'shore'
-        oughta_be_related 'pirate', 'tor', not_working_reason: "predictor gap: similarity=0; 'tor' (rocky peak) is too rare for the embeddings"
+        oughta_be_related 'pirate', 'tor'
       end
       context 'set_related: pirate -> crude / pursued' do
         oughta_be_related 'pirate', 'crude'
@@ -253,7 +253,7 @@ describe 'RELATED' do
         oughta_be_related 'water', 'saline'
       end
       context 'set_related: prayers -> addressed / blessed' do
-        oughta_be_related 'prayers', 'addressed', not_working_reason: "predictor gap: similarity=0; 'addressed' (as in 'addressed prayers') is functional, embeddings miss it"
+        oughta_be_related 'prayers', 'addressed'
         oughta_be_related 'prayers', 'blessed'
       end
       context 'set_related: prayers -> blessed / request' do
@@ -273,7 +273,7 @@ describe 'RELATED' do
         oughta_be_related 'medicine', 'expertise'
       end
       context 'set_related: exploration -> knapsack / backtrack' do
-        oughta_be_related 'exploration', 'knapsack', not_working_reason: "predictor gap: similarity=0; 'knapsack' (explorer's gear) embeddings miss the exploration connection"
+        oughta_be_related 'exploration', 'knapsack'
         oughta_be_related 'exploration', 'backtrack'
       end
       context 'set_related: carbon -> ester / sequester' do

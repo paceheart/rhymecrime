@@ -504,7 +504,7 @@ describe 'RHYMES' do
       oughta_rhyme 'thesis', 'prosthesis'
       ought_not_rhyme 'thesis', 'antithesis'
       oughta_rhyme 'mediterranean', 'subterranean' # medi- is not a prefix
-      ought_not_rhyme 'motion', 'locomotion', not_working_reason: "TODO"
+      ought_not_rhyme 'motion', 'locomotion'
       ought_not_rhyme 'magnet', 'electromagnet'
       ought_not_rhyme 'magnetic', 'electromagnetic'
       oughta_rhyme 'prudence', 'jurisprudence' # they're semantically different enough to be interesting
