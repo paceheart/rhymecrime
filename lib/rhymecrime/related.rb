@@ -39,10 +39,6 @@ SIMILAR_MAX = 50000 # O_o
 # related-words list — anything below 50 is by definition unrelated.
 RELATEDNESS_SCORE_THRESHOLD = 50
 
-def related_trace_memo?
-  ENV["RELATED_TRACE_MEMO"].to_s == "1"
-end
-
 # Diagnostic knob for spec/related_spec.rb and ad-hoc eval work: when set,
 # thematically_related? / why_thematically_related? skip the computed
 # Store lookup and always run the compute pipeline. Lets post-retrain evals
@@ -149,14 +145,11 @@ end
 # entirely and forces the live compute path, useful for evaluating retrained
 # classifiers against rows whose compute is stale.
 def thematically_related?(cue, related, include_self = false)
-  if ENV["RELATED_TRACE_THEMATIC"] == "1"
-    warn "thematically_related? cue=#{cue.inspect} related=#{related.inspect} include_self=#{include_self.inspect}"
-  end
+  trace = trace_pair?(cue, related)
+  warn "thematically_related? cue=#{cue.inspect} related=#{related.inspect} include_self=#{include_self.inspect}" if trace
 
   return true if include_self && (cue == related || lemma(cue) == lemma(related))
   return true if semantically_promiscuous?(cue) || semantically_promiscuous?(related)
-
-  puts "thematically_related? #{cue} -> #{related}" if related_trace_memo?
 
   # Two normalization modes on the way in:
   #   * RELATED_SKIP_LEMMA=1 -> raw surfaces (no normalization).
@@ -170,7 +163,7 @@ def thematically_related?(cue, related, include_self = false)
   # plain lemma.)
   cue_lemma = ENV["RELATED_SKIP_LEMMA"] == "1" ? cue : lemma(cue)
   related_lemma = ENV["RELATED_SKIP_LEMMA"] == "1" ? related : lemma(related)
-  puts "  -> lemma key #{cue_lemma} -> #{related_lemma}" if related_trace_memo?
+  puts "  -> lemma key #{cue_lemma} -> #{related_lemma}" if trace
 
   unless related_bypass_store?
     # Directional store hit: consults only cue_lemma's compute row, since

@@ -864,13 +864,8 @@ def sense_vectors(word, max_senses = $SENSE_VECTOR_MAX_SENSES)
       rows << v if v
     end
   end
-  if gloss_source_wk_first?
-    fill_wk.call
-    fill_wn.call if rows.size < max_senses
-  else
-    fill_wn.call
-    fill_wk.call if rows.size < max_senses
-  end
+  fill_wn.call
+  fill_wk.call if rows.size < max_senses
 
   result = rows.empty? ? nil : Numo::SFloat.vstack(rows)
   $sense_vectors_cache[key] = result
@@ -1005,13 +1000,8 @@ def sense_vectors_morphy(word, max_senses = $SENSE_VECTOR_MAX_SENSES)
         rows << v if v
       end
     end
-    if gloss_source_wk_first?
-      fill_wk.call
-      fill_wn.call if rows.size < max_senses
-    else
-      fill_wn.call
-      fill_wk.call if rows.size < max_senses
-    end
+    fill_wn.call
+    fill_wk.call if rows.size < max_senses
   end
   result = rows.empty? ? nil : Numo::SFloat.vstack(rows)
   $morphy_sv_cache[word] = result
@@ -1108,26 +1098,15 @@ UNIGRAM_FEATURE_NAMES = %w[
 # cn_degree — patterns that the symmetric reductions deliberately erase.
 PAIR_REDUCTIONS = %i[min max diff cue related].freeze
 
-# Env-var ablation hook: comma-separated list of unigram names whose
-# _min/_max/_diff reductions should be excluded from the learned feature
-# vector entirely. Read once at first call and cached so training and
-# inference see the same filter (both consult this method when assembling
-# LEARNED_FEATURE_NAMES and learned_feature_vector). Used to A/B test
-# whether confounder-y unigram features (length, cn_degree, usf_out_degree,
-# is_rare) are helping or hurting the GBT — see bin/_compare_feature_ablations.
-$dropped_unigram_set = nil
-def dropped_unigram_set
-  $dropped_unigram_set ||= begin
-    raw = ENV["RELATED_DROP_UNIGRAMS"].to_s.strip
-    raw.empty? ? [].to_set : raw.split(/\s*,\s*/).to_set
-  end
-end
-
-$kept_unigram_indices = nil
+# Every UNIGRAM_FEATURE_NAMES position is kept. This used to be an env-var
+# ablation hook (RELATED_DROP_UNIGRAMS) used by bin/_compare_feature_ablations
+# to A/B individual unigrams in/out of the GBT; it stayed unset in steady
+# state and the knob was retired in May 2026. Helper kept (instead of
+# inlining UNIGRAM_FEATURE_NAMES.each_index) to preserve the call shape
+# in unigram_pair_feature_names / unigram_pair_feature_values.
+KEPT_UNIGRAM_INDICES = UNIGRAM_FEATURE_NAMES.each_index.to_a.freeze
 def kept_unigram_indices
-  $kept_unigram_indices ||= UNIGRAM_FEATURE_NAMES.each_index.reject do |i|
-    dropped_unigram_set.include?(UNIGRAM_FEATURE_NAMES[i])
-  end
+  KEPT_UNIGRAM_INDICES
 end
 
 def unigram_pair_feature_names

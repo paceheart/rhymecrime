@@ -462,7 +462,7 @@ end
 # Used by the pruners below to gate per-round partner-loss logging: logging
 # costs the corpus at large nothing (short-circuit on non-trace-words), and
 # a contributor debugging a specific trace word gets round-by-round
-# attribution of bucket changes "for free" when the word is in DICT_TRACE_WORDS.
+# attribution of bucket changes "for free" when the word is in TRACE_WORDS.
 def rime_dict_bucket_has_trace_word?(words)
   return false if words.nil?
   words.any? { |w| dict_trace_word?(w) }

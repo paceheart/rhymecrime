@@ -21,7 +21,7 @@ module Rhymecrime
     end
 
     def table_name
-      ENV.fetch("RHYMECRIME_TABLE_NAME", "rhymecrime")
+      ENV.fetch("TABLE_NAME", "rhymecrime")
     end
   end
 end

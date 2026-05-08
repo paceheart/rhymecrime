@@ -1,29 +1,22 @@
 # encoding: utf-8
 
 require_relative "utils_rhyme"
+require_relative "../pace_utils"
 require "rwordnet"
 
-# Trace headword(s) through dict-build (frequency, CMU ingest, rime, disconnect, …).
-# Comma/space/semicolon-separated lists in DICT_TRACE_WORDS and/or TRACE_WORDS (merged and uniq’d).
-#
-# Examples:
-#   TRACE_WORDS=kitchening ./bin/dict-build
-#   TRACE_WORDS="kitchening,puffin" ./bin/dict-build
-#   DICT_TRACE_WORDS="foo bar;baz" ./bin/dict-build
-_parse_trace_words = ->(str) { str.to_s.split(/[\s,;]+/).map(&:strip).reject(&:empty?) }
-
-TRACE_WORDS = (_parse_trace_words[ENV["DICT_TRACE_WORDS"]] + _parse_trace_words[ENV["TRACE_WORDS"]]).uniq.freeze
+# TRACE_WORDS is defined in pace_utils.rb so every layer (runtime relatedness
+# predicates, dict-build) shares one parse of ENV["TRACE_WORDS"] and the same
+# trace_word? / trace_pair? helpers. The dict_trace_* aliases below preserve
+# the build-side naming; new call sites should prefer trace_word?.
 
 def dict_trace_word?(word)
-  !TRACE_WORDS.empty? && TRACE_WORDS.include?(word)
+  trace_word?(word)
 end
 
 # Kaikki morph inheritance / common-list + SUBTLEX-anchored Inflect expansion: base →
 # infl inflection row touches any word in TRACE_WORDS.
 def dict_trace_morph?(base, infl)
-  return false if TRACE_WORDS.empty?
-
-  TRACE_WORDS.include?(base) || TRACE_WORDS.include?(infl)
+  trace_pair?(base, infl)
 end
 
 # List-pivot Inflect inheritance: hash key word, common_words candidate listed,

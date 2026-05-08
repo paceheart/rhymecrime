@@ -12,7 +12,7 @@ Globals:
     # over ~100 KB of JSON-encoded responses) was tripping the 29-second
     # API Gateway timeout at the previous 512 MB (~⅓ vCPU) setting; bumping
     # here, combined with the parallel_batch_get_items fan-out in
-    # dynamo_store.rb and the inflight RHYMECRIME_LOG_TIMING phase logs,
+    # dynamo_store.rb and the always-on Rhymecrime::Timing phase logs,
     # gets us back under budget. Cost impact: ~3.5x per-ms billed, but the
     # function also runs ~3-5x faster, so total billed-ms per request goes
     # *down*. Pricing: us-east-1 arm64 = $0.0000133334 / GB-second.
@@ -132,9 +132,8 @@ Resources:
       Environment:
         Variables:
           RHYMECRIME_DATA_SOURCE: dynamodb
-          RHYMECRIME_TABLE_NAME: !Ref TableName
-          RHYMECRIME_FEEDBACK_TABLE_NAME: !Ref FeedbackTableName
           TABLE_NAME: !Ref TableName
+          RHYMECRIME_FEEDBACK_TABLE_NAME: !Ref FeedbackTableName
           # Lambda's Ruby runtime ships with LANG unset, leaving
           # Encoding.default_external at US-ASCII. The AWS SDK's JSON parser
           # then chokes on any multibyte UTF-8 byte in a DynamoDB response
@@ -144,17 +143,6 @@ Resources:
           # by the runtime (less of a concern in practice, but cheap) inherits
           # the right locale too.
           LANG: en_US.UTF-8
-          # Turn on Rhymecrime::Timing.measure so each phase of
-          # really_find_rhyming_tuples (find+filter, rhyme-bucket loop,
-          # prune) logs its wall-clock to CloudWatch. Cheap (a warn per
-          # phase), and the only way to attribute a slow request to a
-          # specific stage. The DDB word# / rime# prefetch phases
-          # (batch_get_words / batch_get_rimes) that this knob originally
-          # targeted have been retired — lexicon + rime cohort now load from
-          # word_dict.msgpack / rime_dict.msgpack at boot. Flip to "0"
-          # (or remove this line) once the set_related perf work has
-          # stabilized; in steady state we don't need this log volume.
-          RHYMECRIME_LOG_TIMING: "1"
       Policies:
         - DynamoDBReadPolicy:
             TableName: !Ref RhymecrimeTable

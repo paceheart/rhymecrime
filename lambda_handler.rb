@@ -19,7 +19,7 @@ Encoding.default_internal = Encoding::UTF_8
 $LOAD_PATH.unshift(File.join(__dir__, "lib"))
 
 ENV["RHYMECRIME_DATA_SOURCE"] = "dynamodb"
-ENV["RHYMECRIME_TABLE_NAME"] ||= ENV.fetch("TABLE_NAME", "rhymecrime")
+ENV["TABLE_NAME"] ||= "rhymecrime"
 
 require "base64"
 require "json"

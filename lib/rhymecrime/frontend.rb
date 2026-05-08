@@ -17,7 +17,10 @@ require_relative "crime"
 # are gated on this global because both fire deep inside the render path where
 # threading a kwarg through would touch dozens of call sites. (HTTP handlers
 # also use the same ?debug=1 flag to return a plaintext stack trace when
-# render raises — see lambda_handler.rb / app.rb.)
+# render raises — see lambda_handler.rb / app.rb.) build_rhymecrime_page also
+# flips $debug_mode (pace_utils.rb) on for the duration of the request so
+# DEBUG-gated diagnostics fire under ?debug=1 too — see the env-var
+# consolidation note in pace_utils.rb.
 #
 #   1. Pruning visualizer: prune_suffix_redundant_rhyming_tuples retains
 #      (rather than drops) its victims and records them in $debug_pruned_
@@ -27,6 +30,8 @@ require_relative "crime"
 #      production so set_related slots render in the default text color, and
 #      returns word1 under debug so each slot is tinted by its stored
 #      relatedness_score vs word1 (the diagnostic view).
+#   3. Verbose-prune logging in crime.rb's tuple sweepers (via $debug_mode,
+#      which build_rhymecrime_page sets to true for the request).
 #
 # Name is $debug_pruning (rather than $debug_request) for git-blame
 # stability — pruning was the original behavior; coloring piggybacked.
@@ -290,8 +295,16 @@ end
 # to bound worker RSS — that's a different access pattern (sequential
 # distinct-cue scan) where retention has no upside.
 def build_rhymecrime_page(word1, word2, debug: false)
+  prev_debug_mode = $debug_mode
   $debug_pruning = debug
   $debug_pruned_tuples = debug ? Set.new : nil
+  # Per-request DEBUG override: ?debug=1 turns on the same gate that
+  # ENV["DEBUG"]=1 sets at boot, so verbose-prune logging in the tuple
+  # sweepers (crime.rb) and any future $debug_mode-gated diagnostic fires
+  # alongside the pruning visualizer / score-tinting. Restored in ensure
+  # so a debug request doesn't leak into subsequent ones on the same
+  # warm container / Puma thread.
+  $debug_mode = true if debug
   buf = +""
   Thread.current[:html_output_buffer] = buf
   w1, w2 = parse_query_words(word1, word2)
@@ -303,6 +316,7 @@ ensure
   Thread.current[:html_output_buffer] = nil
   $debug_pruning = false
   $debug_pruned_tuples = nil
+  $debug_mode = prev_debug_mode
 end
 
 # CGI: reads params from environment, prints to stdout.

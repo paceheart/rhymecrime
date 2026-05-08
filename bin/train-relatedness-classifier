@@ -554,26 +554,19 @@ labels = []
 weights = []
 ish_flags = []
 
-# Experimental knob: treat whatever rows ("either answer is fine") as soft
-# negatives (unrelated_ish) instead of skipping them. Ish-strength, not
-# strong: the annotator specifically declined to make a confident call, so
-# strong-unrelated would over-claim. The hypothesis is that adding 200-ish
-# gentle negatives gives the classifier more middle-ground coverage without
-# penalizing it too hard if it does fire on them.
-whatever_as_unrelated = ENV["RELATED_WHATEVER_AS_UNRELATED"] == "1"
+# whatever rows ("either answer is fine") are skipped — the annotator
+# specifically declined to make a confident call so we'd be over-claiming
+# either way. This used to be a knob (RELATED_WHATEVER_AS_UNRELATED) that
+# relabeled whatever to unrelated_ish for an extra ~200 soft negatives;
+# the relabel never won the offline sweeps, so the knob was retired in
+# May 2026.
 skipped_whatever = 0
-relabeled_whatever = 0
 
 rows.each do |r|
   kind = r["oughta be related?"].to_s.strip
   if kind == "whatever"
-    if whatever_as_unrelated
-      kind = "unrelated_ish"
-      relabeled_whatever += 1
-    else
-      skipped_whatever += 1
-      next
-    end
+    skipped_whatever += 1
+    next
   end
 
   w1 = r["cue"]
@@ -612,8 +605,7 @@ end
 pos_weight_mass = weights.each_with_index.sum { |w, i| labels[i] == 1.0 ? w : 0.0 }
 neg_weight_mass = weights.each_with_index.sum { |w, i| labels[i] == 0.0 ? w : 0.0 }
 puts "model: #{options[:model]}"
-whatever_note = whatever_as_unrelated ? "#{relabeled_whatever} whatever→unrelated_ish (RELATED_WHATEVER_AS_UNRELATED=1)" : "+#{skipped_whatever} whatever skipped"
-puts "training examples: #{features_list.size}  (#{whatever_note}, #{skipped_promiscuous} semantically-promiscuous pairs filtered at load)"
+puts "training examples: #{features_list.size}  (+#{skipped_whatever} whatever skipped, #{skipped_promiscuous} semantically-promiscuous pairs filtered at load)"
 puts "positives: #{labels.count(1.0)}  negatives: #{labels.count(0.0)}"
 puts format(
   "class asymmetry: fn_weight=%.2f (pos weight mass %.0f vs neg %.0f)  fn_penalty=%.2f",

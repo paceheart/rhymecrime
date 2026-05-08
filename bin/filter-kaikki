@@ -26,8 +26,8 @@
 # contributes at least one of: a pronunciation, an inflectional form, an
 # alt_of/form_of pointer, or a definitional gloss. Default cutoffs for the gloss
 # side were tuned against the relatedness classifier on curated/related.csv;
-# see RHYMECRIME_KAIKKI_* env vars below for the knobs we swept and
-# notes/wiktionary-glosses-experiments.canvas for the results.
+# see the remaining RHYMECRIME_KAIKKI_* env vars below for the knobs we swept
+# and notes/wiktionary-glosses-experiments.canvas for the results.
 
 require "json"
 
@@ -45,9 +45,8 @@ GLOSS_CHAR_LIMIT = (ENV["RHYMECRIME_KAIKKI_GLOSS_CHAR_LIMIT"] || "500").to_i
 # Keep records whose only signal is a definitional gloss (no pronunciation /
 # form / variant pointer). The original filter dropped these — that loses 833K
 # of 1.46M raw records (57%) and explains why most CMUDict-only headwords had
-# no Wiktionary gloss available in earlier builds. Set to 0 only if you
-# explicitly want the legacy variant-discovery-only corpus.
-KEEP_GLOSS_ONLY = ENV.fetch("RHYMECRIME_KAIKKI_KEEP_GLOSS_ONLY", "1") != "0"
+# no Wiktionary gloss available in earlier builds. Always true now (the legacy
+# variant-discovery-only corpus is no longer reachable from this script).
 
 ARGF.each_line do |line|
   obj = begin
@@ -99,7 +98,7 @@ ARGF.each_line do |line|
   # Pronunciations feed wiktionary.rb's pron_hash; forms feed forms_map;
   # alt_of/form_of senses feed corpus_variants.rb's variant discovery.
   has_variant_signal = kept_senses.any? { |s| s["alt_of"] || s["form_of"] }
-  has_definitional_gloss = KEEP_GLOSS_ONLY && kept_senses.any? do |s|
+  has_definitional_gloss = kept_senses.any? do |s|
     g = s["glosses"]
     g && !g.empty?
   end

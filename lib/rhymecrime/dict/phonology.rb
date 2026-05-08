@@ -240,26 +240,17 @@ end
 # syllabify, the historical illegitimate → IH2 . L AH0 JH IH1 D AH0 M
 # AH0 T regression).
 #
-# Default mode is raise — the dict has been audited clean (see
+# Always raises — the dict has been audited clean (see
 # bin/audit-syllable-vowel-invariant), so any new violation is a bug we
-# want to surface loudly during bin/dict-build. Set
-# RHYMECRIME_SYLL_INVARIANT=warn to demote to a stderr warning while
-# debugging, =off to silence entirely.
+# want to surface loudly during bin/dict-build. If you ever need to demote
+# to a warn while debugging, edit the raise below for the duration of the
+# dig — there's no env-var knob anymore.
 def check_syllable_vowel_invariant!(pron, word, source)
   return if pron.nil? || pron.empty?
   return if pron.syllable_vowel_invariant_ok?
-  mode = ENV.fetch("RHYMECRIME_SYLL_INVARIANT", "raise").to_s.downcase
 
-  msg = "syllable-vowel invariant violated for #{word.inspect} via #{source}: " \
+  raise "syllable-vowel invariant violated for #{word.inspect} via #{source}: " \
         "#{pron.syllable_vowel_invariant_violation} (full: #{pron})"
-  case mode
-  when "off", ""
-    # silenced
-  when "warn"
-    warn msg
-  else
-    raise msg
-  end
 end
 
 def conflate_imperfect_rhyme_phoneme_string(phoneme_space_string)

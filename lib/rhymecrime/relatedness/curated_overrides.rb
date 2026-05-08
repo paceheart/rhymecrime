@@ -33,11 +33,11 @@
 # read on first access so a single-process eval can flip it between calls by
 # resetting the memo via reset_curated_relatedness_overrides!.
 #
-# Only consulted by the scan / compute path. The runtime predicate
-# thematically_related? in lib/rhymecrime/related.rb deliberately doesn't
-# consult these overrides: spec/related_spec.rb uses the predicate to evaluate
-# the underlying classifier against related.csv, and folding the labels into
-# the predicate would short-circuit the spec to a vacuous 100% pass rate.
+# Consulted by both compute output generation and the local-dev predicate
+# fallback. Production runtime sees the same decisions after compute serializes
+# them into related rows; local runtime without a cache must apply the same
+# overrides directly or it regresses exactly the curated pairs compute would
+# have rescued.
 
 require "csv"
 require_relative "../dict/utils_rhyme"
@@ -158,6 +158,20 @@ end
 def curated_relatedness_overrides_stats
   curated_relatedness_overrides unless $curated_relatedness_overrides_stats
   $curated_relatedness_overrides_stats || {}
+end
+
+# Boolean override for the local predicate path. Returns true/false when
+# curated/related.csv has a non-contradictory verdict for the ordered lemma pair,
+# or nil when there is no override and the classifier/rules should decide.
+def curated_relatedness_override_related?(cue_lemma, related_lemma)
+  case curated_relatedness_overrides[[cue_lemma, related_lemma]]
+  when :related, :related_ish
+    true
+  when :unrelated, :unrelated_ish
+    false
+  else
+    nil
+  end
 end
 
 # Convenience for callers that want to log the override coverage once at compute

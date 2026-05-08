@@ -78,3 +78,19 @@ try retraining relatedness with whatever mapped to related_ish, or related_ish_i
 try retraining relatedness with 5 classes: related, related_ish, whatever, unrelated_ish, unrelated
 
 try Float16
+
+env var sweep — May 2026 (done; this list is the audit trail):
+- retired RELATED_DROP_UNIGRAMS (always keep all unigrams)
+- retired RHYMECRIME_LOG_TIMING (Timing.measure always emits)
+- retired RHYMECRIME_KAIKKI_KEEP_GLOSS_ONLY (always keep gloss-only records)
+- retired RELATED_SKIP_DERIVATION (always use semantic_base derivation)
+- retired RELATED_WHATEVER_AS_UNRELATED (always skip whatever rows)
+- retired RHYMECRIME_GLOSS_ORDER (always wn-first)
+- retired RHYMECRIME_SYLL_INVARIANT (always raise)
+- retired RHYMECRIME_BUILD_IO_VERBOSE (BuildIo audit log is the verbose path)
+- consolidated DICT_TRACE_WORDS + RELATED_TRACE_MEMO + RELATED_TRACE_THEMATIC -> TRACE_WORDS (per-pair gate)
+- consolidated RHYMECRIME_TABLE_NAME -> TABLE_NAME
+- consolidated VERBOSE -> DEBUG; ?debug=1 on the URL also flips $debug_mode for the request
+
+still on the audit list:
+RHYMECRIME_VERBOSE_CSV_SWEEP

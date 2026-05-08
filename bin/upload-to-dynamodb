@@ -30,7 +30,7 @@
 # data deploy and removes the per-request BatchGetItem fan-out that
 # previously dominated set_related latency on cold cues.
 #
-#   AWS_PROFILE=paceheart RHYMECRIME_TABLE_NAME=rhymecrime AWS_REGION=us-east-1 \
+#   AWS_PROFILE=paceheart TABLE_NAME=rhymecrime AWS_REGION=us-east-1 \
 #     ruby bin/upload-to-dynamodb
 #
 #   --skip-related     Do not upload related rows (omit if the local store is missing)

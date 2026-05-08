@@ -1321,8 +1321,9 @@ end
 # Checks are bidirectional against the kept list because tuples.sort does not reliably
 # front-load base forms (e.g. "artilleries" < "artillery" because "i" < "y").
 #
-# Set VERBOSE=1 in the environment to print each pruned tuple (and the kept tuple it matched);
-# this is separate from $debug_mode / debug, which remain very chatty elsewhere.
+# Set DEBUG=1 in the environment (or hit the page with ?debug=1, which flips
+# $debug_mode on per-request) to print each pruned tuple alongside the kept
+# tuple it matched.
 #
 # When $debug_pruning is true (set per-request from the debug=1 URL param), tuples that
 # would normally be dropped are instead retained in the returned array AND recorded in
@@ -1773,7 +1774,7 @@ end
 # whole pair. Called from really_find_rhyming_pairs after the rhyme-cross.
 def prune_trivial_rhyming_pairs(pairs)
   return pairs if pairs.empty?
-  verbose_prunes = ENV["VERBOSE"] == "1"
+  verbose_prunes = $debug_mode || $debug_pruning
   pairs.reject do |(a, b)|
     trivial = rhyming_pair_trivial?(a, b)
     puts "pruned rhyming pair (trivial rhyme: prefix or homophone): #{a} / #{b}" if trivial && verbose_prunes
@@ -1845,8 +1846,8 @@ end
 # collapses the original O(N^2) scan to roughly O(N * avg_bucket_size)
 # and is the difference between cat (654 tuples → 11 s) and pirate (~900
 # tuples) in the 29-second API Gateway budget — see [timing]
-# set_related[<word>] prune in CloudWatch under
-# RHYMECRIME_LOG_TIMING=1.
+# set_related[<word>] prune in CloudWatch (Rhymecrime::Timing.measure
+# always emits these phase logs).
 #
 # Insertion-order semantics are preserved: kept is a Hash (which
 # iterates in insertion order on MRI), so kept.values at the bottom
@@ -1869,7 +1870,7 @@ end
 # negatives would silently change pruning output (regression in
 # spec/prune_redundant_tuples_spec.rb).
 def prune_cross_tuple_redundancy_sweep(sorted_tuples)
-  verbose_prunes = ENV["VERBOSE"] == "1"
+  verbose_prunes = $debug_mode || $debug_pruning
   debug_pruning = $debug_pruning
 
   base_index = Hash.new { |h, k| h[k] = Set.new }
@@ -1992,15 +1993,16 @@ end
 # Checks are bidirectional against the kept list because tuples.sort does not reliably
 # front-load base forms (e.g. "artilleries" < "artillery" because "i" < "y").
 #
-# Set VERBOSE=1 in the environment to print each pruned tuple (and the kept tuple it matched);
-# this is separate from $debug_mode / debug, which remain very chatty elsewhere.
+# Set DEBUG=1 in the environment (or hit the page with ?debug=1, which flips
+# $debug_mode on per-request) to print each pruned tuple alongside the kept
+# tuple it matched.
 #
 # When $debug_pruning is true (set per-request from the debug=1 URL param), tuples that
 # would normally be dropped are instead retained in the returned array AND recorded in
 # $debug_pruned_tuples, so the renderer can display them inline, greyed out, alongside
 # the kept tuples.
 def prune_suffix_redundant_rhyming_tuples(tuples, focal_word = nil)
-  verbose_prunes = ENV["VERBOSE"] == "1"
+  verbose_prunes = $debug_mode || $debug_pruning
   debug_pruning = $debug_pruning
 
   # Cue-independent per-tuple steps via the pure helper (stop-word
@@ -2177,9 +2179,9 @@ def really_find_rhyming_tuples(input_rel1, common_only = false)
   # Return all buckets with two or more words in them, after prune_suffix_redundant_rhyming_tuples
   # drops tuples that only parallel an earlier tuple's Inflect suffixes (e.g. all plural or all past).
   #
-  # Rhymecrime::Timing.measure wrappers below are no-ops unless
-  # RHYMECRIME_LOG_TIMING=1 is set (template.yaml turns this on for the
-  # deployed Lambda). The phase labels mirror the algorithm steps above so a
+  # Rhymecrime::Timing.measure wrappers below always emit one [timing]
+  # line per phase to STDERR (and from there to CloudWatch on Lambda).
+  # The phase labels mirror the algorithm steps above so a
   # CloudWatch grep for [timing] set_related[<word>] tells you whether the
   # 29-second budget is being eaten by find_related (single get_item on
   # related#<lemma> + N batched gets), prefetch (rhyme-cohort fan-out), the

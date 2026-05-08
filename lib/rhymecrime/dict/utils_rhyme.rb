@@ -2745,16 +2745,10 @@ end
 # WordNet pointed to one and the suffix-allowlist gates passed during
 # compute_semantic_base_map; otherwise falls back to the inflectional
 # lemma(w). Composes the two normalization layers in one call so callers
-# don't have to memorize the order.
-#
-# RELATED_SKIP_DERIVATION=1 disables the derivational hop (returns plain
-# lemma(w)) — used by A/B harnesses to measure R3's contribution against the
-# pre-R3 normalization regime. Layered with RELATED_SKIP_LEMMA=1 at the
-# call sites: RELATED_SKIP_LEMMA skips this entirely (passes the raw
-# surface), RELATED_SKIP_DERIVATION skips just the derivational layer.
+# don't have to memorize the order. Layered with RELATED_SKIP_LEMMA=1 at
+# the call sites — that knob skips this entirely (passes the raw surface).
 def semantic_base(word)
   base = lemma(word)
-  return base if ENV["RELATED_SKIP_DERIVATION"] == "1"
   map = $word_to_semantic_base
   load_word_to_semantic_base! if map.nil?
   map = $word_to_semantic_base
@@ -3132,19 +3126,10 @@ end
 
 # Source ordering for the cap-bounded sense-vector / MPNet-item paths
 # (sense_vectors, sense_vectors_morphy in signals.rb, combined_glosses_for
-# in bin/dump-sense-glosses). When both sources have more senses than the cap,
-# the source listed first eats the slots; the other only contributes if the first
-# leaves room. Default wn-first matches the original integration; flip to
-# wk-first via RHYMECRIME_GLOSS_ORDER=wk-first to test whether the trained
-# classifier prefers Wiktionary's denser per-word sense pool.
-# The token-union and pooled-definition paths (gloss_word_token_set,
-# gloss_tokens_for_word, def_cos) are unaffected — they consume both sources
-# fully rather than bumping into a cap.
-$gloss_source_wk_first = nil
-def gloss_source_wk_first?
-  $gloss_source_wk_first ||= (ENV["RHYMECRIME_GLOSS_ORDER"].to_s.strip.downcase == "wk-first") ? :yes : :no
-  $gloss_source_wk_first == :yes
-end
+# in bin/dump-sense-glosses): WordNet first, Wiktionary fills remaining
+# slots. Token-union and pooled-definition paths (gloss_word_token_set,
+# gloss_tokens_for_word, def_cos) consume both sources fully rather than
+# bumping into a cap.
 
 # Lazy $wiktionary_glosses load. Map shape is { headword => [gloss_text, ...] } where
 # each entry is one Kaikki sense's first gloss (alt-of / form-of pointer senses excluded

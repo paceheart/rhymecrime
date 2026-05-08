@@ -113,36 +113,21 @@ def wordnet_glosses_for(word, max_senses, include_morphy)
 end
 
 # Combined WordNet + Wiktionary gloss list for word, capped at max_senses entries.
-# Default ordering: WordNet first (typically more concise / hand-curated); Wiktionary
-# fills remaining slots. Flip via RHYMECRIME_GLOSS_ORDER=wk-first to take Wiktionary
-# senses first instead — useful when WK has denser per-word coverage than WN. Pointer-
-# only Wiktionary senses ("Alternative spelling of X") are already excluded at build
-# time by collect_definitional_glosses. Dedupes case-folded gloss text so a corpus
-# that happens to repeat a definition verbatim doesn't crowd out a different sense
-# from the other corpus.
+# WordNet first (more concise / hand-curated); Wiktionary fills remaining slots.
+# Pointer-only Wiktionary senses ("Alternative spelling of X") are already
+# excluded at build time by collect_definitional_glosses. Dedupes case-folded
+# gloss text so a corpus that happens to repeat a definition verbatim doesn't
+# crowd out a different sense from the other corpus.
 def combined_glosses_for(word, max_senses, include_morphy)
-  if gloss_source_wk_first?
-    glosses = wiktionary_glosses_for(word).first(max_senses).dup
-    return glosses if glosses.size >= max_senses
-    seen = glosses.each_with_object(Set.new) { |g, s| s << g.to_s.downcase.strip }
-    wordnet_glosses_for(word, max_senses, include_morphy).each do |g|
-      break if glosses.size >= max_senses
-      key = g.to_s.downcase.strip
-      next if key.empty? || seen.include?(key)
-      seen << key
-      glosses << g
-    end
-  else
-    glosses = wordnet_glosses_for(word, max_senses, include_morphy)
-    return glosses if glosses.size >= max_senses
-    seen = glosses.each_with_object(Set.new) { |g, s| s << g.to_s.downcase.strip }
-    wiktionary_glosses_for(word).each do |g|
-      break if glosses.size >= max_senses
-      key = g.to_s.downcase.strip
-      next if key.empty? || seen.include?(key)
-      seen << key
-      glosses << g
-    end
+  glosses = wordnet_glosses_for(word, max_senses, include_morphy)
+  return glosses if glosses.size >= max_senses
+  seen = glosses.each_with_object(Set.new) { |g, s| s << g.to_s.downcase.strip }
+  wiktionary_glosses_for(word).each do |g|
+    break if glosses.size >= max_senses
+    key = g.to_s.downcase.strip
+    next if key.empty? || seen.include?(key)
+    seen << key
+    glosses << g
   end
   glosses
 end

@@ -24,6 +24,7 @@
 #
 
 require_relative "signals"
+require_relative "curated_overrides"
 
 RELATEDNESS_CLASSIFIER_PATH = generated_dict_path(RELATEDNESS_CLASSIFIER_FILENAME) unless defined?(RELATEDNESS_CLASSIFIER_PATH)
 
@@ -32,10 +33,6 @@ RELATEDNESS_CLASSIFIER_PATH = generated_dict_path(RELATEDNESS_CLASSIFIER_FILENAM
 # raise) rather than silently misbehaving. Bump in lock-step with the trainer
 # whenever the node layout changes.
 SUPPORTED_GBT_TREE_FORMAT = "parallel_v1" unless defined?(SUPPORTED_GBT_TREE_FORMAT)
-
-def related_trace_memo?
-  ENV["RELATED_TRACE_MEMO"].to_s == "1"
-end
 
 # Ordered feature vector pulled from PairSignals, shared by the learned-classifier
 # trainer (bin/train-relatedness-classifier) and runtime scorer
@@ -480,7 +477,10 @@ $thematically_related_memo = nil
 # pair is fed to PairSignals in the caller-supplied order and any directional
 # signals downstream see them as PairSignals#cue and PairSignals#related.
 def thematically_related_pair_uncached?(cue, related)
-  puts "related? #{cue} -> #{related}" if related_trace_memo?
+  puts "related? #{cue} -> #{related}" if trace_pair?(cue, related)
+  override = curated_relatedness_override_related?(cue, related)
+  return override unless override.nil?
+
   relatedness_score(PairSignals.new(cue, related)) >= RELATEDNESS_SCORE_THRESHOLD
 end
 
@@ -489,12 +489,13 @@ end
 def thematically_related_pair_memoized?(cue, related)
   memo = ($thematically_related_memo ||= {})
   key = [cue, related]
+  trace = trace_pair?(cue, related)
   if memo.key?(key)
-    puts "  cache hit #{cue} -> #{related}" if related_trace_memo?
+    puts "  cache hit #{cue} -> #{related}" if trace
     return memo[key]
   end
 
-  puts "thematically_related_pair_uncached? #{cue} -> #{related}" if related_trace_memo?
+  puts "thematically_related_pair_uncached? #{cue} -> #{related}" if trace
   memo[key] = thematically_related_pair_uncached?(cue, related)
 end
 
@@ -524,6 +525,17 @@ def why_thematically_related_full?(cue, related, include_self = false)
 
   cue_lemma = ENV["RELATED_SKIP_LEMMA"] == "1" ? cue : lemma(cue)
   related_lemma = ENV["RELATED_SKIP_LEMMA"] == "1" ? related : lemma(related)
+
+  override = curated_relatedness_overrides[[cue_lemma, related_lemma]]
+  case override
+  when :related
+    return "curated/related.csv: related"
+  when :related_ish
+    return "curated/related.csv: related_ish"
+  when :unrelated, :unrelated_ish
+    return nil
+  end
+
   contributions = relatedness_contributions(PairSignals.new(cue_lemma, related_lemma))
   return nil if contributions.empty?
 

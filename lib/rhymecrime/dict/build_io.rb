@@ -7,7 +7,6 @@
 # Env:
 #   RHYMECRIME_BUILD_IO_VALIDATE — default ON (unset or empty). Set to 0 / false / no / off to disable.
 #   RHYMECRIME_BUILD_IO_LOG      — append one JSON object per line per read/write
-#   RHYMECRIME_BUILD_IO_VERBOSE  — truthy: $stderr line per read/write
 
 require "json"
 require "fileutils"
@@ -30,10 +29,6 @@ module BuildIo
       return true if v.nil? || v.to_s.strip.empty?
 
       truthy?(v)
-    end
-
-    def verbose?
-      truthy?(ENV["RHYMECRIME_BUILD_IO_VERBOSE"])
     end
 
     def log_path
@@ -220,10 +215,6 @@ module BuildIo
           f.flock(File::LOCK_UN)
         end
       end
-
-      return unless verbose?
-
-      warn "[generated_io] #{kind} #{p} #{hint}"
     end
 
     def read(path, encoding: "UTF-8", hint: nil)
