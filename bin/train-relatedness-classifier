@@ -125,6 +125,7 @@ ENV.delete("RHYMECRIME_DATA_SOURCE")
 repo = File.expand_path("..", __dir__)
 Dir.chdir(repo)
 
+require "rhymecrime/build/build_io"
 require "rhymecrime/frontend/query"
 # Full-compute pipeline (Numberbatch, ConceptNet, WordNet, USF, MPNet) — not
 # loaded at Lambda runtime by rhymecrime/frontend/query, explicitly pulled in here
