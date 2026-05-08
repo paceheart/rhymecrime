@@ -1,9 +1,10 @@
 # frozen_string_literal: true
 
-# Dict-build trace helpers (TRACE_WORDS / ENV). Loaded at Lambda runtime via morphology/lexical.rb only
-# for dict_trace_word? / dict_trace_puts; full dict pipeline uses the same definitions.
+# Dict-build trace helpers (TRACE_WORDS / ENV). Required from build/constants.rb
+# alongside the rest of the dict pipeline. Runtime WordNet paths use $debug_mode
+# for wn_frequency diagnostics in morphology/lexical.rb instead of loading this file.
 
-require_relative "pace_utils"
+require_relative "../pace_utils"
 
 def dict_trace_word?(word)
   trace_word?(word)

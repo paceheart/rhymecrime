@@ -3,7 +3,7 @@
 # Central gate for generated-data pipeline file I/O: optional invariant checks
 # and optional append-only JSONL audit log (shared across subprocesses when
 # bin/build sets RHYMECRIME_BUILD_IO_LOG). Actual bytes flow through
-# BuildIoUtils; this module adds validation + logging only.
+# IoUtils; this module adds validation + logging only.
 #
 # Env:
 #   RHYMECRIME_BUILD_IO_VALIDATE — default ON (unset or empty). Set to 0 / false / no / off to disable.
@@ -12,7 +12,7 @@
 require "json"
 require "fileutils"
 
-require_relative "../build_io_utils"
+require_relative "../io_utils"
 require_relative "../paths"
 
 module BuildIo
@@ -212,28 +212,28 @@ module BuildIo
 
     def read(path, encoding: "UTF-8", hint: nil)
       record!(:read, path, hint)
-      BuildIoUtils.read(path, encoding: encoding, hint: hint)
+      IoUtils.read(path, encoding: encoding, hint: hint)
     end
 
     def foreach(path, **kwargs, &block)
       hint = kwargs.delete(:hint) || "foreach"
       record!(:read, path, hint)
-      BuildIoUtils.foreach(path, **kwargs, &block)
+      IoUtils.foreach(path, **kwargs, &block)
     end
 
     def binread(path, hint: nil)
       record!(:read, path, hint)
-      BuildIoUtils.binread(path, hint: hint)
+      IoUtils.binread(path, hint: hint)
     end
 
     def write(path, content, encoding: "UTF-8", hint: nil)
       record!(:write, path, hint)
-      BuildIoUtils.write(path, content, encoding: encoding, hint: hint)
+      IoUtils.write(path, content, encoding: encoding, hint: hint)
     end
 
     def binwrite(path, content, hint: nil)
       record!(:write, path, hint)
-      BuildIoUtils.binwrite(path, content, hint: hint)
+      IoUtils.binwrite(path, content, hint: hint)
     end
 
     # Prefer explicit mode string ("r", "rb", "w", "w+", …); hint should name the operation.
@@ -246,7 +246,7 @@ module BuildIo
         record!(:read, path, hint) if first == "r" || (plus && %w[w a].include?(first))
         record!(:write, path, hint) if %w[w a].include?(first) || (plus && first == "r")
       end
-      BuildIoUtils.open(path, *args, hint: hint, **kwargs, &block)
+      IoUtils.open(path, *args, hint: hint, **kwargs, &block)
     end
 
     def stream_read(path, hint: nil, &block)
@@ -259,12 +259,12 @@ module BuildIo
 
     def csv_foreach(path, hint: nil, **csv_opts, &block)
       record!(:read, path, hint || "csv_foreach")
-      BuildIoUtils.csv_foreach(path, hint: hint, **csv_opts, &block)
+      IoUtils.csv_foreach(path, hint: hint, **csv_opts, &block)
     end
 
     def gzip_read(path, encoding: "UTF-8", hint: nil, &block)
       record!(:read, path, hint || "gzip_read")
-      BuildIoUtils.gzip_read(path, encoding: encoding, hint: hint, &block)
+      IoUtils.gzip_read(path, encoding: encoding, hint: hint, &block)
     end
 
     # Pretty summary for bin/build (reads stdin or path to JSONL).

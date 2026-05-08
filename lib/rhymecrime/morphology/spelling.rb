@@ -523,13 +523,13 @@ def load_variants_raw
       generated_dict_path(SPELLING_VARIANTS_AUTO_FILENAME)
     end
   if auto_path && File.exist?(auto_path)
-    BuildIoUtils.foreach(auto_path, chomp: true, encoding: "UTF-8", hint: "load_variants_raw spelling_variants_auto") do |line|
+    IoUtils.foreach(auto_path, chomp: true, encoding: "UTF-8", hint: "load_variants_raw spelling_variants_auto") do |line|
       next unless line =~ /\A[[:alpha:]]/
       forms = line.split.map(&:strip).reject(&:empty?)
       result << forms unless forms.empty?
     end
   end
-  BuildIoUtils.foreach(SPELLING_CSV_PATH, chomp: true, encoding: "UTF-8", hint: "load_variants_raw spelling.csv") do |line|
+  IoUtils.foreach(SPELLING_CSV_PATH, chomp: true, encoding: "UTF-8", hint: "load_variants_raw spelling.csv") do |line|
     next unless line =~ /\A[[:alpha:]]/
     forms, _notes = split_spelling_row(line)
     result << forms unless forms.empty?

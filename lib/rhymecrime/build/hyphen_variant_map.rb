@@ -23,7 +23,7 @@ def save_hyphen_variant_map!(build_keys, exported_keys: nil)
   sorted = {}
   map.keys.sort.each { |k| sorted[k] = map[k].sort }
   FileUtils.mkdir_p(File.dirname(path))
-  BuildIoUtils.write(path, "#{JSON.generate(sorted)}\n", encoding: "UTF-8", hint: "save_hyphen_variant_map")
+  IoUtils.write(path, "#{JSON.generate(sorted)}\n", encoding: "UTF-8", hint: "save_hyphen_variant_map")
   puts "Wrote #{sorted.size} hyphen-variant folds to #{HYPHEN_VARIANT_MAP_FILENAME}"
   link_runtime_spelling_hyphen_symlinks! if final_mode? && rhymecrime_build_dir
 end

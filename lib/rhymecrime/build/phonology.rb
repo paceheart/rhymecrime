@@ -4,7 +4,7 @@
 # CMU ingest, ARPAbet normalization, syllabification, Wiktionary pronunciation merge.
 
 require_relative "build_utils"
-require_relative "../build_io_utils"
+require_relative "../io_utils"
 require_relative "../phoneme.rb"
 require_relative "../pronunciation.rb"
 require_relative "constants"
@@ -334,7 +334,7 @@ def load_authoritative_pronunciations!(hash)
   end
 
   n_lines = 0
-  BuildIoUtils.foreach(AUTHORITATIVE_PRONUNCIATIONS_PATH, encoding: "UTF-8", hint: "load_authoritative_pronunciations") do |line|
+  IoUtils.foreach(AUTHORITATIVE_PRONUNCIATIONS_PATH, encoding: "UTF-8", hint: "load_authoritative_pronunciations") do |line|
     next unless useful_cmudict_line?(line)
 
     line = preprocess_cmudict_line(line)
@@ -367,7 +367,7 @@ def authoritative_pronunciation_words
   return $authoritative_pronunciation_words if $authoritative_pronunciation_words
   words = Set.new
   if File.exist?(AUTHORITATIVE_PRONUNCIATIONS_PATH)
-    BuildIoUtils.foreach(AUTHORITATIVE_PRONUNCIATIONS_PATH, encoding: "UTF-8", hint: "authoritative_pronunciation_words") do |line|
+    IoUtils.foreach(AUTHORITATIVE_PRONUNCIATIONS_PATH, encoding: "UTF-8", hint: "authoritative_pronunciation_words") do |line|
       next unless useful_cmudict_line?(line)
       line = preprocess_cmudict_line(line)
       tokens = line.split
@@ -386,7 +386,7 @@ def load_cmudict()
   hash = Hash.new {|h,k| h[k] = [] } # hash of arrays
   authoritative_words = load_authoritative_pronunciations!(hash)
   cmu_overridden = 0
-  BuildIoUtils.foreach(CMUDICT_FILENAME, encoding: "UTF-8", hint: "merge_cmudict") { |line|
+  IoUtils.foreach(CMUDICT_FILENAME, encoding: "UTF-8", hint: "merge_cmudict") { |line|
     if(useful_cmudict_line?(line))
       line = preprocess_cmudict_line(line)
       tokens = line.split

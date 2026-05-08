@@ -305,7 +305,7 @@ def usf_associations
     raise "USF associations not found at #{path}. Run ./bin/setup-corpora (which calls " \
           "./bin/build-usf-associations)."
   end
-  $usf_associations = JSON.parse(BuildIoUtils.read(path, encoding: "UTF-8", hint: "usf_associations"))
+  $usf_associations = JSON.parse(IoUtils.read(path, encoding: "UTF-8", hint: "usf_associations"))
   puts "loaded #{$usf_associations.size} USF cues from #{path}"
   $usf_associations
 end
@@ -465,7 +465,7 @@ def model_sense_vectors_table
   # single read at INT_MAX (2 GiB), so once the full-vocab msgpack passes that
   # threshold, File.binread raises Errno::EINVAL. MessagePack::Unpacker on an
   # open IO buffers in chunks and is fine with multi-GB bin payloads.
-  raw = BuildIoUtils.open(path, "rb", hint: "model_sense_vectors_table") do |f|
+  raw = IoUtils.open(path, "rb", hint: "model_sense_vectors_table") do |f|
     MessagePack::Unpacker.new(f).read
   end
 

@@ -8,7 +8,7 @@
 require "json"
 require "fileutils"
 
-module BuildIoUtils
+module IoUtils
   class << self
     def read(path, encoding: "UTF-8", hint: nil)
       File.read(path, encoding: encoding)

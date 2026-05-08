@@ -236,7 +236,7 @@ def relatedness_classifier
           "or set RELATED_LEARNED_MODE=off to bypass the learned combiner entirely."
   end
 
-  clf = JSON.parse(BuildIoUtils.read(path, encoding: "UTF-8", hint: "relatedness_classifier"))
+  clf = JSON.parse(IoUtils.read(path, encoding: "UTF-8", hint: "relatedness_classifier"))
   got = clf["feature_names"]
   expected = LEARNED_FEATURE_NAMES
   unless got == expected

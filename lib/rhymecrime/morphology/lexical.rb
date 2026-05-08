@@ -3,7 +3,7 @@
 
 require "set"
 require_relative "inflect"
-require_relative "../dict_trace"
+require_relative "../pace_utils"
 require_relative "../wordfreq_zipf_constants"
 
 #
@@ -55,7 +55,7 @@ end
 
 def wn_frequency(word)
   all_proper = wn_all_proper?(word)
-  dict_trace_puts(word, "wn_frequency: all_proper=#{all_proper}") if dict_trace_word?(word)
+  puts "TRACE(#{word}) wn_frequency: all_proper=#{all_proper}" if $debug_mode
   return 0, all_proper
 end
 
@@ -124,7 +124,7 @@ end
 
 def build_wn_synset_line_index(path)
   idx = {}
-  BuildIoUtils.foreach(path, encoding: "UTF-8", hint: "build_wn_synset_line_index") do |ln|
+  IoUtils.foreach(path, encoding: "UTF-8", hint: "build_wn_synset_line_index") do |ln|
     next if ln.bytesize < 9
 
     off = ln.byteslice(0, 8)
@@ -396,7 +396,7 @@ def wn_noun_lex_filenum_to_lexname
       path = File.join(root, rel)
       next unless File.file?(path)
 
-      BuildIoUtils.foreach(path, chomp: true, encoding: "UTF-8", hint: "wn_noun_lex_filenum_to_lexname") do |line|
+      IoUtils.foreach(path, chomp: true, encoding: "UTF-8", hint: "wn_noun_lex_filenum_to_lexname") do |line|
         next if line.empty? || line.start_with?("#")
         parts = line.split("\t")
         parts = line.split if parts.size < 3
@@ -437,7 +437,7 @@ def wn_noun_exc_invariant_plural_bases
       path = File.join(root, rel)
       next unless File.file?(path)
 
-      BuildIoUtils.foreach(path, chomp: true, encoding: "UTF-8", hint: "wn_noun_exc_invariant_plural_bases") do |line|
+      IoUtils.foreach(path, chomp: true, encoding: "UTF-8", hint: "wn_noun_exc_invariant_plural_bases") do |line|
         next if line.empty? || line.start_with?("#")
         inf, lem = line.split
         next unless inf && lem && inf == lem

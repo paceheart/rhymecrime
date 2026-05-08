@@ -42,7 +42,7 @@ $semantically_promiscuous_words = nil
 def load_curated_word_set(filename)
   set = Set.new
   path = File.join(CURATED_DIR, filename)
-  BuildIoUtils.foreach(path, chomp: true, encoding: "UTF-8", hint: "load_curated_word_set #{filename}") do |line|
+  IoUtils.foreach(path, chomp: true, encoding: "UTF-8", hint: "load_curated_word_set #{filename}") do |line|
     w = line.strip
     next if w.empty? || w.start_with?("#")
     set << w
@@ -139,7 +139,7 @@ def load_rarity_csv_word_sets!
   rare = Set.new
   forbidden = []
   forbidden_seen = Set.new
-  BuildIoUtils.csv_foreach(RARITY_CSV_PATH, headers: true, encoding: "UTF-8", hint: "load_rarity_csv_word_sets!") do |row|
+  IoUtils.csv_foreach(RARITY_CSV_PATH, headers: true, encoding: "UTF-8", hint: "load_rarity_csv_word_sets!") do |row|
     word = row["word"].to_s.strip
     next if word.empty?
     kind = row["kind"].to_s.strip

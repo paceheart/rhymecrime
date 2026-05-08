@@ -9,7 +9,7 @@ def load_string_hash(filename)
   # KEY  STRING1 STRING2 ...
   # substitutes "_" with " " in keys after loading
   hash = Hash.new # hash of strings
-  BuildIoUtils.foreach(filename, encoding: "UTF-8", hint: "load_string_hash") do |line|
+  IoUtils.foreach(filename, encoding: "UTF-8", hint: "load_string_hash") do |line|
     if useful_line?(line)
       tokens = line.split
       key = tokens.shift # now TOKENS contains only the value strings
@@ -55,7 +55,7 @@ def load_word_dict()
     raise "First run ./bin/dict-build to populate #{GENERATED_DIR}/"
   end
   word_dict = Hash.new
-  BuildIoUtils.foreach(pathname, encoding: "UTF-8", hint: "load_word_dict") do |line|
+  IoUtils.foreach(pathname, encoding: "UTF-8", hint: "load_word_dict") do |line|
     next unless useful_line?(line)
 
     parts = line.chomp.split(",", 4)

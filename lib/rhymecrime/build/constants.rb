@@ -1,7 +1,7 @@
 # encoding: utf-8
 
 require_relative "../paths"
-require_relative "../dict_trace"
+require_relative "dict_trace"
 require_relative "../wordfreq_zipf_constants"
 require "rwordnet"
 

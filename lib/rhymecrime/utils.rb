@@ -4,7 +4,7 @@
 # Load order is fixed — each chunk may depend on earlier ones.
 #
 # Must not transitively require build/build_io.rb (validated I/O gate + audit); see
-# spec/load_path_contract_spec.rb. Neutral reads use build_io_utils.
+# spec/load_path_contract_spec.rb. Neutral reads use io_utils.
 #
 # Dict-build and other offline tools load rhymecrime/build/build_utils, which pulls this
 # barrel in first.

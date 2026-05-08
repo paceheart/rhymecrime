@@ -91,7 +91,7 @@ def load_wiktionary
   obsolete_only_blocked = Set.new
   total = 0; converted = 0; skipped = 0
 
-  BuildIoUtils.gzip_read(path, encoding: 'UTF-8', hint: "load_wiktionary kaikki") do |gz|
+  IoUtils.gzip_read(path, encoding: 'UTF-8', hint: "load_wiktionary kaikki") do |gz|
     gz.each_line do |line|
       obj = JSON.parse(line) rescue next
 

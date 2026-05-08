@@ -115,7 +115,7 @@ end
 # Loads vocab entries from a cache built by build_conceptnet_vocab_cache! (skips # comments).
 def conceptnet_vocab_load(cache_gz_path)
   s = Set.new
-  BuildIoUtils.gzip_read(cache_gz_path, encoding: "UTF-8", hint: "conceptnet_vocab_load") do |gz|
+  IoUtils.gzip_read(cache_gz_path, encoding: "UTF-8", hint: "conceptnet_vocab_load") do |gz|
     gz.each_line do |line|
       w = line.rstrip
       next if w.empty? || w.start_with?("#")
@@ -141,7 +141,7 @@ def each_conceptnet_kept_en_en_lemma_pair(gz_path)
   return enum_for(:each_conceptnet_kept_en_en_lemma_pair, gz_path) unless block_given?
 
   keep = CONCEPTNET_KEEP_RELATION_INDEX
-  BuildIoUtils.gzip_read(gz_path, encoding: "UTF-8", hint: "each_conceptnet_kept_en_en_lemma_pair") do |gz|
+  IoUtils.gzip_read(gz_path, encoding: "UTF-8", hint: "each_conceptnet_kept_en_en_lemma_pair") do |gz|
     gz.each_line do |line|
       next unless line.include?("/c/en/")
       parts = line.split("\t", 5)
@@ -273,7 +273,7 @@ def save_conceptnet_edges!(out_path = nil)
   keep = CONCEPTNET_KEEP_RELATION_INDEX
   triples = {}
   lines = 0
-  BuildIoUtils.gzip_read(gz_path, encoding: "UTF-8", hint: "save_conceptnet_edges") do |gz|
+  IoUtils.gzip_read(gz_path, encoding: "UTF-8", hint: "save_conceptnet_edges") do |gz|
     gz.each_line do |line|
       lines += 1
       print "." if (lines % 5_000_000).zero?
@@ -298,7 +298,7 @@ def save_conceptnet_edges!(out_path = nil)
   end
   puts if lines >= 5_000_000
 
-  BuildIoUtils.stream_write(out_path, hint: "save_conceptnet_edges") do |out|
+  IoUtils.stream_write(out_path, hint: "save_conceptnet_edges") do |out|
     packer = MessagePack::Packer.new(out)
     packer.write({
       "format" => CONCEPTNET_EDGES_STREAM_FORMAT,
@@ -329,7 +329,7 @@ def each_conceptnet_edge_streaming(path)
   return enum_for(:each_conceptnet_edge_streaming, path) unless block_given?
   raise "ConceptNet edges file missing: #{path} (run save_conceptnet_edges!)" unless File.exist?(path)
 
-  BuildIoUtils.stream_read(path, hint: "conceptnet_edges") do |io|
+  IoUtils.stream_read(path, hint: "conceptnet_edges") do |io|
     unpacker = MessagePack::Unpacker.new(io)
     header = unpacker.read
     unless header.is_a?(Hash) && header["format"] == CONCEPTNET_EDGES_STREAM_FORMAT
@@ -393,7 +393,7 @@ def conceptnet_edges_cache_rebuild_reason
   end
 
   begin
-    BuildIoUtils.stream_read(out_path, hint: "conceptnet_edges header_check") do |io|
+    IoUtils.stream_read(out_path, hint: "conceptnet_edges header_check") do |io|
       header = MessagePack::Unpacker.new(io).read
       unless header.is_a?(Hash) && header["format"] == CONCEPTNET_EDGES_STREAM_FORMAT
         return "old format (header=#{header.inspect}); current format=#{CONCEPTNET_EDGES_STREAM_FORMAT.inspect}"
@@ -478,7 +478,7 @@ def numberbatch_corpus_token_set_cached
   end
 
   s = Set.new
-  BuildIoUtils.stream_read(path, hint: "numberbatch_corpus_token_set_cached") do |io|
+  IoUtils.stream_read(path, hint: "numberbatch_corpus_token_set_cached") do |io|
     unpacker = MessagePack::Unpacker.new(io)
     header = unpacker.read
     unless header.is_a?(Hash) && header["format"] == NUMBERBATCH_STREAM_FORMAT
@@ -511,7 +511,7 @@ def usf_corpus_word_set
           "Run ./bin/setup-corpora to create it."
   end
 
-  graph = JSON.parse(BuildIoUtils.read(path, encoding: "UTF-8", hint: "usf_corpus_word_set"))
+  graph = JSON.parse(IoUtils.read(path, encoding: "UTF-8", hint: "usf_corpus_word_set"))
   s = Set.new
   graph.each do |cue, targets|
     s.add(cue)
@@ -561,11 +561,11 @@ def save_numberbatch_vectors!
   out_path = generated_root_path(NUMBERBATCH_VECTORS_FILENAME)
   count = 0
   dim_seen = nil
-  BuildIoUtils.stream_write(out_path, hint: "save_numberbatch_vectors") do |out|
+  IoUtils.stream_write(out_path, hint: "save_numberbatch_vectors") do |out|
     packer = MessagePack::Packer.new(out)
     packer.write({ "format" => NUMBERBATCH_STREAM_FORMAT, "dtype" => "f4_le" })
     first = true
-    BuildIoUtils.foreach(txt_path, encoding: "UTF-8",
+    IoUtils.foreach(txt_path, encoding: "UTF-8",
                              hint: "save_numberbatch_vectors corpus_scan") do |line|
       if first
         first = false
@@ -602,7 +602,7 @@ def each_numberbatch_vector_streaming(path)
   raise "Numberbatch vectors file missing: #{path} (run save_numberbatch_vectors!)" unless File.exist?(path)
 
   require "numo/narray"
-  BuildIoUtils.stream_read(path, hint: "numberbatch_vectors") do |io|
+  IoUtils.stream_read(path, hint: "numberbatch_vectors") do |io|
     unpacker = MessagePack::Unpacker.new(io)
     header = unpacker.read
     unless header.is_a?(Hash) && header["format"] == NUMBERBATCH_STREAM_FORMAT

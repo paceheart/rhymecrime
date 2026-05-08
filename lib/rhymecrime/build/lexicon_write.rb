@@ -15,7 +15,7 @@ USF_LEMMA_RE = /\A[a-z][a-z0-9'-]*\z/.freeze
 def save_string_hash(hash, filename, header="")
   # sanitizes spaces into underscores
   FileUtils.mkdir_p(File.dirname(filename))
-  BuildIoUtils.open(filename, "w", encoding: "UTF-8", hint: "save_string_hash") do |fh|
+  IoUtils.open(filename, "w", encoding: "UTF-8", hint: "save_string_hash") do |fh|
     fh.puts(header) unless header.empty?
     hash.each do |key, values|
       key = key.sanitize
@@ -37,7 +37,7 @@ def build_usf_associations!(out_path = nil)
   graph = Hash.new { |h, k| h[k] = {} }
   pair_count = 0
   shards.each do |path|
-    BuildIoUtils.foreach(path, encoding: "UTF-8", hint: "build_usf_associations") do |line|
+    IoUtils.foreach(path, encoding: "UTF-8", hint: "build_usf_associations") do |line|
       line = line.scrub
       next if line.include?("CUE,")
       next unless line.match?(/\A[A-Z]/)
@@ -59,7 +59,7 @@ def build_usf_associations!(out_path = nil)
     end
   end
   FileUtils.mkdir_p(File.dirname(out_path))
-  BuildIoUtils.write(out_path, JSON.generate(graph), hint: "build_usf_associations")
+  IoUtils.write(out_path, JSON.generate(graph), hint: "build_usf_associations")
   puts "wrote #{graph.size} cues / #{pair_count} pairs to #{out_path}"
   graph
 end
@@ -100,7 +100,7 @@ def numberbatch_vectors_cache_rebuild_reason
   end
 
   begin
-    BuildIoUtils.stream_read(out_path, hint: "numberbatch_vectors header_check") do |io|
+    IoUtils.stream_read(out_path, hint: "numberbatch_vectors header_check") do |io|
       header = MessagePack::Unpacker.new(io).read
       return nil if header.is_a?(Hash) && header["format"] == NUMBERBATCH_STREAM_FORMAT
 
@@ -152,7 +152,7 @@ def save_word_semantic_base_map!(word_dict, semantic_base_map, transform_for: ni
   MessagePackUtils.pack_and_save(msgpack_path, obj)
   puts "Wrote #{obj.size} word→semantic_base entries to #{msgpack_path} (#{File.size(msgpack_path)} bytes)"
 
-  BuildIoUtils.open(txt_path, "w", encoding: "UTF-8", hint: "save_word_semantic_base_map txt") do |f|
+  IoUtils.open(txt_path, "w", encoding: "UTF-8", hint: "save_word_semantic_base_map txt") do |f|
     f.puts "# word\tsemantic_base\ttransform"
     obj.keys.sort.each do |w|
       transform = transform_for ? transform_for[w] : ""
@@ -165,7 +165,7 @@ end
 def save_word_dict(word_dict, lemma_map = nil)
   ensure_generated_dict_dir!
   path = generated_dict_path_under_dict_dir(WORD_DICT_FILENAME)
-  f = BuildIoUtils.open(path, "w", encoding: "UTF-8", hint: "save_word_dict")
+  f = IoUtils.open(path, "w", encoding: "UTF-8", hint: "save_word_dict")
   f.puts(WORD_DICT_HEADER)
   for word, word_info in word_dict
     sanitized = word.sanitize
@@ -253,5 +253,5 @@ def save_part_of_speech_map(pos_map)
   ensure_generated_dict_dir!
   path = generated_dict_path_under_dict_dir(PART_OF_SPEECH_FILENAME)
   obj = pos_map.keys.sort.to_h { |w| [w, pos_map[w].to_a.sort] }
-  BuildIoUtils.write(path, JSON.generate(obj), encoding: "UTF-8", hint: "save_part_of_speech_map")
+  IoUtils.write(path, JSON.generate(obj), encoding: "UTF-8", hint: "save_part_of_speech_map")
 end

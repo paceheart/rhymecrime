@@ -12,7 +12,7 @@ def build_hyphen_multi_fold_map(explicit_word_keys = nil)
   else
     path = generated_dict_path_under_dict_dir(WORD_DICT_FILENAME)
     if File.exist?(path)
-      BuildIoUtils.foreach(path, encoding: "UTF-8", hint: "build_hyphen_multi_fold_map") do |line|
+      IoUtils.foreach(path, encoding: "UTF-8", hint: "build_hyphen_multi_fold_map") do |line|
         next if line =~ /\A;/ || line =~ /\A#/
         tok = line.split(",", 2).first
         next if tok.nil? || tok.empty?
@@ -33,7 +33,7 @@ def load_hyphen_multi_fold_map_from_disk
 
   path = generated_dict_path(HYPHEN_VARIANT_MAP_FILENAME)
   return nil unless File.exist?(path)
-  raw = JSON.parse(BuildIoUtils.read(path, encoding: "UTF-8", hint: "load_hyphen_multi_fold_map_from_disk"))
+  raw = JSON.parse(IoUtils.read(path, encoding: "UTF-8", hint: "load_hyphen_multi_fold_map_from_disk"))
   out = {}
   raw.each do |fold, arr|
     out[fold] = arr.freeze

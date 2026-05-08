@@ -122,7 +122,7 @@ def part_of_speech_tags(word)
             "If this fired inside Lambda, the file is excluded by design — see " \
             "bin/stage-lambda and the doc comment above part_of_speech_tags."
     end
-    $part_of_speech_by_word = JSON.parse(BuildIoUtils.read(path, encoding: "UTF-8", hint: "part_of_speech_tags"))
+    $part_of_speech_by_word = JSON.parse(IoUtils.read(path, encoding: "UTF-8", hint: "part_of_speech_tags"))
   end
   tags = $part_of_speech_by_word[w]
   tags.is_a?(Array) ? tags : []
