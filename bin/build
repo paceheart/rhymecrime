@@ -129,7 +129,7 @@ end
 puts "preflight ok"
 RUBY
 
-TIMESTAMP="$(date -u +%Y%m%dT%H%M%S)"
+TIMESTAMP="$(date +%Y%m%dT%H%M%S)"
 BUILD_DIR="$REPO/generated/$TIMESTAMP"
 mkdir -p "$BUILD_DIR/bootstrap" "$BUILD_DIR/runtime"
 
