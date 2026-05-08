@@ -6,6 +6,7 @@
 #   ./bin/build
 #
 # Build Stages:
+#   0. augment-related-from-feedback — optionally fold web feedback into curated/related.csv
 #   1/4. dict-build (bootstrap) — rarity signal dump → bootstrap/
 #   2/4. train-rarity-classifier → bootstrap/rarity_classifier.json
 #   3/4. retrain-relatedness --rebuild-vectors — sense_glosses + MPNet + relatedness classifier
@@ -19,6 +20,9 @@ set -euo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd -P)"
 cd "$REPO"
+
+echo "==> Augment: bin/augment-related-from-feedback"
+./bin/augment-related-from-feedback
 
 echo "==> Preflight: checking setup-produced inputs"
 ruby -I"$REPO/lib" <<'RUBY'
