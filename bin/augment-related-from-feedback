@@ -5,7 +5,7 @@
 # Importer: fold thumbs-up/down feedback into curated/related.csv as new
 # hand-tag rows. **Default:** scan the prod rhymecrime-feedback DynamoDB table
 # into generated/feedback_from_ddb.csv (or --ddb-out), then import from
-# that file — the full loop from lib/rhymecrime/feedback_store.rb in one
+# that file — the full loop from lib/rhymecrime/store/feedback_store.rb in one
 # command. Use --from-file to read the local-dev sink (generated/feedback.csv
 # or FEEDBACK_CSV) instead, without touching AWS.
 #
@@ -335,7 +335,7 @@ if from_dynamodb
   $LOAD_PATH.unshift File.expand_path("../lib", __dir__)
   require "aws-sdk-dynamodb"
   require_relative "_aws_preflight"
-  require_relative "../lib/rhymecrime/feedback_store"
+  require_relative "../lib/rhymecrime/store/feedback_store"
 
   profile, _identity = AwsPreflight.preflight!(
     script_name: "augment-related-from-feedback",

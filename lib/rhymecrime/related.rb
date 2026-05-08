@@ -30,7 +30,7 @@
 
 require_relative "pace_utils"
 require_relative "utils"
-require_relative "store"
+require_relative "store/store"
 
 SIMILAR_MAX = 50000 # O_o
 

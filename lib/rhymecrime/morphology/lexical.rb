@@ -3,8 +3,8 @@
 
 require "set"
 require_relative "inflect"
-require_relative "dict_trace"
-require_relative "wordfreq_zipf_constants"
+require_relative "../dict_trace"
+require_relative "../wordfreq_zipf_constants"
 
 #
 # WordNet

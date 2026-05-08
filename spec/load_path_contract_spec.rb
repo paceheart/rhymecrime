@@ -13,10 +13,10 @@ RSpec.describe "Runtime require graph" do
     expect(system(RbConfig.ruby, "-e", script)).to eq(true)
   end
 
-  it "does not load build/build_io.rb when requiring rhymecrime/query" do
+  it "does not load build/build_io.rb when requiring rhymecrime/frontend/query" do
     assert_features_absent(
       "/rhymecrime/build/build_io.rb",
-      'require "rhymecrime/query"',
+      'require "rhymecrime/frontend/query"',
     )
   end
 
@@ -27,8 +27,8 @@ RSpec.describe "Runtime require graph" do
       ENV["TABLE_NAME"] ||= "rhymecrime"
       $LOAD_PATH.unshift(#{repo_root.inspect} + "/lib")
       before = $LOADED_FEATURES.dup
-      require "rhymecrime/query"
-      require "rhymecrime/feedback_store"
+      require "rhymecrime/frontend/query"
+      require "rhymecrime/store/feedback_store"
       after = $LOADED_FEATURES - before
       bad = after.select { |f| f.end_with?(".rb") && f.include?("/rhymecrime/build/") }
       warn("unexpected build requires: \#{bad.inspect}") unless bad.empty?

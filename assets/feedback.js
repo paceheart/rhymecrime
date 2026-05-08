@@ -2,7 +2,7 @@
 // to POST /feedback, and persists the user's vote in sessionStorage so the
 // UI keeps its "voted" state across same-tab navigations.
 //
-// Server expectations (matches lib/rhymecrime/feedback_store.rb):
+// Server expectations (matches lib/rhymecrime/store/feedback_store.rb):
 //   POST /feedback
 //   Content-Type: application/json
 //   { "cue": <string>, "related": <string>, "verdict": "up"|"down",

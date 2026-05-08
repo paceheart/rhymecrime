@@ -23,8 +23,8 @@ ENV["TABLE_NAME"] ||= "rhymecrime"
 
 require "base64"
 require "json"
-require "rhymecrime/frontend"
-require "rhymecrime/feedback_store"
+require "rhymecrime/frontend/frontend"
+require "rhymecrime/store/feedback_store"
 
 # Static asset table. assets/header.html references these as root-relative
 # URLs (/crimestyle.css, etc.), so the Lambda has to answer for them too.

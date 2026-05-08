@@ -10,8 +10,8 @@
 # barrel in first.
 
 require_relative "paths"
-require_relative "curated_rarity"
-require_relative "spelling"
-require_relative "hyphen"
-require_relative "prefix_clusters"
+require_relative "morphology/curated_rarity"
+require_relative "morphology/spelling"
+require_relative "morphology/hyphen"
+require_relative "morphology/prefix_clusters"
 require_relative "lexicon_io"

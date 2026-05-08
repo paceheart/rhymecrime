@@ -1,6 +1,6 @@
 # Unit tests for semantically_promiscuous?: the predicate that flags content-empty
 # words ("could", "perhaps", "henceforth") whose relatedness short-circuits to "related
-# to everything" in scoring / display. See the long-form comment in prefix_clusters.rb
+# to everything" in scoring / display. See the long-form comment in morphology/prefix_clusters.rb
 # alongside SEMANTICALLY_PROMISCUOUS_FILENAME for the curation policy.
 
 def oughta_be_promiscuous(word)
@@ -26,7 +26,7 @@ end
 # we delete them from word_dict at build time. Curated in
 # unrhymable_stop_words.txt, disjoint-in-spirit from the promiscuous list (see
 # the long-form comment near SEMANTICALLY_PROMISCUOUS_FILENAME in
-# prefix_clusters.rb for the why).
+# morphology/prefix_clusters.rb for the why).
 def oughta_be_unrhymable(word)
   it "unrhymable: #{word.inspect}" do
     expect(unrhymable_stop_word?(word)).to(

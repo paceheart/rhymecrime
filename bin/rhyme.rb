@@ -5,5 +5,5 @@
 #
 
 $LOAD_PATH.unshift File.expand_path("../lib", __dir__)
-require "rhymecrime/frontend"
+require "rhymecrime/frontend/frontend"
 compute_and_print_html

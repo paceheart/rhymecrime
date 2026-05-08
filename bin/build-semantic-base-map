@@ -19,8 +19,8 @@ ENV.delete("RHYMECRIME_DATA_SOURCE")
 
 require "optparse"
 require_relative "../lib/rhymecrime/build/build_utils"
-require_relative "../lib/rhymecrime/frontend"
-require_relative "../lib/rhymecrime/lexical"
+require_relative "../lib/rhymecrime/frontend/frontend"
+require_relative "../lib/rhymecrime/morphology/lexical"
 require_relative "../lib/rhymecrime/build/dict"
 
 dry_run = false

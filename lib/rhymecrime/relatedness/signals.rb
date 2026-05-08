@@ -14,7 +14,7 @@
 # PairSignals class live here so the runtime graph can stay free of the
 # hundreds of MB of data files these modules pull in.
 #
-# Callers are expected to have already loaded rhymecrime/query (or the full
+# Callers are expected to have already loaded rhymecrime/frontend/query (or the full
 # frontend stack) so helpers like lemma, semantically_promiscuous?,
 # frequency, rare?, word_dict_includes_headword?, and part_of_speech_tags are available.
 #

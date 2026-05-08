@@ -20,7 +20,7 @@ Data and build artifacts are split so **sources** stay under `corpora/` and **re
 
 | Location | Role |
 |----------|------|
-| **`lib/`** | On the load path. `lib/rhymecrime.rb` defines `Rhymecrime::ROOT`; application code lives under **`lib/rhymecrime/`** (`query.rb`, `related.rb`, `frontend.rb`, helpers, and the **`build/`** subtree). Use `require "rhymecrime/..."` from `bin/` and specs (after unshifting `lib/`). |
+| **`lib/`** | On the load path. `lib/rhymecrime.rb` defines `Rhymecrime::ROOT`; application code lives under **`lib/rhymecrime/`** (`related.rb`, helpers, the **`frontend/`**, **`store/`**, and **`build/`** subtrees). Use `require "rhymecrime/..."` from `bin/` and specs (after unshifting `lib/`). |
 | **`bin/`** | **Executables**: `rhyme.rb`, `similar.rb`, `debug.rb`, `anneal.rb`, `dict-build` (dictionary rebuild). Each prepends `lib/` to `$LOAD_PATH` as needed. |
 | **`assets/`** | Static fragments and CSS for the CGI UI (`header.html`, `footer.html`, `*.css`). Loaded via `File.join(REPO_ROOT, "assets", ...)`. |
 | **`corpora/`** | Upstream or hand-maintained **inputs** (versioned when license/size allow). |
@@ -46,7 +46,7 @@ Data and build artifacts are split so **sources** stay under `corpora/` and **re
 echo "word1=food" | bin/rhyme.rb
 ```
 
-Set `OUTPUT_FORMAT` in `lib/rhymecrime/frontend.rb` to `"text"` for plain-text output.
+Set `OUTPUT_FORMAT` in `lib/rhymecrime/frontend/frontend.rb` to `"text"` for plain-text output.
 
 ## Running the web UI
 

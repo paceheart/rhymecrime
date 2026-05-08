@@ -9,7 +9,7 @@ ruby "~> 3.4.0"
 
 gem "aws-sdk-dynamodb"
 gem "csv"     # bundled (not default) since Ruby 3.4 — required at runtime
-              # by lib/rhymecrime/feedback_store.rb's CsvFeedbackStore.
+              # by lib/rhymecrime/store/feedback_store.rb's CsvFeedbackStore.
 gem "memery"
 gem "msgpack"
 gem "puma"
@@ -37,7 +37,7 @@ group :development, :test do
   gem "parallel_tests" # bundle exec parallel_rspec spec/ partitions spec
                        # files across worker processes (one per core by default).
                        # Each worker pays the boot cost (~22s of msgpack parsing
-                       # in require "rhymecrime/query") once, then the slow
+                       # in require "rhymecrime/frontend/query") once, then the slow
                        # similar_rhymes_* describe blocks fan out — see the
                        # spec/similar_rhymes_{set_related,pair_related,related_
                        # rhymes}_spec.rb split. Dev/test only.

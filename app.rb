@@ -10,8 +10,8 @@ $LOAD_PATH.unshift File.expand_path("lib", __dir__)
 
 require "json"
 require "sinatra"
-require "rhymecrime/frontend"
-require "rhymecrime/feedback_store"
+require "rhymecrime/frontend/frontend"
+require "rhymecrime/store/feedback_store"
 
 set :public_folder, File.expand_path("assets", __dir__)
 set :bind, "0.0.0.0"

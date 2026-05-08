@@ -1,10 +1,10 @@
 # frozen_string_literal: true
 
-# feedback_store.rb — write-only sink for per-(cue, related) thumbs feedback
+# feedback_store.rb - write-only sink for per-(cue, related) thumbs feedback
 # collected from the live UI. Two backends, picked at request time by
 # Rhymecrime::DataSource.dynamodb?:
 #
-#   * DynamoFeedbackStore — production. Writes one item per click into a
+#   * DynamoFeedbackStore - production. Writes one item per click into a
 #     dedicated rhymecrime-feedback table (see template.yaml).
 #       pk = "feedback#<cue>#<related>"
 #       sk = ISO 8601 timestamp with sub-second precision
@@ -14,7 +14,7 @@
 #     bin/augment-related-from-feedback (DynamoDB by default; --from-file
 #     for local CSV) can fold feedback into curated/related.csv when re-importing training data.
 #
-#   * CsvFeedbackStore — local dev. Appends a row to
+#   * CsvFeedbackStore - local dev. Appends a row to
 #     generated/feedback.csv on every click. Same column set as the
 #     DDB attrs so importer scripts can ingest either source.
 #
@@ -22,7 +22,7 @@
 # function's IAM policy is DynamoDBReadPolicy on the main table by design
 # (smallest possible blast radius if the function is hijacked). Feedback
 # writes go to a different physical table with a DynamoDBCrudPolicy scoped
-# to *that* table only — write capability stays surgical and the main read
+# to *that* table only - write capability stays surgical and the main read
 # path keeps its read-only policy.
 
 require "csv"
@@ -41,7 +41,7 @@ module Rhymecrime
     # undo: the user clicked their already-active thumb, retracting it.
     # We keep undo in the audit trail (rather than just deleting the prior
     # row) so importer scripts can reconstruct the full click sequence and
-    # distinguish "user retracted" from "user never voted" — useful if we
+    # distinguish "user retracted" from "user never voted" - useful if we
     # want to weight retracted votes differently when training, or surface
     # ambivalence in disagreement-resolution UIs.
     #
@@ -63,7 +63,7 @@ module Rhymecrime
     UNCOMPUTED_RELATED_TOKEN = "[uncomputed]"
 
     # Top-level entry point. Returns true on success, false on a (logged)
-    # write failure — the UI treats either as "click registered" so a flaky
+    # write failure - the UI treats either as "click registered" so a flaky
     # backend doesn't surface as a user-facing error during data collection.
     #
     # cue / related are the lowercased surface forms that were rendered
@@ -71,7 +71,7 @@ module Rhymecrime
     # cue / related columns). verdict is "up" or "down". ip,
     # user_agent, session are request-scoped metadata pulled from the
     # caller (Sinatra request.* in dev, Lambda event["requestContext"]
-    # in prod) — nil-safe; absent metadata is stored as the empty string so
+    # in prod) - nil-safe; absent metadata is stored as the empty string so
     # downstream importers don't have to handle nils.
     def record!(cue:, related:, verdict:, ip: nil, user_agent: nil, session: nil)
       cue = cue.to_s.strip.downcase
@@ -97,7 +97,7 @@ module Rhymecrime
       false
     end
 
-    # Log an "uncomputed cue" event — the runtime asked Store.fetch_set_
+    # Log an "uncomputed cue" event - the runtime asked Store.fetch_set_
     # related_tuples for a cue that has no computed row, so the user
     # got the friendly "Oops, I don't know what words are related to X,
     # sorry! I'll make a note." message in query.rb's set_related
@@ -178,7 +178,7 @@ module Rhymecrime
         # Late-bound: generated_dict_path lives in rhymecrime/utils (paths), which
         # the Lambda runtime path doesn't load. We're only ever instantiated
         # in dev, so the require here is safe.
-        require_relative "utils"
+        require_relative "../utils"
         generated_root_path("feedback.csv")
       end
     end

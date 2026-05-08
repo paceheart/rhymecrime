@@ -3,7 +3,7 @@
 # cgi_print / emit_line output leaks into the other request's response body (the bug that
 # caused a fidget query's rhyming-word-sets to appear inside a pirate query's HTML).
 
-require "rhymecrime/frontend"
+require "rhymecrime/frontend/frontend"
 
 RSpec.describe "thread-local HTML output buffer" do
   def drive_writer(tag, iters)

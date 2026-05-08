@@ -14,7 +14,7 @@
 # uncomputed rows from real votes.
 
 require_relative "spec_helper"
-require "rhymecrime/feedback_store"
+require "rhymecrime/store/feedback_store"
 
 RSpec.describe Rhymecrime::FeedbackStore do
   # Fake backend with the same record!(record) shape as Csv/

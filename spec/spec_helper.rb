@@ -14,7 +14,7 @@
 #
 # See http://rubydoc.info/gems/rspec-core/RSpec/Core/Configuration
 $LOAD_PATH.unshift File.expand_path("../lib", __dir__)
-require "rhymecrime/query"
+require "rhymecrime/frontend/query"
 
 # Skip an example when not_working_reason is truthy (except false).
 # Use true or "" for the default reason "not working"; use a String for a custom skip message.

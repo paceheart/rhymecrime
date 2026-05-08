@@ -15,7 +15,7 @@ CMUDICT_FILENAME = File.join(CORPORA_ROOT, "cmudict", "cmudict-0.7c.txt")
 # common / rare / forbidden word sets are not surfaced as *_FILENAME
 # constants any more — they're consumed by kind out of curated/rarity.csv
 # via rarity_csv_common_words / rarity_csv_rare_words /
-# rarity_csv_forbidden_words in curated_rarity.rb.
+# rarity_csv_forbidden_words in morphology/curated_rarity.rb.
 NEOL2016_FILENAME = File.join(CORPORA_ROOT, "neol", "neol2016.txt")
 NEOL_SUPPLEMENT_FILENAME = File.join(CURATED_DIR, "neol_supplement.txt")
 

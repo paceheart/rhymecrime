@@ -96,8 +96,8 @@ a:visited {
 }
 
 /* Semantically promiscuous words (perhaps, however, ...) are rendered
-   without an <a> wrap in print_word (lib/rhymecrime/query.rb): clicking
-   would land on relatedness columns that frontend.rb short-circuits — dead-end
+   without an <a> wrap in print_word (lib/rhymecrime/frontend/query.rb): clicking
+   would land on relatedness columns that frontend/frontend.rb short-circuits — dead-end
    UX. The visual signal (no link) needs a color cue: inside .output_p cyan
    #22dce1 inherits to bare text, so without an override they'd match links.
    Gray #bbb reads clearly against the pink body (#ffdce1). */
@@ -106,7 +106,7 @@ a:visited {
 }
 
 /* Inline thumbs-up / thumbs-down widget rendered after every "related word"
-   surface (see emit_relatedness_feedback_widget in lib/rhymecrime/query.rb).
+   surface (see emit_relatedness_feedback_widget in lib/rhymecrime/frontend/query.rb).
    Icons are inline SVGs whose fill is currentColor, so the color rules
    below (mint #00fa9a for up, hot pink-red #ff355e for down) drive both the
    resting and voted states without any tinting/filter tricks. The buttons
@@ -187,7 +187,7 @@ a:visited {
 }
 
 /* Mobile / narrow-viewport layout for the main results grid.
-   print_html_column in lib/rhymecrime/frontend.rb emits a single <tr> of
+   print_html_column in lib/rhymecrime/frontend/frontend.rb emits a single <tr> of
    alternating cells: content columns carry a label='<goal>' attribute, and
    the spacer + vertical-divider cells in between carry no label. Below
    700px there isn't enough room for 4-5 side-by-side columns to stay legible,

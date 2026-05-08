@@ -5,14 +5,14 @@ require "forwardable"
 require "aws-sdk-dynamodb"
 require "json"
 require_relative "data_source"
-require_relative "timing"
+require_relative "../timing"
 
 module Rhymecrime
   # Read-side adapter over the computed related#<lemma> / score#<lemma>
   # / set_related#<lemma> partitions in DynamoDB. The lexicon (word#)
   # and rime cohort (rime#) partitions were retired once the corresponding
   # .msgpack files got small enough (~5.5 MB and ~700 KB respectively) to
-  # ship in the Lambda deploy bundle — see lib/rhymecrime/paths.rb
+  # ship in the Lambda deploy bundle - see lib/rhymecrime/paths.rb
   # (WORD_DICT_MSGPACK_FILENAME, RIME_DICT_MSGPACK_FILENAME) and
   # bin/upload-to-dynamodb (which now writes related#, score#, and
   # set_related#).
@@ -56,7 +56,7 @@ module Rhymecrime
 
     # Print the DynamoDB table identity once per process. Mirrors
     # LocalStore#announce_cache_age! so any compute-cache consumer
-    # surfaces the data source it's about to trust — DDB doesn't expose a
+    # surfaces the data source it's about to trust - DDB doesn't expose a
     # cheap "last write" timestamp without a describe_table round-trip, so
     # we just identify the table and region.
     #
@@ -64,7 +64,7 @@ module Rhymecrime
     # in DDB mode store_authoritative? is true, the live-compute pipeline
     # (relatedness/signals, relatedness/score) isn't even require'd, and
     # the corpora it depends on (Numberbatch, ConceptNet, etc.) aren't in the
-    # Lambda bundle by design — see bin/stage-lambda. A Store miss is the
+    # Lambda bundle by design - see bin/stage-lambda. A Store miss is the
     # final answer; there is nothing to fall back to.
     def announce_cache_source!
       return if @announced
@@ -78,7 +78,7 @@ module Rhymecrime
     end
 
     # Cheap path: words only, no score GetItem. Used by everything that
-    # doesn't need the relatedness_score band — the non-debug rhyme page,
+    # doesn't need the relatedness_score band - the non-debug rhyme page,
     # pair_in_store? membership checks, find_all_related_computed's
     # filter loop. Touches one item (related#<lemma>); a missing attribute
     # or a parse failure both yield [], matching the legacy behavior.
@@ -90,8 +90,8 @@ module Rhymecrime
     # Lazy companion to fetch_related_words: GetItems score#<lemma> and
     # returns the parallel score array, or [] when the row is missing
     # (legacy data, or this lemma simply had no computed scores). Only
-    # called by fetch_related_tuples — i.e. by /similar, ?debug=1, and
-    # lookup_score_by_lemmas — so the production rhyme page never pays for
+    # called by fetch_related_tuples - i.e. by /similar, ?debug=1, and
+    # lookup_score_by_lemmas - so the production rhyme page never pays for
     # it.
     def fetch_scores_array(lemma_key)
       item = get_item("score##{lemma_key}")
@@ -158,7 +158,7 @@ module Rhymecrime
     # rhyming friends" answer the caller renders normally, while nil
     # signals "we never computed this cue" and routes to the
     # friendly-message branch in query.rb's goal dispatch
-    # (forbidden? → "I don't like that word."; otherwise →
+    # (forbidden? -> "I don't like that word."; otherwise ->
     # "Oops, I don't know what words are related to <cue>...").
     #
     # In-process FIFO cache (@set_related_cache) covers warm-container
@@ -181,7 +181,7 @@ module Rhymecrime
 
     # Shared filter step. The lexicon (lexicon_word_entry) and rime cohort
     # (rime_dict_lookup) are now in-process from the bundled msgpacks, so the
-    # filter is a pure CPU loop — no DDB round-trip. Mirrors
+    # filter is a pure CPU loop - no DDB round-trip. Mirrors
     # LocalStore#filter_related_words; the defined? guard keeps this
     # module importable by tools that don't load query.rb (e.g.
     # bin/upload-to-dynamodb).
@@ -205,7 +205,7 @@ module Rhymecrime
 
     # DynamoDB / AWS SDK may hand back BINARY-tagged strings or malformed
     # UTF-8. Those survive into HTML output and make the Lambda return
-    # payload fail JSON serialization → API Gateway "Internal Server Error".
+    # payload fail JSON serialization -> API Gateway "Internal Server Error".
     def utf8_store_string(value)
       value.to_s.encode(Encoding::UTF_8, Encoding::UTF_8, invalid: :replace, undef: :replace)
     end
@@ -229,11 +229,11 @@ module Rhymecrime
 
     # Decodes the tuples attribute on set_related#<lemma> items into an
     # Array of Arrays of words. Returns nil when item is itself nil
-    # (missing row → distinct from "row exists but empty list" so the
+    # (missing row -> distinct from "row exists but empty list" so the
     # runtime can route to the friendly-message branch). Tolerates List-of-
     # Lists (modern uploads) and JSON-encoded String shapes; a decode
     # failure on a present row degrades to an empty Array rather than nil
-    # (the row exists, we just couldn't read it — render an empty result
+    # (the row exists, we just couldn't read it - render an empty result
     # rather than the "unknown cue" message that would mislead the user).
     def parse_tuples_attr(item)
       return nil unless item
@@ -256,9 +256,9 @@ module Rhymecrime
     end
 
     # FIFO-bounded write to @set_related_cache. Returns the value so
-    # callers can chain "miss → fetch → cache → return" in one expression.
+    # callers can chain "miss -> fetch -> cache -> return" in one expression.
     # Capacity matches DDB_SET_RELATED_CACHE_CAP; eviction is FIFO
-    # (Ruby Hash insertion order) — same rationale as put_word in the
+    # (Ruby Hash insertion order) - same rationale as put_word in the
     # legacy word# cache: writes are once-per-cue and we don't pay for
     # access-order bookkeeping when the workload is "scan every cue once
     # over the container's lifetime."
@@ -279,7 +279,7 @@ module Rhymecrime
     # RELATEDNESS_SCORE_THRESHOLD lives in lib/rhymecrime/related.rb and
     # isn't loaded when dynamo_store is required in isolation (e.g. by
     # bin/upload-to-dynamodb tests). Look it up via Object.const_get and
-    # fall back to the hardcoded 50 that matches the runtime constant —
+    # fall back to the hardcoded 50 that matches the runtime constant -
     # keeps this file importable without dragging in the relatedness
     # constants module.
     def relatedness_score_threshold

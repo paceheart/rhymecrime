@@ -57,9 +57,9 @@ end.parse!
 repo = File.expand_path("..", __dir__)
 Dir.chdir(repo)
 
-require "rhymecrime/query"
+require "rhymecrime/frontend/query"
 # Numberbatch loader + WordNet setup live in relatedness/signals (they're not
-# pulled in by rhymecrime/query anymore); this script iterates Numberbatch
+# pulled in by rhymecrime/frontend/query anymore); this script iterates Numberbatch
 # keys and WordNet lemmas/morphy, so require them explicitly.
 require "rhymecrime/relatedness/signals"
 require "rwordnet"

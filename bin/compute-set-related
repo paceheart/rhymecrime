@@ -5,7 +5,7 @@
 # computed related# universe and stash it as a set_related#<lemma>
 # row in generated/rhymecrime_local.sqlite3.
 #
-# Why: the runtime set_related goal in lib/rhymecrime/query.rb used to
+# Why: the runtime set_related goal in lib/rhymecrime/frontend/query.rb used to
 # run four phases live on every request (~6s/cue: find+filter related,
 # prefetch, rhyme-bucket loop, suffix-redundancy prune). That's blown up
 # the Lambda 29s budget for hub cues and made cold-start latency worse
@@ -80,7 +80,7 @@ require "optparse"
 require "set"
 require "sqlite3"
 require_relative "../lib/rhymecrime/build/build_utils"
-require_relative "../lib/rhymecrime/frontend"
+require_relative "../lib/rhymecrime/frontend/frontend"
 require_relative "../lib/rhymecrime/dev/local_store"
 
 # Compact "Xh Ym Z.Zs" / "Ym Z.Zs" / "Z.Zs" formatter for the elapsed-

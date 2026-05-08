@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# Dict-build trace helpers (TRACE_WORDS / ENV). Loaded at Lambda runtime via lexical.rb only
+# Dict-build trace helpers (TRACE_WORDS / ENV). Loaded at Lambda runtime via morphology/lexical.rb only
 # for dict_trace_word? / dict_trace_puts; full dict pipeline uses the same definitions.
 
 require_relative "pace_utils"

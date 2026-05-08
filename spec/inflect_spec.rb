@@ -1,5 +1,5 @@
 # encoding: utf-8
-require "rhymecrime/inflect"
+require "rhymecrime/morphology/inflect"
 
 def inflects(base_phonemes, base_word, inflected_word, expected)
   it "#{base_word} -> #{inflected_word}" do

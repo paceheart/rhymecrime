@@ -4,8 +4,8 @@
 
 require "set"
 require "rwordnet"
-require_relative "paths"
-require_relative "pronunciation"
+require_relative "../paths"
+require_relative "../pronunciation"
 
 module Inflect
   VOICELESS = Set.new(%w[P T K F TH S SH CH])

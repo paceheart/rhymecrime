@@ -24,7 +24,7 @@ require "forwardable"
 require "json"
 require "singleton"
 require "sqlite3"
-require_relative "../data_source"
+require_relative "../store/data_source"
 require_relative "../utils"
 
 module Rhymecrime

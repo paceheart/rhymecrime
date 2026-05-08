@@ -29,7 +29,7 @@
 #   sig = extract_rarity_signals(word, ctx)
 
 require "set"
-require_relative "../lexical"
+require_relative "../morphology/lexical"
 require_relative "constants"
 require_relative "build_utils"
 

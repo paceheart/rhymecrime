@@ -324,7 +324,7 @@ describe "RARITY" do
   # Wiktionary/Kaikki paradigm-table overgenerates -s rows for every
   # gerund-as-noun lemma, so the dict gets bannings, pricings,
   # addressings, marketings etc. — none real corpus surfaces. The
-  # wiktionary_overgenerated_gerund_plural? predicate in prefix_clusters.rb
+  # wiktionary_overgenerated_gerund_plural? predicate in morphology/prefix_clusters.rb
   # demotes the shape to :rare at runtime; concrete bases (morning
   # noun.time, meeting noun.group, saving surface in WN) survive via the
   # gates inside that predicate.
@@ -341,7 +341,7 @@ describe "RARITY" do
   # Wiktionary also pluralizes abstract -ness nominalizations
   # (abruptnesses, stiffnesses, goodnesses) — paradigm-table noise that
   # English never produces. wiktionary_overgenerated_abstract_nesses_plural?
-  # in curated_rarity.rb forbids these via explicitly_forbidden?; concrete
+  # in morphology/curated_rarity.rb forbids these via explicitly_forbidden?; concrete
   # -ness surfaces (baronesses, base baroness noun.person) survive via
   # the WN concreteness gate.
   context 'wiktionary -nesses overgeneration' do

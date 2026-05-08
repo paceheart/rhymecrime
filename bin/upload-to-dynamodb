@@ -63,7 +63,7 @@ require "optparse"
 require "aws-sdk-dynamodb"
 require "sqlite3"
 require_relative "_aws_preflight"
-require_relative "../lib/rhymecrime/data_source"
+require_relative "../lib/rhymecrime/store/data_source"
 require_relative "../lib/rhymecrime/build/build_utils"
 
 skip_related = false

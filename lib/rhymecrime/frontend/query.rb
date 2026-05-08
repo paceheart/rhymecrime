@@ -3,7 +3,7 @@
 
 #
 # control parameters
-# Display toggles for CLI / tests live here. HTML output format is set in frontend.rb (OUTPUT_FORMAT).
+# Display toggles for CLI / tests live here. HTML output format is set in frontend/frontend.rb (OUTPUT_FORMAT).
 #
 
 $output_format = 'cgi'
@@ -45,13 +45,13 @@ require "net/http"
 require "uri"
 require "json"
 require "cgi"
-require_relative "data_source"
-require_relative "utils"
-require_relative "phoneme.rb"
-require_relative "inflect"
-require_relative "lexical"
-require_relative "pronunciation.rb"
-require_relative "timing"
+require_relative "../store/data_source"
+require_relative "../utils"
+require_relative "../phoneme.rb"
+require_relative "../morphology/inflect"
+require_relative "../morphology/lexical"
+require_relative "../pronunciation.rb"
+require_relative "../timing"
 require "memery"
 
 #
@@ -85,14 +85,14 @@ def emit_line(string = "")
   end
 end
 
-require_relative "related"
-require_relative "feedback_store"
-require_relative "dynamo_store" if Rhymecrime::DataSource.dynamodb?
+require_relative "../related"
+require_relative "../store/feedback_store"
+require_relative "../store/dynamo_store" if Rhymecrime::DataSource.dynamodb?
 
-require_relative "lexicon"
-require_relative "filter"
-require_relative "rhyme"
-require_relative "tuples"
+require_relative "../lexicon"
+require_relative "../filter"
+require_relative "../rhyme"
+require_relative "../tuples"
 require_relative "display"
 
 #
@@ -195,11 +195,11 @@ def rhymecrime(word1, word2, goal, output_format='text', debug_mode=false)
       #     one place we want the *union* of those two lists: unrhymable
       #     stop words are deleted from word_dict at build (so they
       #     never get a compute row); semantically-promiscuous words
-      #     are also caught upfront by compute_column_for_goal in
-      #     frontend.rb, but we keep the predicate here as the
+    #     are also caught upfront by compute_column_for_goal in
+    #     frontend/frontend.rb, but we keep the predicate here as the
       #     authoritative answer when callers reach rhymecrime via paths
       #     that bypass the upfront filter (CLI tools, eval scripts). The
-      #     message matches promiscuous_message in frontend.rb so the
+    #     message matches promiscuous_message in frontend/frontend.rb so the
       #     two upstream paths render identically.
       #   * otherwise — the cue is rare / outside the computed cue
       #     universe. Apologetic response; the "I'll make a note" trailer
