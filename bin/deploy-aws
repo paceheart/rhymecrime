@@ -21,6 +21,8 @@
 # Data uploads are a *separate* step: see bin/upload-to-dynamodb /
 # bin/deploy-data. Lambda + DynamoDB tables get provisioned here, but the
 # tables ship empty until you upload.
+#
+# To redeploy an older revision after a bad push: bin/rollback-aws <git-ref>
 
 set -euo pipefail
 cd "$(dirname "$0")/.."

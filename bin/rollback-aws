@@ -1,0 +1,134 @@
+#!/usr/bin/env bash
+#
+# Roll back the rhymecrime CloudFormation stack by redeploying from a
+# known-good Git revision. CloudFormation has no "undo last successful
+# update" API for Lambda code — the packaged template in S3 is not
+# version-addressable from the CLI in a one-shot way — so the reliable
+# recovery is: check out an older ref, run the same SAM pipeline as
+# bin/deploy-aws, and push that artifact again.
+#
+#   ./bin/rollback-aws v1.2.3
+#   ./bin/rollback-aws abc123ef
+#   ./bin/rollback-aws --continue-failed-rollback
+#
+# Prereqs (same mental model as bin/deploy-aws):
+#   - Docker running for sam build --use-container
+#   - generated/current/word_dict.msgpack present in *this* clone (see
+#     below) — generated/ is gitignored, so the worktree at GIT_REF does
+#     not carry it. By default we copy generated/current from the repo you
+#     run this script from into the worktree before staging. That ships
+#     your local lexicon with older app code; if the bad deploy changed
+#     dict shape, run bin/build [--dict-only] on that older ref in a
+#     separate clone instead.
+#
+# Profile: RHYMECRIME_AWS_PROFILE (default paceheart), matching deploy-aws.
+
+set -euo pipefail
+
+REPO="$(cd "$(dirname "$0")/.." && pwd -P)"
+cd "$REPO"
+
+aws_profile="${RHYMECRIME_AWS_PROFILE:-paceheart}"
+stack_name="rhymecrime"
+
+usage() {
+  cat <<'EOF'
+Roll back the CloudFormation stack by redeploying SAM from an older Git ref.
+
+Usage:
+  bin/rollback-aws <git-ref>
+  bin/rollback-aws --continue-failed-rollback
+  bin/rollback-aws --help
+
+Examples:
+  bin/rollback-aws v1.0.1
+  bin/rollback-aws HEAD~1
+  bin/rollback-aws abc123ef
+
+Copies generated/current from this clone into a temporary worktree (generated/
+is gitignored). Ensure word_dict.msgpack exists (bin/build / setup.sh).
+
+When a stack update fails and CloudFormation is stuck in UPDATE_ROLLBACK_FAILED:
+  bin/rollback-aws --continue-failed-rollback
+EOF
+}
+
+cleanup_worktree() {
+  if [[ -n "${WT:-}" && -d "$WT" ]]; then
+    git -C "$REPO" worktree remove --force "$WT" 2>/dev/null || rm -rf "$WT"
+  fi
+}
+
+continue_failed_rollback() {
+  echo "==> continue-update-rollback on stack $stack_name (--profile $aws_profile)"
+  aws cloudformation continue-update-rollback \
+    --stack-name "$stack_name" \
+    --profile "$aws_profile" \
+    --region "${AWS_REGION:-us-east-1}"
+  echo "==> done. Watch: aws cloudformation describe-stacks --stack-name $stack_name --profile $aws_profile"
+}
+
+if [[ $# -lt 1 ]]; then
+  usage
+  exit 1
+fi
+
+if [[ "$1" == "-h" || "$1" == "--help" ]]; then
+  usage
+  exit 0
+fi
+
+if [[ "$1" == "--continue-failed-rollback" ]]; then
+  continue_failed_rollback
+  exit 0
+fi
+
+GIT_REF="$1"
+
+if git -C "$REPO" rev-parse "$GIT_REF" >/dev/null 2>&1; then
+  :
+else
+  echo "error: '$GIT_REF' is not a valid ref in $REPO (try: git fetch --all)" >&2
+  exit 1
+fi
+
+GEN_SRC="$REPO/generated/current"
+if [[ ! -f "$GEN_SRC/word_dict.msgpack" ]]; then
+  echo "error: missing $GEN_SRC/word_dict.msgpack — run bin/build [--dict-only] or setup.sh in this clone first." >&2
+  exit 1
+fi
+
+if [[ -n "${RHYMECRIME_AWS_PROFILE:-}" && "$RHYMECRIME_AWS_PROFILE" != "paceheart" ]]; then
+  echo "==> RHYMECRIME_AWS_PROFILE=$RHYMECRIME_AWS_PROFILE: using --profile=$aws_profile"
+fi
+
+WT="$(mktemp -d "${TMPDIR:-/tmp}/rhymecrime-rollback.XXXXXX")"
+trap cleanup_worktree EXIT
+
+echo "==> worktree at $WT (detached $(git -C "$REPO" rev-parse --short "$GIT_REF"))"
+git -C "$REPO" worktree add --detach "$WT" "$GIT_REF"
+
+echo "==> copying generated/current from $REPO (lexicon not in git)"
+mkdir -p "$WT/generated/current"
+# Copy, not move: keep the developer's clone untouched.
+cp -R "$GEN_SRC/." "$WT/generated/current/"
+
+cd "$WT"
+
+echo "==> [1/3] staging Lambda bundle (rollback tree)"
+./bin/stage-lambda
+
+echo "==> [2/3] sam build (inside build-ruby3.4 arm64 container)"
+sam build --use-container
+
+echo "==> [3/3] sam deploy --profile $aws_profile (rollback)"
+sam deploy --profile "$aws_profile"
+
+echo
+echo "==> rollback deploy finished. URLs:"
+aws cloudformation describe-stacks \
+  --stack-name "$stack_name" \
+  --query "Stacks[0].Outputs[?OutputKey=='HttpApiUrl' || OutputKey=='CustomDomainUrl' || OutputKey=='WwwCustomDomainUrl'].[OutputKey,OutputValue]" \
+  --output table \
+  --profile "$aws_profile" \
+  --region "${AWS_REGION:-us-east-1}"
