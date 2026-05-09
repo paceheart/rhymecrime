@@ -7,6 +7,33 @@ body {
 
 body.about {
     color: #eeeefa;
+    box-sizing: border-box;
+    max-width: 100%;
+    overflow-wrap: break-word;
+}
+
+/* Example rhyme lists: avoid horizontal page scroll on narrow screens. */
+body.about pre {
+    box-sizing: border-box;
+    max-width: 100%;
+    margin: 0.75em 0;
+    padding: 0.5em 0.65em;
+    background: rgba(0, 0, 0, 0.25);
+    border-radius: 6px;
+    white-space: pre-wrap;
+    word-break: break-word;
+    overflow-x: auto;
+}
+
+/* credits.html footer: long attribution line + URLs must wrap on phones. */
+body.about center {
+    display: block;
+    max-width: 100%;
+    padding-inline: 0;
+}
+
+body.about center font {
+    overflow-wrap: anywhere;
 }
 
 body.about a:link,
