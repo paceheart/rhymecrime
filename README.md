@@ -8,7 +8,7 @@ Prereqs: Ruby (see `template.yaml` for the AWS Lambda runtime version), Bundler,
 ```bash
 git clone https://github.com/paceheart/rhymecrime/
 cd rhymecrime
-./setup.sh             # bundle install + download corpora + bin/dict-build
+./setup.sh             # bundle install + download corpora + bin/build (full pipeline)
 bundle exec rspec      # all tests should pass
 ```
 
@@ -21,12 +21,12 @@ Data and build artifacts are split so **sources** stay under `corpora/` and **re
 | Location | Role |
 |----------|------|
 | **`lib/`** | On the load path. `lib/rhymecrime.rb` defines `Rhymecrime::ROOT`; application code lives under **`lib/rhymecrime/`** (`related.rb`, helpers, the **`frontend/`**, **`store/`**, and **`build/`** subtrees). Use `require "rhymecrime/..."` from `bin/` and specs (after unshifting `lib/`). |
-| **`bin/`** | **Executables**: `rhyme.rb`, `similar.rb`, `debug.rb`, `anneal.rb`, `dict-build` (dictionary rebuild). Each prepends `lib/` to `$LOAD_PATH` as needed. |
+| **`bin/`** | **Executables**: `rhyme.rb`, `similar.rb`, `debug.rb`, `anneal.rb`, `build` (`bin/build [--dict-only]`). Each prepends `lib/` to `$LOAD_PATH` as needed. |
 | **`assets/`** | Static fragments and CSS for the CGI UI (`header.html`, `footer.html`, `*.css`). Loaded via `File.join(REPO_ROOT, "assets", ...)`. |
 | **`corpora/`** | Upstream or hand-maintained **inputs** (versioned when license/size allow). |
 | **`corpora/cmudict/`** | CMU Pronouncing Dictionary (tweaked 0.7c text + license/readme). |
 | **`corpora/wordnet/3.1/`** | WordNet 3.1 lexicon (same internal layout as the standard distribution: inner `dict/`, `LICENSE`, …). |
-| **`corpora/usf/`** | USF free-association norms (raw `Cue_Target_Pairs.*` shards). Runtime graph `generated/usf_associations.json` is compiled by `bin/build-usf-associations` (run from `setup.sh`); not produced by `dict-build`. |
+| **`corpora/usf/`** | USF free-association norms (raw `Cue_Target_Pairs.*` shards). Runtime graph `generated/usf_associations.json` is compiled by `bin/build-usf-associations` (run from `setup.sh`); not produced by `bin/build [--dict-only]`. |
 | **`corpora/neol/`** | The 12dicts `neol2016.txt` neologism list (2016 snapshot, public domain). Force-added past `corpora/*` in `.gitignore`. The locally-curated companion list lives at `curated/neol_supplement.txt`. See `corpora/neol/README.md`. |
 | **`corpora/wiktionary/`** | Kaikki / Wiktextract English JSONL (often large; **gitignored** — fetched by `bin/setup-corpora`). |
 | **`corpora/subtlex/`** | SUBTLEX-US frequency TSV (`SUBTLEXus.tsv` from Open Lexicon, CC-BY-SA). Vendored — force-added past `corpora/*` in `.gitignore`. See `corpora/subtlex/README.md` and the top-level `THIRD_PARTY_NOTICES.md`. |
@@ -34,7 +34,7 @@ Data and build artifacts are split so **sources** stay under `corpora/` and **re
 | **`corpora/conceptnet/`** | Optional **ConceptNet** assertions gzip (`conceptnet-assertions-5.7.0.csv.gz`) for thematic edge weights in `generated/conceptnet_edges.msgpack` (large; **gitignored**). |
 | **`corpora/numberbatch/`** | Optional **Numberbatch** English vectors (`numberbatch-en-19.08.txt`) for `generated/numberbatch_vectors.msgpack` (large; **gitignored**). |
 | **`curated/`** | All hand-edited inputs in one flat directory: stop-word lists (`semantically_promiscuous.txt`, `unrhymable_stop_words.txt`, `neol_supplement.txt`), the `authoritative_pronunciations.txt` overrides, the manually-declared `spelling.csv` variant clusters, and the labeled `semantic_base.csv` / `rarity.csv` / `related.csv` test/training sets. `rarity.csv` doubles as the source of truth for the common / rare / forbidden curated word lists (the retired `common_words.txt` / `rare_words.txt` / `forbid_list.txt`); rows are projected by `kind` into `rarity_csv_common_words` / `rarity_csv_rare_words` / `rarity_csv_forbidden_words`. See `curated/README.md`. |
-| **`generated/`** | **Outputs** of `./bin/dict-build` (see `lib/rhymecrime/build/dict.rb`): `word_dict.txt`, `rime_dict.txt`, `part_of_speech.json`, `hyphen_variant_map.json`, `wordfreq.tsv`, and when source corpora are present `conceptnet_edges.msgpack`, `numberbatch_vectors.msgpack`. Semantic relatedness also reads `usf_associations.json` here if present. Entire directory is **gitignored**; clone → run `setup.sh` (wordfreq, Kaikki, …) then `./bin/dict-build`. |
+| **`generated/`** | **Outputs** of `bin/build [--dict-only]` (see `lib/rhymecrime/build/dict.rb`): `word_dict.txt`, `rime_dict.txt`, `part_of_speech.json`, `hyphen_variant_map.json`, `wordfreq.tsv`, and when source corpora are present `conceptnet_edges.msgpack`, `numberbatch_vectors.msgpack`. Semantic relatedness also reads `usf_associations.json` here if present. Entire directory is **gitignored**; clone → run `setup.sh` (wordfreq, Kaikki, …), then **`bin/build [--dict-only]`** (omit `--dict-only` for full training pipeline). |
 | **`lib/rhymecrime/build/`** | Dictionary compiler (`dict.rb`), pronunciation / inflection / Wiktionary loaders, and `build/wordfreq/export_wordfreq_tsv.py`. (Hand-edited word lists previously kept here now live under `curated/`.) |
 | **`spec/`** | RSpec examples and supporting harnesses. Hand-labeled CSVs (`related.csv`, `rarity.csv`, `semantic_base.csv`, `spelling.csv`) live under `curated/`. |
 
@@ -89,7 +89,7 @@ otter / slaughter
 
 ### Building the Rhyming Dictionary
 
-First, run `./bin/dict-build` from the repository root to compile the rhyming dictionary into `generated/`. Corpus inputs (CMUdict, WordNet, Kaikki extract, SUBTLEX, etc.) live under `corpora/`.
+First, run `bin/build [--dict-only]` from the repository root to compile the rhyming dictionary into `generated/`. Corpus inputs (CMUdict, WordNet, Kaikki extract, SUBTLEX, etc.) live under `corpora/`.
 It starts from cmudict, which has a bunch of lines like this:
 
   KITTEN  K IH1 T AH0 N  
@@ -182,11 +182,13 @@ End-to-end data flow runs in five phases. Each phase's outputs are inputs to the
 
 **Phase 1 — Fetch corpora** (`bin/setup-corpora`). Downloads Wiktionary, ConceptNet 5.7, and Numberbatch 19.08 to `corpora/`; pre-aggregates USF associations, ConceptNet vocab/cache artifacts, Numberbatch vectors, and the wordfreq Zipf table into `generated/`. CMUdict, VarCon, SUBTLEX-US, neol, and USF shards are vendored in the repo.
 
-**Phase 2 — Dictionary + classifier build** (`bin/build`, four stages). The orchestrator runs `bin/dict-build` twice (full first, slim rescore last) around two classifier-training stages:
-1. `dict-build` (full): merges every corpus into the canonical lexicon — `generated/word_dict.{txt,msgpack}`, `generated/rime_dict.{txt,msgpack}`, lemma / semantic-base / spelling-variant / hyphen-variant maps. It consumes the setup-produced corpus mirrors `generated/conceptnet_edges.msgpack` and `generated/numberbatch_vectors.msgpack`, and writes the rarity-training signal dump `generated/rarity_signals_dump.jsonl`.
-2. `bin/train-rarity-classifier` → `generated/rarity_classifier.json`.
-3. `bin/retrain-relatedness --rebuild-vectors`: dumps `generated/<timestamp>/sense_glosses.jsonl`, encodes them with MPNet (the only Python step) into `generated/<timestamp>/model_sense_vectors.msgpack`, and trains `generated/<timestamp>/relatedness_classifier.json`.
-4. `dict-build` (slim): re-runs over `word_dict.txt` so the freshly-trained rarity classifier can rescore borderline words.
+**Phase 2 — Dictionary + classifier build** (`bin/build`). Runs the embedded Ruby dictionary compile (`load dict.rb`; same working directory convention as historically) twice—bootstrap rarity-signal dump, then final rarity-classifier rescore—around training stages:
+1. **Bootstrap compile** (`RHYMECRIME_BUILD_MODE=bootstrap`): merges every corpus into the canonical lexicon — `generated/<stamp>/runtime/word_dict.{txt,msgpack}`, `rime_dict.{txt,msgpack}`, lemma / semantic-base / spelling-variant / hyphen-variant maps. Consumes the setup-produced corpus mirrors `generated/conceptnet_edges.msgpack` and `generated/numberbatch_vectors.msgpack`, and writes the rarity-training signal dump to `generated/<stamp>/bootstrap/rarity_signals_dump.jsonl`.
+2. `bin/train-rarity-classifier` → classifier JSON under the build stamp.
+3. `bin/retrain-relatedness --rebuild-vectors`: sense glosses dump, MPNet vectors, relatedness classifier.
+4. **Final compile** (`RHYMECRIME_BUILD_MODE=final`): rarity classifier rescores borderline headwords into the shipped lexicon.
+
+Solo iteration on curated CSVs without retraining classifiers: `bin/build [--dict-only]`.
 
 **Phase 3 — Relatedness compute** (`bin/compute-relatedness` then `bin/compute-set-related`). For every cue lemma, runs the full relatedness pipeline (Numberbatch + ConceptNet + USF + sense-vector cosine + WordNet glosses → classifier) to produce the `related#<lemma>` and `score#<lemma>` rows, then computes the post-prune rhyming-tuple list for each cue as `set_related#<lemma>`. Output is one SQLite file (`generated/rhymecrime_local.sqlite3`) with three tables. Cue order is descending by `curated/related.csv` row count, alpha tiebreak — so `Ctrl-C`-resumable runs and `--max-cues=N` smoke runs front-load the cues you've curated most (`cat`, `pirate`, `food`, `hell`, `crime`, …).
 

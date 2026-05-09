@@ -2,8 +2,8 @@
 # encoding: utf-8
 #
 # Scans conceptnet-assertions*.csv.gz and writes a gzip of every English vocab entry on a kept relation edge.
-# Normally unnecessary: setup.sh runs this after downloading assertions; dict-build auto-builds the
-# cache if it is missing or older than assertions. Use this script to refresh the cache without a full dict-build.
+# Normally unnecessary: setup.sh runs this after downloading assertions; `bin/build` auto-builds the
+# cache if it is missing or older than assertions. Use this script to refresh the cache without a full `bin/build [--dict-only]`.
 #
 #   ./bin/preprocess-conceptnet
 #   ./bin/preprocess-conceptnet /path/to/conceptnet_assertions.txt.gz

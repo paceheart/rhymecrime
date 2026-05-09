@@ -82,7 +82,7 @@ Brysbaert & New (2009) movie-subtitle frequency norms for American English.
 ## Fetched at build (not redistributed by this repository)
 
 The following datasets are downloaded by `bin/setup-corpora` into
-`corpora/<name>/` (gitignored) and consumed by `bin/dict-build`. The
+`corpora/<name>/` (gitignored) and consumed by `bin/build`. The
 generated artifacts that ship in `generated/` are derived works and inherit
 the upstream license terms.
 

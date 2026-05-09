@@ -3,7 +3,7 @@
 Hand-edited inputs to RhymeCrime. Everything in this directory is authored
 manually, lives nowhere else, and is consumed directly at build time and/or
 runtime — distinct from `corpora/` (third-party reference data) and
-`generated/` (compiler outputs from `bin/dict-build`).
+`generated/` (compiler outputs from `bin/build`).
 
 If you're updating any of these files: keep them lowercased and ASCII unless
 otherwise noted, sort word-list lines alphabetically, and prefer one entry per
@@ -15,8 +15,8 @@ The common / rare / forbidden curated word lists used to be three separate
 plain-text files (`common_words.txt`, `rare_words.txt`, `forbid_list.txt`).
 They were merged into `rarity.csv` (see below) — every previously-listed word
 now lives there as a row whose `kind` is one of `common` / `common_ish` /
-`rare` / `rare_ish` / `forbidden` / `forbidden_ish`. Both `bin/dict-build`
-and the runtime read from `rarity.csv` directly:
+`rare` / `rare_ish` / `forbidden` / `forbidden_ish`. `bin/build` reads
+from `rarity.csv` directly:
 
   * `common` / `common_ish` rows → the build-time "common floor" (was
     `common_words.txt`); accessor `rarity_csv_common_words`.
@@ -80,7 +80,7 @@ pipelines:
 Function words and apostrophe-heavy contractions that are valid English but
 would make awful rhyme targets — articles / possessives (`the`, `a`, `my`),
 contractions (`he'd've`, `couldn't've`, `they're`), interjections (`huh`,
-`mm`, `oh`). **Deleted from `word_dict` entirely** at dict-build time by
+`mm`, `oh`). **Deleted from `word_dict` entirely** at dictionary-compile time by
 `delete_unrhymable_stop_words_from_hash` in `lib/rhymecrime/build/phonology.rb`,
 alongside `forbid_list.txt` — the runtime never sees these words as
 headwords. Predicate: `unrhymable_stop_word?`. Conceptually parallel to

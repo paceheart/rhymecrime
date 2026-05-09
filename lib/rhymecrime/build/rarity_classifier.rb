@@ -13,7 +13,7 @@
 # curated/rarity.csv and quietly shipped that delta.
 #
 # Two explicit bootstrap escapes for the chicken-and-egg case (the trainer reads a
-# classifier dump that ./bin/dict-build produces, so the very first build can't
+# classifier dump that the build bootstrap stage produces (`run_dict_inner` Ruby block), so the very first build can't
 # have a classifier yet):
 #
 #   RHYMECRIME_RARITY_CLASSIFIER=off       no rescore (rule-based path runs)
@@ -190,9 +190,10 @@ def rarity_classifier
   path = rarity_classifier_json_path
   unless File.exist?(path)
     raise "rarity classifier not found at #{path}. Train it via:\n" \
-          "  ./bin/build                                     # full four-Build-Stage pipeline (dump + train + relatedness)\n" \
-          "or just the rarity steps manually:\n" \
-          "  RHYMECRIME_RARITY_DUMP_SIGNALS=<path> ./bin/dict-build\n" \
+          "  bin/build                                     # full pipeline (dump + train + relatedness)\n" \
+          "or just the rarity bootstrap + train steps manually:\n" \
+          "  RHYMECRIME_BUILD_DIR=<stamp> RHYMECRIME_BUILD_MODE=bootstrap RHYMECRIME_RARITY_DUMP_SIGNALS=<path> bin/build --dict-only\n" \
+          "      (normally leave this to bin/build stage 1)\n" \
           "  ./bin/train-rarity-classifier\n" \
           "Or set RHYMECRIME_RARITY_CLASSIFIER=off to skip rescore."
   end
@@ -523,7 +524,7 @@ end
 def rarity_rescore_and_dump!(hash, **ctx_kwargs)
   dump_path = ENV["RHYMECRIME_RARITY_DUMP_SIGNALS"]
   dump_enabled = !dump_path.nil? && !dump_path.empty?
-  # bin/dict-build Dir.chdir's into lib/rhymecrime/build/ before invoking
+  # Embedded dict compile cwd is lib/rhymecrime/build/, so a relative
   # us, so a relative RHYMECRIME_RARITY_DUMP_SIGNALS would land under
   # lib/rhymecrime/build/generated/ instead of the repo's generated/. Anchor
   # to REPO_ROOT so the path the operator passes (and the path the trainer

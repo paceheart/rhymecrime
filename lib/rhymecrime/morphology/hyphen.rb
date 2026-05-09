@@ -91,7 +91,7 @@ end
 
 # Frequency lookup that works in both runtime and build contexts. Runtime
 # (query.rb loaded) defers to word_dict's lazy loader; build time
-# (bin/dict-build, where query.rb is not on the load path) reads the
+# (`bin/build` embedded dictionary compile loads dict.rb alone; query.rb not on load path.)
 # $word_dict global pinned by preferred_form_in_build_lexicon. Calling
 # frequency(word) directly would NameError during the build because
 # query.rb is the only place it's defined.
@@ -246,7 +246,7 @@ end
 # the wiktionary_*_overplural predicates, …) to read the in-flight build
 # hash instead of the runtime-loaded msgpack: those helpers consult
 # $word_dict unconditionally, so without this swap they'd see either
-# nil (pre-runtime) or a stale prior-build dict during bin/dict-build.
+# nil (pre-runtime) or a stale prior-build dict during bin/build [--dict-only].
 # Idempotent on nested calls (each call stashes/restores its own previous).
 def with_word_dict(hash)
   previous = $word_dict

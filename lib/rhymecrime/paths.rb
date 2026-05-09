@@ -30,12 +30,11 @@ WORD_DICT_FILENAME = "word_dict.txt"
 # and for tools like bin/audit-word that grep them, but the runtime never
 # reads them when the .msgpack is present.
 #
-# Built by rebuild_rhymecrime_dictionaries alongside the .txt saves so a
-# single ./bin/dict-build refreshes both surfaces; see bin/build and
-# bin/dict-build for the full pipeline.
+# Built by rebuild_rhymecrime_dictionaries alongside the .txt saves so
+# `bin/build [--dict-only]` refreshes both surfaces; omit `--dict-only` for the full pipeline.
 WORD_DICT_MSGPACK_FILENAME = "word_dict.msgpack"
 RIME_DICT_MSGPACK_FILENAME = "rime_dict.msgpack"
-# Flat {word => canonical_lemma} table, emitted by dict-build right after
+# Flat {word => canonical_lemma} table, emitted by rebuild_rhymecrime_dictionaries right after
 # save_word_dict and read into $word_to_lemma at runtime. Exists so the
 # hot lemma(w) path (hit thousands of times per page render while coloring
 # set_related tuples) is a single Hash lookup, instead of walking through

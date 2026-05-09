@@ -1,7 +1,7 @@
 # Build and deploy the RhymeCrime Lambda (SAM). Set repository secrets:
 #   AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, (optional) AWS_REGION
 #
-# Data pipeline (dict-build, upload-to-dynamodb, compute-relatedness) is run separately
+# Data pipeline (bin/deploy-data) is run separately
 # — see bin/deploy-data.
 
 name: Deploy Lambda

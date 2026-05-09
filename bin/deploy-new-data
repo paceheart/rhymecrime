@@ -3,15 +3,15 @@
 # Faster sibling of bin/deploy-data for the curated-CSV iteration loop. Skips
 # the hours-long full compute-relatedness scan by recomputing only the cues
 # whose curated/related.csv rows actually changed since HEAD (auto-detected
-# via git diff, overridable with --cues=W,W,W). bin/dict-build always
+# via git diff, overridable with --cues=W,W,W). bin/build [--dict-only] always
 # runs, since curated/rarity.csv overrides are folded in there during the
 # rarity-classifier rescore (see lib/rhymecrime/build/rarity_curated_overrides.rb).
 #
 # What runs:
 #   0. AWS pre-flight              — sts:GetCallerIdentity round-trip (fails
 #      (skipped with --skip-upload)  fast on unset/expired AWS_PROFILE before
-#                                    we burn ~30s on dict-build / compute-*).
-#   1. bin/dict-build              — applies curated/rarity.csv overrides to
+#                                    we burn ~30s on bin/build [--dict-only] / compute-*).
+#   1. bin/build [--dict-only]     — applies curated/rarity.csv overrides to
 #                                    word_dict.txt via rarity_rescore_and_dump!
 #   2. bin/compute-relatedness     — applies curated/related.csv overrides
 #       --only=<changed cues>        (see lib/rhymecrime/relatedness/curated_overrides.rb)
@@ -68,7 +68,7 @@ for arg in "$@"; do
 done
 
 # Up-front AWS pre-flight: cheap STS round-trip to surface unset/expired
-# AWS_PROFILE before we burn ~30s on dict-build + compute-relatedness +
+# AWS_PROFILE before we burn ~30s on bin/build [--dict-only] + compute-relatedness +
 # compute-set-related. Without this, an SSO token that expired overnight
 # would only fail at the upload-to-dynamodb step at the *end* of the run,
 # wasting the entire compute pass. Skipped when --skip-upload is set
@@ -79,7 +79,7 @@ done
 # tail forwards the user's original CLI flags into Ruby's ARGV so the
 # require_profile! abort can echo back a copy-pasteable re-run command.
 if [[ "$skip_upload" != "1" ]]; then
-  echo "==> aws preflight (sts:GetCallerIdentity — fail fast before dict-build/compute spend)"
+  echo "==> aws preflight (sts:GetCallerIdentity — fail fast before bin/build [--dict-only] / compute spend)"
   bundle exec ruby -e '
     require "./bin/_aws_preflight"
     AwsPreflight.preflight!(
@@ -106,8 +106,8 @@ else
   cue_source="auto-detected (git diff HEAD curated/related.csv)"
 fi
 
-echo "==> dict-build (applies curated/rarity.csv overrides via rarity-classifier rescore)"
-./bin/dict-build
+echo "==> bin/build [--dict-only] (curated rarity.csv overrides via rarity-classifier rescore)"
+./bin/build --dict-only
 
 if [[ -n "$changed_cues" ]]; then
   echo "==> compute-relatedness --only=$changed_cues  (cues: $cue_source)"

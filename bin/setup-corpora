@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 #
-# Fetch (and pre-aggregate) every external corpus that bin/dict-build consumes.
+# Fetch (and pre-aggregate) every external corpus that bin/build consumes.
 # Idempotent — downloads are skipped if the destination file is already present
 # and non-empty, and generated corpus mirrors are rebuilt only when missing,
 # stale, or in an older on-disk format.
 #
 # Normally invoked via ./setup.sh, which runs bundle install first and
-# ./bin/build after. You can also run ./bin/setup-corpora directly if
+# bin/build after. You can also run ./bin/setup-corpora directly if
 # gems are already installed and you only want to refresh the inputs (e.g. to
 # pick up a new Wiktionary dump without re-resolving the Gemfile).
 #

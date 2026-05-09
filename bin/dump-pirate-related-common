@@ -38,7 +38,7 @@ Dir.chdir(repo)
 
 word_mp = generated_dict_path(WORD_DICT_MSGPACK_FILENAME)
 unless File.exist?(word_mp)
-  warn "Missing #{word_mp} — run final dict-build first"
+  warn "Missing #{word_mp} — run bin/build [--dict-only] first"
   exit 1
 end
 

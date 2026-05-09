@@ -18,7 +18,7 @@ GOOD="$REPO/generated/last-known-good"
 
 if [ ! -L "$CURRENT" ]; then
   echo "ERROR: $CURRENT is not a symlink (or does not exist)." >&2
-  echo "       Run ./bin/build first; generated/current must be a symlink to <TIMESTAMP>/runtime." >&2
+  echo "       Run bin/build first; generated/current must be a symlink to <TIMESTAMP>/runtime." >&2
   exit 1
 fi
 

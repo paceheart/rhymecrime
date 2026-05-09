@@ -29,7 +29,7 @@
 set -euo pipefail
 
 if [[ -z "${RHYMECRIME_BUILD_DIR:-}" ]]; then
-  echo "error: RHYMECRIME_BUILD_DIR is not set. Run ./bin/build or export it to a timestamp directory under generated/." >&2
+  echo "error: RHYMECRIME_BUILD_DIR is not set. Run bin/build or export it to a timestamp directory under generated/." >&2
   exit 1
 fi
 

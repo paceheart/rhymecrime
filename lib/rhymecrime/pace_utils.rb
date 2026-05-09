@@ -22,8 +22,8 @@ end
 # trace site that needs the same gate. Empty -> all tracing is a no-op.
 #
 # Examples:
-#   TRACE_WORDS=kitchening ./bin/dict-build
-#   TRACE_WORDS="kitchening,puffin" ./bin/dict-build
+#   TRACE_WORDS=kitchening bin/build --dict-only
+#   TRACE_WORDS="kitchening,puffin" bin/build --dict-only
 #   TRACE_WORDS="foo bar;baz" bundle exec rspec
 TRACE_WORDS = ENV["TRACE_WORDS"].to_s.split(/[\s,;]+/).map(&:strip).reject(&:empty?).uniq.freeze unless defined?(TRACE_WORDS)
 

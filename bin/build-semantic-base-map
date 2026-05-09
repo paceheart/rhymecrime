@@ -3,11 +3,11 @@
 
 # build-semantic-base-map — rebuild word_semantic_base_map.{msgpack,txt}
 # from the existing word_dict.txt + word_lemma_map.msgpack without
-# re-running the full bin/dict-build pipeline.
+# re-running `bin/build`.
 #
 # Useful for iterating on SEMANTIC_BASE_SUFFIX_RULES / the gates in
 # lib/rhymecrime/build/dict.rb: edit, run this, diff the .txt against the
-# previous version, repeat. The full bin/dict-build regenerates the same
+# previous version, repeat. The full `bin/build` regenerates the same
 # artefacts as a side-effect of rebuild_rhymecrime_dictionaries — this is a
 # fast path that skips ConceptNet / Numberbatch / SUBTLEX I/O.
 #
@@ -46,7 +46,7 @@ unless no_cosine_guard
     nb_vectors = load_numberbatch_vectors_for_semantic_base_guard(wd.keys)
     puts "Loaded #{nb_vectors.size} Numberbatch vectors (filtered to word_dict) for cosine guard from #{nb_path}"
   else
-    puts "WARN: #{nb_path} not present — skipping NB cosine guard. Run bin/dict-build once first."
+    puts "WARN: #{nb_path} not present — skipping NB cosine guard. Run bin/build [--dict-only] once first."
   end
 end
 

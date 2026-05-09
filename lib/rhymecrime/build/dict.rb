@@ -2,7 +2,7 @@
 # encoding: utf-8
 #
 # RhymeCrime dictionary compiler entrypoint: CMU + Wiktionary/Kaikki + frequency phases → <repo>/generated/*.
-# Prefer: ./bin/dict-build from the repo root (loads this file with cwd = this directory, then runs rebuild).
+# Prefer `bin/build [--dict-only]` — load dict.rb via the same inline Ruby shim in bin/build.
 #
 # Implementation is split under this directory by concern:
 #
@@ -19,13 +19,13 @@
 #          Rare headword omission for export runs in rebuild_rhymecrime_dictionaries after hyphen-map keys snapshot.)
 #     this file     — rebuild_rhymecrime_dictionaries only
 #
-# Corpus inputs live under <repo>/corpora/. Invoked by bin/dict-build.
+# Corpus inputs live under <repo>/corpora/. Invoked by embedded compile inside bin/build.
 # ConceptNet vocab cache under generated/ is created by setup.sh after downloading assertions, or
 # automatically at the start of this rebuild if it is missing or older than assertions.gz.
 #
 # ConceptNet edges (generated/conceptnet_edges.msgpack) and Numberbatch vectors
 # (generated/numberbatch_vectors.msgpack) are corpus mirrors created by
-# bin/setup-corpora. dict-build only verifies they are present/current, then
+# bin/setup-corpora. bin/build only verifies they are present/current, then
 # readers stream + filter at load (signals.rb / rarity_classifier.rb).
 
 require "rwordnet"
@@ -832,7 +832,7 @@ def rebuild_rhymecrime_dictionaries()
   clear_wordnet_lemma_cache!
   ensure_conceptnet_vocab_cache_for_build!
   # Cheap generated-root cache checks. USF remains cheap enough to self-heal in
-  # dict-build; the large corpus mirrors are produced by bin/setup-corpora and
+  # dict.rb compile path; the large corpus mirrors are produced by bin/setup-corpora and
   # treated as build inputs here.
   ensure_usf_associations_cache!
   require_numberbatch_vectors_cache!
@@ -847,7 +847,7 @@ def rebuild_rhymecrime_dictionaries()
   wn_seed_pos_map_for_pronunciation_map_gaps!(pos_map, pronunciation_map)
   apply_lexical_pos_layer_b!(pos_map, wordfreq_hash)
   # POS map is required by query.rb (part_of_speech_tags) for bin/dump-sense-glosses
-  # and relatedness/signals in Build Stage 3/4, before final dict-build runs.
+  # and relatedness/signals in Build Stage 3/4, before the final dictionary compile (`bin/build` stage 4) runs.
   save_part_of_speech_map(pos_map)
   unless bootstrap_mode?
     save_wiktionary_glosses!(kaikki_glosses_map)

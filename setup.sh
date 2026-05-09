@@ -6,9 +6,9 @@
 #   bundle install              # Ruby gems pinned in Gemfile / Gemfile.lock
 #   ./bin/setup-corpora         # external corpora + stable corpus mirrors
 #   ./bin/setup-python-venv     # .venv/ for MPNet encoding (sentence-transformers + msgpack)
-#   ./bin/build                 # full pipeline: dict-build (rarity dump),
+#   ./bin/build                 # full pipeline (see bin/build header): rarity dump,
 #                               # rarity classifier, MPNet sense vectors,
-#                               # relatedness classifier, dict-build rescore
+#                               # relatedness classifier, dictionary final compile
 #
 # Run from the repo root after a fresh clone:
 #

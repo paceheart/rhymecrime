@@ -110,7 +110,7 @@ def conceptnet_edges
   path = CONCEPTNET_EDGES_PATH
   unless File.exist?(path)
     raise "ConceptNet edges not found at #{path}. Run ./bin/setup-corpora " \
-          "to create the setup-time corpus mirror before ./bin/build."
+          "to create the setup-time corpus mirror before bin/build."
   end
   # Streaming load filtered by current word_dict membership: the cache file is
   # a full corpus mirror (every kept-relation edge has a record), so a word
@@ -363,7 +363,7 @@ def numberbatch
   path = NUMBERBATCH_VEC_PATH
   unless File.exist?(path)
     raise "Numberbatch vectors not found at #{path}. Run ./bin/setup-corpora " \
-          "to create the setup-time corpus mirror before ./bin/build."
+          "to create the setup-time corpus mirror before bin/build."
   end
   # Streaming load filtered by current word_dict membership: the cache file
   # is a full corpus mirror (any lowercase numberbatch token has a row), so

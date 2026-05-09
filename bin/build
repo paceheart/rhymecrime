@@ -3,14 +3,17 @@
 # Full RhymeCrime build pipeline. One timestamped directory under generated/
 # holds bootstrap/, runtime/, training intermediates, and BUILD_INFO.json.
 #
-#   ./bin/build
+#   bin/build [--dict-only]
 #
-# Build Stages:
+# Dictionary compile is run inline by this script (Ruby load dict.rb).
+# Env: RHYMECRIME_BUILD_DIR, RHYMECRIME_BUILD_MODE, optional RHYMECRIME_RARITY_DUMP_SIGNALS.
+#
+# Build stages (full pipeline):
 #   0. augment-related-from-feedback — optionally fold web feedback into curated/related.csv
-#   1/4. dict-build (bootstrap) — rarity signal dump → bootstrap/
+#   1/4. dictionary compile (bootstrap) — rarity signal dump → bootstrap/
 #   2/4. train-rarity-classifier → bootstrap/rarity_classifier.json
-#   3/4. retrain-relatedness --rebuild-vectors — sense_glosses + MPNet + relatedness classifier
-#   4/4. dict-build (final) — rarity classifier rescore, runtime artifacts → runtime/
+#   3/4. retrain-relatedness --rebuild-vectors — sense glosses + MPNet + relatedness classifier
+#   4/4. dictionary compile (final) — rarity classifier rescore, runtime artifacts → runtime/
 #
 # Prereqs (one-time): ./setup.sh
 #   (creates generated/conceptnet_edges.msgpack and
@@ -21,15 +24,57 @@ set -euo pipefail
 REPO="$(cd "$(dirname "$0")/.." && pwd -P)"
 cd "$REPO"
 
-echo "==> Augment: bin/augment-related-from-feedback"
-./bin/augment-related-from-feedback
+DICT_ONLY=0
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --dict-only) DICT_ONLY=1 ;;
+    -h|--help)
+      cat <<'USAGE'
+bin/build                  Full pipeline: augment, corpus preflight, dictionary bootstrap+final,
+                           train rarity + prefix classifiers, retrain relatedness, prefix gate,
+                           link generated/current.
 
-echo "==> Preflight: checking setup-produced inputs"
-ruby -I"$REPO/lib" <<'RUBY'
+bin/build [--dict-only]    Solo lexicon rebuild (omit the flag for full pipeline): reuses
+                           classifiers from generated/current when a new timestamp dir is
+                           created; skips Python/MPNet preflight. Sets RHYMECRIME_BUILD_MODE to
+                           final when unset; updates generated/current after a final compile.
+
+Environment (both modes): RHYMECRIME_BUILD_DIR, RHYMECRIME_BUILD_MODE, RHYMECRIME_BUILD_IO_VALIDATE
+USAGE
+      exit 0
+      ;;
+    *)
+      echo "bin/build: unknown option: $1" >&2
+      echo "usage: bin/build [--dict-only]" >&2
+      exit 1
+      ;;
+  esac
+  shift
+done
+
+run_dict_inner() {
+  BIN_BUILD_DICT_REPO_ROOT="$REPO" ruby -I"$REPO/lib" -e '
+repo = ENV.fetch("BIN_BUILD_DICT_REPO_ROOT")
+dict_dir = File.join(repo, "lib", "rhymecrime", "build")
+$LOAD_PATH.unshift File.join(repo, "lib")
+Dir.chdir(dict_dir) do
+  load File.join(dict_dir, "dict.rb")
+  rebuild_rhymecrime_dictionaries
+end
+'
+}
+
+# Corpus + cache preflight shared by full build and --dict-only.
+# Set BIN_BUILD_PREFLIGHT_PHASE=dict_only to skip Python/MPNet deps (solo lexicon rebuild).
+run_corpus_preflight() {
+  (
+    export BIN_BUILD_PREFLIGHT_PHASE="${BIN_BUILD_PREFLIGHT_PHASE:-full}"
+    ruby -I"$REPO/lib" <<'RUBY'
 require "rhymecrime/build/build_utils"
 
 repo = File.expand_path(Dir.pwd)
 errors = []
+dict_only_preflight = ENV["BIN_BUILD_PREFLIGHT_PHASE"] == "dict_only"
 
 require_nonempty = lambda do |label, path, fix|
   unless File.file?(path) && File.size?(path)
@@ -89,7 +134,7 @@ require_any[
   "Numberbatch text corpus",
   [
     File.join(repo, "corpora", "numberbatch", "numberbatch-en-19.08.txt"),
-    File.join(repo, "corpora", "numberbatch-en-19.08.txt"),
+    File.join(repo, "numberbatch-en-19.08.txt"),
     File.join(repo, "numberbatch-en-19.08.txt"),
   ],
   "run #{setup} or set NUMBERBATCH_TXT to an existing .txt before running bin/build",
@@ -111,11 +156,13 @@ rescue StandardError => e
   errors << e.message
 end
 
-venv_python = File.join(repo, ".venv", "bin", "python")
-if !File.executable?(venv_python)
-  errors << "Python venv missing:\n  #{venv_python}\n  fix: run ./bin/setup-python-venv"
-elsif !system(venv_python, "-c", "import sentence_transformers, msgpack", out: File::NULL, err: File::NULL)
-  errors << "Python venv dependencies are not importable from:\n  #{venv_python}\n  fix: run ./bin/setup-python-venv"
+unless dict_only_preflight
+  venv_python = File.join(repo, ".venv", "bin", "python")
+  if !File.executable?(venv_python)
+    errors << "Python venv missing:\n  #{venv_python}\n  fix: run ./bin/setup-python-venv"
+  elsif !system(venv_python, "-c", "import sentence_transformers, msgpack", out: File::NULL, err: File::NULL)
+    errors << "Python venv dependencies are not importable from:\n  #{venv_python}\n  fix: run ./bin/setup-python-venv"
+  end
 end
 
 if errors.any?
@@ -129,17 +176,12 @@ end
 
 puts "preflight ok"
 RUBY
+  )
+}
 
-TIMESTAMP="$(date +%Y%m%dT%H%M%S)"
-BUILD_DIR="$REPO/generated/$TIMESTAMP"
-mkdir -p "$BUILD_DIR/bootstrap" "$BUILD_DIR/runtime"
-
-export RHYMECRIME_BUILD_DIR="$BUILD_DIR"
-# Enforce bootstrap/final read+write invariants (raises on violation). Default on; set RHYMECRIME_BUILD_IO_VALIDATE=0 to disable.
-export RHYMECRIME_BUILD_IO_VALIDATE="${RHYMECRIME_BUILD_IO_VALIDATE:-1}"
-
-echo "==> Preflight: checking BuildIo write validation"
-ruby -I"$REPO/lib" <<'RUBY'
+run_buildio_preflight() {
+  echo "==> Preflight: checking BuildIo write validation"
+  ruby -I"$REPO/lib" <<'RUBY'
 require "rhymecrime/build/build_io"
 
 errors = []
@@ -156,11 +198,7 @@ begin
     ENV["RHYMECRIME_BUILD_MODE"] = old_mode
   end
 rescue StandardError => e
-  errors << "BuildIo write validation failed for RHYMECRIME_BUILD_DIR:\n" \
-            "  #{ENV.fetch("RHYMECRIME_BUILD_DIR", "(unset)")}\n" \
-            "  #{e.class}: #{e.message}\n" \
-            "  fix: ensure bin/build is using a canonical generated/<timestamp> path " \
-            "and BuildIo accepts writes under both bootstrap/ and runtime/"
+  errors << "BuildIo write validation failed for RHYMECRIME_BUILD_DIR:\n  #{ENV.fetch("RHYMECRIME_BUILD_DIR", "(unset)")}\n  #{e.class}: #{e.message}\n  fix: ensure bin/build is using a canonical generated/<timestamp> path and BuildIo accepts writes under both bootstrap/ and runtime/"
 end
 
 if errors.any?
@@ -173,6 +211,74 @@ end
 
 puts "BuildIo write preflight ok"
 RUBY
+}
+
+copy_runtime_classifiers_from_current() {
+  local cur="$REPO/generated/current"
+  [ -L "$cur" ] || return 0
+  local bd="$1"
+  local old_rt
+  old_rt="$(ruby -e 'puts File.expand_path(File.readlink(ARGV[0]), File.dirname(ARGV[0]))' "$cur")"
+  local f
+  for f in rarity_classifier.json relatedness_classifier.json prefix_classifier.json; do
+    if [ -f "$old_rt/$f" ]; then
+      cp "$old_rt/$f" "$bd/runtime/$f"
+    fi
+  done
+}
+
+if [ "$DICT_ONLY" -eq 1 ]; then
+  BIN_BUILD_PREFLIGHT_PHASE=dict_only run_corpus_preflight
+
+  if [ -z "${RHYMECRIME_BUILD_DIR:-}" ]; then
+    TIMESTAMP="$(date +%Y%m%dT%H%M%S)"
+    BUILD_DIR="$REPO/generated/$TIMESTAMP"
+    mkdir -p "$BUILD_DIR/bootstrap" "$BUILD_DIR/runtime"
+    copy_runtime_classifiers_from_current "$BUILD_DIR"
+    export RHYMECRIME_BUILD_DIR="$BUILD_DIR"
+  else
+    export RHYMECRIME_BUILD_DIR="$(ruby -e 'puts File.expand_path(ARGV[0], ARGV[1])' "${RHYMECRIME_BUILD_DIR}" "$REPO")"
+    BUILD_DIR="$RHYMECRIME_BUILD_DIR"
+    mkdir -p "$BUILD_DIR/bootstrap" "$BUILD_DIR/runtime"
+  fi
+
+  export RHYMECRIME_BUILD_IO_VALIDATE="${RHYMECRIME_BUILD_IO_VALIDATE:-1}"
+  run_buildio_preflight
+
+  _bm="${RHYMECRIME_BUILD_MODE:-}"
+  _bm="$(printf '%s' "$_bm" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+  export RHYMECRIME_BUILD_MODE="${_bm:-final}"
+
+  echo "==> Dictionary compile (--dict-only; RHYMECRIME_BUILD_MODE=$RHYMECRIME_BUILD_MODE)"
+  run_dict_inner
+
+  RUNTIME="$BUILD_DIR/runtime"
+  CURRENT_LINK="$REPO/generated/current"
+
+  if [ "$RHYMECRIME_BUILD_MODE" = "final" ]; then
+    ln -sfn "$RUNTIME" "$CURRENT_LINK"
+    echo "==> Linked $CURRENT_LINK -> $RUNTIME"
+  elif [ "$RHYMECRIME_BUILD_MODE" = "bootstrap" ]; then
+    echo "bootstrap mode: left generated/current unchanged (full bin/build rotates current after final stage)."
+  else
+    echo "bin/build [--dict-only]: not updating generated/current (need RHYMECRIME_BUILD_MODE=final; got $RHYMECRIME_BUILD_MODE)." >&2
+  fi
+  exit 0
+fi
+
+echo "==> Augment: bin/augment-related-from-feedback"
+./bin/augment-related-from-feedback
+
+BIN_BUILD_PREFLIGHT_PHASE=full run_corpus_preflight
+
+TIMESTAMP="$(date +%Y%m%dT%H%M%S)"
+BUILD_DIR="$REPO/generated/$TIMESTAMP"
+mkdir -p "$BUILD_DIR/bootstrap" "$BUILD_DIR/runtime"
+
+export RHYMECRIME_BUILD_DIR="$BUILD_DIR"
+export RHYMECRIME_BUILD_IO_VALIDATE="${RHYMECRIME_BUILD_IO_VALIDATE:-1}"
+
+run_buildio_preflight
 
 echo "==> Writing $BUILD_DIR/BUILD_INFO.json"
 ruby -rjson -rtime -rsocket -e '
@@ -207,50 +313,34 @@ export RHYMECRIME_BUILD_IO_LOG="$IO_AUDIT_LOG"
 
 DUMP_PATH="$BUILD_DIR/bootstrap/rarity_signals_dump.jsonl"
 
-echo "==> Build Stage 1/4 [3m]: dict-build (bootstrap: rarity signals dump)"
+echo "==> Build Stage 1/4 [3m]: dictionary bootstrap (rarity signals dump)"
 echo "                    dump path: $DUMP_PATH"
-# ConceptNet + Numberbatch corpus mirrors live at generated/<name>.msgpack and
-# are setup-produced inputs. dict-build verifies them but intentionally does
-# not rebuild them.
 RHYMECRIME_BUILD_MODE=bootstrap \
 RHYMECRIME_RARITY_DUMP_SIGNALS="$DUMP_PATH" \
-  ./bin/dict-build
-
-# generated/current is intentionally NOT updated here — it stays pointing at
-# the previously-completed build (or is missing on a fresh checkout) until the
-# whole pipeline succeeds. Stages 2-4 read in-flight runtime artifacts directly
-# via RHYMECRIME_BUILD_DIR (see generated_dict_path in paths.rb).
+  run_dict_inner
 
 echo "==> Build Stage 2/5 [7m]: training rarity classifier -> bootstrap/rarity_classifier.json"
 ruby ./bin/train-rarity-classifier
-# Symlink (not copy) the rarity classifier into runtime/ so there's only one
-# on-disk copy per build. Stage 4 dict-build reads runtime/rarity_classifier.json
-# and resolves transparently through the symlink.
 ln -sfn "../bootstrap/rarity_classifier.json" "$BUILD_DIR/runtime/rarity_classifier.json"
 
 echo "==> Build Stage 2b/5: training prefix classifier -> bootstrap/prefix_classifier.json"
 ruby ./bin/train-prefix-classifier
-# Symlink into runtime/ so precompute-prefix-gate (stage 5) and any future
-# per-build consumers can find it via generated_dict_path.
 ln -sfn "../bootstrap/prefix_classifier.json" "$BUILD_DIR/runtime/prefix_classifier.json"
 
 echo "==> Build Stage 3/5: retrain-relatedness (sense glosses + MPNet vectors + classifier)"
 ./bin/retrain-relatedness --rebuild-vectors
-# Same symlink-don't-copy treatment for the relatedness classifier (written by
-# train-relatedness-classifier at $BUILD_DIR/relatedness_classifier.json).
 ln -sfn "../relatedness_classifier.json" "$BUILD_DIR/runtime/relatedness_classifier.json"
 
-echo "==> Build Stage 4/5: dict-build (final: rarity-classifier rescore)"
+echo "==> Build Stage 4/5: dictionary final (rarity-classifier rescore)"
 RHYMECRIME_BUILD_MODE=final \
 RHYMECRIME_BUILD_DIR="$BUILD_DIR" \
-  ./bin/dict-build
+  run_dict_inner
 
 echo "==> Build Stage 5/5: precompute prefix allow-list -> word_dict column (msgpack + txt)"
 RHYMECRIME_BUILD_DIR="$BUILD_DIR" \
   ./bin/precompute-prefix-gate
 
 echo "==> Linking generated/current -> $BUILD_DIR/runtime"
-# Rotate: save the existing current target as prev before overwriting it.
 if [ -L "$REPO/generated/current" ]; then
   _PREV_TARGET="$(readlink "$REPO/generated/current")"
   ln -sfn "$_PREV_TARGET" "$REPO/generated/prev"

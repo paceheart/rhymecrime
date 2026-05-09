@@ -60,7 +60,7 @@ def word_dict()
   return $word_dict unless $word_dict.nil?
   # Prefer the msgpack: it's the runtime-canonical artifact (smaller, faster
   # to parse, and the only one shipped to Lambda). Fall back to the .txt
-  # loader for fresh checkouts where bin/dict-build hasn't run yet — keeps
+  # loader for fresh checkouts where build hasn't run yet — keeps
   # bundle exec rspec working before the first build.
   $word_dict = load_word_dict_msgpack || load_word_dict
 end
@@ -78,7 +78,7 @@ end
 
 def load_rime_dict_as_hash()
   load_string_hash(generated_dict_path_under_dict_dir(RIME_DICT_FILENAME)) or
-    raise "First run ./bin/dict-build to populate generated/"
+    raise "First run bin/build [--dict-only] to populate generated/"
 end
 
 def pronunciations(word)
@@ -126,7 +126,7 @@ def part_of_speech_tags(word)
   if $part_of_speech_by_word.nil?
     path = generated_dict_path_under_dict_dir(PART_OF_SPEECH_FILENAME)
     unless File.exist?(path)
-      raise "missing #{path}: run ./bin/dict-build to generate it. " \
+      raise "missing #{path}: run bin/build [--dict-only] to generate it. " \
             "If this fired inside Lambda, the file is excluded by design — see " \
             "bin/stage-lambda and the doc comment above part_of_speech_tags."
     end

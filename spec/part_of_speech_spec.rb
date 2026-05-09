@@ -1,5 +1,5 @@
 # Desired lexical POS per lemma (see dict build / part_of_speech.json policy).
-# Requires generated/part_of_speech.json from: ./bin/dict-build
+# Requires generated/part_of_speech.json from bin/build [--dict-only]
 #
 # Table: each row is either
 #   - an Array: word, then POS abbreviations (noun, verb, adj, adv — keys match Kaikki), or

@@ -243,7 +243,7 @@ end
 #
 # Always raises — the dict has been audited clean (see
 # bin/audit-syllable-vowel-invariant), so any new violation is a bug we
-# want to surface loudly during bin/dict-build. If you ever need to demote
+# want to surface loudly during build. If you ever need to demote
 # to a warn while debugging, edit the raise below for the duration of the
 # dig — there's no env-var knob anymore.
 def check_syllable_vowel_invariant!(pron, word, source)

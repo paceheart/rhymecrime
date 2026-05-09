@@ -10,7 +10,7 @@
 # Words with no :allow triple keep the legacy [freq, prons, lemma] shape.
 # Absent column => rule-based prefix filter only (same as before precompute).
 #
-# Run after bin/train-prefix-classifier and the final dict-build (stage 4).
+# Run after bin/train-prefix-classifier and the final dictionary compile (`bin/build` stage 4).
 # The RHYMECRIME_BUILD_DIR env var must be set (done automatically by bin/build).
 #
 # Usage:

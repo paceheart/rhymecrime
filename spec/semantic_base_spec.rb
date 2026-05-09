@@ -1,4 +1,4 @@
-# Semantic-base column expectations from generated/word_dict (see bin/dict-build).
+# Semantic-base column expectations from generated/word_dict (see bin/build [--dict-only]).
 # Rows: surface, semantic_base, optional skip (1 to skip unless RHYMECRIME_RUN_SKIPPED), optional notes.
 #
 # Layout note: every row in curated/semantic_base.csv is exercised inline at

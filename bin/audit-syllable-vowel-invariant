@@ -52,7 +52,7 @@ ARGV.each_with_index do |arg, i|
 end
 
 unless File.exist?(WORD_DICT_PATH)
-  abort "missing #{WORD_DICT_PATH} (run bin/dict-build first)"
+  abort "missing #{WORD_DICT_PATH} (run bin/build [--dict-only] first)"
 end
 
 violations = []

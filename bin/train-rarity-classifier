@@ -6,7 +6,7 @@
 #
 # Input:
 #   generated/rarity_signals_dump.jsonl    built by running
-#       RHYMECRIME_RARITY_DUMP_SIGNALS=<path> ./bin/dict-build
+#       Then bin/build (stage 1) or: RHYMECRIME_BUILD_DIR=<stamp> RHYMECRIME_BUILD_MODE=bootstrap RHYMECRIME_RARITY_DUMP_SIGNALS=<path> bin/build --dict-only
 #     once with the classifier disabled. One record per headword:
 #       {"word": "foo", "features": [...one float per feature, leading 1.0 bias...], "freq": 10}
 #     Feature ordering and count must match LEARNED_RARITY_FEATURE_NAMES in
@@ -140,7 +140,7 @@ build_dir = ENV.fetch("RHYMECRIME_BUILD_DIR")
 dump_path = File.join(build_dir, "bootstrap", "rarity_signals_dump.jsonl")
 unless File.exist?(dump_path)
   warn "missing signals dump: #{dump_path}"
-  warn "produce it with ./bin/build (or set RHYMECRIME_BUILD_DIR and run dict-build bootstrap with RHYMECRIME_RARITY_DUMP_SIGNALS)"
+  warn "produce it with bin/build (bootstrap stage), or manually: RHYMECRIME_BUILD_DIR=<stamp> RHYMECRIME_BUILD_MODE=bootstrap RHYMECRIME_RARITY_DUMP_SIGNALS=<path> bin/build --dict-only"
   exit 1
 end
 

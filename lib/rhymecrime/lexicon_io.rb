@@ -67,7 +67,7 @@ end
 def load_word_dict()
   pathname = generated_dict_path_under_dict_dir(WORD_DICT_FILENAME)
   unless File.exist?(pathname)
-    raise "First run ./bin/dict-build to populate #{GENERATED_DIR}/"
+    raise "First run bin/build [--dict-only] to populate #{GENERATED_DIR}/"
   end
   word_dict = Hash.new
   IoUtils.foreach(pathname, encoding: "UTF-8", hint: "load_word_dict") do |line|
@@ -127,10 +127,10 @@ end
 # is the word itself", matching the nil-collapse rule in save_word_dict and
 # lexicon_word_entry.
 #
-# Outside dict-build, missing on disk is fatal (raises) — that used to silently
-# degrade relatedness/rarity to a self-lemma-everywhere regime. Inside dict-build
-# (RHYMECRIME_BUILD_MODE set by bin/dict-build / bin/build), the file legitimately
-# may not exist yet — load_cmudict → semantically_promiscuous? → lemma() runs
+# Outside dict.rb compile phases, missing on disk is fatal (raises) — that used to silently
+# degrade relatedness/rarity to a self-lemma-everywhere regime. During embedded
+# compile in bin/build (RHYMECRIME_BUILD_MODE set; dict.rb without query.rb on load path),
+# the file legitimately may not exist yet — load_cmudict → semantically_promiscuous? → lemma() runs
 # before save_word_lemma_map! at the bottom of rebuild_rhymecrime_dictionaries.
 # In that window, an empty hash gives identity lemma() which is fine for
 # dict-build's own bootstrap consumers.
@@ -145,7 +145,7 @@ def load_word_to_lemma!
     return
   end
   if ENV["RHYMECRIME_BUILD_MODE"].to_s.empty?
-    raise "word→lemma map not found at #{path}. Run ./bin/dict-build (or ./bin/build) " \
+    raise "word→lemma map not found at #{path}. Run bin/build [--dict-only] " \
           "to generate it."
   end
   $word_to_lemma = {}
@@ -176,7 +176,7 @@ def load_word_to_semantic_base!
     return
   end
   if ENV["RHYMECRIME_BUILD_MODE"].to_s.empty?
-    raise "semantic-base map not found at #{path}. Run ./bin/dict-build (or ./bin/build) " \
+    raise "semantic-base map not found at #{path}. Run bin/build [--dict-only] " \
           "to generate it."
   end
   $word_to_semantic_base = {}
@@ -207,7 +207,7 @@ end
 # than the per-word fallback loop.
 #
 # Raises if the cache is missing — setup-corpora creates the corpus mirror
-# before bin/build / dict-build consume it.
+# before bin/build consumes it.
 def load_numberbatch_vectors_for_semantic_base_guard(keep_words = nil)
   path = generated_root_path(NUMBERBATCH_VECTORS_FILENAME)
   unless File.exist?(path)
