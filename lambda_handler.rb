@@ -23,10 +23,12 @@ ENV["TABLE_NAME"] ||= "rhymecrime"
 
 require "base64"
 require "json"
+require "rhymecrime/paths"
 require "rhymecrime/frontend/frontend"
+require "rhymecrime/about_page"
 require "rhymecrime/store/feedback_store"
 
-# Static asset table. assets/header.html references these as root-relative
+# Static asset table. assets/private/header.html references these as root-relative
 # URLs (/crimestyle.css, etc.), so the Lambda has to answer for them too.
 # The CloudFront distribution in template.yaml uses CachingDisabled, so
 # static assets ride the Cache-Control: public, max-age=300 header set by
@@ -38,12 +40,14 @@ require "rhymecrime/store/feedback_store"
 # loudly instead of silent-404'ing on every page render.
 #
 # When you add a new <link rel=stylesheet> or <script src> in
-# assets/header.html (or anywhere else served from /), mirror an entry
+# assets/private/header.html (or anywhere else served from /), mirror an entry
 # below or the deployed page silently degrades to default browser styling.
 ASSET_ROUTES = {
+  "/robots.txt"          => ["text/plain; charset=utf-8",               File.read(File.join(__dir__, "assets", "robots.txt"),          encoding: "UTF-8")],
   "/crimestyle.css"      => ["text/css; charset=utf-8",               File.read(File.join(__dir__, "assets", "crimestyle.css"),      encoding: "UTF-8")],
   "/crimestyle_wide.css" => ["text/css; charset=utf-8",               File.read(File.join(__dir__, "assets", "crimestyle_wide.css"), encoding: "UTF-8")],
   "/feedback.js"         => ["application/javascript; charset=utf-8", File.read(File.join(__dir__, "assets", "feedback.js"),         encoding: "UTF-8")],
+  "/about.html"          => ["text/html; charset=utf-8",              Rhymecrime::AboutPage.html],
 }.freeze
 
 def asset_response(path)
@@ -61,6 +65,28 @@ def asset_response(path)
   }
 end
 
+def rhymecrime_lambda_html_response(word1, word2, debug)
+  begin
+    body = build_rhymecrime_page(word1, word2, debug: debug)
+    # API Gateway JSON-serializes the invocation response; malformed UTF-8
+    # in the HTML (e.g. rare bytes in DynamoDB attributes) would otherwise
+    # fail serialization and surface as a generic 500.
+    body = body.to_s.encode(Encoding::UTF_8, Encoding::UTF_8, invalid: :replace, undef: :replace)
+    { statusCode: 200, headers: { "Content-Type" => "text/html; charset=utf-8" }, body: body }
+  rescue StandardError => e
+    raise unless debug
+
+    warn "[rhymecrime] GET lookup render failed (debug=1): #{e.class}: #{e.message}\n#{e.backtrace&.join("\n")}"
+    detail = "#{e.class}: #{e.message}\n#{e.backtrace&.join("\n")}"
+    detail = detail.encode(Encoding::UTF_8, Encoding::UTF_8, invalid: :replace, undef: :replace)
+    {
+      statusCode: 500,
+      headers: { "Content-Type" => "text/plain; charset=utf-8" },
+      body: detail,
+    }
+  end
+end
+
 def handler(event:, context:)
   # Lexicon and rime cohort are loaded once from word_dict.msgpack /
   # rime_dict.msgpack at process boot and stay resident across warm-
@@ -73,8 +99,6 @@ def handler(event:, context:)
   path = event["rawPath"] || event.dig("requestContext", "http", "path") || "/"
   method = event.dig("requestContext", "http", "method") || "GET"
   params = event["queryStringParameters"] || {}
-  word1 = params["word1"].to_s
-  word2 = params["word2"].to_s
   # ?debug=1 is the catch-all dev affordance: (1) pruning visualizer +
   # set_related score coloring via build_rhymecrime_page(debug: true), and
   # (2) if the page render raises, return text/plain 500 with exception +
@@ -82,49 +106,35 @@ def handler(event:, context:)
   # opaque {"message":"Internal Server Error"}. Mirrored in app.rb for local.
   debug = params["debug"].to_s == "1"
 
-  case [method, path]
-  when ["GET", "/"]
-    begin
-      body = build_rhymecrime_page(word1, word2, debug: debug)
-      # API Gateway JSON-serializes the invocation response; malformed UTF-8
-      # in the HTML (e.g. rare bytes in DynamoDB attributes) would otherwise
-      # fail serialization and surface as a generic 500.
-      body = body.to_s.encode(Encoding::UTF_8, Encoding::UTF_8, invalid: :replace, undef: :replace)
-      { statusCode: 200, headers: { "Content-Type" => "text/html; charset=utf-8" }, body: body }
-    rescue StandardError => e
-      raise unless debug
+  if method == "GET"
+    return rhymecrime_lambda_html_response("", "", debug) if path == "/"
 
-      warn "[rhymecrime] GET / render failed (debug=1): #{e.class}: #{e.message}\n#{e.backtrace&.join("\n")}"
-      detail = "#{e.class}: #{e.message}\n#{e.backtrace&.join("\n")}"
-      detail = detail.encode(Encoding::UTF_8, Encoding::UTF_8, invalid: :replace, undef: :replace)
-      {
-        statusCode: 500,
-        headers: { "Content-Type" => "text/plain; charset=utf-8" },
-        body: detail,
-      }
+    if path == Rhymecrime::HttpPaths::HEALTH
+      begin
+        Rhymecrime::DynamoRuntime.instance.client.describe_table(table_name: Rhymecrime::DataSource.table_name)
+        return { statusCode: 200, headers: { "Content-Type" => "text/plain" }, body: "ok" }
+      rescue StandardError => e
+        return { statusCode: 503, headers: { "Content-Type" => "text/plain" }, body: e.message.to_s }
+      end
     end
-  when ["GET", "/health"]
-    begin
-      Rhymecrime::DynamoRuntime.instance.client.describe_table(table_name: Rhymecrime::DataSource.table_name)
-      { statusCode: 200, headers: { "Content-Type" => "text/plain" }, body: "ok" }
-    rescue StandardError => e
-      { statusCode: 503, headers: { "Content-Type" => "text/plain" }, body: e.message.to_s }
-    end
-  when ["POST", "/feedback"]
-    handle_feedback(event)
-  else
-    if method == "GET" && ASSET_ROUTES.key?(path)
-      asset_response(path)
-    else
-      { statusCode: 404, headers: { "Content-Type" => "text/plain" }, body: "not found" }
-    end
+
+    parsed_lookup = Rhymecrime::LookupPaths.parse_path(path)
+    return rhymecrime_lambda_html_response(parsed_lookup[0], parsed_lookup[1], debug) if parsed_lookup
+
+    return asset_response(path) if ASSET_ROUTES.key?(path)
+
+    return { statusCode: 404, headers: { "Content-Type" => "text/plain" }, body: "not found" }
   end
+
+  return handle_feedback(event) if method == "POST" && path == Rhymecrime::HttpPaths::FEEDBACK
+
+  { statusCode: 404, headers: { "Content-Type" => "text/plain" }, body: "not found" }
 end
 
 # HTTP API v2 hands the request body in event["body"], possibly base64-
 # encoded (binary content types and a few size-driven cases). We always
 # decode the flag rather than trusting Content-Type, since API Gateway is
-# the authority on whether it base64'd before invoking us.
+# the authority on whether it base64'd before invoking Lambda.
 def handle_feedback(event)
   raw = event["body"].to_s
   raw = Base64.decode64(raw) if event["isBase64Encoded"]

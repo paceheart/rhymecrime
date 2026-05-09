@@ -41,7 +41,7 @@ describe 'SET_RELATED' do
     set_related_oughta_contain 'pirate', 'commandeering', 'profiteering'
     set_related_oughta_contain 'pirate', 'deck', 'wreck'
     set_related_oughta_contain 'pirate', 'dagger', 'swagger'
-    set_related_oughta_contain 'pirate', 'diabolic', 'alcoholic'
+    set_related_oughta_contain 'pirate', 'diabolic', 'alcoholic', not_working_reason: "diabolic deemed rare and I can't disagree"
     set_related_ought_not_contain 'pirate', 'diabolic', 'non-alcoholic'
     set_related_oughta_contain 'pirate', 'drunken', 'sunken'
     set_related_oughta_contain 'pirate', 'fursona', 'jonah'

@@ -138,6 +138,7 @@ describe 'RHYMES' do
   end
   
   context "you can't just add a prefix and call it a rhyme" do
+    ought_not_rhyme 'appropriate', 'misappropriate'
     ought_not_rhyme 'racial', 'biracial'
     ought_not_rhyme 'erotic', 'homoerotic'
     ought_not_rhyme 'sexual', 'homosexual'
@@ -1140,6 +1141,7 @@ describe 'RHYMES' do
   end
 
   context 'bad pronunciations' do
+    ought_not_rhyme 'marveled', 'held'
     ought_not_rhyme 'lances', 'nancies'
     ought_not_rhyme 'us', 'yes'
     ought_not_rhyme 'shat', 'nut'

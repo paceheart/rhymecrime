@@ -12,6 +12,7 @@ DEBUG_MODE = false
 
 require "cgi"
 require "set"
+require_relative "../lookup_paths"
 require_relative "query"
 
 # Per-request debug pruning lives in Thread.current[RHYMECRIME_REQUEST_DEBUG] (see query.rb).
@@ -53,8 +54,13 @@ def parse_query_words(word1, word2)
   normalize_query_word_pair(word1, word2, strip: true)
 end
 
+def rhymecrime_lookup_href(word1, word2)
+  w1, w2 = parse_query_words(word1, word2)
+  Rhymecrime::LookupPaths.lookup_path_from_normalized_words(w1, w2)
+end
+
 def print_html_header(word1, word2, app_name = "RhymeCrime", handler = "/")
-  head = IO.read(File.join(REPO_ROOT, "assets", "header.html"), encoding: "UTF-8")
+  head = IO.read(File.join(ASSETS_PRIVATE_DIR, "header.html"), encoding: "UTF-8")
 
   clarifier = ""
   if word1 != ""
@@ -83,6 +89,12 @@ def print_html_header(word1, word2, app_name = "RhymeCrime", handler = "/")
   end
 
   head = head.gsub(%(action="/"), %(action="#{handler}"))
+  if app_name == "RhymeCrime"
+    head = head.sub(
+      '<form id="rhymecrime-search" ',
+      '<form id="rhymecrime-search" data-rc-path-search="1" ',
+    )
+  end
 
   cgi_puts head
   debug "DEBUG MODE"
@@ -261,7 +273,9 @@ def print_output(output, input_word1, output_type, tuple_focal_word = nil, feedb
 end
 
 def print_html_footer
-  cgi_puts IO.read(File.join(REPO_ROOT, "assets", "footer.html"), encoding: "UTF-8")
+  cgi_puts IO.read(File.join(ASSETS_PRIVATE_DIR, "footer_close.html"), encoding: "UTF-8")
+  cgi_puts IO.read(File.join(ASSETS_PRIVATE_DIR, "credits.html"), encoding: "UTF-8")
+  cgi_puts "</body></html>\n"
 end
 
 # Full HTML page (Sinatra / Lambda). Uses a thread-local buffer so cgi_print / emit_* accumulate
@@ -299,6 +313,7 @@ def build_rhymecrime_page(word1, word2, debug: false)
   Thread.current[:html_output_buffer] = buf
   w1, w2 = parse_query_words(word1, word2)
   print_html_header(w1, w2)
+  cgi_puts "<hr>" if w1 != ""
   compute_and_print_html_middle(w1, w2)
   print_html_footer
   buf
@@ -376,6 +391,7 @@ def build_similar_page(word1, word2)
   Thread.current[:html_output_buffer] = buf
   w1, w2 = parse_query_words(word1, word2)
   print_html_header(w1, w2, "Thematic Similarity", "/similar")
+  cgi_puts "<hr>"
   compute_and_print_html_similar_middle(w1, w2)
   print_html_footer
   buf

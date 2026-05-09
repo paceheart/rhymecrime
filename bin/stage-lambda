@@ -29,7 +29,7 @@
 #   lambda_handler.rb               request entry point
 #   Gemfile, Gemfile.lock           bundler input (RubyBundlerBuilder consumes)
 #   lib/                            lib/rhymecrime except build/ + dev/ (see rm below)
-#   assets/                         CSS / JS / images served from /
+#   assets/                         public CSS / JS / robots + assets/private composition HTML
 #   curated/                        hand-curated data files (rarity.csv, etc.)
 #   generated/spelling_variants_auto.txt    \ small files query.rb /
 #   generated/hyphen_variant_map.json       | paths.rb open with

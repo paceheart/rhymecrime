@@ -209,8 +209,8 @@ def print_word(word, focal_word=false, cue: nil)
   # for the standards-track equivalent, the change is span+class right here.
   cgi_print "<nobr>" if emit_thumbs
   if(link_word)
-    # @todo urlencode
-    cgi_print "<a href='/?word1=#{word}'>"
+    href = CGI.escape_html(rhymecrime_lookup_href(word, ""))
+    cgi_print "<a href='#{href}'>"
   end
   # Color the word by its computed relatedness_score to focal_word when one
   # is supplied (e.g. set_related tuples, where every slot should be related
@@ -242,7 +242,7 @@ def print_word(word, focal_word=false, cue: nil)
   # when the word is semantically promiscuous (thematically_related? treats those
   # pairs as trivially related, so a vote would be meaningless).
   # The data attributes carry the *underscore* surface so what we POST to
-  # /feedback matches the shape of curated/related.csv's cue/related
+  # Rhymecrime::HttpPaths::FEEDBACK payload matches the shape of curated/related.csv's cue/related
   # columns; feedback.js wires the click → fetch and uses sessionStorage
   # to persist the user's vote across navigations within the tab.
   emit_relatedness_feedback_widget(word, cue) if emit_thumbs
@@ -281,10 +281,10 @@ end
 # Everything else (forearm rectangle, palm curves, finger fold, lower wrist
 # sweep) is byte-for-byte Material's, so both icons still read as the
 # Material thumbs — just with more prominent thumbs.
-THUMB_UP_SVG = '<svg viewBox="0 -2 24 26" width="1em" height="1em" aria-hidden="true" focusable="false">' \
+THUMB_UP_SVG = '<svg viewBox="0 -2 24 26" width="1em" height="1em" role="img" aria-label="up" focusable="false">' \
   '<path fill="currentColor" d="M2 21h4V9H2v12zM23 10c0-1.1-.9-2-2-2h-6.31l.95-6.67.03-.32c0-.41-.17-.79-.44-1.06L14.17 -1.1 7.59 7.59C7.22 7.95 7 8.45 7 9v10c0 1.1.9 2 2 2h9c.83 0 1.54-.5 1.84-1.22l3.02-7.05c.09-.23.14-.47.14-.73v-2z"/>' \
   '</svg>'
-THUMB_DOWN_SVG = '<svg viewBox="0 0 24 26" width="1em" height="1em" aria-hidden="true" focusable="false">' \
+THUMB_DOWN_SVG = '<svg viewBox="0 0 24 26" width="1em" height="1em" role="img" aria-label="down" focusable="false">' \
   '<path fill="currentColor" d="M15 3H6c-.83 0-1.54.5-1.84 1.22l-3.02 7.05C1.05 11.5 1 11.74 1 12v2c0 1.1.9 2 2 2h6.31l-.95 6.67-.03.32c0 .41.17.79.44 1.06L9.83 25.1l6.59-8.69C16.78 16.05 17 15.55 17 15V5c0-1.1-.9-2-2-2zm4 0v12h4V3h-4z"/>' \
   '</svg>'
 

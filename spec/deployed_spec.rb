@@ -4,7 +4,7 @@
 # curl-based verification checklist from the cloudfront-http-redirect
 # change: confirms the CloudFront distribution is fronting both the apex
 # and the www subdomain, 301-redirects port 80 to 443, and still proxies
-# POST /feedback through to the Lambda.
+# POST Rhymecrime::HttpPaths::FEEDBACK through to the Lambda.
 #
 # Hostname is hardcoded — every rspec run hits production, so a deployment
 # regression shows up as a red spec the next time anyone runs the suite. If
@@ -13,6 +13,7 @@
 # this hardcode is here to prevent.
 
 require_relative "spec_helper"
+require "rhymecrime/paths"
 require "net/http"
 require "uri"
 require "json"
@@ -26,7 +27,7 @@ RSpec.describe "deployed stack" do
   #
   # All non-POST checks use GET (not HEAD) because the API Gateway HTTP API
   # routes in template.yaml are method-specific (Method: GET — *not*
-  # ANY), so a HEAD request against /health doesn't match any route and
+  # ANY), so a HEAD request against /_health doesn't match any route and
   # returns 404 instead of the 200 the lambda would emit. Real users / Route
   # 53 health checks / monitoring probes overwhelmingly use GET, so testing
   # GET is the right contract; HEAD support would be a separate decision
@@ -48,20 +49,20 @@ RSpec.describe "deployed stack" do
   end
 
   describe "HTTPS (status quo)" do
-    # /health surfaces the lambda's body in the failure message because a
+    # /_health surfaces the lambda's body in the failure message because a
     # 503 here typically means the lambda *did* run but its
     # DescribeTable probe against DynamoDB raised — and the exception
     # message is the only signal we get about *why* (missing IAM permission,
     # wrong table name, throttling, etc.). Without echoing response.body
     # the spec just says "expected 200, got 503" and you're stuck doing a
     # second curl to figure out what happened.
-    it "GET https://<apex>/health returns 200" do
-      response = http_get("https://#{HOST}/health")
+    it "GET https://<apex>#{Rhymecrime::HttpPaths::HEALTH} returns 200" do
+      response = http_get("https://#{HOST}#{Rhymecrime::HttpPaths::HEALTH}")
       expect(response.code).to eq("200"), "expected 200, got #{response.code} (body: #{response.body.inspect})"
     end
 
-    it "GET https://www.<apex>/health returns 200" do
-      response = http_get("https://www.#{HOST}/health")
+    it "GET https://www.<apex>#{Rhymecrime::HttpPaths::HEALTH} returns 200" do
+      response = http_get("https://www.#{HOST}#{Rhymecrime::HttpPaths::HEALTH}")
       expect(response.code).to eq("200"), "expected 200, got #{response.code} (body: #{response.body.inspect})"
     end
   end
@@ -79,7 +80,7 @@ RSpec.describe "deployed stack" do
       expect(response["location"]).to eq("https://www.#{HOST}/")
     end
 
-    it "GET http://<apex>/?word1=crime preserves the query string in the redirect Location" do
+    it "GET http://<apex>/?word1=crime preserves path+query for CloudFront HTTPS redirect" do
       response = http_get("http://#{HOST}/?word1=crime")
       expect(response.code).to eq("301")
       # CloudFront redirect-to-https preserves both path and query — we rely
@@ -87,23 +88,29 @@ RSpec.describe "deployed stack" do
       expect(response["location"]).to eq("https://#{HOST}/?word1=crime")
     end
 
-    it "following the redirect for http://<apex>/?word1=crime returns 200" do
+    it "GET https://<apex>/?word1=crime ignores lookup params (splash only)" do
       response = http_get("https://#{HOST}/?word1=crime")
+      expect(response.code).to eq("200")
+      expect(response.body).to include("RhymeCrime")
+    end
+
+    it "GET https://<apex>/crime returns 200 (main lookup page)" do
+      response = http_get("https://#{HOST}/crime")
       expect(response.code).to eq("200")
       # Sanity: it's the rhymecrime page, not some interstitial.
       expect(response.body).to include("rhymecrime")
     end
   end
 
-  describe "POST /feedback through CloudFront" do
+  describe "POST feedback API (Rhymecrime::HttpPaths::FEEDBACK) through CloudFront" do
     # Uses a deliberately invalid verdict so Rhymecrime::FeedbackStore.record!
     # rejects the row before any DDB write happens — confirms CloudFront is
     # forwarding POST bodies + headers correctly without leaving a smoke-test
     # row in the feedback table on every CI run. A 400 here means the request
     # made it all the way through CloudFront -> API Gateway -> Lambda and the
     # handler ran; a 5xx would mean the path is broken somewhere in the chain.
-    it "POST https://<apex>/feedback with an invalid payload returns 400 (proves the path, no DDB write)" do
-      response = http_post_json("https://#{HOST}/feedback", { cue: "", related: "", verdict: "__invalid__" })
+    it "POST https://<apex>#{Rhymecrime::HttpPaths::FEEDBACK} with an invalid payload returns 400 (proves the path, no DDB write)" do
+      response = http_post_json("https://#{HOST}#{Rhymecrime::HttpPaths::FEEDBACK}", { cue: "", related: "", verdict: "__invalid__" })
       expect(response.code).to eq("400")
     end
   end

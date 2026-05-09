@@ -1,9 +1,9 @@
 // feedback.js — wires the per-(cue, related) thumbs-up / thumbs-down widget
-// to POST /feedback, and persists the user's vote in sessionStorage so the
+// to POST /_feedback, and persists the user's vote in sessionStorage so the
 // UI keeps its "voted" state across same-tab navigations.
 //
 // Server expectations (matches lib/rhymecrime/feedback_store.rb):
-//   POST /feedback
+//   POST /_feedback
 //   Content-Type: application/json
 //   { "cue": <string>, "related": <string>, "verdict": "up"|"down",
 //     "session": <opaque per-tab id> }
@@ -87,7 +87,7 @@
   }
 
   function postFeedback(cue, related, verdict) {
-    return fetch("/feedback", {
+    return fetch("/_feedback", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({

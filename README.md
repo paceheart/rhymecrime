@@ -22,7 +22,7 @@ Data and build artifacts are split so **sources** stay under `corpora/` and **re
 |----------|------|
 | **`lib/`** | On the load path. `lib/rhymecrime.rb` defines `Rhymecrime::ROOT`; application code lives under **`lib/rhymecrime/`** (`related.rb`, helpers, the **`frontend/`**, **`store/`**, and **`build/`** subtrees). Use `require "rhymecrime/..."` from `bin/` and specs (after unshifting `lib/`). |
 | **`bin/`** | **Executables**: `rhyme.rb`, `similar.rb`, `debug.rb`, `anneal.rb`, `build` (`bin/build [--dict-only]`). Each prepends `lib/` to `$LOAD_PATH` as needed. |
-| **`assets/`** | Static fragments and CSS for the CGI UI (`header.html`, `footer.html`, `*.css`). Loaded via `File.join(REPO_ROOT, "assets", ...)`. |
+| **`assets/`** | Browser-served files at repo **`assets/`** (`*.css`, `feedback.js`, `robots.txt`). HTML fragments Ruby stitches into pages (**`header.html`**, **`footer_close.html`**, **`credits.html`**, **`about_body.html`**) live in **`assets/private/`** — see `ASSETS_PRIVATE_DIR` in `lib/rhymecrime/paths.rb`; `/private/*` is 404 locally (`config.ru`), and Lambda exposes only keys in **`ASSET_ROUTES`**. Full `/about.html` is glued in **`Rhymecrime::AboutPage`** (About body + same footer credits strip). |
 | **`corpora/`** | Upstream or hand-maintained **inputs** (versioned when license/size allow). |
 | **`corpora/cmudict/`** | CMU Pronouncing Dictionary (tweaked 0.7c text + license/readme). |
 | **`corpora/wordnet/3.1/`** | WordNet 3.1 lexicon (same internal layout as the standard distribution: inner `dict/`, `LICENSE`, …). |
@@ -56,7 +56,7 @@ Set `OUTPUT_FORMAT` in `lib/rhymecrime/frontend/frontend.rb` to `"text"` for pla
 bin/run-local              # http://localhost:9292/
 ```
 
-`config.ru` boots `app.rb`, a small Sinatra app exposing `/`, `/similar`, `/feedback`, and `/health`.
+`config.ru` boots `app.rb`, a small Sinatra app exposing `/`, `/similar`, plus `Rhymecrime::HttpPaths::FEEDBACK` and `Rhymecrime::HttpPaths::HEALTH` from `lib/rhymecrime/paths.rb` (same strings must appear under `ApiFeedback` / `ApiHealth` in `template.yaml`). RhymeCrime lookups use slash URLs `/<cue>` and `/<cue>/<related>` only (`Rhymecrime::LookupPaths` in `lib/rhymecrime/lookup_paths.rb`); the search form relies on JavaScript to navigate there.
 
 **Bundler groups:** Puma, Sinatra, and sqlite3 are not in the default Gemfile group (they are omitted from the Lambda bundle). Use a normal `bundle install` on your dev machine before `bin/run-local`, before using file-backed SQLite (`RHYMECRIME_DATA_SOURCE` unset), or before `bundle exec rspec`. A install with `--without 'development:test'` reproduces the production gem set only; it will not satisfy those workflows until you run `bundle install` again without that setting. Details are in the `Gemfile` header comment.
 
@@ -254,4 +254,4 @@ at build/runtime)                                                 ││
 
 RhymeCrime was created by <a href="http://paceheart.com">Pace Heart</a> and extended/maintained by all the contributors to this repository.
 
-See assets/footer.html for the list of libraries and data sources used by RhymeCrime.
+See `assets/private/credits.html` for the list of libraries and data sources used by RhymeCrime.

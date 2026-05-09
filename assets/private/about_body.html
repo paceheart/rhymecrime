@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>About RhymeCrime</title>
+<link rel="stylesheet" href="/crimestyle.css">
+</head>
+<body class="about">
+<svg xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false" style="position:absolute;width:0;height:0;overflow:hidden">
+<defs>
+<symbol id="about-thumb-up" viewBox="0 -2 24 26"><path fill="currentColor" d="M2 21h4V9H2v12zM23 10c0-1.1-.9-2-2-2h-6.31l.95-6.67.03-.32c0-.41-.17-.79-.44-1.06L14.17 -1.1 7.59 7.59C7.22 7.95 7 8.45 7 9v10c0 1.1.9 2 2 2h9c.83 0 1.54-.5 1.84-1.22l3.02-7.05c.09-.23.14-.47.14-.73v-2z"/></symbol>
+<symbol id="about-thumb-down" viewBox="0 0 24 26"><path fill="currentColor" d="M15 3H6c-.83 0-1.54.5-1.84 1.22l-3.02 7.05C1.05 11.5 1 11.74 1 12v2c0 1.1.9 2 2 2h6.31l-.95 6.67-.03.32c0 .41.17.79.44 1.06L9.83 25.1l6.59-8.69C16.78 16.05 17 15.55 17 15V5c0-1.1-.9-2-2-2zm4 0v12h4V3h-4z"/></symbol>
+</defs>
+</svg>
+<h3>About RhymeCrime</h3>  
+RhymeCrime finds semantically related rhymes. For example, if you input <a href="https://rhymecrome.com/pirate">pirate</a>, RhymeCrime will give you rhymes like
+<pre>
+  anchored / tankard
+  crypto / tiptoe
+  handsome / ransom
+  marauder / otter / rotter / water
+</pre>
+Every word in the list is thematically related to <i>pirate</i> in some way, and each word rhymes with the other words on the same line.
+<h3>Thumbs-Up <span class="feedback-thumbs feedback-thumbs-doc"><button type="button" class="thumb thumb-up" aria-label="Thumbs up"><svg viewBox="0 -2 24 26" width="1em" height="1em" aria-hidden="true" focusable="false"><use href="#about-thumb-up"/></svg></button></span> / Thumbs-Down <span class="feedback-thumbs feedback-thumbs-doc"><button type="button" class="thumb thumb-down" aria-label="Thumbs down"><svg viewBox="0 0 24 26" width="1em" height="1em" aria-hidden="true" focusable="false"><use href="#about-thumb-down"/></svg></button></span></h3>
+Figuring out which words are related is more of an art than a science. You can help RhymeCrime improve by pressing thumbs-up <span class="feedback-thumbs feedback-thumbs-doc"><button type="button" class="thumb thumb-up" aria-label="Thumbs up"><svg viewBox="0 -2 24 26" width="1em" height="1em" aria-hidden="true" focusable="false"><use href="#about-thumb-up"/></svg></button></span> on words that are definitely related to the word you entered, and pressing thumbs-down <span class="feedback-thumbs feedback-thumbs-doc"><button type="button" class="thumb thumb-down" aria-label="Thumbs down"><svg viewBox="0 0 24 26" width="1em" height="1em" aria-hidden="true" focusable="false"><use href="#about-thumb-down"/></svg></button></span> on words that are definitely <i>not</i> related to the word you entered.
+<h3>What's that second optional box for?</h3>
+I'm glad you asked! The second box finds rhyming <b>pairs</b> where the first rhyme is related to the first word you entered, and the second rhyme is related to the second word you entered. For example, if you enter "food" in the first box and "evil" in the second box, RhymeCrime will give you rhymes like
+<pre>
+  cuisine / mean
+  dinner / sinner
+  rice / vice
+  wheat / deceit
+</pre>
+Each pair of words rhymes, each word on the left side is thematically related to <i>food</i> in some way, and each word on the right side is thematically related to <i>evil.</i>
+<h3>How does it work?</h3>
+Like my relationship status, <a href="https://github.com/paceheart/rhymecrime#how-it-works">it's complicated</a>.
+
+<dialog id="about-doc-thumb-modal" class="about-doc-thumb-modal" aria-labelledby="about-doc-thumb-modal-message">
+<p id="about-doc-thumb-modal-message" class="about-doc-thumb-modal-message"></p>
+<form method="dialog" class="about-doc-thumb-modal-actions">
+<button type="submit" class="about-doc-thumb-modal-ok">OK</button>
+</form>
+</dialog>
+<script>
+(function () {
+  "use strict";
+  var UP = [
+    "You did it!",
+    "Woohoo!",
+    "Yeah!",
+    "BOOYAH",
+    "Heck yeah!",
+    "Who's got at least one thumb and isn't dumb?",
+    "Superb!",
+    "Thumbs up!",
+    "Fidget with the digit!",
+    "You've got this!",
+    "You're a natural!",
+    "You're a pro!",
+    "It's as if you were born to thumb",
+    "Upvote!"
+  ];
+  var DOWN = [
+    "Get that outta here!",
+    "It's as if you were born to thumb",
+    "Boo!",
+    "EXTERMINATE!",
+    "You must construct additional pylons.",
+    "Downvote!",
+    "Task failed successfully",
+    "Doom noted with extreme prejudice.",
+    "Negatory!",
+    "No good!",
+    "So bad!",
+    "Indubitably lackluster!",
+    "Other M was the worst Metroid."
+  ];
+  function pick(arr) {
+    return arr[Math.floor(Math.random() * arr.length)];
+  }
+  var dlg = document.getElementById("about-doc-thumb-modal");
+  var msg = document.getElementById("about-doc-thumb-modal-message");
+  if (!dlg || !msg || typeof dlg.showModal !== "function") return;
+
+  dlg.addEventListener("click", function (e) {
+    var rect = dlg.getBoundingClientRect();
+    var inDialog =
+      rect.top <= e.clientY &&
+      e.clientY <= rect.top + rect.height &&
+      rect.left <= e.clientX &&
+      e.clientX <= rect.left + rect.width;
+    if (!inDialog) dlg.close();
+  });
+
+  document.querySelectorAll(".feedback-thumbs-doc .thumb-up").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      msg.textContent = pick(UP);
+      dlg.showModal();
+    });
+  });
+  document.querySelectorAll(".feedback-thumbs-doc .thumb-down").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      msg.textContent = pick(DOWN);
+      dlg.showModal();
+    });
+  });
+})();
+</script>
+</body>
+</html>

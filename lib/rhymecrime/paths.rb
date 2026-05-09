@@ -136,9 +136,20 @@ end
 # GENERATED_DIR — <repo>/generated/current/ (symlink → latest build's runtime/); all
 # runtime lexicon artifacts dict-build emits and query.rb loads live here.
 REPO_ROOT = File.expand_path("../..", __dir__)
+ASSETS_PRIVATE_DIR = File.join(REPO_ROOT, "assets", "private").freeze
 WORDNET_3_1_PATH = File.join(REPO_ROOT, "corpora", "wordnet", "3.1").freeze
 GENERATED_ROOT_DIR = File.join(REPO_ROOT, "generated")
 GENERATED_DIR = File.join(GENERATED_ROOT_DIR, "current")
+
+module Rhymecrime
+  # Root-relative URLs wired in template.yaml (ApiHealth / ApiFeedback), app.rb,
+  # lambda_handler.rb, and assets/feedback.js. SAM cannot import Ruby — keep
+  # template.yaml in sync; spec/http_paths_contract_spec.rb asserts parity.
+  module HttpPaths
+    HEALTH = "/_health".freeze
+    FEEDBACK = "/_feedback".freeze
+  end
+end
 
 # Hand-curated inputs (lemma/spelling/related/rarity CSVs, common/rare/forbid/stop word
 # lists, authoritative pronunciation overrides, neol supplement). All ten files live

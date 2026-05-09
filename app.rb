@@ -10,27 +10,45 @@ $LOAD_PATH.unshift File.expand_path("lib", __dir__)
 
 require "json"
 require "sinatra"
+require "rhymecrime/paths"
 require "rhymecrime/frontend/frontend"
 require "rhymecrime/store/feedback_store"
+require "rhymecrime/about_page"
 
 set :public_folder, File.expand_path("assets", __dir__)
 set :bind, "0.0.0.0"
+
+helpers do
+  def rhymecrime_http_page(word1, word2)
+    debug = params["debug"] == "1"
+    begin
+      build_rhymecrime_page(word1, word2, debug: debug)
+    rescue StandardError => e
+      raise unless debug
+
+      content_type "text/plain"
+      status 500
+      "#{e.class}: #{e.message}\n#{e.backtrace&.join("\n")}"
+    end
+  end
+end
 
 before do
   headers "Content-Type" => "text/html; charset=utf-8"
 end
 
-get "/" do
-  debug = params["debug"] == "1"
-  begin
-    build_rhymecrime_page(params["word1"], params["word2"], debug: debug)
-  rescue StandardError => e
-    raise unless debug
+get "/robots.txt" do
+  content_type "text/plain; charset=utf-8"
+  File.read(File.join(settings.public_folder, "robots.txt"), encoding: "UTF-8")
+end
 
-    content_type "text/plain"
-    status 500
-    "#{e.class}: #{e.message}\n#{e.backtrace&.join("\n")}"
-  end
+get "/" do
+  # Lookups are path-only (/<cue>, /<cue>/<related>); word1/word2 query params are ignored.
+  rhymecrime_http_page("", "")
+end
+
+get "/about.html" do
+  Rhymecrime::AboutPage.html
 end
 
 get "/similar" do
@@ -40,7 +58,7 @@ get "/similar" do
   build_similar_page(params["word1"], params["word2"])
 end
 
-post "/feedback" do
+post Rhymecrime::HttpPaths::FEEDBACK do
   content_type :json
   body = request.body.read
   payload = body.empty? ? {} : (JSON.parse(body) rescue {})
@@ -56,7 +74,7 @@ post "/feedback" do
   ok ? "" : { error: "invalid feedback payload" }.to_json
 end
 
-get "/health" do
+get Rhymecrime::HttpPaths::HEALTH do
   content_type "text/plain"
   if Rhymecrime::DataSource.dynamodb?
     begin
@@ -71,4 +89,18 @@ get "/health" do
 
     "ok file"
   end
+end
+
+get %r{/([^/.]+)/([^/.]+)} do
+  parsed = Rhymecrime::LookupPaths.parse_path(request.path_info)
+  pass if parsed.nil?
+
+  rhymecrime_http_page(*parsed)
+end
+
+get %r{/([^/.]+)} do
+  parsed = Rhymecrime::LookupPaths.parse_path(request.path_info)
+  pass if parsed.nil?
+
+  rhymecrime_http_page(*parsed)
 end

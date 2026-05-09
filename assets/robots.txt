@@ -1,0 +1,14 @@
+# Only "/" and "/about.html" are meant for search indexing. Lookup URLs
+# (/<cue>, /<cue>/<related>, …) have unbounded cardinality — disallow crawling
+# them. Allow static assets (/crimestyle*.css, /feedback.js) so crawlers can
+# render allowed pages; "/robots.txt" refreshes this policy (mirror additions in
+# lambda_handler.rb ASSET_ROUTES).
+# https://developers.google.com/search/docs/crawling-indexing/robots/robots_txt
+User-agent: *
+Disallow: /
+Allow: /$
+Allow: /about.html
+Allow: /robots.txt
+Allow: /crimestyle.css
+Allow: /crimestyle_wide.css
+Allow: /feedback.js

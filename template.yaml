@@ -157,12 +157,14 @@ Resources:
         ApiHealth:
           Type: HttpApi
           Properties:
-            Path: /health
+            # Must match Rhymecrime::HttpPaths::HEALTH (lib/rhymecrime/paths.rb).
+            Path: /_health
             Method: GET
         ApiFeedback:
           Type: HttpApi
           Properties:
-            Path: /feedback
+            # Must match Rhymecrime::HttpPaths::FEEDBACK (lib/rhymecrime/paths.rb).
+            Path: /_feedback
             Method: POST
         # Catch-all for static assets (/crimestyle.css, /feedback.js, etc.)
         # served by ASSET_ROUTES in lambda_handler.rb. Without it, API
@@ -173,7 +175,7 @@ Resources:
         # Method: GET keeps the proxy GET-only so random POST /anything
         # still 404s at the API Gateway layer instead of paying for a Lambda
         # cold-start. New POST/PUT endpoints get their own explicit route
-        # above; longest-match wins, so POST /feedback above is unaffected.
+        # above; longest-match wins, so POST /_feedback above is unaffected.
         ApiAssetProxy:
           Type: HttpApi
           Properties:
@@ -242,16 +244,16 @@ Resources:
   # domain mapping (apex hostname can only be claimed by one AWS service at
   # a time; CloudFront wins). No OriginPath here on purpose: HTTP API's
   # auto-generated $default stage routes are exposed at the *root* of the
-  # execute-api URL (/health resolves to https://${id}.execute-api.../health,
-  # NOT .../​$default/health) — adding OriginPath: /$default makes
+  # execute-api URL (/_health resolves to https://${id}.execute-api.../_health,
+  # NOT .../​$default/_health) — adding OriginPath: /$default makes
   # CloudFront prepend /$default to every request and API Gateway 404s
   # the lot. If we ever switch to an explicit AWS::Serverless::HttpApi
   # with a non-default named StageName (e.g. prod), set
   # OriginPath: /prod at that point.
   #
   # The two managed-policy GUIDs are stable AWS values:
-  # CachingDisabled — every GET / is parameterized by ?w=..., /health
-  # is meant to be live, and /feedback is POST. Zero CloudFront caching by
+  # CachingDisabled — every GET / is parameterized by ?w=..., /_health
+  # is meant to be live, and /_feedback is POST. Zero CloudFront caching by
   # default; the lambda already sets Cache-Control: public, max-age=300 on
   # /crimestyle.css etc., so the *browser* still caches static assets
   # without CloudFront layering anything on top. To actually cache rhyme
