@@ -57,12 +57,8 @@ Each of them is almost entirely redundant with the other two, but each tuple has
 our / scour
 our / scour / tower
 
-review experiments/apostrophe-review.txt
-
 try again to strengthen lemma to semantic_base and see if it helps
 we should be able to go even hammer with semantic_base, e.g. sembase(conflagration) -> fire
-
-When we have explicit curated data with a clear relatedness decision, override the classifier's guess of the related words
 
 do something about ever / however / howsoever / whatever / whatsoever / whenever / wherever / whichever / whichsoever / whoever / whomever / whomsoever / whosoever
 
@@ -83,3 +79,5 @@ cheese -> cassavas / guavas, why not cassava / guava?
 
 try asking some LLMs for 100 or 1000 words related to 'pirate'. try various prompts.
 try RoBERTa
+
+make a test that ensures everything in awesome.csv works

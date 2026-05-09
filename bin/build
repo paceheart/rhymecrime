@@ -2,6 +2,8 @@
 #
 # Full RhymeCrime build pipeline. One timestamped directory under generated/
 # holds bootstrap/, runtime/, training intermediates, and BUILD_INFO.json.
+# When generated/current is linked to a runtime/, word_dict.txt and rime_dict.txt
+# are also copied to published/ for git-friendly snapshots.
 #
 #   bin/build [--dict-only]
 #
@@ -32,13 +34,14 @@ while [ $# -gt 0 ]; do
       cat <<'USAGE'
 bin/build                  Full pipeline: augment, corpus preflight, dictionary bootstrap+final,
                            train rarity + prefix classifiers, retrain relatedness, prefix gate,
-                           link generated/current.
+                           link generated/current and refresh published/*.txt lexicon mirrors.
 
 bin/build [--dict-only]    Solo lexicon rebuild (omit the flag for full pipeline): reuses
                            classifiers + model_sense_vectors.msgpack from the prior
                            generated/current stamp when a new timestamp dir is created;
                            skips Python/MPNet preflight. Sets RHYMECRIME_BUILD_MODE to
-                           final when unset; updates generated/current after a final compile.
+                           final when unset; updates generated/current (and published/*.txt)
+                           after a final compile.
 
 Environment (both modes): RHYMECRIME_BUILD_DIR, RHYMECRIME_BUILD_MODE, RHYMECRIME_BUILD_IO_VALIDATE
 USAGE
@@ -260,8 +263,13 @@ copy_runtime_classifiers_from_current() {
 
 # Point generated/current at RUNTIME (see replace_path_with_symlink — expected layout
 # is …/generated/current/word_dict.txt, not …/generated/current/runtime/…).
+# Also mirror human-readable lexicon dumps into published/ (tracked in git).
 install_generated_current_symlink() {
-  replace_path_with_symlink "$1" "$REPO/generated/current"
+  local runtime="$1"
+  replace_path_with_symlink "$runtime" "$REPO/generated/current"
+  mkdir -p "$REPO/published"
+  cp "$runtime/word_dict.txt" "$runtime/rime_dict.txt" "$REPO/published/"
+  echo "    copied word_dict.txt + rime_dict.txt -> published/"
 }
 
 if [ "$DICT_ONLY" -eq 1 ]; then
