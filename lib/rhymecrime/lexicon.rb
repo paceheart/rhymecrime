@@ -14,14 +14,12 @@ def lexicon_word_entry(word)
 end
 
 def debug_info(word)
-  result = ""
+  result = +"lexicon=#{rarity_string(word)}"
   i = 0
   prons = pronunciations(word)
   for pron in prons
     i = i + 1
-    unless i == 1
-      result << " "
-    end
+    result << " "
 
     # pronunciation
     if prons.length == 1
@@ -99,6 +97,15 @@ def frequency(word)
   else
     return 0
   end
+end
+
+# Coarse runtime label for failure messages / debug: matches forbidden? and the
+# frequency <= RARE_FREQ_MAX gate used by rare? in frontend/display.rb.
+def rarity_string(word)
+  return "forbidden" if forbidden?(word)
+  return "rare" if frequency(word) <= RARE_FREQ_MAX
+
+  "common"
 end
 
 # Sorted list of RhymeCrime part-of-speech tags for word (Kaikki pos union, then lexical
