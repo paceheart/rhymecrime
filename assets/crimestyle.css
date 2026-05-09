@@ -14,6 +14,13 @@ body.about a:visited {
     color: #c8d4ff;
 }
 
+/* First heading sits under the same 4px body padding as the main page; drop
+   UA h3 margin-top so it doesn’t stack double-spaced above the prose. */
+body.about > h3:first-of-type {
+    margin-block-start: 0;
+    margin-block-end: 0.415em;
+}
+
 /* Default UA <hr> uses inset borders — on dark gray it vanishes. */
 hr {
     border: none;
