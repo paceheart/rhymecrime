@@ -95,6 +95,22 @@ Tatu Ylonen's Wiktextract project — structured English Wiktionary export.
   - Citation: Ylonen, T. (2022). *Wiktextract: Wiktionary as Machine-Readable
     Structured Data.* Proceedings of LREC 2022.
 
+### UniMorph English (`corpora/unimorph/eng`)
+
+Morphological paradigm triples for English (UniMorph universal feature
+schema).
+
+  - Upstream: <https://unimorph.github.io/> /
+    <https://github.com/unimorph/eng>.
+  - Local layout: place the upstream English tree at `corpora/unimorph/eng`
+    (not fetched by `bin/setup-corpora`; `bin/build` and related tools read it
+    when present — see `lib/rhymecrime/build/unimorph.rb`).
+  - License: **CC-BY-SA 3.0** (upstream `eng` README cites Wikipedia-derived
+    content; confirm in-repo if you vendor a newer snapshot).
+  - Citation: Sylak-Glassman, J., Kirov, C., Yarowsky, D., & Que, R. (2015).
+    *A language-independent feature schema for inflectional morphology.* In
+    *Proceedings of ACL-IJCNLP 2015 (Short Papers)*, 674–680.
+
 ### ConceptNet 5.7 (`corpora/conceptnet/`)
 
 ConceptNet semantic-network assertions.
