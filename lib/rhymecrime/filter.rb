@@ -1,5 +1,43 @@
 # coding: utf-8
 
+require "set"
+
+# Classifier/curated prefix-allow bases for WORD (word_dict optional 4th column), plus
+# every such base declared on morphological descendants reachable by the same single-step
+# peels as recursive_prefix_ancestors (COMMON_PREFIXES + compound-modifier + hyphen).
+# Stacked prefixes (disenchanted → dis- → enchanted → en- → chanted) then inherit
+# enchanted's en+chanted allow for chanted without inventing a disen- pseudo-prefix row.
+def prefix_allow_bases_effective(word, memo = {}, depth = 0)
+  return memo[word] if memo.key?(word)
+
+  bases = Set.new(lexicon_word_prefix_allow_bases(word) || [])
+  if depth >= RECURSIVE_PREFIX_STRIP_MAX_DEPTH
+    return memo[word] = bases
+  end
+
+  COMMON_PREFIXES.each do |label|
+    tail = lexical_root_after_prefix(word, label)
+    next unless tail && !tail.empty?
+    next unless prefix_ancestor_morpheme_like?(tail)
+    next unless word_dict_includes_headword?(tail)
+    prefix_allow_bases_effective(tail, memo, depth + 1).each { |b| bases << b }
+  end
+
+  compound_modifier_remainders(word).each do |rest|
+    next unless prefix_ancestor_morpheme_like?(rest)
+    next unless word_dict_includes_headword?(rest)
+    prefix_allow_bases_effective(rest, memo, depth + 1).each { |b| bases << b }
+  end
+
+  hyphen_compound_remainders(word).each do |rest|
+    next unless prefix_ancestor_morpheme_like?(rest)
+    next unless word_dict_includes_headword?(rest)
+    prefix_allow_bases_effective(rest, memo, depth + 1).each { |b| bases << b }
+  end
+
+  memo[word] = bases
+end
+
 def filter_out_prefix_words(words, focal_word)
   return words - prefix_words(words, focal_word)
 end
@@ -55,6 +93,7 @@ PREFIX_FILTER_SIBLING_ANCHOR_TAILS = %w[meter metre].to_set.freeze
 
 def prefix_words(words, focal_word)
   focal_ancestors = recursive_prefix_ancestors(focal_word)
+  allow_memo = {}
   result = words.select do |w|
     next false if w == focal_word
     candidate_ancestors = recursive_prefix_ancestors(w)
@@ -65,17 +104,19 @@ def prefix_words(words, focal_word)
         focal_word != anc && w != anc
     end
     next false if common.empty?
-    focal_bases = lexicon_word_prefix_allow_bases(focal_word)
-    cand_bases  = lexicon_word_prefix_allow_bases(w)
+    focal_bases = prefix_allow_bases_effective(focal_word, allow_memo)
+    cand_bases  = prefix_allow_bases_effective(w, allow_memo)
     common.any? do |anc|
       # word_dict optional column: classifier-allowed (word, base) prefix pairs.
       # Bypass only when the *other* headword is the bare shared ancestor (anc),
       # not when both sides are prefixed siblings (e.g. bisect/intersect both peel
       # to sect but ought_not_rhyme; sect/intersect oughta_rhyme with inter,sect allow).
-      if focal_bases || cand_bases
+      # Bases inherited along stacked-prefix peels (see prefix_allow_bases_effective)
+      # count the same as entries stored on the outer headword.
+      if !focal_bases.empty? || !cand_bases.empty?
         bypass =
-          (focal_bases&.include?(anc) && w == anc) ||
-          (cand_bases&.include?(anc) && focal_word == anc)
+          (focal_bases.include?(anc) && w == anc) ||
+          (cand_bases.include?(anc) && focal_word == anc)
         next false if bypass
       end
       pron_suffix_aligned_or_equal?(focal_word, anc) &&
