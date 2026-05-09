@@ -2,6 +2,7 @@ cue,related,oughta be related?,notes
 abbreviation,music,related_ish,prereq: music/abbreviation+notation
 abomination,evil,related,prereq: food+evil/starvation+abomination
 addressed,prayers,related,prereq: prayers/addressed+blessed
+prayers,addressed,related_ish,prereq: prayers/addressed+blessed
 apocalypse,evil,related,prereq: food+evil/chips+apocalypse
 apple,algebra,unrelated,
 apple,computer,related_ish,Apple brand cultural
@@ -12814,3 +12815,4 @@ fuck,wowed,related,feedback: 1 up / 0 down
 fuck,yes,related,feedback: 1 up / 0 down
 transgender,conspecific,unrelated,feedback: 0 up / 1 down
 transgender,werning,unrelated,feedback: 0 up / 1 down
+evil,totalitarian,related,pair-related spec
