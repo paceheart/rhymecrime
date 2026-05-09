@@ -22,7 +22,7 @@ if [ ! -L "$CURRENT" ]; then
   exit 1
 fi
 
-RUNTIME_TARGET="$(readlink -- "$CURRENT")"
+RUNTIME_TARGET="$(readlink "$CURRENT")"
 case "$RUNTIME_TARGET" in
   /*) ;;
   *)  RUNTIME_TARGET="$REPO/generated/$RUNTIME_TARGET" ;;
@@ -33,5 +33,7 @@ if [ ! -d "$RUNTIME_TARGET" ]; then
   exit 1
 fi
 
+# BSD/macOS: if GOOD exists as a directory, bare ln -sfn nests the symlink inside it.
+rm -rf "$GOOD"
 ln -sfn "$RUNTIME_TARGET" "$GOOD"
 echo "marked good: $GOOD -> $RUNTIME_TARGET"

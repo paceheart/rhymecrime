@@ -272,7 +272,9 @@ def link_runtime_spelling_hyphen_symlinks!
 
   %w[spelling_variants_auto.txt hyphen_variant_map.json].each do |fn|
     dest = generated_runtime_path(fn)
-    FileUtils.rm_f(dest)
+    # rm_rf: if dest is a directory, ln_sf nests the symlink inside (BSD);
+    # rm_f does not remove non-empty dirs.
+    FileUtils.rm_rf(dest)
     FileUtils.ln_sf(File.join("..", "bootstrap", fn), dest)
   end
 end

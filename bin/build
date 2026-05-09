@@ -35,8 +35,9 @@ bin/build                  Full pipeline: augment, corpus preflight, dictionary 
                            link generated/current.
 
 bin/build [--dict-only]    Solo lexicon rebuild (omit the flag for full pipeline): reuses
-                           classifiers from generated/current when a new timestamp dir is
-                           created; skips Python/MPNet preflight. Sets RHYMECRIME_BUILD_MODE to
+                           classifiers + model_sense_vectors.msgpack from the prior
+                           generated/current stamp when a new timestamp dir is created;
+                           skips Python/MPNet preflight. Sets RHYMECRIME_BUILD_MODE to
                            final when unset; updates generated/current after a final compile.
 
 Environment (both modes): RHYMECRIME_BUILD_DIR, RHYMECRIME_BUILD_MODE, RHYMECRIME_BUILD_IO_VALIDATE
@@ -213,6 +214,16 @@ puts "BuildIo write preflight ok"
 RUBY
 }
 
+# Remove PATH (file, symlink, or directory), then ln -sfn TARGET PATH. On BSD/macOS,
+# if PATH exists as a directory, a bare ln -sfn creates a symlink *inside* PATH instead
+# of replacing it — breaking any code that expects PATH itself to be the symlink.
+replace_path_with_symlink() {
+  local target="$1"
+  local path="$2"
+  rm -rf "$path"
+  ln -sfn "$target" "$path"
+}
+
 copy_runtime_classifiers_from_current() {
   local cur="$REPO/generated/current"
   [ -L "$cur" ] || return 0
@@ -225,6 +236,32 @@ copy_runtime_classifiers_from_current() {
       cp "$old_rt/$f" "$bd/runtime/$f"
     fi
   done
+
+  # MPNet embeddings are written to the stamp root by retrain-relatedness (sibling
+  # of runtime/), not under runtime/. Solo tools (e.g. compute-relatedness) resolve
+  # them via dirname(realpath(current)) + model_sense_vectors.msgpack — so a fresh
+  # --dict-only stamp must carry the file too, or relatedness scoring breaks.
+  local old_stamp vec dest
+  old_stamp="$(dirname "$old_rt")"
+  vec="$old_stamp/model_sense_vectors.msgpack"
+  dest="$bd/model_sense_vectors.msgpack"
+  if [ -f "$vec" ] && [ ! -e "$dest" ]; then
+    if ln "$vec" "$dest" 2>/dev/null; then
+      echo "    hard-linked model_sense_vectors.msgpack from prior stamp ($(basename "$old_stamp"))"
+    else
+      replace_path_with_symlink "$(cd "$(dirname "$vec")" && pwd -P)/$(basename "$vec")" "$dest"
+      echo "    symlinked model_sense_vectors.msgpack from prior stamp ($(basename "$old_stamp"))"
+    fi
+  elif [ ! -f "$vec" ] && [ -f "$bd/runtime/relatedness_classifier.json" ]; then
+    echo "    WARN: prior build has no $vec — compute-relatedness needs MPNet vectors." >&2
+    echo "          Run bin/retrain-relatedness --rebuild-vectors or full bin/build once." >&2
+  fi
+}
+
+# Point generated/current at RUNTIME (see replace_path_with_symlink — expected layout
+# is …/generated/current/word_dict.txt, not …/generated/current/runtime/…).
+install_generated_current_symlink() {
+  replace_path_with_symlink "$1" "$REPO/generated/current"
 }
 
 if [ "$DICT_ONLY" -eq 1 ]; then
@@ -256,7 +293,7 @@ if [ "$DICT_ONLY" -eq 1 ]; then
   CURRENT_LINK="$REPO/generated/current"
 
   if [ "$RHYMECRIME_BUILD_MODE" = "final" ]; then
-    ln -sfn "$RUNTIME" "$CURRENT_LINK"
+    install_generated_current_symlink "$RUNTIME"
     echo "==> Linked $CURRENT_LINK -> $RUNTIME"
   elif [ "$RHYMECRIME_BUILD_MODE" = "bootstrap" ]; then
     echo "bootstrap mode: left generated/current unchanged (full bin/build rotates current after final stage)."
@@ -321,15 +358,15 @@ RHYMECRIME_RARITY_DUMP_SIGNALS="$DUMP_PATH" \
 
 echo "==> Build Stage 2/5 [7m]: training rarity classifier -> bootstrap/rarity_classifier.json"
 ruby ./bin/train-rarity-classifier
-ln -sfn "../bootstrap/rarity_classifier.json" "$BUILD_DIR/runtime/rarity_classifier.json"
+replace_path_with_symlink "../bootstrap/rarity_classifier.json" "$BUILD_DIR/runtime/rarity_classifier.json"
 
 echo "==> Build Stage 2b/5: training prefix classifier -> bootstrap/prefix_classifier.json"
 ruby ./bin/train-prefix-classifier
-ln -sfn "../bootstrap/prefix_classifier.json" "$BUILD_DIR/runtime/prefix_classifier.json"
+replace_path_with_symlink "../bootstrap/prefix_classifier.json" "$BUILD_DIR/runtime/prefix_classifier.json"
 
 echo "==> Build Stage 3/5: retrain-relatedness (sense glosses + MPNet vectors + classifier)"
 ./bin/retrain-relatedness --rebuild-vectors
-ln -sfn "../relatedness_classifier.json" "$BUILD_DIR/runtime/relatedness_classifier.json"
+replace_path_with_symlink "../relatedness_classifier.json" "$BUILD_DIR/runtime/relatedness_classifier.json"
 
 echo "==> Build Stage 4/5: dictionary final (rarity-classifier rescore)"
 RHYMECRIME_BUILD_MODE=final \
@@ -343,10 +380,10 @@ RHYMECRIME_BUILD_DIR="$BUILD_DIR" \
 echo "==> Linking generated/current -> $BUILD_DIR/runtime"
 if [ -L "$REPO/generated/current" ]; then
   _PREV_TARGET="$(readlink "$REPO/generated/current")"
-  ln -sfn "$_PREV_TARGET" "$REPO/generated/prev"
+  replace_path_with_symlink "$_PREV_TARGET" "$REPO/generated/prev"
   echo "    rotated prev -> $_PREV_TARGET"
 fi
-ln -sfn "$BUILD_DIR/runtime" "$REPO/generated/current"
+install_generated_current_symlink "$BUILD_DIR/runtime"
 
 echo
 echo "==> Generated I/O audit (unique paths touched via BuildIo)"
