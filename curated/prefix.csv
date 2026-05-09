@@ -115,6 +115,8 @@ inter,act,filter,new,inter+act (between agents)
 inter,sect,allow,spec,cross != cult
 inter,view,allow,new,French entrevue - interview ≠ inter+view derivationally
 inter,course,allow,new,Latin intercursus - opaque in modern English
+inter,bred,filter,new,
+inter,breed,filter,new,
 in,tern,allow,new,Latin internus - tern (seabird) is unrelated
 re,orient,filter,spec,re+orient
 re,orienting,filter,spec,re+orienting
