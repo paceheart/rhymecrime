@@ -10,6 +10,7 @@ DEBUG_MODE = false
 # Front end for RhymeCrime.
 #
 
+require "cgi"
 require "set"
 require_relative "query"
 
@@ -52,7 +53,7 @@ def parse_query_words(word1, word2)
   normalize_query_word_pair(word1, word2, strip: true)
 end
 
-def print_html_header(word1, word2, title = "RhymeCrime", handler = "/")
+def print_html_header(word1, word2, app_name = "RhymeCrime", handler = "/")
   head = IO.read(File.join(REPO_ROOT, "assets", "header.html"), encoding: "UTF-8")
 
   clarifier = ""
@@ -62,8 +63,25 @@ def print_html_header(word1, word2, title = "RhymeCrime", handler = "/")
       clarifier += " / #{word2}"
     end
   end
-  head = head.gsub("<title>RhymeCrime</title>", "<title>#{title}#{clarifier}</title>")
-  head = head.gsub("RhymeCrime", title)
+
+  document_title =
+    if app_name != "RhymeCrime"
+      "#{app_name}#{clarifier}"
+    elsif word1 == ""
+      "RhymeCrime | be gay · do rhymes"
+    elsif word2 == ""
+      "RhymeCrime | #{word1} | rhyming word sets semantically related to #{word1}"
+    else
+      "RhymeCrime | #{word1} + #{word2} | rhyming word pairs where the first word is semantically related to #{word1} and the second word is semantically related to #{word2}"
+    end
+
+  safe_title = CGI.escape_html(document_title)
+  head = head.sub(%r{<title>.*?</title>}m, "<title>#{safe_title}</title>")
+
+  if app_name != "RhymeCrime"
+    head = head.sub("<h2>RhymeCrime</h2>", "<h2>#{CGI.escape_html(app_name)}</h2>")
+  end
+
   head = head.gsub(%(action="/"), %(action="#{handler}"))
 
   cgi_puts head
