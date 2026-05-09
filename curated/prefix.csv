@@ -147,6 +147,7 @@ re,cord,allow,spec,Latin recordari - cord (rope) is unrelated
 re,corded,allow,spec,Latin recordari - corded is unrelated
 re,sent,allow,new,Old French resentir - resent ≠ re+sent (past of send)
 re,veal,allow,new,Old French reveler - veal (meat) is unrelated
+re,broadcast,filter,new,
 sub,urban,filter,spec,sub+urban
 sub,human,filter,spec,sub+human
 sub,ordinate,filter,spec,sub+ordinate productive morphology
@@ -236,6 +237,7 @@ under,lay,filter,spec,
 under,lie,filter,spec,
 under,lying,allow,spec,lying also means deceiving
 under,mine,allow,new,undermine doesn't mean under a mine
+under,sea,filter,new,
 up,wind,filter,spec,
 down,wind,filter,spec,
 be,labor,filter,new,be+labor — to discuss at length

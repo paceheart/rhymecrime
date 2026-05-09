@@ -138,6 +138,8 @@ describe 'RHYMES' do
   end
   
   context "you can't just add a prefix and call it a rhyme" do
+    ought_not_rhyme 'sea', 'undersea'
+    ought_not_rhyme 'arctic', 'antarctic'
     ought_not_rhyme 'appropriate', 'misappropriate'
     ought_not_rhyme 'racial', 'biracial'
     ought_not_rhyme 'erotic', 'homoerotic'
