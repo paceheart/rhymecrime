@@ -65,7 +65,19 @@ def prefix_words(words, focal_word)
         focal_word != anc && w != anc
     end
     next false if common.empty?
+    focal_bases = lexicon_word_prefix_allow_bases(focal_word)
+    cand_bases  = lexicon_word_prefix_allow_bases(w)
     common.any? do |anc|
+      # word_dict optional column: classifier-allowed (word, base) prefix pairs.
+      # Bypass only when the *other* headword is the bare shared ancestor (anc),
+      # not when both sides are prefixed siblings (e.g. bisect/intersect both peel
+      # to sect but ought_not_rhyme; sect/intersect oughta_rhyme with inter,sect allow).
+      if focal_bases || cand_bases
+        bypass =
+          (focal_bases&.include?(anc) && w == anc) ||
+          (cand_bases&.include?(anc) && focal_word == anc)
+        next false if bypass
+      end
       pron_suffix_aligned_or_equal?(focal_word, anc) &&
         pron_suffix_aligned_or_equal?(w, anc)
     end

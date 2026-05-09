@@ -10,6 +10,7 @@ module Rhymecrime
     RHYMECRIME_VERBOSE_CSV_SWEEP_ENV = "RHYMECRIME_VERBOSE_CSV_SWEEP"
     RELATED_CSV_OVERRIDE_ENV = "RHYMECRIME_RELATED_CSV_OVERRIDE"
     RARITY_CSV_OVERRIDE_ENV = "RHYMECRIME_RARITY_CSV_OVERRIDE"
+    PREFIX_CSV_OVERRIDE_ENV = "RHYMECRIME_PREFIX_CSV_OVERRIDE"
 
     module_function
 
@@ -43,6 +44,10 @@ module Rhymecrime
 
     def rarity_csv_override_enabled?
       csv_env_override_enabled?(RARITY_CSV_OVERRIDE_ENV)
+    end
+
+    def prefix_csv_override_enabled?
+      csv_env_override_enabled?(PREFIX_CSV_OVERRIDE_ENV)
     end
 
     def run_skipped_examples?

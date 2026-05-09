@@ -1,0 +1,222 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+#
+# Precomputes prefix-rhyme classifier allows: for every dictionary headword,
+# strips each mixed prefix to find (word, base, prefix) triples where the base
+# is also a headword, classifies each triple with the prefix classifier, and
+# writes allowed bases into word_dict as an optional 4th array slot per headword
+# (serialized to word_dict.msgpack and word_dict.txt).
+#
+# Words with no :allow triple keep the legacy [freq, prons, lemma] shape.
+# Absent column => rule-based prefix filter only (same as before precompute).
+#
+# Run after bin/train-prefix-classifier and the final dict-build (stage 4).
+# The RHYMECRIME_BUILD_DIR env var must be set (done automatically by bin/build).
+#
+# Usage:
+#   RHYMECRIME_BUILD_DIR=generated/<stamp> ./bin/precompute-prefix-gate
+
+$LOAD_PATH.unshift File.expand_path("../lib", __dir__)
+
+require "json"
+require "msgpack"
+require "numo/narray"
+require "set"
+require "zlib"
+
+require "rhymecrime/paths"
+require "rhymecrime/pronunciation"
+require "rhymecrime/build/build_io"
+require "rhymecrime/build/build_utils"
+require "rhymecrime/build/lexicon_write"
+require "rhymecrime/io_utils"
+require "rhymecrime/lexicon_io"
+
+# Gloss + POS helpers used by the classifier feature vector
+require "rhymecrime/build/constants"
+require "rhymecrime/morphology/lexical"
+require "rhymecrime/tuples"
+require "rhymecrime/relatedness/signals"
+
+# The classifier itself (prefix_pair_classify, prefix_feature_vector, etc.)
+require "rhymecrime/build/prefix_classifier"
+require "rhymecrime/build/prefix_curated_overrides"
+
+build_dir = ENV["RHYMECRIME_BUILD_DIR"]
+unless build_dir
+  warn "RHYMECRIME_BUILD_DIR must be set (set automatically by bin/build)"
+  exit 1
+end
+
+repo = REPO_ROOT
+Dir.chdir(repo)
+
+# ---------------------------------------------------------------------------
+# Load word dict (final runtime version) to enumerate headwords
+# ---------------------------------------------------------------------------
+
+puts "loading word dict…"
+raw_word_dict = MessagePackUtils.load_and_unpack(
+  generated_dict_path(WORD_DICT_MSGPACK_FILENAME)
+)
+headword_set = Set.new(raw_word_dict.keys)
+puts "  #{headword_set.size} headwords"
+
+# ---------------------------------------------------------------------------
+# Load the prefix classifier to get the mixed-prefix list
+# ---------------------------------------------------------------------------
+
+puts "loading prefix classifier…"
+clf = prefix_classifier
+mixed_prefixes = clf["mixed_prefixes"] || []
+puts "  mixed prefixes: #{mixed_prefixes.join(', ')}"
+
+# ---------------------------------------------------------------------------
+# Enumerate (word, base, prefix) triples where base is also a headword
+# ---------------------------------------------------------------------------
+
+triples = []
+headword_set.each do |word|
+  mixed_prefixes.each do |prefix|
+    next unless word.start_with?(prefix)
+    base = word[prefix.length..]
+    next if base.empty? || base.length < 2
+    next unless headword_set.include?(base)
+    triples << [word, base, prefix]
+  end
+end
+puts "  #{triples.size} candidate (word, base, prefix) triples"
+
+# ---------------------------------------------------------------------------
+# Load Wiktionary glosses (feature: gloss_cites_base, gloss_jaccard, etc.)
+# ---------------------------------------------------------------------------
+
+puts "loading Wiktionary glosses…"
+load_wiktionary_glosses!
+puts "  #{($wiktionary_glosses || {}).size} glossed words"
+
+# ---------------------------------------------------------------------------
+# Load Numberbatch vectors for all involved words (cosine feature)
+# ---------------------------------------------------------------------------
+
+puts "loading Numberbatch vectors…"
+nb_words_needed = Set.new
+triples.each { |word, base, _| nb_words_needed << word << base }
+
+nb_path = generated_root_path(NUMBERBATCH_VECTORS_FILENAME)
+NBVEC_FORMAT = "nbvec_stream_v1"
+vectors = {}
+IoUtils.stream_read(nb_path, hint: "precompute-prefix-gate numberbatch") do |io|
+  unpacker = MessagePack::Unpacker.new(io)
+  header   = unpacker.read
+  unless header.is_a?(Hash) && header["format"] == NBVEC_FORMAT
+    warn "unexpected Numberbatch header — regenerate via ./bin/setup-corpora"
+    exit 1
+  end
+  begin
+    loop do
+      w, bin = unpacker.read
+      vectors[w] = Numo::SFloat.from_binary(bin).to_a if nb_words_needed.include?(w)
+    end
+  rescue EOFError
+    # end of stream
+  end
+end
+puts "  #{vectors.size}/#{nb_words_needed.size} vectors loaded"
+
+# ---------------------------------------------------------------------------
+# Load Wiktionary etymology templates (wiktionary_prefix_template + etym features)
+# ---------------------------------------------------------------------------
+
+puts "loading Wiktionary etymology templates…"
+wik_path = File.join(repo, "corpora", "wiktionary", "kaikki-english-filtered.jsonl.gz")
+unless File.exist?(wik_path)
+  warn "missing #{wik_path} — run ./bin/filter-kaikki first"
+  exit 1
+end
+
+wik_words_needed = Set.new
+triples.each { |word, base, _| wik_words_needed << word.downcase << base.downcase }
+
+wik_templates = {}
+Zlib::GzipReader.open(wik_path, encoding: "UTF-8") do |gz|
+  gz.each_line do |line|
+    obj = JSON.parse(line)
+    word = obj["word"].to_s.downcase
+    next unless wik_words_needed.include?(word)
+    (obj["etymology_templates"] || []).each do |t|
+      next unless t.is_a?(Hash) && %w[prefix affix].include?(t["name"].to_s)
+      args = t["args"] || {}
+      morphemes = args.keys
+                      .select { |k| k.match?(/\A\d+\z/) }
+                      .sort_by(&:to_i)
+                      .map { |k| args[k].to_s.downcase.gsub(/[^a-z]/, "") }
+                      .reject(&:empty?)
+      morphemes.shift if morphemes.first && morphemes.first.length <= 3
+      next if morphemes.size < 2
+      base_sense = args["t2"].to_s.strip
+      wik_templates[word] ||= []
+      wik_templates[word] << [morphemes, base_sense]
+    end
+  rescue JSON::ParserError
+    next
+  end
+end
+puts "  #{wik_templates.size} words with etymology templates"
+
+# ---------------------------------------------------------------------------
+# Classify every triple and collect :allow verdicts
+# ---------------------------------------------------------------------------
+
+puts "classifying #{triples.size} triples…"
+gate = {}  # word => [base, ...]  (only :allow entries)
+
+triples.each do |word, base, prefix|
+  verdict = prefix_pair_classify(word, base, prefix, vectors: vectors, wik_templates: wik_templates)
+  next unless verdict == :allow
+  (gate[word] ||= []) << base
+end
+
+allow_count  = gate.values.sum(&:size)
+filter_count = triples.size - allow_count
+puts "  allow=#{allow_count}  filter=#{filter_count}"
+
+prefix_curated_overrides_apply!(gate)
+allow_count  = gate.values.sum(&:size)
+puts "  allow(after prefix.csv fold-in)=#{allow_count}"
+
+# ---------------------------------------------------------------------------
+# Merge allows into word_dict and rewrite msgpack + txt
+# ---------------------------------------------------------------------------
+
+puts "loading full word_dict for rewrite…"
+word_dict = load_word_dict_msgpack
+unless word_dict&.any?
+  warn "word_dict.msgpack missing or empty at #{generated_dict_path(WORD_DICT_MSGPACK_FILENAME)}"
+  exit 1
+end
+
+lemma_path = generated_dict_path(WORD_LEMMA_MAP_FILENAME)
+lemma_map = File.exist?(lemma_path) ? MessagePackUtils.load_and_unpack(lemma_path) : nil
+
+# Every prefixed headword we evaluated may have had a stale entry[3] from a prior
+# build; if the gate no longer lists bases (curated filter removed them), truncate
+# back to [freq, prons, lemma] so we do not leave orphan allows in word_dict.
+triples.map(&:first).uniq.each do |word|
+  entry = word_dict[word]
+  next unless entry
+
+  bases = gate[word]
+  if bases.nil? || bases.empty?
+    word_dict[word] = entry[0..2].dup if entry.size > 3
+  else
+    u = bases.uniq
+    row = entry[0..2].dup
+    row << u
+    word_dict[word] = row
+  end
+end
+
+save_word_dict_msgpack!(word_dict, lemma_map)
+save_word_dict(word_dict, lemma_map)
+puts "updated #{generated_dict_path(WORD_DICT_MSGPACK_FILENAME)} and word_dict.txt with prefix allow column"

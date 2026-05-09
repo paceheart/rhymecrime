@@ -2076,8 +2076,8 @@ def build_word_dict(pronunciation_map, rime_dict, subtlex_hash, subtlex_total_ha
   delete_common_rich_only_rime_buckets!(rime_dict, word_dict)
   filter_word_dict_disconnected!(word_dict, rime_dict, subtlex_hash, wordfreq_hash, pos_map, forms_map, pronunciation_map_seed_headwords, wiktionary_words)
   # Terminal reducer: project every surviving BuildEntry back to the
-  # legacy [freq, prons, lemma] shape that save_word_dict,
-  # save_word_dict_msgpack!, and the rest of rebuild_rhymecrime_dictionaries
+  # legacy [freq, prons, lemma] shape (optional 4th: prefix-allow bases) that
+  # save_word_dict, save_word_dict_msgpack!, and the rest of rebuild_rhymecrime_dictionaries
   # expect. Drops tombstoned rows (scrubs, classifier, disconnect) in
   # one consolidated pass so every downstream consumer sees exactly the
   # pre-refactor wire contract.

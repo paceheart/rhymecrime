@@ -21,13 +21,24 @@
 #                                   Numberbatch, MPNet per-sense and pooled-
 #                                   definition signals (signals.rb,
 #                                   bin/dump-sense-glosses).
+#   etymology_templates[{name, args}]
+#                                -- Wiktionary template calls extracted from the
+#                                   etymology section. Only "prefix" and "affix"
+#                                   templates are kept (e.g. {{prefix|en|un|able}},
+#                                   {{affix|en|sub|marine}}); other etymology
+#                                   templates (derived, borrowed, inh, ...) are
+#                                   dropped. Consumed by filter.rb's
+#                                   wiktionary_prefix_derivation? predicate to
+#                                   distinguish productive prefix pairs (unable/able)
+#                                   from opaque look-alikes (abasement/basement).
 #
 # Every other field in the raw dump is dropped. A record survives iff it
 # contributes at least one of: a pronunciation, an inflectional form, an
-# alt_of/form_of pointer, or a definitional gloss. Default cutoffs for the gloss
-# side were tuned against the relatedness classifier on curated/related.csv;
-# see the remaining RHYMECRIME_KAIKKI_* env vars below for the knobs we swept
-# and notes/wiktionary-glosses-experiments.canvas for the results.
+# alt_of/form_of pointer, a definitional gloss, or a kept etymology template.
+# Default cutoffs for the gloss side were tuned against the relatedness classifier
+# on curated/related.csv; see the remaining RHYMECRIME_KAIKKI_* env vars below
+# for the knobs we swept and notes/wiktionary-glosses-experiments.canvas for the
+# results.
 
 require "json"
 
@@ -42,6 +53,11 @@ GLOSSES_PER_SENSE = (ENV["RHYMECRIME_KAIKKI_GLOSSES_PER_SENSE"] || "5").to_i
 # legal definitions hit the cap. Default 500 keeps them while staying under
 # MPNet's 512-token input.
 GLOSS_CHAR_LIMIT = (ENV["RHYMECRIME_KAIKKI_GLOSS_CHAR_LIMIT"] || "500").to_i
+# Etymology template names to keep. "prefix" and "affix" encode productive
+# morphological derivation ({{prefix|en|un|able}}, {{affix|en|sub|marine}});
+# "derived", "borrowed", "inh", etc. encode historical source language and are
+# not useful for the prefix-rhyme filter.
+KEPT_ETYM_TEMPLATE_NAMES = %w[prefix affix].freeze
 # Keep records whose only signal is a definitional gloss (no pronunciation /
 # form / variant pointer). The original filter dropped these — that loses 833K
 # of 1.46M raw records (57%) and explains why most CMUDict-only headwords had
@@ -94,19 +110,38 @@ ARGF.each_line do |line|
     kept_senses << sense
   end
 
+  # Etymology templates: keep only "prefix" and "affix" template calls, which
+  # encode productive morphological derivation ({{prefix|en|un|able}},
+  # {{affix|en|sub|marine}}). Each kept entry retains just {name, args} — the
+  # "expansion" field (human-readable text) is dropped to save space. The "args"
+  # hash from kaikki uses positional keys "1", "2", ... for the morphemes and
+  # "lang" for the language code; callers should strip non-numeric keys and the
+  # first positional arg (the language code "en") to get the morpheme list.
+  kept_etym_templates = (obj["etymology_templates"] || []).filter_map do |t|
+    next unless t.is_a?(Hash)
+    name = t["name"].to_s
+    next unless KEPT_ETYM_TEMPLATE_NAMES.include?(name)
+    args = t["args"]
+    next unless args.is_a?(Hash)
+    { "name" => name, "args" => args }
+  end
+
   # A record is worth keeping iff downstream can consume something from it.
   # Pronunciations feed wiktionary.rb's pron_hash; forms feed forms_map;
-  # alt_of/form_of senses feed corpus_variants.rb's variant discovery.
+  # alt_of/form_of senses feed corpus_variants.rb's variant discovery;
+  # etymology_templates feed filter.rb's prefix-derivation predicate.
   has_variant_signal = kept_senses.any? { |s| s["alt_of"] || s["form_of"] }
   has_definitional_gloss = kept_senses.any? do |s|
     g = s["glosses"]
     g && !g.empty?
   end
-  next if kept_sounds.empty? && kept_forms.empty? && !has_variant_signal && !has_definitional_gloss
+  next if kept_sounds.empty? && kept_forms.empty? && !has_variant_signal &&
+          !has_definitional_gloss && kept_etym_templates.empty?
 
   out = { "word" => word, "pos" => pos }
   out["sounds"] = kept_sounds unless kept_sounds.empty?
   out["forms"] = kept_forms unless kept_forms.empty?
   out["senses"] = kept_senses unless kept_senses.empty?
+  out["etymology_templates"] = kept_etym_templates unless kept_etym_templates.empty?
   $stdout.puts(JSON.generate(out))
 end

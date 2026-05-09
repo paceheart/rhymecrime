@@ -80,3 +80,6 @@ try retraining relatedness with 5 classes: related, related_ish, whatever, unrel
 try Float16
 
 cheese -> cassavas / guavas, why not cassava / guava?
+
+try asking some LLMs for 100 or 1000 words related to 'pirate'. try various prompts.
+try RoBERTa

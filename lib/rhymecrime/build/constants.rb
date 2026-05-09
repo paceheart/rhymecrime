@@ -92,8 +92,10 @@ WORD_DICT_HEADER = "# RhymeCrime's word info dictionary
 #
 # Each line is of the form:
 #
-# WORD,FREQUENCY,PRONUNCIATION1|PRONUNCIATION2...[,LEMMA]
+# WORD,FREQUENCY,PRONUNCIATION1|PRONUNCIATION2...[,LEMMA[,PREFIX_ALLOW_BASES]]
 #
 # LEMMA is the base/uninflected form (omitted when same as WORD).
+# PREFIX_ALLOW_BASES (optional): pipe-separated headwords for which the prefix
+# classifier allowed this word to rhyme with that base (see precompute-prefix-gate).
 #
 #"

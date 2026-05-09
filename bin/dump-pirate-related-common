@@ -1,0 +1,59 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+#
+# Emits runtime/pirate_related_common.json for the active build — the sorted list of
+# common, rhymeable headwords scored as related to lemma "pirate", matching
+# bin/compute-relatedness's per-cue scan:
+#   RelatedWords.find_all_thematically_related_words_by_scan(<lemma>, false, true)
+#
+# Requires RHYMECRIME_BUILD_DIR (set by bin/build if you invoke this from the build).
+# Heavy: loads Numberbatch, ConceptNet, MPNet, classifier (~minutes on first run after boot).
+#
+# Usage:
+#   RHYMECRIME_BUILD_DIR=generated/<stamp> ./bin/dump-pirate-related-common
+
+$LOAD_PATH.unshift File.expand_path("../lib", __dir__)
+
+ENV.delete("RHYMECRIME_DATA_SOURCE")
+
+require "json"
+require "rhymecrime/paths"
+require "rhymecrime/build/build_io"
+require "rhymecrime/build/build_utils"
+require "rhymecrime/frontend/frontend"
+require "rhymecrime/build/rime"
+
+relatedness_lazy_load_compute!
+
+CUE_LEMMA = "pirate"
+
+build_dir = ENV["RHYMECRIME_BUILD_DIR"]
+if build_dir.nil? || build_dir.empty?
+  warn "RHYMECRIME_BUILD_DIR must be set (bin/build sets this automatically)"
+  exit 1
+end
+
+repo = REPO_ROOT
+Dir.chdir(repo)
+
+word_mp = generated_dict_path(WORD_DICT_MSGPACK_FILENAME)
+unless File.exist?(word_mp)
+  warn "Missing #{word_mp} — run final dict-build first"
+  exit 1
+end
+
+RelatedWords.reset_caches!
+pairs = RelatedWords.find_all_thematically_related_words_by_scan(CUE_LEMMA, false, true)
+words = pairs.map(&:first).uniq.sort
+
+payload = {
+  "cue_lemma" => CUE_LEMMA,
+  "word_count" => words.size,
+  "words" => words,
+}
+
+out_path = generated_dict_path(PIRATE_RELATED_COMMON_FILENAME)
+body = JSON.pretty_generate(payload) + "\n"
+BuildIo.write(out_path, body, hint: "dump-pirate-related-common")
+
+puts "wrote #{out_path} (#{words.size} words)"

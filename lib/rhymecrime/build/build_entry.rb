@@ -348,7 +348,8 @@ def wrap_as_rime_dict(rime_dict_or_hash)
 end
 
 # Terminal reducer: projects every surviving BuildEntry in hash back
-# onto the legacy [freq, prons, lemma] array shape that save_word_dict,
+# onto the legacy [freq, prons, lemma] array shape (optional 4th: prefix allow
+# bases added by precompute-prefix-gate) that save_word_dict,
 # save_word_dict_msgpack!, and the downstream rebuild_rhymecrime_dictionaries
 # steps expect. Drops entries whose tombstoned has been set.
 #

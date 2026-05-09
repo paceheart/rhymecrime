@@ -2,7 +2,8 @@
 
 #
 # Lexicon: in-process $word_dict, loaded from word_dict.msgpack at boot.
-# Same data shape in dev and Lambda; the DDB word# partition was retired
+# Same data shape in dev and Lambda (optional 4th entry column: prefix-allow
+# bases from precompute-prefix-gate); the DDB word# partition was retired
 # (see bin/upload-to-dynamodb and bin/stage-lambda) once the msgpack got
 # small enough (~5.5 MB) to ship in the deploy bundle. DynamoRuntime now
 # only fronts the related# / score# partitions.

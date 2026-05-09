@@ -1,0 +1,397 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+#
+# bin/diff-builds — compare two RhymeCrime runtime directories side-by-side.
+#
+# Usage:
+#   bin/diff-builds [current-runtime-dir] [prev-runtime-dir]
+#
+# Defaults: generated/current and generated/prev.
+# Exits 0 with a note when prev is absent (first build).
+#
+# Standalone: reads msgpack/JSON artifacts directly — does not load the
+# rhymecrime library, so it runs cheaply right after bin/build finishes.
+
+require "json"
+require "csv"
+require "set"
+require "msgpack"
+
+SAMPLE_SIZE     = 10
+RARE_FREQ_MAX   = 4
+FORBIDDEN_KINDS = %w[forbidden forbidden_ish].freeze
+
+RARITY_CLASSIFIER_JSON       = "rarity_classifier.json"
+RELATEDNESS_CLASSIFIER_JSON  = "relatedness_classifier.json"
+PREFIX_CLASSIFIER_JSON       = "prefix_classifier.json"
+
+REPO = File.expand_path("..", __dir__)
+
+# ── helpers ──────────────────────────────────────────────────────────────────
+
+def resolve_dir(path)
+  real = File.realpath(path)
+  File.directory?(real) ? real : nil
+rescue Errno::ENOENT, Errno::ELOOP, Errno::EINVAL
+  nil
+end
+
+def load_msgpack_file(path)
+  MessagePack.unpack(File.binread(path))
+rescue => e
+  abort "Failed to load #{path}: #{e.message}"
+end
+
+def load_build_info(runtime_dir)
+  stamp_dir  = File.dirname(runtime_dir)
+  info_path  = File.join(stamp_dir, "BUILD_INFO.json")
+  File.exist?(info_path) ? JSON.parse(File.read(info_path)) : {}
+rescue
+  {}
+end
+
+def load_json_if_present(path)
+  return nil unless File.exist?(path)
+  JSON.parse(File.read(path, encoding: "UTF-8"))
+rescue JSON::ParserError, StandardError
+  nil
+end
+
+# Returns {word => [freq_int, pron_strings, lemma_or_nil]} straight from msgpack —
+# same shape the runtime uses, but prons stay as raw strings (no Pronunciation objects).
+def load_word_dict(runtime_dir)
+  load_msgpack_file(File.join(runtime_dir, "word_dict.msgpack"))
+end
+
+# Returns {rime_string => [word, ...]} straight from msgpack.
+def load_rime_dict(runtime_dir)
+  load_msgpack_file(File.join(runtime_dir, "rime_dict.msgpack"))
+end
+
+def load_forbidden_words
+  path = File.join(REPO, "curated", "rarity.csv")
+  return Set.new unless File.exist?(path)
+  result = Set.new
+  CSV.foreach(path, headers: true, encoding: "UTF-8") do |row|
+    word = row["word"].to_s.strip
+    kind = row["kind"].to_s.strip
+    result << word if FORBIDDEN_KINDS.include?(kind) && !word.empty?
+  end
+  result
+rescue => e
+  warn "  [forbidden] #{e.message}"
+  Set.new
+end
+
+# Returns {basename => real_byte_size} following symlinks for every entry.
+def file_sizes(runtime_dir)
+  Dir.glob(File.join(runtime_dir, "*")).sort.each_with_object({}) do |path, h|
+    real = (File.realpath(path) rescue path)
+    h[File.basename(path)] = (File.size(real) rescue nil)
+  end
+end
+
+def fmt_bytes(n)
+  return "—" if n.nil?
+  if n >= 1_048_576
+    format("%.1f MB", n.to_f / 1_048_576)
+  elsif n >= 1_024
+    format("%.1f KB", n.to_f / 1_024)
+  else
+    "#{n} B"
+  end
+end
+
+def fmt_bytes_delta(cur, prev)
+  return "—" if cur.nil? || prev.nil?
+  d = cur - prev
+  return "(same)" if d.zero?
+  sign = d > 0 ? "+" : "-"
+  "#{sign}#{fmt_bytes(d.abs)}"
+end
+
+def fmt_num_delta(cur, prev)
+  return "—" if cur.nil? || prev.nil?
+  d = cur.to_f - prev.to_f
+  return "(same)" if d.zero?
+  cur.is_a?(Float) ? format("%+.2f", d) : format("%+d", d.to_i)
+end
+
+def fmt_pct(x)
+  return nil if x.nil?
+  x = x.to_f
+  x > 1.01 ? format("%.2f%%", x) : format("%.2f%%", x * 100.0)
+end
+
+RIME_BUCKET_EXAMPLE_WORDS = 2
+
+# Up to +max+ headwords in +rdict[rime_key]+ with freq > RARE_FREQ_MAX in +wdict+, alphabetically.
+def common_words_in_rime_bucket(rime_key, rdict, wdict, max: RIME_BUCKET_EXAMPLE_WORDS)
+  (rdict[rime_key] || []).select do |w|
+    (wdict[w]&.first).to_i > RARE_FREQ_MAX
+  end.sort.first(max)
+end
+
+def format_rime_bucket_sample_line(rime_key, rdict, wdict)
+  ex = common_words_in_rime_bucket(rime_key, rdict, wdict)
+  return rime_key if ex.empty?
+
+  "#{rime_key} (#{ex.join(', ')})"
+end
+
+SEPARATOR = ("─" * 62).freeze
+
+def section(title, trailing_blank: false)
+  puts
+  puts SEPARATOR
+  puts "  #{title}"
+  puts SEPARATOR
+  puts if trailing_blank
+end
+
+# Prints prev\current / current\prev counts and up to SAMPLE_SIZE examples from each
+# set difference (no intersection line — summary stats cover overlap). key_fn optionally
+# transforms each key for display.
+def print_set_diff(label, cur_set, prev_set, key_fn: nil, sample: SAMPLE_SIZE, leading_blank: true)
+  removed = prev_set - cur_set
+  added   = cur_set  - prev_set
+
+  display = lambda do |set|
+    items = set.to_a.sort.first(sample)
+    items = items.map { |k| key_fn.call(k) } if key_fn
+    items.join(", ")
+  end
+
+  puts if leading_blank
+  puts "  #{label}"
+  if removed.empty?
+    printf "    %-24s 0\n", "prev \\ current:"
+  else
+    printf "    %-24s %d  (removed)\n", "prev \\ current:", removed.size
+    puts  "      sample: #{display.(removed)}"
+  end
+  if added.empty?
+    printf "    %-24s 0\n", "current \\ prev:"
+  else
+    printf "    %-24s %d  (added)\n", "current \\ prev:", added.size
+    puts  "      sample: #{display.(added)}"
+  end
+end
+
+# Like print_set_diff for rime keys, but each sampled key lists two common words from +rdict+/+wdict+.
+def print_rime_bucket_set_diff(cur_keys, prev_keys, cur_rdict, prev_rdict, cur_wdict, prev_wdict,
+                               sample: SAMPLE_SIZE, leading_blank: true)
+  removed = prev_keys - cur_keys
+  added   = cur_keys  - prev_keys
+
+  show_removed = lambda do
+    removed.to_a.sort.first(sample).map { |k| format_rime_bucket_sample_line(k, prev_rdict, prev_wdict) }.join(", ")
+  end
+  show_added = lambda do
+    added.to_a.sort.first(sample).map { |k| format_rime_bucket_sample_line(k, cur_rdict, cur_wdict) }.join(", ")
+  end
+
+  puts if leading_blank
+  puts "  Rime buckets"
+  if removed.empty?
+    printf "    %-24s 0\n", "prev \\ current:"
+  else
+    printf "    %-24s %d  (removed)\n", "prev \\ current:", removed.size
+    puts  "      sample: #{show_removed.call}"
+  end
+  if added.empty?
+    printf "    %-24s 0\n", "current \\ prev:"
+  else
+    printf "    %-24s %d  (added)\n", "current \\ prev:", added.size
+    puts  "      sample: #{show_added.call}"
+  end
+end
+
+def print_identical_rime_buckets(cur_rdict, _cur_wdict)
+  n = cur_rdict.size
+  puts "  Rime buckets: identical (#{n} keys) — no removed/added samples"
+end
+
+def print_classifier_training_metrics(runtime_dir)
+  section "Classifier metrics (current build)"
+
+  rar_path = File.join(runtime_dir, RARITY_CLASSIFIER_JSON)
+  rel_path = File.join(runtime_dir, RELATEDNESS_CLASSIFIER_JSON)
+  pfx_path = File.join(runtime_dir, PREFIX_CLASSIFIER_JSON)
+
+  rar = load_json_if_present(rar_path)
+  rel = load_json_if_present(rel_path)
+  pfx = load_json_if_present(pfx_path)
+
+  r_cv = rar&.dig("training", "cv_weighted_pct")
+  r_is = rar&.dig("training", "in_sample_weighted_pct")
+  r_line =
+    if r_cv || r_is
+      parts = []
+      parts << "CV weighted acc=%s" % fmt_pct(r_cv) if r_cv
+      parts << "in-sample=%s" % fmt_pct(r_is) if r_is
+      parts.join("; ")
+    else
+      "—"
+    end
+  puts "  rarity:        #{r_line}"
+
+  rel_cv = rel&.dig("training", "cv_mean_weighted_pct")
+  rel_is = rel&.dig("training", "in_sample_weighted_pct")
+  rel_line =
+    if rel_cv || rel_is
+      parts = []
+      parts << "CV weighted acc=%s" % fmt_pct(rel_cv) if rel_cv
+      parts << "in-sample=%s" % fmt_pct(rel_is) if rel_is
+      parts.join("; ")
+    else
+      "—"
+    end
+  puts "  relatedness:   #{rel_line}"
+
+  p_cv = pfx&.dig("training", "hybrid_cv_ba")
+  p_cv = pfx&.dig("training", "cv_ba") if p_cv.nil?
+  p_is = pfx&.dig("training", "hybrid_in_sample_ba")
+  p_is = pfx&.dig("training", "in_sample_ba") if p_is.nil?
+  p_line =
+    if p_cv || p_is
+      parts = []
+      parts << "CV balanced acc=%s" % fmt_pct(p_cv) if p_cv
+      parts << "in-sample=%s" % fmt_pct(p_is) if p_is
+      parts.join("; ")
+    else
+      "—"
+    end
+  puts "  prefix:        #{p_line}"
+end
+
+# ── parse args / resolve dirs ─────────────────────────────────────────────────
+
+cur_path  = ARGV[0] || File.join(REPO, "generated", "current")
+prev_path = ARGV[1] || File.join(REPO, "generated", "prev")
+
+cur_dir = resolve_dir(cur_path)
+abort "current runtime not found or not a directory: #{cur_path}" if cur_dir.nil?
+
+prev_dir = resolve_dir(prev_path)
+if prev_dir.nil?
+  puts "No prev build at #{prev_path} — skipping diff (first build?)."
+  exit 0
+end
+
+# ── header ───────────────────────────────────────────────────────────────────
+
+cur_info  = load_build_info(cur_dir)
+prev_info = load_build_info(prev_dir)
+
+puts
+puts "==> Build diff: current vs prev"
+printf "    %-10s %s\n", "current:", cur_dir
+printf "    %-10s built %s, sha=%s\n",
+       "", cur_info["built_at"] || "unknown", (cur_info["git_sha"] || "?")[0, 8]
+printf "    %-10s %s\n", "prev:", prev_dir
+printf "    %-10s built %s, sha=%s\n",
+       "", prev_info["built_at"] || "unknown", (prev_info["git_sha"] || "?")[0, 8]
+
+# ── load artifacts ────────────────────────────────────────────────────────────
+
+$stderr.print "  loading artifacts... word_dict"
+cur_wdict  = load_word_dict(cur_dir)
+prev_wdict = load_word_dict(prev_dir)
+
+$stderr.print ", rime_dict"
+cur_rdict  = load_rime_dict(cur_dir)
+prev_rdict = load_rime_dict(prev_dir)
+
+$stderr.print ", forbidden"
+forbidden = load_forbidden_words
+
+$stderr.puts " — done"
+
+# ── build word sets ───────────────────────────────────────────────────────────
+
+cur_common  = Set.new
+prev_common = Set.new
+cur_rare    = Set.new
+prev_rare   = Set.new
+
+cur_wdict.each  { |w, e| f = e[0].to_i; cur_common  << w if f > RARE_FREQ_MAX; cur_rare  << w if (1..RARE_FREQ_MAX).cover?(f) }
+prev_wdict.each { |w, e| f = e[0].to_i; prev_common << w if f > RARE_FREQ_MAX; prev_rare << w if (1..RARE_FREQ_MAX).cover?(f) }
+
+cur_rime_keys  = cur_rdict.keys.to_set
+prev_rime_keys = prev_rdict.keys.to_set
+
+# Forbidden words that leaked into the dictionary (should always be empty).
+cur_escaped  = forbidden & cur_wdict.keys.to_set
+prev_escaped = forbidden & prev_wdict.keys.to_set
+
+# ── file sizes ────────────────────────────────────────────────────────────────
+
+section "File sizes"
+
+cur_sizes  = file_sizes(cur_dir)
+prev_sizes = file_sizes(prev_dir)
+all_files  = (cur_sizes.keys | prev_sizes.keys).sort
+
+col_w = all_files.map(&:length).max + 2
+printf "  %-#{col_w}s %12s %12s   %s\n", "file", "prev", "current", "delta"
+puts "  " + "-" * (col_w + 44)
+
+all_files.each do |f|
+  cs  = cur_sizes[f]
+  ps  = prev_sizes[f]
+  pct = (cs && ps && ps > 0) ? ((cs - ps).to_f / ps * 100).round(1) : nil
+  flag = (pct && pct.abs >= 5) ? format("  ◀ %+.1f%%", pct) : ""
+  printf "  %-#{col_w}s %12s %12s   %-16s%s\n",
+         f, fmt_bytes(ps), fmt_bytes(cs), fmt_bytes_delta(cs, ps), flag
+end
+
+# ── summary stats ─────────────────────────────────────────────────────────────
+
+section "Summary stats"
+
+cur_rime_n  = cur_rdict.size
+prev_rime_n = prev_rdict.size
+cur_avg     = cur_rime_n  > 0 ? (cur_rdict.values.sum(&:size).to_f  / cur_rime_n).round(2)  : 0.0
+prev_avg    = prev_rime_n > 0 ? (prev_rdict.values.sum(&:size).to_f / prev_rime_n).round(2) : 0.0
+cur_multi   = cur_wdict.count  { |_, e| (e[1] || []).size >= 2 }
+prev_multi  = prev_wdict.count { |_, e| (e[1] || []).size >= 2 }
+
+rows = [
+  ["total headwords",                cur_wdict.size,   prev_wdict.size],
+  ["  common  (freq > #{RARE_FREQ_MAX})",   cur_common.size,  prev_common.size],
+  ["  rare    (freq 1–#{RARE_FREQ_MAX})",   cur_rare.size,    prev_rare.size],
+  ["  multi-pron",                   cur_multi,        prev_multi],
+  ["rime buckets",                   cur_rime_n,       prev_rime_n],
+  ["  avg words/bucket",             cur_avg,          prev_avg],
+  ["forbidden (curated)",            forbidden.size,   forbidden.size],
+  ["  escaped into dict",            cur_escaped.size, prev_escaped.size],
+]
+
+lw = rows.map { |r| r[0].length }.max + 2
+printf "  %-#{lw}s %10s %10s %10s\n", "metric", "prev", "current", "delta"
+puts "  " + "-" * (lw + 32)
+rows.each do |label, c, p|
+  printf "  %-#{lw}s %10s %10s %10s\n", label, p, c, fmt_num_delta(c, p)
+end
+
+print_classifier_training_metrics(cur_dir)
+
+# ── set diffs ─────────────────────────────────────────────────────────────────
+
+section "Set diffs"
+
+rime_removed = prev_rime_keys - cur_rime_keys
+rime_added   = cur_rime_keys - prev_rime_keys
+if rime_removed.empty? && rime_added.empty?
+  puts
+  print_identical_rime_buckets(cur_rdict, cur_wdict)
+else
+  print_rime_bucket_set_diff(cur_rime_keys, prev_rime_keys, cur_rdict, prev_rdict, cur_wdict, prev_wdict)
+end
+
+print_set_diff("Common words", cur_common, prev_common)
+print_set_diff("Rare words",     cur_rare,      prev_rare)
+print_set_diff("Forbidden words escaped into dict (should always be 0/0)", cur_escaped, prev_escaped)
+
+puts

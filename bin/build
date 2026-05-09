@@ -64,6 +64,7 @@ end
 %w[
   authoritative_pronunciations.txt
   neol_supplement.txt
+  prefix.csv
   rarity.csv
   related.csv
   semantic_base.csv
@@ -220,30 +221,49 @@ RHYMECRIME_RARITY_DUMP_SIGNALS="$DUMP_PATH" \
 # whole pipeline succeeds. Stages 2-4 read in-flight runtime artifacts directly
 # via RHYMECRIME_BUILD_DIR (see generated_dict_path in paths.rb).
 
-echo "==> Build Stage 2/4 [7m]: training rarity classifier -> bootstrap/rarity_classifier.json"
+echo "==> Build Stage 2/5 [7m]: training rarity classifier -> bootstrap/rarity_classifier.json"
 ruby ./bin/train-rarity-classifier
 # Symlink (not copy) the rarity classifier into runtime/ so there's only one
 # on-disk copy per build. Stage 4 dict-build reads runtime/rarity_classifier.json
 # and resolves transparently through the symlink.
 ln -sfn "../bootstrap/rarity_classifier.json" "$BUILD_DIR/runtime/rarity_classifier.json"
 
-echo "==> Build Stage 3/4: retrain-relatedness (sense glosses + MPNet vectors + classifier)"
+echo "==> Build Stage 2b/5: training prefix classifier -> bootstrap/prefix_classifier.json"
+ruby ./bin/train-prefix-classifier
+# Symlink into runtime/ so precompute-prefix-gate (stage 5) and any future
+# per-build consumers can find it via generated_dict_path.
+ln -sfn "../bootstrap/prefix_classifier.json" "$BUILD_DIR/runtime/prefix_classifier.json"
+
+echo "==> Build Stage 3/5: retrain-relatedness (sense glosses + MPNet vectors + classifier)"
 ./bin/retrain-relatedness --rebuild-vectors
 # Same symlink-don't-copy treatment for the relatedness classifier (written by
 # train-relatedness-classifier at $BUILD_DIR/relatedness_classifier.json).
 ln -sfn "../relatedness_classifier.json" "$BUILD_DIR/runtime/relatedness_classifier.json"
 
-echo "==> Build Stage 4/4: dict-build (final: rarity-classifier rescore)"
+echo "==> Build Stage 4/5: dict-build (final: rarity-classifier rescore)"
 RHYMECRIME_BUILD_MODE=final \
 RHYMECRIME_BUILD_DIR="$BUILD_DIR" \
   ./bin/dict-build
 
+echo "==> Build Stage 5/5: precompute prefix allow-list -> word_dict column (msgpack + txt)"
+RHYMECRIME_BUILD_DIR="$BUILD_DIR" \
+  ./bin/precompute-prefix-gate
+
 echo "==> Linking generated/current -> $BUILD_DIR/runtime"
+# Rotate: save the existing current target as prev before overwriting it.
+if [ -L "$REPO/generated/current" ]; then
+  _PREV_TARGET="$(readlink "$REPO/generated/current")"
+  ln -sfn "$_PREV_TARGET" "$REPO/generated/prev"
+  echo "    rotated prev -> $_PREV_TARGET"
+fi
 ln -sfn "$BUILD_DIR/runtime" "$REPO/generated/current"
 
 echo
 echo "==> Generated I/O audit (unique paths touched via BuildIo)"
 ruby -I"$REPO/lib" -e 'require "rhymecrime/build/build_io"; BuildIo.print_build_report'
+
+echo "==> Build diff (current vs prev)"
+ruby "$REPO/bin/diff-builds" || true
 
 echo
 echo "build done. Run bundle exec rspec to validate."

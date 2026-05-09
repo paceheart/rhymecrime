@@ -73,11 +73,12 @@ def load_word_dict()
   IoUtils.foreach(pathname, encoding: "UTF-8", hint: "load_word_dict") do |line|
     next unless useful_line?(line)
 
-    parts = line.chomp.split(",", 4)
+    parts = line.chomp.split(",", 5)
     word = parts[0].desanitize
     freq = parts[1].to_i
     pronunciations_str = parts[2] || ""
     lemma_raw = parts[3]
+    prefix_allows_raw = parts[4]
     prons = Array.new
     pronunciation_strings = pronunciations_str.split("|")
     for pronstr in pronunciation_strings
@@ -87,6 +88,10 @@ def load_word_dict()
     end
     lemma = (lemma_raw && !lemma_raw.strip.empty?) ? lemma_raw.strip.desanitize : word
     word_info = [freq, prons, lemma]
+    if prefix_allows_raw && !prefix_allows_raw.strip.empty?
+      bases = prefix_allows_raw.split("|").map(&:strip).reject(&:empty?).map(&:desanitize)
+      word_info << bases unless bases.empty?
+    end
     word_dict[word] = word_info
   end
   clear_spelling_variant_hyphen_caches!
@@ -105,6 +110,15 @@ def lexicon_word_entry(word)
   wd = defined?(word_dict) ? word_dict : $word_dict
   return nil if wd.nil?
   wd[word]
+end
+
+# Optional 4th column of word_dict: headword bases for which the prefix classifier
+# allowed (word, base) as a rhyme. nil or empty => no override (rule-based filter only).
+def lexicon_word_prefix_allow_bases(word)
+  e = lexicon_word_entry(word)
+  return nil unless e && e.size > 3
+  bases = e[3]
+  bases.is_a?(Array) && !bases.empty? ? bases : nil
 end
 
 # Flat {word => lemma} lookup loaded from WORD_LEMMA_MAP_FILENAME (built by
@@ -247,14 +261,21 @@ def load_word_dict_msgpack
   raw = MessagePackUtils.load_and_unpack(path)
   word_dict = {}
   raw.each do |word, entry|
-    freq, pron_strs, stored_lemma = entry
+    next unless entry.is_a?(Array)
+
+    freq = entry[0]
+    pron_strs = entry[1]
+    stored_lemma = entry[2]
+    allow_bases = entry.size > 3 ? entry[3] : nil
     prons = []
     (pron_strs || []).each do |pronstr|
       phonemes = pronstr.split(" ")
       next if phonemes.empty?
       push_pronunciation_unless_duplicate!(prons, Pronunciation.new(phonemes))
     end
-    word_dict[word] = [freq.to_i, prons, stored_lemma || word]
+    row = [freq.to_i, prons, stored_lemma || word]
+    row << allow_bases if allow_bases.is_a?(Array) && !allow_bases.empty?
+    word_dict[word] = row
   end
   clear_spelling_variant_hyphen_caches!
   $lemma_to_words = nil
@@ -328,6 +349,10 @@ def load_wiktionary_glosses!
   $wiktionary_glosses = File.exist?(path) ? MessagePackUtils.load_and_unpack(path) : false
 end
 
+# Loads the prefix gate precomputed by bin/precompute-prefix-gate.
+# Returns a Hash { word => Set<base> } of :allow verdicts (filter is the default
+# when a pair is absent). Returns false (falsy) if the msgpack is missing so
+# callers can fall back gracefully to the rule-based prefix filter.
 # Returns Array<String> of Wiktionary glosses for word (one entry per definitional sense
 # in the filtered Kaikki dump), or [] when the headword has no Wiktionary glosses, the
 # msgpack isn't on disk yet, or RHYMECRIME_GLOSS_SOURCE excludes Wiktionary. Same

@@ -729,6 +729,7 @@ common = {
     "cv_folds" => options[:folds],
     "cv_pooled_composite" => pooled_composite,
     "cv_mean_threshold" => avg_thr,
+    "cv_mean_weighted_pct" => avg_weighted,
     "in_sample_composite" => s[:composite],
     "in_sample_weighted_pct" => s[:weighted_pct],
   },

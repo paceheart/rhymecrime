@@ -1,0 +1,960 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+#
+# Train a binary classifier for the prefix rhyme filter.
+#
+# Input:
+#   curated/prefix.csv                              labeled (base, prefix, verdict) — word derived as prefix+base
+#   generated/numberbatch_vectors.msgpack           word vectors (built by bin/setup-corpora)
+#   corpora/wiktionary/kaikki-english-filtered.jsonl.gz
+#
+# Output:
+#   generated/prefix_classifier.json   saved model + productive-prefix list
+#
+# Prefixes with zero "allow" rows in the CSV are called "productive" — we
+# hard-code them as always-filter in the JSON rather than running the model.
+# Prefixes with at least one "allow" row are "mixed" and handled by the
+# binary classifier.
+#
+# Features (one vector per labeled row):
+#   bias, cosine, cosine_missing, wiktionary_prefix_template, prefix_len,
+#   pfx_<name>  (one-hot over the ordered mixed-prefix list)
+#
+# Model combos tried (binary: filter=1, allow=0):
+#   binary-gbt     gradient-boosted trees, depth-limited to avoid overfitting
+#   binary-logreg  logistic regression with L2
+#
+# Evaluation: balanced accuracy (mean of per-class recall) via 5-fold CV.
+# Hybrid dispatch map comes from per-prefix CV. Final models: logistic regression
+# is fit only on rows whose prefix dispatches to logreg; GBT only on gbt-dispatch
+# prefixes (empty scope falls back to all rows).
+#
+# Usage:
+#   ./bin/train-prefix-classifier
+#   ./bin/train-prefix-classifier --dry-run
+#   ./bin/train-prefix-classifier --folds 5 --seed 42 --verbose
+#   ./bin/train-prefix-classifier --only binary-gbt
+
+$LOAD_PATH.unshift File.expand_path("../lib", __dir__)
+
+require "csv"
+require "json"
+require "msgpack"
+require "numo/narray"
+require "optparse"
+require "set"
+require "zlib"
+
+require "rhymecrime/paths"
+require "rhymecrime/build/build_io"
+require "rhymecrime/io_utils"
+
+# Load the gloss + token infrastructure reused from the query path.
+require "rhymecrime/build/constants"   # WordNet::DB.path, WORDNET_3_1_PATH
+require "rhymecrime/lexicon_io"        # wiktionary_glosses_for, load_wiktionary_glosses!
+require "rhymecrime/morphology/lexical" # wordnet_corpora_present?, lemma helpers
+require "rhymecrime/tuples"            # gloss_tokens_for_word, gloss_cites_base?
+require "rhymecrime/relatedness/signals" # gloss_word_token_set
+
+repo = REPO_ROOT
+Dir.chdir(repo)
+
+# ---------------------------------------------------------------------------
+# Options
+# ---------------------------------------------------------------------------
+
+options = {
+  folds: 5,
+  seed: 42,
+  dry_run: false,
+  verbose: false,
+  only: nil,
+
+  # logreg
+  epochs: 500,
+  lr: 0.2,
+  l2: 0.02,
+
+  # gbt
+  trees: 150,
+  depth: 3,
+  gbt_lr: 0.05,
+  lambda_leaf: 3.0,
+  min_child_hessian: 10.0,
+  colsample: 0.8,
+}
+
+OptionParser.new do |opt|
+  opt.on("--folds N",   Integer) { |v| options[:folds] = v }
+  opt.on("--seed N",    Integer) { |v| options[:seed] = v }
+  opt.on("--dry-run")            { options[:dry_run] = true }
+  opt.on("--verbose")            { options[:verbose] = true }
+  opt.on("--only NAME")          { |v| options[:only] = v }
+
+  opt.on("--epochs N",           Integer) { |v| options[:epochs] = v }
+  opt.on("--lr F",               Float)   { |v| options[:lr] = v }
+  opt.on("--l2 F",               Float)   { |v| options[:l2] = v }
+
+  opt.on("--trees N",            Integer) { |v| options[:trees] = v }
+  opt.on("--depth N",            Integer) { |v| options[:depth] = v }
+  opt.on("--gbt-lr F",           Float)   { |v| options[:gbt_lr] = v }
+  opt.on("--lambda-leaf F",      Float)   { |v| options[:lambda_leaf] = v }
+  opt.on("--min-child-hessian F",Float)   { |v| options[:min_child_hessian] = v }
+  opt.on("--colsample F",        Float)   { |v| options[:colsample] = v }
+end.parse!
+
+# ---------------------------------------------------------------------------
+# Load CSV and split prefixes into productive vs mixed
+# ---------------------------------------------------------------------------
+
+csv_path = File.join(CURATED_DIR, "prefix.csv")
+raw_rows = CSV.read(csv_path, headers: true, encoding: "UTF-8")
+
+by_prefix = raw_rows.group_by { |r| r["prefix"].to_s }
+
+productive_prefixes = []
+mixed_prefixes = []
+
+by_prefix.each do |pfx, rs|
+  next if pfx.empty?
+  filter_count = rs.count { |r| r["verdict"] == "filter" }
+  allow_count  = rs.count { |r| r["verdict"] == "allow" }
+  if allow_count == 0 && filter_count > 0
+    productive_prefixes << pfx
+  elsif allow_count > 0
+    mixed_prefixes << pfx
+  end
+end
+
+productive_prefixes.sort!
+mixed_prefixes.sort!
+
+puts "productive prefixes (#{productive_prefixes.size}): #{productive_prefixes.join(', ')}"
+puts "mixed prefixes     (#{mixed_prefixes.size}): #{mixed_prefixes.join(', ')}"
+puts
+
+# ---------------------------------------------------------------------------
+# Feature schema (fixed for the life of this model; retrain if it changes)
+# ---------------------------------------------------------------------------
+
+MIXED_PREFIX_LIST = mixed_prefixes.freeze
+FEATURE_NAMES = (
+  %w[bias cosine cosine_missing wiktionary_prefix_template prefix_len] +
+  MIXED_PREFIX_LIST.map { |p| "pfx_#{p}" } +
+  %w[gloss_cites_base gloss_base_substring gloss_jaccard word_senses base_senses
+     etym_base_sense_match base_expected_pos]
+).freeze
+
+puts "feature count: #{FEATURE_NAMES.size}"
+puts
+
+# ---------------------------------------------------------------------------
+# Load Numberbatch vectors
+# ---------------------------------------------------------------------------
+
+nb_path = generated_root_path(NUMBERBATCH_VECTORS_FILENAME)
+unless File.exist?(nb_path)
+  warn "missing #{nb_path} — run ./bin/setup-corpora first"
+  exit 1
+end
+
+# Stream only the words we need (CSV words + bases) — full corpus is ~600 MB.
+nb_words_needed = Set.new
+raw_rows.each do |r|
+  nb_words_needed << r["prefix"].to_s + r["base"].to_s
+  nb_words_needed << r["base"].to_s
+end
+
+NBVEC_FORMAT = "nbvec_stream_v1"
+vectors = {}  # word => Array<Float> (already L2-normalized, so cosine = dot product)
+IoUtils.stream_read(nb_path, hint: "train-prefix-classifier numberbatch") do |io|
+  unpacker = MessagePack::Unpacker.new(io)
+  header   = unpacker.read
+  unless header.is_a?(Hash) && header["format"] == NBVEC_FORMAT
+    warn "unexpected Numberbatch header: #{header.inspect} — regenerate via ./bin/setup-corpora"
+    exit 1
+  end
+  begin
+    loop do
+      word, bin = unpacker.read
+      next unless nb_words_needed.include?(word)
+      vectors[word] = Numo::SFloat.from_binary(bin).to_a
+    end
+  rescue EOFError
+    # end of stream
+  end
+end
+puts "loaded #{vectors.size}/#{nb_words_needed.size} needed Numberbatch vectors from #{nb_path}"
+
+# ---------------------------------------------------------------------------
+# Load Wiktionary etymology templates
+# ---------------------------------------------------------------------------
+
+wik_path = File.join(repo, "corpora", "wiktionary", "kaikki-english-filtered.jsonl.gz")
+unless File.exist?(wik_path)
+  warn "missing #{wik_path} — run ./bin/filter-kaikki to produce it"
+  exit 1
+end
+
+words_of_interest = Set.new
+raw_rows.each do |r|
+  words_of_interest << (r["prefix"].to_s + r["base"].to_s).downcase
+  words_of_interest << r["base"].to_s.downcase
+end
+
+wik_templates = {}  # word -> [[morpheme, morpheme, ...], ...]
+
+Zlib::GzipReader.open(wik_path, encoding: "UTF-8") do |gz|
+  gz.each_line do |line|
+    obj = JSON.parse(line)
+    word = obj["word"].to_s.downcase
+    next unless words_of_interest.include?(word)
+    (obj["etymology_templates"] || []).each do |t|
+      next unless t.is_a?(Hash) && %w[prefix affix].include?(t["name"].to_s)
+      args = t["args"] || {}
+      morphemes = args.keys
+                      .select { |k| k.match?(/\A\d+\z/) }
+                      .sort_by(&:to_i)
+                      .map { |k| args[k].to_s.downcase.gsub(/[^a-z]/, "") }
+                      .reject(&:empty?)
+      morphemes.shift if morphemes.first && morphemes.first.length <= 3
+      next if morphemes.size < 2
+      # t2 is Wiktionary's sense gloss for the 2nd content arg (= the base in a
+      # {{prefix|en|PFX|BASE}} template), which can reveal an archaic sense that
+      # no longer matches the base word's dominant modern glosses.
+      base_sense = args["t2"].to_s.strip
+      wik_templates[word] ||= []
+      wik_templates[word] << [morphemes, base_sense]
+    end
+  rescue JSON::ParserError
+    next
+  end
+end
+puts "loaded Wiktionary templates for #{wik_templates.size} words of interest"
+puts
+
+# ---------------------------------------------------------------------------
+# Feature extraction
+# ---------------------------------------------------------------------------
+
+# Vectors are already L2-normalized when stored, so cosine = dot product.
+def _cosine(v1, v2)
+  return 0.0 unless v1 && v2
+  v1.each_with_index.sum { |a, i| a * v2[i] }
+end
+
+def _has_template?(word, base, wik_templates)
+  entries = wik_templates[word.downcase] || []
+  base_bare = base.downcase.gsub(/[^a-z]/, "")
+  entries.any? { |ms, _sense| ms.last == base_bare }
+end
+
+# Jaccard between the Wiktionary etymology sense annotation for the base morpheme
+# (the t2 field in {{prefix|en|PFX|BASE|t2=...}}) and the base word's actual glosses.
+# Returns:
+#   0.0  — no prefix template matches this (word, base) pair
+#   0.5  — template matched but no sense annotation present (neutral / no signal)
+#   0..1 — actual overlap score when the annotation exists
+# High score → etymology sense still dominant → filter signal.
+# Low score → archaic/dead sense in etymology → allow signal (e.g. berate/rate).
+def _etym_base_sense_match(word, base, wik_templates)
+  entries  = wik_templates[word.downcase] || []
+  base_bare = base.downcase.gsub(/[^a-z]/, "")
+  matching = entries.select { |ms, _| ms.last == base_bare }
+  return 0.0 if matching.empty?
+
+  sense = matching.filter_map { |_, s| s.empty? ? nil : s }.first
+  return 0.5 if sense.nil?
+
+  etym_toks = sense.downcase.scan(/[a-z]+/).reject { |t| t.length < 3 }.to_set
+  base_toks  = gloss_word_token_set(base).reject  { |t| t.length < 3 }.to_set
+  u = (etym_toks | base_toks).size
+  return 0.5 if u.zero?
+  (etym_toks & base_toks).size.to_f / u
+end
+
+# Jaccard similarity of the token sets from both words' glosses (WN + Wiktionary).
+# Uses the existing gloss_word_token_set which handles lemma fallback and caching.
+GLOSS_STOPWORDS = Set.new(%w[
+  a an the is are was were be been being have has had do does did will would
+  could should may might shall can cannot it its this that these those i we
+  you he she they me us him her them my our your his their in of to for with
+  on at by from or and but not no nor so yet both either as if then than when
+  where which who whom whose what how all any each every more most other some
+  such no only same too very just into through during before after above below
+  up down out off over under again further once here there about against while
+  also make makes made used use using become becomes became state states type
+  kinds one two three four five six seven eight nine ten etc especially
+  cause
+]).freeze
+
+def _gloss_jaccard(word, base)
+  t1 = gloss_word_token_set(word).reject { |t| t.length < 3 || GLOSS_STOPWORDS.include?(t) }.to_set
+  t2 = gloss_word_token_set(base).reject { |t| t.length < 3 || GLOSS_STOPWORDS.include?(t) }.to_set
+  union = (t1 | t2).size
+  return 0.0 if union.zero?
+  (t1 & t2).size.to_f / union
+end
+
+# 1.0 if any gloss token of `word` contains `base` as a substring — catches
+# cases where a prefix wraps the base (e.g. "unable" contains "able",
+# "unkind" contains "kind") that the start-anchored stem check in
+# gloss_cites_base? misses.  Self-reference (the word itself as a token)
+# is excluded to avoid the trivial match.
+def _gloss_base_substring(word, base)
+  return 0.0 if GLOSS_STOPWORDS.include?(base.downcase)
+  tokens = gloss_tokens_for_word(word)
+  return 0.0 if tokens.empty?
+  return 0.0 if base.length < 3
+  base_lc     = base.downcase
+  derived_lc  = word.downcase
+  tokens.any? { |t| t != derived_lc && t.include?(base_lc) } ? 1.0 : 0.0
+end
+
+# Total number of distinct senses (WordNet synsets + Wiktionary gloss entries)
+# for a word, log-scaled.  Polysemous bases like "cord" (rope / spinal / vocal /
+# electrical) accumulate many senses; a base with only 1-2 senses is more likely
+# a transparent morphological target.  Mirror lemma-fallback logic from
+# gloss_tokens_for_word so inflected forms still resolve.
+def _sense_count(word)
+  surface = word.to_s.downcase
+  lem = lemma(surface) rescue nil
+  forms = [surface]
+  forms << lem if lem && !forms.include?(lem)
+
+  count = 0
+  wn_available = defined?(WordNet::Lemma) && wordnet_corpora_present?
+  forms.each do |f|
+    if wn_available
+      count += WordNet::Lemma.find_all(f).sum { |l| l.synsets.size }
+    end
+    count += wiktionary_glosses_for(f).size
+    break if count > 0
+  end
+  Math.log(1 + count)
+end
+
+# Which WordNet POS tags each prefix canonically applies to.
+# "s" = adjective satellite (treated as adjective by WordNet).
+PREFIX_EXPECTED_POS = {
+  "a"     => %w[a s n],   # privative/locative: atonal, aflame
+  "be"    => %w[a n],     # verbalising: belittle, befall, behead
+  "co"    => %w[v n],     # co-: cooperate, co-author
+  "de"    => %w[v],       # reversative: decode, defrost
+  "dis"   => %w[a s],     # negating: dishonest, disloyal; NOT all dis- uses
+  "en"    => %w[v a n],   # causative: enlarge, enable, endanger
+  "im"    => %w[a s],     # negating adjectives: impatient, impure
+  "in"    => %w[a s],     # negating adjectives: inactive, incorrect
+  "inter" => %w[v n],     # between: interconnect, interface
+  "re"    => %w[v],       # again: remake, rewrite
+  "sub"   => %w[a s n],   # under: submarine, substandard
+  "un"    => %w[a s],     # negating adjectives: unhappy, unkind
+  "under" => %w[v a s],   # under-: undermine, underqualified
+}.freeze
+
+# Fraction of the base's WordNet synsets that match the prefix's expected POS.
+# When the prefix accepts multiple POS, return the max across them.
+# Returns 0.5 when the base has no WordNet coverage (neutral / no signal).
+def _base_expected_pos_frac(base, prefix)
+  expected = PREFIX_EXPECTED_POS[prefix.to_s] || []
+  return 0.5 if expected.empty?
+
+  surface = base.to_s.downcase
+  lem = lemma(surface) rescue nil
+  forms = [surface]
+  forms << lem if lem && !forms.include?(lem)
+
+  by_pos = Hash.new(0); total = 0
+  wn_available = defined?(WordNet::Lemma) && wordnet_corpora_present?
+  forms.each do |f|
+    if wn_available
+      WordNet::Lemma.find_all(f).each do |l|
+        l.synsets.each { |s| total += 1; by_pos[s.pos] += 1 }
+      end
+    end
+    break if total > 0
+  end
+  return 0.5 if total == 0
+
+  expected.map { |pos| by_pos[pos].to_f / total }.max
+rescue StandardError
+  0.5
+end
+
+def build_feature_vector(word, base, prefix, vectors, wik_templates, mixed_prefix_list)
+  v1  = vectors[word]
+  v2  = vectors[base]
+  cos = _cosine(v1, v2)
+  cos_missing   = (v1.nil? || v2.nil?) ? 1.0 : 0.0
+  has_template  = _has_template?(word, base, wik_templates) ? 1.0 : 0.0
+  pfx_len_norm  = prefix.length.to_f / 10.0
+  pfx_onehot    = mixed_prefix_list.map { |p| prefix == p ? 1.0 : 0.0 }
+
+  # gloss_cites_base? is conservative (returns true when gloss is absent),
+  # so invert: 0.0 when gloss is absent/uninformative, 1.0 when it explicitly cites base.
+  cites     = GLOSS_STOPWORDS.include?(base.downcase) ? 0.0 :
+              gloss_tokens_for_word(word).empty? ? 0.0 :
+              (gloss_cites_base?(word, base) ? 1.0 : 0.0)
+  substring = _gloss_base_substring(word, base)
+  jaccard   = _gloss_jaccard(word, base)
+  w_senses         = _sense_count(word)
+  b_senses         = _sense_count(base)
+  etym_sense_match  = _etym_base_sense_match(word, base, wik_templates)
+  base_expected_pos = _base_expected_pos_frac(base, prefix)
+
+  [1.0, cos, cos_missing, has_template, pfx_len_norm] + pfx_onehot +
+    [cites, substring, jaccard, w_senses, b_senses, etym_sense_match,
+     base_expected_pos]
+end
+
+# ---------------------------------------------------------------------------
+# Build labeled dataset (mixed prefixes only; skip whatever/nil/arguable)
+# ---------------------------------------------------------------------------
+
+labeled_rows = []
+skipped_verdict = 0
+skipped_productive = 0
+
+raw_rows.each do |r|
+  prefix  = r["prefix"].to_s
+  verdict = r["verdict"].to_s
+  base    = r["base"].to_s
+  word    = prefix + base
+
+  unless MIXED_PREFIX_LIST.include?(prefix)
+    skipped_productive += 1
+    next
+  end
+
+  unless %w[filter allow].include?(verdict)
+    skipped_verdict += 1
+    next
+  end
+
+  feats = build_feature_vector(word, base, prefix, vectors, wik_templates, MIXED_PREFIX_LIST)
+  labeled_rows << {
+    word:     word,
+    base:     base,
+    prefix:   prefix,
+    label:    verdict == "filter" ? 1 : 0,
+    features: feats,
+  }
+end
+
+n_filter = labeled_rows.count { |r| r[:label] == 1 }
+n_allow  = labeled_rows.count { |r| r[:label] == 0 }
+puts "labeled rows: #{labeled_rows.size}  (filter=#{n_filter}, allow=#{n_allow})"
+puts "skipped: #{skipped_productive} productive-prefix rows, #{skipped_verdict} non-verdict rows"
+puts
+puts "per-prefix breakdown:"
+printf "  %-12s  %6s  %6s\n", "prefix", "filter", "allow"
+MIXED_PREFIX_LIST.each do |pfx|
+  rs = labeled_rows.select { |r| r[:prefix] == pfx }
+  f  = rs.count { |r| r[:label] == 1 }
+  a  = rs.count { |r| r[:label] == 0 }
+  printf "  %-12s  %6d  %6d\n", pfx, f, a
+end
+puts
+
+# ---------------------------------------------------------------------------
+# Shared math
+# ---------------------------------------------------------------------------
+
+def sigmoid(z)
+  if z >= 0
+    1.0 / (1.0 + Math.exp(-z))
+  else
+    ez = Math.exp(z)
+    ez / (1.0 + ez)
+  end
+end
+
+# ---------------------------------------------------------------------------
+# Logistic regression (binary)
+# ---------------------------------------------------------------------------
+
+def standardize_cols!(rows)
+  d = rows.first.size
+  means = Array.new(d, 0.0)
+  stds  = Array.new(d, 1.0)
+  n = rows.size.to_f
+  (1...d).each do |j|
+    s = 0.0; rows.each { |r| s += r[j] }
+    means[j] = s / n
+    sq = 0.0; rows.each { |r| sq += (r[j] - means[j])**2 }
+    stds[j]  = Math.sqrt(sq / n)
+    stds[j]  = 1.0 if stds[j] < 1e-9
+  end
+  rows.each { |r| (1...d).each { |j| r[j] = (r[j] - means[j]) / stds[j] } }
+  [means, stds]
+end
+
+def fit_logreg(x_rows, y, lr:, l2:, epochs:)
+  d = x_rows.first.size
+  w = Array.new(d, 0.0)
+  prev_loss = Float::INFINITY
+  epochs.times do |epoch|
+    grad = Array.new(d, 0.0)
+    loss = 0.0
+    x_rows.each_with_index do |x, i|
+      z  = w.each_with_index.sum { |wj, j| wj * x[j] }
+      p  = sigmoid(z)
+      pc = [[p, 1e-12].max, 1 - 1e-12].min
+      loss += -(y[i] * Math.log(pc) + (1 - y[i]) * Math.log(1 - pc))
+      err = p - y[i]
+      d.times { |j| grad[j] += err * x[j] }
+    end
+    (1...d).each { |j| grad[j] += l2 * w[j] }
+    step = lr / x_rows.size
+    d.times { |j| w[j] -= step * grad[j] }
+    delta = (prev_loss - loss).abs / [prev_loss.abs, 1.0].max
+    break if delta < 1e-7 && epoch > 10
+    prev_loss = loss
+  end
+  w
+end
+
+def predict_logreg(raw_row, w, means, stds)
+  z = 0.0
+  raw_row.each_with_index do |v, j|
+    x = j.zero? ? v : (v - means[j]) / stds[j]
+    z += w[j] * x
+  end
+  sigmoid(z) >= 0.5 ? 1 : 0
+end
+
+def predict_logreg_prob(raw_row, w, means, stds)
+  z = 0.0
+  raw_row.each_with_index do |v, j|
+    x = j.zero? ? v : (v - means[j]) / stds[j]
+    z += w[j] * x
+  end
+  sigmoid(z)
+end
+
+# ---------------------------------------------------------------------------
+# GBT (binary)
+# ---------------------------------------------------------------------------
+
+def find_best_split(x_rows, g, h, feature_indices, rows, total_g, total_h, lambda_leaf:, min_child_hessian:)
+  base_gain = total_g**2 / (total_h + lambda_leaf)
+  best = nil; best_gain = 0.0
+
+  feature_indices.each do |f|
+    sorted = rows.sort_by { |i| x_rows[i][f] }
+    g_l = 0.0; h_l = 0.0; sz = sorted.size
+    (0...sz - 1).each do |k|
+      i = sorted[k]
+      g_l += g[i]; h_l += h[i]
+      h_r = total_h - h_l
+      next if h_l < min_child_hessian || h_r < min_child_hessian
+      v_cur  = x_rows[i][f]
+      v_next = x_rows[sorted[k + 1]][f]
+      next if v_cur == v_next
+      g_r    = total_g - g_l
+      gain   = g_l**2 / (h_l + lambda_leaf) + g_r**2 / (h_r + lambda_leaf) - base_gain
+      if gain > best_gain; best_gain = gain; best = { feature: f, threshold: (v_cur + v_next) / 2.0 }; end
+    end
+  end
+  best
+end
+
+def build_tree(nodes, x_rows, g, h, features, rows, depth, max_depth, lambda_leaf, min_child_hessian)
+  total_g = 0.0; total_h = 0.0
+  rows.each { |i| total_g += g[i]; total_h += h[i] }
+
+  split = nil
+  if depth < max_depth && rows.size >= 2 && total_h >= 2 * min_child_hessian
+    split = find_best_split(x_rows, g, h, features, rows, total_g, total_h,
+                            lambda_leaf: lambda_leaf, min_child_hessian: min_child_hessian)
+  end
+
+  if split.nil?
+    idx = nodes.size
+    nodes << { "v" => -total_g / (total_h + lambda_leaf) }
+    return idx
+  end
+
+  f = split[:feature]; t = split[:threshold]
+  left_rows  = []; right_rows = []
+  rows.each { |i| (x_rows[i][f] <= t ? left_rows : right_rows) << i }
+
+  if left_rows.empty? || right_rows.empty?
+    idx = nodes.size; nodes << { "v" => -total_g / (total_h + lambda_leaf) }; return idx
+  end
+
+  idx = nodes.size
+  nodes << { "f" => f, "t" => t, "l" => nil, "r" => nil }
+  nodes[idx]["l"] = build_tree(nodes, x_rows, g, h, features, left_rows,  depth + 1, max_depth, lambda_leaf, min_child_hessian)
+  nodes[idx]["r"] = build_tree(nodes, x_rows, g, h, features, right_rows, depth + 1, max_depth, lambda_leaf, min_child_hessian)
+  idx
+end
+
+def tree_predict_margin(nodes, row)
+  idx = 0
+  loop do
+    n = nodes[idx]
+    return n["v"] if n.key?("v")
+    idx = row[n["f"]] <= n["t"] ? n["l"] : n["r"]
+  end
+end
+
+def fit_gbt_binary(x_rows, y, trees:, depth:, lr:, lambda_leaf:, min_child_hessian:, colsample:, seed:)
+  n   = x_rows.size
+  rng = Random.new(seed)
+  p0  = y.sum.to_f / n
+  p0  = [[p0, 1e-4].max, 1 - 1e-4].min
+  bias    = Math.log(p0 / (1 - p0))
+  margins = Array.new(n, bias)
+  ensemble = []
+  all_features = (1...x_rows.first.size).to_a
+
+  trees.times do
+    g = Array.new(n); h_arr = Array.new(n)
+    n.times { |i| p = sigmoid(margins[i]); g[i] = p - y[i]; h_arr[i] = p * (1 - p) }
+    feats = colsample < 1.0 ? all_features.sample([(all_features.size * colsample).ceil, 1].max, random: rng) : all_features
+    nodes = []
+    build_tree(nodes, x_rows, g, h_arr, feats, (0...n).to_a, 0, depth, lambda_leaf, min_child_hessian)
+    n.times { |i| margins[i] += lr * tree_predict_margin(nodes, x_rows[i]) }
+    ensemble << nodes
+  end
+  [bias, ensemble]
+end
+
+def predict_gbt_label(raw_row, bias, trees, lr)
+  s = bias
+  trees.each { |t| s += lr * tree_predict_margin(t, raw_row) }
+  sigmoid(s) >= 0.5 ? 1 : 0
+end
+
+def predict_gbt_prob(raw_row, bias, trees, lr)
+  s = bias
+  trees.each { |t| s += lr * tree_predict_margin(t, raw_row) }
+  sigmoid(s)
+end
+
+# ---------------------------------------------------------------------------
+# K-fold
+# ---------------------------------------------------------------------------
+
+def make_folds(n, k, seed)
+  rng = Random.new(seed)
+  indices = (0...n).to_a.shuffle(random: rng)
+  folds = Array.new(k) { [] }
+  indices.each_with_index { |idx, i| folds[i % k] << idx }
+  folds
+end
+
+# Balanced accuracy = mean of per-class recall
+def balanced_accuracy(labeled_rows, eval_ids, predict_label_fn)
+  tp = 0; fn = 0; tn = 0; fp = 0
+  eval_ids.each do |i|
+    truth = labeled_rows[i][:label]
+    pred  = predict_label_fn.call(labeled_rows[i][:features])
+    if truth == 1
+      pred == 1 ? tp += 1 : fn += 1
+    else
+      pred == 0 ? tn += 1 : fp += 1
+    end
+  end
+  recall_pos = tp + fn > 0 ? tp.to_f / (tp + fn) : 0.0
+  recall_neg = tn + fp > 0 ? tn.to_f / (tn + fp) : 0.0
+  { ba: (recall_pos + recall_neg) / 2.0, tp: tp, fn: fn, tn: tn, fp: fp }
+end
+
+def train_logreg(labeled_rows, train_ids, options)
+  x = train_ids.map { |i| labeled_rows[i][:features].dup }
+  y = train_ids.map { |i| labeled_rows[i][:label].to_f }
+  means, stds = standardize_cols!(x)
+  w = fit_logreg(x, y, lr: options[:lr], l2: options[:l2], epochs: options[:epochs])
+  predict = ->(feats) { predict_logreg(feats, w, means, stds) }
+  model = { "means" => means, "stds" => stds, "weights" => w }
+  [predict, model]
+end
+
+def train_gbt(labeled_rows, train_ids, options)
+  x = train_ids.map { |i| labeled_rows[i][:features] }
+  y = train_ids.map { |i| labeled_rows[i][:label].to_f }
+  bias, trees = fit_gbt_binary(x, y, trees: options[:trees], depth: options[:depth],
+                               lr: options[:gbt_lr], lambda_leaf: options[:lambda_leaf],
+                               min_child_hessian: options[:min_child_hessian],
+                               colsample: options[:colsample], seed: options[:seed])
+  predict = ->(feats) { predict_gbt_label(feats, bias, trees, options[:gbt_lr]) }
+  model = { "bias" => bias, "lr" => options[:gbt_lr], "trees" => trees }
+  [predict, model]
+end
+
+# ---------------------------------------------------------------------------
+# Cross-validation
+# ---------------------------------------------------------------------------
+
+combos = %w[binary-gbt binary-logreg]
+combos = combos.select { |c| c == options[:only] } if options[:only]
+
+folds = make_folds(labeled_rows.size, options[:folds], options[:seed])
+cv_results = {}
+# per_prefix_cv[combo][pfx] = array of per-fold BA values (only folds with >= 1 example)
+per_prefix_cv = Hash.new { |h, k| h[k] = Hash.new { |h2, k2| h2[k2] = [] } }
+# cv_preds[combo][row_idx] = predicted label (0 or 1) from that row's held-out fold
+cv_preds = {}
+
+combos.each do |combo|
+  _target, model_type = combo.split("-")
+  cv_preds[combo] = Array.new(labeled_rows.size)
+  puts "=== #{combo}  #{options[:folds]}-fold CV ==="
+  fold_scores = []
+  folds.each_with_index do |test_ids, fi|
+    train_ids = folds.each_with_index.flat_map { |f, i| i == fi ? [] : f }
+    predict, _m = case model_type
+                  when "logreg" then train_logreg(labeled_rows, train_ids, options)
+                  when "gbt"    then train_gbt(labeled_rows, train_ids, options)
+                  end
+    r = balanced_accuracy(labeled_rows, test_ids, predict)
+    fold_scores << r
+    puts format("  fold %d  BA=%.1f%%  (tp=%d fn=%d tn=%d fp=%d)", fi, r[:ba] * 100, r[:tp], r[:fn], r[:tn], r[:fp])
+
+    # Store per-row held-out predictions for hybrid CV BA computation
+    test_ids.each { |i| cv_preds[combo][i] = predict.call(labeled_rows[i][:features]) }
+
+    # Accumulate per-prefix CV scores for this fold
+    MIXED_PREFIX_LIST.each do |pfx|
+      pfx_test_ids = test_ids.select { |i| labeled_rows[i][:prefix] == pfx }
+      next if pfx_test_ids.empty?
+      pfx_r = balanced_accuracy(labeled_rows, pfx_test_ids, predict)
+      per_prefix_cv[combo][pfx] << { ba: pfx_r[:ba], n: pfx_test_ids.size }
+    end
+  end
+  mean_ba = fold_scores.sum { |r| r[:ba] } / fold_scores.size.to_f
+  cv_results[combo] = mean_ba
+  puts format("  CV mean BA = %.1f%%\n", mean_ba * 100)
+end
+
+# ---------------------------------------------------------------------------
+# Winner + final fit
+# ---------------------------------------------------------------------------
+
+winner_combo, winner_ba = cv_results.max_by { |_, v| v }
+puts "=== CV ranking ==="
+cv_results.sort_by { |_, v| -v }.each { |name, ba| puts format("  %-20s  %.1f%%", name, ba * 100) }
+puts
+puts "winner: #{winner_combo}  (#{format('%.1f%%', winner_ba * 100)})"
+puts
+
+all_ids = (0...labeled_rows.size).to_a
+
+# Per-prefix CV comparison → build prefix_model_map (before hybrid-scoped final fit)
+# Min test-fold observations required before overriding the global winner
+MIN_PREFIX_CV_OBS = 4
+_global_tgt, global_winner_mt = winner_combo.split("-")
+prefix_model_map = {}
+puts "=== per-prefix CV BA by model ==="
+printf "  %-12s", "prefix"
+combos.each { |c| printf "  %-22s", c }
+puts "  dispatch"
+MIXED_PREFIX_LIST.each do |pfx|
+  pfx_cv_by_combo = combos.map do |c|
+    folds_data = per_prefix_cv[c][pfx]
+    total_obs  = folds_data.sum { |fd| fd[:n] }
+    mean_ba    = folds_data.empty? ? nil : folds_data.sum { |fd| fd[:ba] } / folds_data.size.to_f
+    [c, { mean_ba:, total_obs: }]
+  end.to_h
+
+  # Check we have enough data to make a per-prefix decision
+  max_obs = pfx_cv_by_combo.values.map { |v| v[:total_obs] }.max.to_i
+  if max_obs < MIN_PREFIX_CV_OBS
+    chosen_mt = global_winner_mt
+    note = "(fallback: too few CV obs=#{max_obs})"
+  else
+    best_combo = pfx_cv_by_combo.reject { |_, v| v[:mean_ba].nil? }
+                                .max_by { |_, v| v[:mean_ba] }
+    chosen_mt  = best_combo ? best_combo[0].split("-").last : global_winner_mt
+    note = ""
+  end
+  prefix_model_map[pfx] = chosen_mt
+
+  printf "  %-12s", pfx
+  combos.each do |c|
+    v = pfx_cv_by_combo[c]
+    if v[:mean_ba]
+      printf "  BA=%.1f%% (obs=%-3d)      ", v[:mean_ba] * 100, v[:total_obs]
+    else
+      printf "  %-22s", "n/a"
+    end
+  end
+  printf "  %s %s\n", chosen_mt, note
+end
+
+# Final fit: each model trains only on rows whose prefix dispatches to it
+# (hybridization scope). CV above still uses full-data folds to choose the map.
+# Empty scope → fall back to all_ids so we never ship a model fit on zero rows.
+def dispatch_model_for_prefix(prefix_model_map, global_winner_mt, pfx)
+  prefix_model_map[pfx] || global_winner_mt
+end
+
+all_models   = {}
+all_predicts = {}
+final_fit_counts = {}
+puts
+puts "=== final fit: logreg on logreg-dispatch prefixes only; gbt on gbt-dispatch only ==="
+%w[logreg gbt].each do |mt|
+  next if combos.none? { |c| c.end_with?("-#{mt}") }
+
+  pfx_for_mt = MIXED_PREFIX_LIST.select { |pfx| dispatch_model_for_prefix(prefix_model_map, global_winner_mt, pfx) == mt }
+  scoped_ids = all_ids.select { |i| dispatch_model_for_prefix(prefix_model_map, global_winner_mt, labeled_rows[i][:prefix]) == mt }
+  train_ids = scoped_ids.empty? ? all_ids : scoped_ids
+  if scoped_ids.empty?
+    warn format("  %-7s: no rows in dispatch scope — falling back to all %d rows", mt, all_ids.size)
+  else
+    puts format("  %-7s: %d / %d rows  prefixes=%s", mt, scoped_ids.size, all_ids.size, pfx_for_mt.join(", "))
+  end
+  final_fit_counts[mt] = train_ids.size
+  pred, m = case mt
+            when "logreg" then train_logreg(labeled_rows, train_ids, options)
+            when "gbt"    then train_gbt(labeled_rows, train_ids, options)
+            end
+  all_models[mt]   = m
+  all_predicts[mt] = pred
+end
+puts
+
+# Hybrid CV BA: for each row, use the held-out prediction from the
+# model that prefix_model_map assigns to its prefix.
+tp_h = 0; fn_h = 0; tn_h = 0; fp_h = 0
+all_ids.each do |i|
+  truth = labeled_rows[i][:label]
+  pfx   = labeled_rows[i][:prefix]
+  mt    = prefix_model_map[pfx] || global_winner_mt
+  pred  = cv_preds["binary-#{mt}"][i]
+  if truth == 1
+    pred == 1 ? tp_h += 1 : fn_h += 1
+  else
+    pred == 0 ? tn_h += 1 : fp_h += 1
+  end
+end
+recall_pos_h = tp_h + fn_h > 0 ? tp_h.to_f / (tp_h + fn_h) : 0.0
+recall_neg_h = tn_h + fp_h > 0 ? tn_h.to_f / (tn_h + fp_h) : 0.0
+hybrid_cv_ba = (recall_pos_h + recall_neg_h) / 2.0
+puts format("hybrid CV BA: %.1f%%  (tp=%d fn=%d tn=%d fp=%d)\n",
+            hybrid_cv_ba * 100, tp_h, fn_h, tn_h, fp_h)
+
+# Overall in-sample BA for the global CV winner alone (all rows, single model)
+winner_mt = global_winner_mt
+predict_winner_only = all_predicts[winner_mt]
+in_sample  = balanced_accuracy(labeled_rows, all_ids, predict_winner_only)
+puts format("in-sample BA (%s only, all rows): %.1f%%  (tp=%d fn=%d tn=%d fp=%d)\n",
+            winner_mt, in_sample[:ba] * 100, in_sample[:tp], in_sample[:fn], in_sample[:tn], in_sample[:fp])
+
+hybrid_predict = lambda do |feats, row_prefix|
+  mt = dispatch_model_for_prefix(prefix_model_map, global_winner_mt, row_prefix)
+  all_predicts[mt].call(feats)
+end
+hybrid_in_sample_all = balanced_accuracy(labeled_rows, all_ids, lambda { |feats|
+  i = all_ids.find { |j| labeled_rows[j][:features] == feats }
+  pfx = i ? labeled_rows[i][:prefix] : nil
+  hybrid_predict.call(feats, pfx)
+})
+puts format("in-sample BA (hybrid dispatch): %.1f%%  (tp=%d fn=%d tn=%d fp=%d)\n",
+            hybrid_in_sample_all[:ba] * 100, hybrid_in_sample_all[:tp], hybrid_in_sample_all[:fn],
+            hybrid_in_sample_all[:tn], hybrid_in_sample_all[:fp])
+
+# Per-prefix accuracy (hybrid: each prefix uses its dispatched model)
+puts "=== per-prefix breakdown in-sample (hybrid) ==="
+printf "  %-12s  %6s  %6s  %6s  %6s  %6s  %8s\n", "prefix", "n", "tp", "fn", "tn", "fp", "model"
+MIXED_PREFIX_LIST.each do |pfx|
+  pfx_ids = all_ids.select { |i| labeled_rows[i][:prefix] == pfx }
+  next if pfx_ids.empty?
+  disp = dispatch_model_for_prefix(prefix_model_map, global_winner_mt, pfx)
+  pred_fn = ->(feats) { hybrid_predict.call(feats, pfx) }
+  r = balanced_accuracy(labeled_rows, pfx_ids, pred_fn)
+  printf "  %-12s  %6d  %6d  %6d  %6d  %6d   BA=%.0f%%  %s\n",
+         pfx, pfx_ids.size, r[:tp], r[:fn], r[:tn], r[:fp], r[:ba] * 100, disp
+end
+puts
+
+if options[:verbose]
+  worst = all_ids.map do |i|
+    row  = labeled_rows[i]
+    # Dispatch through hybrid map for verbose misclassification report
+    dispatch_mt = dispatch_model_for_prefix(prefix_model_map, global_winner_mt, labeled_rows[i][:prefix])
+    pred = all_predicts[dispatch_mt].call(row[:features])
+    next nil if pred == row[:label]
+    row.merge(pred: pred, dispatch_mt:)
+  end.compact
+  puts "=== misclassified rows via hybrid dispatch (#{worst.size}) ==="
+  col_w = FEATURE_NAMES.map(&:length).max
+  worst.each do |r|
+    puts format("  %-22s  base=%-15s  pfx=%-8s  truth=%d  pred=%d  model=%s",
+                r[:word], r[:base], r[:prefix], r[:label], r[:pred], r[:dispatch_mt])
+    FEATURE_NAMES.each_with_index do |name, i|
+      val = r[:features][i]
+      next if name == "bias"
+      next if name.start_with?("pfx_") && val == 0.0
+      puts format("    %-#{col_w}s  %s", name, val.round(4))
+    end
+    puts
+  end
+
+  # Echo hybrid in-sample (same as non-verbose summary above)
+  puts format("hybrid in-sample BA (verbose echo): %.1f%%  (tp=%d fn=%d tn=%d fp=%d)\n",
+              hybrid_in_sample_all[:ba] * 100, hybrid_in_sample_all[:tp], hybrid_in_sample_all[:fn],
+              hybrid_in_sample_all[:tn], hybrid_in_sample_all[:fp])
+end
+
+# ---------------------------------------------------------------------------
+# Serialize
+# ---------------------------------------------------------------------------
+
+out = {
+  "feature_names"       => FEATURE_NAMES,
+  "productive_prefixes" => productive_prefixes,
+  "mixed_prefixes"      => MIXED_PREFIX_LIST,
+  "target"              => "binary",
+  "model_type"          => global_winner_mt,   # overall winner (fallback)
+  "model"               => all_models[global_winner_mt],
+  "logreg_model"        => all_models["logreg"],
+  "gbt_model"           => all_models["gbt"],
+  "prefix_model_map"    => prefix_model_map,
+  "training" => {
+    "winner"            => winner_combo,
+    "cv_ba"             => winner_ba,
+    "hybrid_cv_ba"      => hybrid_cv_ba,
+    "all_cv_results"    => cv_results,
+    "in_sample_ba"      => in_sample[:ba],
+    "hybrid_in_sample_ba" => hybrid_in_sample_all[:ba],
+    "per_prefix_cv"     => per_prefix_cv.transform_values { |h|
+                             h.transform_values { |folds_data|
+                               { "mean_ba"    => folds_data.empty? ? nil : folds_data.sum { |f| f[:ba] } / folds_data.size.to_f,
+                                 "total_obs"  => folds_data.sum { |f| f[:n] } }
+                             }
+                           },
+    "min_prefix_cv_obs" => MIN_PREFIX_CV_OBS,
+    "hybrid_scoped_final_fit" => true,
+    "final_fit_row_counts"    => final_fit_counts,
+    "rows"              => labeled_rows.size,
+    "filter_rows"       => n_filter,
+    "allow_rows"        => n_allow,
+    "folds"             => options[:folds],
+    "seed"              => options[:seed],
+    "trees"             => options[:trees],
+    "depth"             => options[:depth],
+    "gbt_lr"            => options[:gbt_lr],
+    "lambda_leaf"       => options[:lambda_leaf],
+    "min_child_hessian" => options[:min_child_hessian],
+    "colsample"         => options[:colsample],
+    "epochs"            => options[:epochs],
+    "lr"                => options[:lr],
+    "l2"                => options[:l2],
+  },
+}
+
+if options[:dry_run]
+  puts "(--dry-run: not writing output file)"
+else
+  build_dir = ENV["RHYMECRIME_BUILD_DIR"]
+  out_path = build_dir \
+    ? File.join(build_dir, "bootstrap", "prefix_classifier.json") \
+    : generated_root_path("prefix_classifier.json")
+  BuildIo.write(out_path, JSON.generate(out), encoding: "UTF-8", hint: "train-prefix-classifier")
+  size_kb = File.size(out_path) / 1024.0
+  puts format("wrote %s (%.1f KB)", out_path, size_kb)
+end

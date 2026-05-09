@@ -182,12 +182,20 @@ def save_word_dict(word_dict, lemma_map = nil)
       isFirstPron = false
       f.print(pron)
     end
-    if lemma_map
-      lemma = lemma_map[word]
-      if lemma && lemma != word
-        f.print(',')
-        f.print(lemma.sanitize)
-      end
+    lemma = lemma_map ? lemma_map[word] : word_info[2]
+    bases = word_info[3]
+    has_bases = bases.is_a?(Array) && !bases.empty?
+    lemma_neq = lemma_map && lemma && lemma != word
+    if lemma_neq
+      f.print(',')
+      f.print(lemma.sanitize)
+    elsif has_bases
+      # Empty lemma column when lemma is omitted but PREFIX_ALLOWS follows (split(",", 5)).
+      f.print(',')
+    end
+    if has_bases
+      f.print(',')
+      f.print(bases.map(&:sanitize).join('|'))
     end
     f.puts
   end
@@ -203,7 +211,10 @@ def save_word_dict_msgpack!(word_dict, lemma_map = nil)
     lem = lemma_map ? lemma_map[word] : (info[2] || word)
     pron_strs = (prons || []).map(&:to_s)
     stored_lemma = (lem && lem != word) ? lem : nil
-    obj[word] = [freq.to_i, pron_strs, stored_lemma]
+    row = [freq.to_i, pron_strs, stored_lemma]
+    bases = info[3]
+    row << bases if bases.is_a?(Array) && !bases.empty?
+    obj[word] = row
   end
   MessagePackUtils.pack_and_save(path, obj)
   size_mb = (File.size(path).to_f / 1024 / 1024).round(2)

@@ -15,11 +15,13 @@ require_relative "pace_utils"
 RIME_DICT_FILENAME = "rime_dict.txt"
 WORD_DICT_FILENAME = "word_dict.txt"
 # MessagePack mirrors of the .txt artifacts above. Same shape semantics —
-# word_dict.msgpack is {word => [freq, prons, lemma_or_nil]} where prons
-# is an Array of space-joined ARPABET strings (split on load to feed
+# word_dict.msgpack is {word => [freq, prons, lemma_or_nil, prefix_allow_bases?]}
+# where prons is an Array of space-joined ARPABET strings (split on load to feed
 # Pronunciation.new); rime_dict.msgpack is {rime => [w1, w2, ...]}. Self-
 # lemmas are stored as nil (matching save_word_lemma_map!'s policy) and
-# materialized back to the headword on load.
+# materialized back to the headword on load. The optional 4th element is an
+# Array<String> of headword bases for which the prefix classifier allowed
+# (word, base) as a rhyme (see bin/precompute-prefix-gate); omitted when empty.
 #
 # These are the runtime-canonical artifacts: word_dict() / rime_dict() in
 # query.rb load these in BOTH local-dev and Lambda mode (the DDB word# /
@@ -37,7 +39,8 @@ RIME_DICT_MSGPACK_FILENAME = "rime_dict.msgpack"
 # save_word_dict and read into $word_to_lemma at runtime. Exists so the
 # hot lemma(w) path (hit thousands of times per page render while coloring
 # set_related tuples) is a single Hash lookup, instead of walking through
-# lexicon_word_entry → DataSource.dynamodb? → word_dict[w] → entry[2]
+# lexicon_word_entry → DataSource.dynamodb? → word_dict[w] → entry[2] (lemma);
+# optional entry[3] lists prefix-allow bases from precompute-prefix-gate.
 # on every call. Shipping this msgpack in the Lambda deploy bundle also lets
 # DDB mode answer lemma(w) without a per-word GetItem.
 WORD_LEMMA_MAP_FILENAME = "word_lemma_map.msgpack"
@@ -109,6 +112,10 @@ MODEL_SENSE_VECTORS_FILENAME = "model_sense_vectors.msgpack"
 # gloss_word_token_set in signals.rb: callers default to the WordNet-only behavior when
 # this map is empty.
 WIKTIONARY_GLOSSES_FILENAME = "wiktionary_glosses.msgpack"
+# Common headwords related to cue lemma "pirate" (same scan contract as
+# bin/compute-relatedness: rhymeable targets only, common_only). Optional
+# artifact from bin/dump-pirate-related-common.
+PIRATE_RELATED_COMMON_FILENAME = "pirate_related_common.json"
 # Word-frequency rare ceiling: treat as rare when frequency is at or below this (see rare? in query.rb).
 RARE_FREQ_MAX = 4
 

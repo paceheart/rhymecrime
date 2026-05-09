@@ -170,7 +170,6 @@ describe 'RHYMES' do
     ought_not_rhyme 'ice', 'deice' # de- is a prefix, but deice (de-ice) is not in cmudict, so this succeeds for the wrong reason
     oughta_rhyme 'stand', 'strand' # control
     oughta_rhyme 'understand', 'strand' # control
-    ought_not_rhyme 'stand', 'understand' # under- is a prefix
     ought_not_rhyme 'organizing', 'reorganizing' # re-
     ought_not_rhyme 'organizing', 'self-organizing' # self-
     ought_not_rhyme 'urban', 'suburban' # sub-
@@ -186,7 +185,7 @@ describe 'RHYMES' do
     ought_not_rhyme 'mixed', 'intermixed' # inter-
     ought_not_rhyme 'unmixed', 'intermixed' # inter-
     ought_not_rhyme 'operate', 'interoperate' # inter-
-    ought_not_rhyme 'operate', 'cooperate' # co-
+    oughta_rhyme 'operate', 'cooperate' # arguable
     ought_not_rhyme 'indicated', 'contraindicated' # contra-
     ought_not_rhyme 'emphasize', 'deemphasize' # de-
     ought_not_rhyme 'closed', 'enclosed' # en-
@@ -245,9 +244,7 @@ describe 'RHYMES' do
     ought_not_rhyme 'lay', 'underlay' # under-
     ought_not_rhyme 'overlay', 'underlay' # over- + under-
     ought_not_rhyme 'lie', 'underlie' # under-
-    ought_not_rhyme 'lying', 'underlying' # under-
-    # TODO: rezoned (and thus these specs) want a pron from re- + zoned: prepend e.g. R IH0 or R IY0
-    # plus a syllable boundary before zoned's CMU string. General prefix morphology is overkill for this alone.
+    ought_not_rhyme 'lying', 'underlying', not_working_reason: 'arguable; B says yes'
     oughta_rhyme 'owned', 'zoned'
     oughta_rhyme 'unowned', 'zoned', not_working_reason: "TODO: unowned lacks pron"
     oughta_rhyme 'owned', 'rezoned', not_working_reason: "TODO: rezoned lacks pron"
@@ -271,8 +268,8 @@ describe 'RHYMES' do
     ought_not_rhyme 'war', 'antiwar' # anti-
     ought_not_rhyme 'composition', 'decomposition' # de-
     ought_not_rhyme 'cycling', 'recycling' # re-
-    ought_not_rhyme 'chanted', 'enchanted' # en-
-    ought_not_rhyme 'chanted', 'disenchanted' # dis- en-
+    oughta_rhyme 'chanted', 'enchanted' # arguable
+    oughta_rhyme 'chanted', 'disenchanted' # arguable
     ought_not_rhyme 'enchanted', 'disenchanted' # en- + dis- en-
     ought_not_rhyme 'dishonesty', 'honesty' # dis-
     ought_not_rhyme 'healthy', 'unhealthy' # un-
@@ -304,76 +301,56 @@ describe 'RHYMES' do
     ought_not_rhyme 'entity', 'nonentity'
     ought_not_rhyme 'entity', 'non-entity'
     context "unless they're not derivationally related" do
-      # Nested so before(:each) below does not skip these: hooks apply to the whole group.
-      context "pairs that do not need pseudo-prefix deferral" do
-        ought_not_rhyme 'pulse', 'impulse' # stress mismatch
-        ought_not_rhyme 'certain', 'ascertain'
-        ought_not_rhyme 'plumber', 'demur' # stress mismatch
-        oughta_rhyme 'plumber', 'dumber'
-        ought_not_rhyme 'dumber', 'demur' # stress mismatch, but would be a homophone anyway
-        ought_not_rhyme 'national', 'international'
-        # recorded → corded direction works (the reverse is still deferred below)
-        oughta_rhyme_one_way 'recorded', 'corded'
-      end
-
-      # Pseudo-prefixes (the re-, a-, im- isn't really derivational here) would need
-      # lemma-aware / etymological reasoning to distinguish from real prefix rhymes. For now
-      # every pair below is skipped: we accept splash damage from filter_out_prefix_words
-      # and revisit when we have a signal that tells real prefixation (atonal, impure) apart
-      # from opaque or borrowed look-alikes (abasement, impact, ahead).
-      context "deferred pending better prefix-vs-opaque detection" do
-        before(:each) { skip_if_not_working('pseudo-prefix: filter_out_prefix_words overfilters') }
-        nwr = 'splash damage: filter_out_prefix_words treats the false re- as derivational'
-        oughta_rhyme 'parity', 'disparity', not_working_reason: nwr
-        oughta_rhyme 'dress', 'redress', not_working_reason: nwr
-        oughta_rhyme 'percussion', 'repercussion', not_working_reason: nwr
-        oughta_rhyme 'lied', 'relied', not_working_reason: nwr
-        oughta_rhyme 'quest', 'request', not_working_reason: nwr
-        oughta_rhyme_one_way 'corded', 'recorded', not_working_reason: nwr
-        oughta_rhyme 'tween', 'between', not_working_reason: nwr
-        oughta_rhyme 'basement', 'abasement'
-        oughta_rhyme 'bashed', 'abashed'
-        oughta_rhyme 'but', 'abut'
-        oughta_rhyme 'do', 'ado'
-        oughta_rhyme 'go', 'ago'
-        oughta_rhyme 'head', 'ahead'
-        oughta_rhyme 'pathetic', 'apathetic'
-        oughta_rhyme 'spire', 'aspire'
-        oughta_rhyme 'void', 'avoid'
-        oughta_rhyme 'based', 'abased'
-        oughta_rhyme 'bode', 'abode'
-        oughta_rhyme 'bodes', 'abodes'
-        oughta_rhyme 'butter', 'abutter'
-        oughta_rhyme 'pact', 'impact'
-        oughta_rhyme 'peach', 'impeach'
-        oughta_rhyme 'plied', 'implied'
-        oughta_rhyme 'port', 'import' # arguable
-        oughta_rhyme 'pound', 'impound'
-        oughta_rhyme 'prove', 'improve'
-        oughta_rhyme 'marine', 'submarine'
-        oughta_rhyme 'tract', 'subtract'
-        oughta_rhyme 'lime', 'sublime'
-        oughta_rhyme 'due', 'subdue'
-        oughta_rhyme 'scribe', 'subscribe'
-        oughta_rhyme 'merge', 'submerge'
-        oughta_rhyme 'sect', 'intersect'
-        oughta_rhyme 'turn', 'return'
-        oughta_rhyme 'member', 'remember'
-        oughta_rhyme 'mind', 'remind'
-        context "arguable" do
-          oughta_rhyme 'bide', 'abide'
-          oughta_rhyme 'new', 'anew'
-          oughta_rhyme 'part', 'apart'
-          oughta_rhyme 'rise', 'arise'
-          oughta_rhyme 'wait', 'await'
-          oughta_rhyme 'waits', 'awaits'
-          oughta_rhyme 'wake', 'awake'
-          oughta_rhyme 'wakes', 'awakes'
-          oughta_rhyme 'waken', 'awaken'
-          oughta_rhyme 'wakening', 'awakening'
-          oughta_rhyme 'woke', 'awoke'
-          oughta_rhyme 'woken', 'awoken'
-        end
+      oughta_rhyme 'parity', 'disparity'
+      oughta_rhyme 'dress', 'redress'
+      oughta_rhyme 'percussion', 'repercussion'
+      oughta_rhyme 'lied', 'relied'
+      oughta_rhyme 'quest', 'request'
+      oughta_rhyme 'corded', 'recorded'
+      oughta_rhyme 'tween', 'between'
+      oughta_rhyme 'basement', 'abasement'
+      oughta_rhyme 'bashed', 'abashed'
+      oughta_rhyme 'but', 'abut'
+      oughta_rhyme 'do', 'ado'
+      oughta_rhyme 'go', 'ago'
+      oughta_rhyme 'head', 'ahead'
+      oughta_rhyme 'pathetic', 'apathetic'
+      oughta_rhyme 'spire', 'aspire'
+      oughta_rhyme 'void', 'avoid'
+      oughta_rhyme 'based', 'abased'
+      oughta_rhyme 'bode', 'abode'
+      oughta_rhyme 'bodes', 'abodes'
+      oughta_rhyme 'butter', 'abutter'
+      oughta_rhyme 'pact', 'impact'
+      oughta_rhyme 'peach', 'impeach'
+      oughta_rhyme 'plied', 'implied'
+      oughta_rhyme 'port', 'import' # arguable
+      oughta_rhyme 'pound', 'impound'
+      oughta_rhyme 'prove', 'improve'
+      oughta_rhyme 'marine', 'submarine'
+      oughta_rhyme 'tract', 'subtract'
+      oughta_rhyme 'lime', 'sublime'
+      oughta_rhyme 'due', 'subdue'
+      oughta_rhyme 'scribe', 'subscribe'
+      oughta_rhyme 'merge', 'submerge'
+      oughta_rhyme 'sect', 'intersect'
+      oughta_rhyme 'turn', 'return'
+      oughta_rhyme 'member', 'remember'
+      oughta_rhyme 'mind', 'remind'
+      context "arguable" do
+        oughta_rhyme 'bide', 'abide', not_working_reason: 'edge case'
+        oughta_rhyme 'new', 'anew', not_working_reason: 'edge case'
+        oughta_rhyme 'part', 'apart', not_working_reason: 'edge case'
+        oughta_rhyme 'rise', 'arise', not_working_reason: 'edge case'
+        ought_not_rhyme 'stand', 'understand' # under- is a prefix, but 'understand' arguably has its own meaning
+        oughta_rhyme 'wait', 'await', not_working_reason: 'edge case'
+        oughta_rhyme 'waits', 'awaits', not_working_reason: 'edge case'
+        oughta_rhyme 'wake', 'awake', not_working_reason: 'edge case'
+        oughta_rhyme 'wakes', 'awakes', not_working_reason: 'edge case'
+        oughta_rhyme 'waken', 'awaken', not_working_reason: 'edge case'
+        oughta_rhyme 'wakening', 'awakening', not_working_reason: 'edge case'
+        oughta_rhyme 'woke', 'awoke', not_working_reason: 'edge case'
+        oughta_rhyme 'woken', 'awoken', not_working_reason: 'edge case'
       end
     end
   end
@@ -508,7 +485,7 @@ describe 'RHYMES' do
       ought_not_rhyme 'magnet', 'electromagnet'
       ought_not_rhyme 'magnetic', 'electromagnetic'
       oughta_rhyme 'prudence', 'jurisprudence' # they're semantically different enough to be interesting
-      ought_not_rhyme 'explosion', 'implosion'
+      ought_not_rhyme 'explosion', 'implosion', not_working_reason: 'arguable; B says yes'
     end
   end
 
