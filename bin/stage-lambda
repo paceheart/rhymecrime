@@ -31,13 +31,13 @@
 #   lib/                            lib/rhymecrime except build/ + dev/ (see rm below)
 #   assets/                         public CSS / JS / robots + assets/private composition HTML
 #   curated/                        hand-curated data files (rarity.csv, etc.)
-#   generated/spelling_variants_auto.txt    \ small files query.rb /
-#   generated/hyphen_variant_map.json       | paths.rb open with
-#   generated/word_lemma_map.msgpack        | File.read at runtime.
-#   generated/word_semantic_base_map.msgpack/ See the require-graph audit
+#   generated/current/spelling_variants_auto.txt    \ small files query.rb /
+#   generated/current/hyphen_variant_map.json       | paths.rb open with
+#   generated/current/word_lemma_map.msgpack        | File.read at runtime.
+#   generated/current/word_semantic_base_map.msgpack/ See the require-graph audit
 #                                            below if you're tempted to add.
-#   generated/word_dict.msgpack             \ runtime-canonical lexicon /
-#   generated/rime_dict.msgpack             | rime cohort. Replaced the
+#   generated/current/word_dict.msgpack     \ runtime-canonical lexicon /
+#   generated/current/rime_dict.msgpack     | rime cohort. Replaced the
 #                                            | DDB word# / rime# partitions
 #                                            | once the msgpacks proved small
 #                                            | enough to bundle (~6 MB total);
@@ -75,7 +75,9 @@ STAGING="lambda-build"
 
 echo "==> wiping $STAGING/"
 rm -rf "$STAGING"
-mkdir -p "$STAGING/generated"
+# Must mirror repo layout: GENERATED_DIR in lib/rhymecrime/paths.rb is
+# <REPO_ROOT>/generated/current — flat generated/ breaks Lambda lookups.
+mkdir -p "$STAGING/generated/current"
 
 echo "==> copying runtime sources"
 cp lambda_handler.rb "$STAGING/"
@@ -90,12 +92,12 @@ echo "==> copying generated/ runtime artifacts"
 RUNTIME="${RHYMECRIME_BUILD_DIR:+$RHYMECRIME_BUILD_DIR/runtime}"
 RUNTIME="${RUNTIME:-$REPO/generated/current}"
 # Plain cp follows symlinks for files (spelling + hyphen may link to ../bootstrap/).
-cp "$RUNTIME/spelling_variants_auto.txt"     "$STAGING/generated/"
-cp "$RUNTIME/hyphen_variant_map.json"        "$STAGING/generated/"
-cp "$RUNTIME/word_lemma_map.msgpack"         "$STAGING/generated/"
-cp "$RUNTIME/word_semantic_base_map.msgpack" "$STAGING/generated/"
-cp "$RUNTIME/word_dict.msgpack"              "$STAGING/generated/"
-cp "$RUNTIME/rime_dict.msgpack"              "$STAGING/generated/"
+cp "$RUNTIME/spelling_variants_auto.txt"     "$STAGING/generated/current/"
+cp "$RUNTIME/hyphen_variant_map.json"        "$STAGING/generated/current/"
+cp "$RUNTIME/word_lemma_map.msgpack"         "$STAGING/generated/current/"
+cp "$RUNTIME/word_semantic_base_map.msgpack" "$STAGING/generated/current/"
+cp "$RUNTIME/word_dict.msgpack"              "$STAGING/generated/current/"
+cp "$RUNTIME/rime_dict.msgpack"              "$STAGING/generated/current/"
 
 echo
 echo "staged. $(du -sh "$STAGING" | cut -f1) in $STAGING/"
