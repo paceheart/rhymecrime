@@ -213,6 +213,12 @@ def forbidden?(word)
   w = word.to_s
   return true if w.empty?
 
+  # Ensure the msgpack-backed lexicon is loaded before answering: without this,
+  # word_dict_includes_headword? returns false while $word_dict is still nil and
+  # every headword looks forbidden — find_rhyming_tuples then returns [] on the
+  # first call in a fresh process (e.g. an isolated rspec example).
+  word_dict
+
   !word_dict_includes_headword?(w)
 end
 

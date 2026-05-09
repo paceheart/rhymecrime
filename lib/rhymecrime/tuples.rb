@@ -1475,42 +1475,96 @@ end
 def really_find_rhyming_pairs(input_rel1, input_rel2, common_only = false)
   # Pairs of rhyming words where the first word is related to INPUT_REL1 and the second word is related to INPUT_REL2
   # Each element of the returned array is a pair of rhyming words [W1 W2] where W1 is related to INPUT_REL1 and W2 is related to INPUT_REL2
-  # Algorithm:
-  # Compute the set of all words thematically related to INPUT_REL1, call it RELATEDS1.
-  # Compute the set of all words thematically related to INPUT_REL2, call it RELATEDS2.
-  # For each word REL1 in RELATEDS1,
-  #   Get all non-homophone rhymes RHYME of REL1.
-  #   If RHYME rhymes with REL1 and is related to INPUT_REL2, we win! "REL1 / RHYME" is a pair.
+  #
+  # Algorithm (same semantics as the naive nested loop, optimized):
+  # - RELATEDS1 / RELATEDS2: filtered related lemmas for each cue (common preferred, not promiscuous).
+  # - Expand the *smaller* side: for each outer word, gather (rime → [(outer_w, pron), ...]) using
+  #   the same all_forms × pronunciations walk as find_rhyming_words (homophone_ok=false cohort pass).
+  # - For each distinct rime, scan its cohort once; any cohort word in the *other* related set is a
+  #   candidate match. homophone_rhyme?(candidate, pron) matches find_rhyming_words_for_pronunciation.
+  # - Rhymecrime::Timing.measure phases mirror set_related so CloudWatch can separate related fetch,
+  #   index build, cohort scan, and prune.
   return [] if forbidden?(input_rel1) || forbidden?(input_rel2)
+
+  timing_base = "pair_related[#{input_rel1}+#{input_rel2}]"
 
   # Semantically promiscuous words are thematically related to everything by
   # policy, which would otherwise flood the pair output with pairs like
   # [perhaps, duh] / [could, then]. A 2-element pair has no room for a
   # go-word anchor when either side is promiscuous, so we drop those before
   # the rhyme cross.
-  relateds1 = filter_related_words_to_common_preferred(
-    find_related_words(input_rel1, true, false, nil, common_only: true)
-  ).reject { |w| semantically_promiscuous?(w) }
-  relateds2 = filter_related_words_to_common_preferred(
-    find_related_words(input_rel2, true, false, nil, common_only: true)
-  ).reject { |w| semantically_promiscuous?(w) }.to_set
+  relateds1 = Rhymecrime::Timing.measure("#{timing_base} find+filter related[1]") do
+    filter_related_words_to_common_preferred(
+      find_related_words(input_rel1, true, false, nil, common_only: true)
+    ).reject { |w| semantically_promiscuous?(w) }
+  end
+  relateds2 = Rhymecrime::Timing.measure("#{timing_base} find+filter related[2]") do
+    filter_related_words_to_common_preferred(
+      find_related_words(input_rel2, true, false, nil, common_only: true)
+    ).reject { |w| semantically_promiscuous?(w) }
+  end
+  relateds2_set = relateds2.to_set
+  relateds1_set = relateds1.to_set
 
-  related_rhymes = Hash.new { |h, k| h[k] = [] }
-  relateds1.each do |rel1|
-    # rel1 is a word related to input_rel1. We're looking for rhyming pairs [rel1 rel2].
-    debug "rhymes for #{rel1} (#{debug_info(rel1)}):<br>"
-    find_rhyming_words(rel1, false).each do |rhyme| # check all non-homophone rhymes of REL1, call each one 'RHYME'
-      if relateds2.include?(rhyme) # is RHYME related to INPUT_REL2? If so, we win!
-        related_rhymes[rel1].push(rhyme)
-        debug " " + rhyme + " " + debug_info(rhyme)
+  # Expand the smaller related set so we run fewer outer-word expansions; emit [w1, w2] with w1 ∈ RELATEDS1.
+  outer_words, inner_set =
+    if relateds1.size <= relateds2.size
+      [relateds1, relateds2_set]
+    else
+      [relateds2, relateds1_set]
+    end
+
+  return [] if outer_words.empty? || inner_set.empty?
+
+  rime_entries = Rhymecrime::Timing.measure("#{timing_base} build rime index outer=#{outer_words.size} inner=#{inner_set.size}") do
+    h = Hash.new { |hh, k| hh[k] = [] }
+    outer_words.each do |outer_w|
+      all_forms(outer_w).each do |form|
+        next if forbidden?(form)
+        pronunciations(form).each do |pron|
+          h[pron.rime] << [outer_w, pron]
+        end
       end
     end
-    debug "<br><br>"
+    h
+  end
+
+  related_rhymes = Hash.new { |h, k| h[k] = [] }
+  pair_debug_header_printed = Set.new
+  Rhymecrime::Timing.measure("#{timing_base} cohort scan rimes=#{rime_entries.size}") do
+    rime_entries.each do |rime, entries|
+      rime_dict_lookup(rime).each do |candidate|
+        next if forbidden?(candidate)
+        next unless inner_set.include?(candidate)
+
+        entries.each do |outer_w, pron|
+          next if outer_w == candidate
+          next if homophone_rhyme?(candidate, pron)
+
+          w1, w2 =
+            if relateds1.size <= relateds2.size
+              [outer_w, candidate]
+            else
+              [candidate, outer_w]
+            end
+
+          unless pair_debug_header_printed.include?(w1)
+            debug "rhymes for #{w1} (#{debug_info(w1)}):<br>"
+            pair_debug_header_printed << w1
+          end
+          related_rhymes[w1] << w2
+          debug " #{w2} #{debug_info(w2)}"
+        end
+      end
+    end
   end
 
   pairs = []
   related_rhymes.each do |relrhyme1, relrhyme2_list|
-    relrhyme2_list.each { |relrhyme2| pairs.push([relrhyme1, relrhyme2]) }
+    relrhyme2_list.uniq.each { |relrhyme2| pairs.push([relrhyme1, relrhyme2]) }
   end
-  prune_trivial_rhyming_pairs(pairs)
+
+  Rhymecrime::Timing.measure("#{timing_base} prune pairs=#{pairs.size}") do
+    prune_trivial_rhyming_pairs(pairs)
+  end
 end
