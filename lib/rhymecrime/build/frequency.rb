@@ -1993,7 +1993,19 @@ def add_frequency_info(pronunciation_map, subtlex_hash, subtlex_total_hash, word
   # base baroness noun.person) survive via the WN concreteness gate.
   # Stronger junk than the -ings class — tombstone outright.
   #
-  # Both scrubs run AFTER rarity_rescore_and_dump! on purpose: the
+  # And: abstract -ment pluralizations (managements, mismanagements,
+  # equipments, empowerments, encouragements) where Kaikki enumerates a
+  # paradigm -s row off a mass / process noun. Demote (mirrors -ings)
+  # using a surface-vs-base Zipf gap rather than the WN-concreteness
+  # gate the other two scrubs use — management has noun.group so the
+  # WN gate misclassifies it as concrete; the corpus signal (real
+  # plurals track within ~1 Zipf of the lemma; paradigm noise collapses
+  # 2+ Zipf below) cleanly separates payments/statements/treatments
+  # from managements/equipments/empowerments. See
+  # wiktionary_overgenerated_ment_plural? in
+  # lib/rhymecrime/morphology/curated_rarity.rb for the gate details.
+  #
+  # All three scrubs run AFTER rarity_rescore_and_dump! on purpose: the
   # classifier might otherwise re-promote a freshly-demoted gerund surface
   # back to freq=10. Running last makes the demote / tombstone the
   # final word in the build pipeline.
@@ -2049,6 +2061,29 @@ def add_frequency_info(pronunciation_map, subtlex_hash, subtlex_total_hash, word
       nesses_overplural_scrub += 1
     end
     puts "#{nesses_overplural_scrub} Wiktionary -nesses overpluralization surfaces tombstoned" if nesses_overplural_scrub > 0
+
+    ment_overplural_scrub = 0
+    hash.keys.each do |word|
+      next unless wiktionary_overgenerated_ment_plural?(word, wordfreq_hash)
+      entry = hash[word]
+      next unless entry
+      next if entry.is_a?(BuildEntry) && entry.tombstoned?
+      pre = entry[0]
+      next if pre <= RARE_FREQ_MAX
+      dict_trace_puts(word, "wiktionary_ment_overplural_scrub: DEMOTE freq=#{pre}->#{RARE_FREQ_MAX}") if dict_trace_word?(word)
+      if entry.is_a?(BuildEntry)
+        entry.append_freq_tag!(
+          phase: :wiktionary_ment_overplural_scrub,
+          post_freq: RARE_FREQ_MAX,
+          pre_freq: pre,
+          gate_outcomes: { reason: :paradigm_noise_ment_pluralization },
+        )
+      else
+        entry[0] = RARE_FREQ_MAX
+      end
+      ment_overplural_scrub += 1
+    end
+    puts "#{ment_overplural_scrub} Wiktionary -ments overpluralization surfaces demoted to freq=#{RARE_FREQ_MAX}" if ment_overplural_scrub > 0
   end
 
   puts "#{count + extra + common_extra + floor_applied + inherited + cw_inherited + morph_inherited + morph_corpus} total entries with frequency data"

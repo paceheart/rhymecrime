@@ -363,3 +363,66 @@ def wiktionary_overgenerated_abstract_nesses_plural?(word)
   true
 end
 
+# Surface-vs-base Zipf gap that flags a -ments plural as paradigm noise.
+# Real English -ments plurals track within ~1 Zipf of their base
+# (payment 4.66 / payments 4.48; statement 4.97 / statements 4.51;
+# treatment 5.01 / treatments 4.09; arrangement 4.25 / arrangements
+# 4.23). Paradigm-noise -ments plurals collapse 2+ Zipf below the lemma
+# (management 5.13 / managements 2.33; equipment 4.88 / equipments 2.87;
+# encouragement 3.79 / encouragements 1.77; mismanagement 3.09 /
+# mismanagements 0). The 2.0 cutoff sits cleanly between the two
+# clusters and is the discriminator the gerund / -nesses scrubs can't
+# use (they fall back to wn_base_has_concrete_noun_sense? — but
+# management has noun.group so the WN gate misclassifies it).
+WIKTIONARY_MENT_OVERPLURAL_BASE_GAP_ZIPF = 2.0
+
+# True when word is a <X>ments surface (managements, mismanagements,
+# equipments, empowerments, encouragements) where the lemma is common
+# but the plural is a Wiktionary/Kaikki paradigm-table artifact rather
+# than a real corpus surface. English nominalizes verbs into abstract
+# -ment nouns freely (manage→management, equip→equipment), and Kaikki
+# enumerates the -s row for each as if it were a count noun even when
+# the base is a mass / process noun that doesn't pluralize. Without
+# this gate, morph_inherit_kaikki copies the common base's freq onto
+# the rare surface and the rarity classifier rescores it back to common
+# (see TRACE_WORDS=managements,mismanagements bin/build --dict-only).
+#
+# Gates (in order — early-exit cheap):
+#   * shape: ends in -ments, base (chomp s) ends in -ment, length >= 7
+#   * rarity.csv common/rare rows win (curator's call beats the rule —
+#     denouements is common_ish; protected here)
+#   * surface in WordNet → preserve (WordNet rarely lists plurals so
+#     this is mostly a guard for any future surface attestation)
+#   * base must be in word_dict — guards against unattested bases
+#   * surface Zipf must sit at least WIKTIONARY_MENT_OVERPLURAL_BASE_GAP_ZIPF
+#     below base Zipf — the discriminator that separates real plurals
+#     from paradigm noise (see constant comment for the data behind 2.0)
+#   * otherwise the surface is Wiktionary paradigm noise: word_dict's
+#     wiktionary_ment_overplural_scrub in frequency.rb clamps freq to
+#     RARE_FREQ_MAX at build time, so the runtime rare? short-circuit
+#     fires naturally.
+#
+# Build-time scrub only — not wired into rare? at runtime: the demote
+# bakes into the generated word_dict via append_freq_tag!, so the live
+# rarity gates read it through plain frequency(word) <= RARE_FREQ_MAX.
+# wordfreq_hash is threaded as an argument because the surface/base
+# Zipf gap is the discriminator (the gerund / -nesses predicates don't
+# need wordfreq because their WN-concreteness gate is sufficient — for
+# -ments it isn't, so we reach for the corpus signal instead).
+def wiktionary_overgenerated_ment_plural?(word, wordfreq_hash)
+  return false if word.nil? || word.empty?
+  return false unless word.end_with?("ments")
+  return false if word.length < 7
+  base = word.chomp("s")
+  return false unless base.end_with?("ment")
+  rarity_csv_common_words # load
+  rarity_csv_rare_words # load
+  return false if $rarity_csv_common_words&.include?(word)
+  return false if $rarity_csv_rare_words&.include?(word)
+  return false if wn_has_entry?(word)
+  return false unless word_dict_includes_headword?(base)
+  surface_zipf = (wordfreq_hash[word] || 0).to_f
+  base_zipf = (wordfreq_hash[base] || 0).to_f
+  surface_zipf < base_zipf - WIKTIONARY_MENT_OVERPLURAL_BASE_GAP_ZIPF
+end
+

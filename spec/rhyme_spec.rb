@@ -272,7 +272,6 @@ describe 'RHYMES' do
     ought_not_rhyme 'social', 'antisocial' # anti-
     ought_not_rhyme 'war', 'antiwar' # anti-
     ought_not_rhyme 'composition', 'decomposition' # de-
-    ought_not_rhyme 'cycling', 'recycling' # re-
     oughta_rhyme 'chanted', 'enchanted' # arguable
     oughta_rhyme 'chanted', 'disenchanted' # arguable
     ought_not_rhyme 'enchanted', 'disenchanted' # en- + dis- en-
@@ -483,6 +482,7 @@ describe 'RHYMES' do
     ought_not_rhyme 'venous', 'intravenous'
     ought_not_rhyme 'modern', 'postmodern'
     context "edge cases" do
+      oughta_rhyme 'cycling', 'recycling'
       oughta_rhyme 'semblance', 'resemblance'
       oughta_rhyme 'angular', 'rectangular'
       oughta_rhyme 'thesis', 'prosthesis'

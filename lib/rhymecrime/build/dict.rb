@@ -127,6 +127,48 @@ def wn_accept_inflection_lemma_pair?(word, base)
     wn_derivationally_related_to_base?(word, base)
 end
 
+# Drop *…in'* headwords whose *…ing* reconstitution is in the lexicon but
+# Inflect's canonical g-drop spelling from lemma(*…ing*) does not match the
+# headword (e.g. *stin'* vs *sting*, self-lemma, gdropped(sting, sting)=nil).
+# Corpus Zipf can still attach to CMU noise even when the lemma map no longer
+# links the surface to the *…ing* lemma. Skips Kaikki-attested colloquial
+# spellings ($inflection_base_words), e.g. *somethin'*→*something*.
+def scrub_spurious_gdrop_in_prime_headwords!(word_dict, rime_dict, lemma_map)
+  return 0 unless word_dict && rime_dict
+
+  dropped = []
+  word_dict.each_key do |word|
+    next unless word.end_with?("in'") || word.end_with?("in\u2019")
+    ing_form = word.sub(/in['\u2019]\z/, "ing")
+    next unless word_dict.key?(ing_form)
+    next if $inflection_base_words[word]
+
+    ing_lemma = lemma_map[ing_form] || ing_form
+    expected = Inflect.gdropped_in_apostrophe_spelling(ing_lemma, ing_form)
+    next if expected && expected.tr("\u2019", "'") == word.tr("\u2019", "'")
+
+    dropped << word
+  end
+
+  dropped.each do |w|
+    dict_trace_puts(w, "spurious_gdrop_in_prime_scrub: DELETE") if dict_trace_word?(w)
+    word_dict.delete(w)
+  end
+
+  return 0 if dropped.empty?
+
+  before = rime_dict.values.sum(&:size)
+  rime_dict.each_value do |words|
+    next if words.nil? || words.empty?
+
+    words.reject! { |w| dropped.include?(w) }
+  end
+  rime_dict.delete_if { |_rime, words| words.nil? || words.empty? }
+  stripped = before - rime_dict.values.sum(&:size)
+  puts "Pruned #{dropped.size} spurious *…in'* headwords (Inflect g-drop spelling ≠ surface; #{stripped} rime_dict mentions stripped)" if dropped.size > 0
+  dropped.size
+end
+
 # Sentinel-region cutoff for independent_ing_adj_surface?'s freq-differential
 # gate. Real corpus frequencies in word_dict top out below ~25 (log2 of the
 # SUBTLEX corpus size); anything above this is a curated structural sentinel
@@ -526,6 +568,8 @@ def compute_lemma_map(word_dict)
       ing_form = word.sub(/in['\u2019]\z/, "ing")
       next unless word_dict.key?(ing_form)
       ing_lemma = lemma_map[ing_form] || ing_form
+      expected = Inflect.gdropped_in_apostrophe_spelling(ing_lemma, ing_form)
+      next unless expected && expected.tr("\u2019", "'") == word.tr("\u2019", "'")
       next if ing_lemma == word
       lemma_map[word] = ing_lemma
       gdrop_lemmas += 1
@@ -899,6 +943,7 @@ def rebuild_rhymecrime_dictionaries()
     # mirror at generated/conceptnet_edges.msgpack and filters by word_lemma_map.msgpack
     # at load time (see load_conceptnet_edges_streaming).
     lemma_checkpoint = compute_lemma_map(word_dict)
+    scrub_spurious_gdrop_in_prime_headwords!(word_dict, rime_dict, lemma_checkpoint)
     save_word_dict_msgpack!(word_dict, lemma_checkpoint)
     save_word_lemma_map!(word_dict, lemma_checkpoint)
     save_hyphen_variant_map!(hyphen_fold_build_keys, exported_keys: word_dict.keys)
@@ -907,6 +952,7 @@ def rebuild_rhymecrime_dictionaries()
   end
 
   lemma_map = compute_lemma_map(word_dict)
+  scrub_spurious_gdrop_in_prime_headwords!(word_dict, rime_dict, lemma_map)
   save_string_hash(rime_dict, generated_dict_path_under_dict_dir(RIME_DICT_FILENAME), RIME_DICT_HEADER)
   save_word_dict(word_dict, lemma_map)
   save_word_lemma_map!(word_dict, lemma_map)

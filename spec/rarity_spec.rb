@@ -388,6 +388,24 @@ describe "RARITY" do
     oughta_be_forbidden 'aied'
   end
 
+  # Wiktionary/Kaikki paradigm-table also overgenerates -s rows for
+  # abstract -ment nominalizations of verbs (manage→management,
+  # equip→equipment, encourage→encouragement). The lemma is mass /
+  # process — pluralizing it is paradigm noise, not a count-noun
+  # surface — but morph_inherit_kaikki happily copies the common
+  # base's freq onto the rare plural, and the rarity classifier then
+  # rescores it back to common. The wiktionary_overgenerated_ment_plural?
+  # predicate in morphology/curated_rarity.rb gates on a 2.0 surface-vs-
+  # base Zipf gap (real plurals like payments/statements track within
+  # ~1 Zipf of the lemma; paradigm noise like managements/equipments
+  # collapses 2+ Zipf below) so the build-time
+  # wiktionary_ment_overplural_scrub demotes only the noise surfaces.
+  context 'wiktionary -ments overgeneration' do
+    oughta_be_common 'management'
+    oughta_be_rare 'managements'
+    oughta_be_rare 'mismanagements'
+  end
+
   context "csv sweep (curated/rarity.csv)" do
     it "covers >= #{RARITY_MIN_EVALUATED_ROWS} rows" do
       expect(RARITY_EVALUATED).to be >= RARITY_MIN_EVALUATED_ROWS
