@@ -66,8 +66,6 @@ make it actually follow up on the "I'll make a note" notes
 
 in single column, add a "jump to"
 
-explain what it does
-
 get rid of initialisms
 
 try retraining relatedness with whatever mapped to related_ish, or related_ish_ish

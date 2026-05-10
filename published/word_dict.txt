@@ -123,7 +123,7 @@ cabernet,10,K AE2 . B AH0 R . N EY1
 lances,10,L AE1 N . S AH0 Z,lanx
 us,999999,AH1 S
 shat,10,SH AE1 T,shite
-marveled,10,M AA0 R . V EH1 L D,marvel
+marveled,10,,marvel
 saltwater,10,
 'allo,2,AA2 . L OW1
 'cause,999999,K AH0 Z
