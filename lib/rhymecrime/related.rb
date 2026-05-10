@@ -303,7 +303,10 @@ class RelatedWords
         return @related_word_cache[key] = words
       end
 
-      if Rhymecrime::Store.available? && Rhymecrime::Store.has_related?(lemma_key)
+      # RELATED_BYPASS_STORE=1 must skip the SQLite cache too: otherwise only
+      # thematically_related? runs live while find_related_words still serves a
+      # stale related#<cue> row (spec eval after dict/retrain drift).
+      if !related_bypass_store? && Rhymecrime::Store.available? && Rhymecrime::Store.has_related?(lemma_key)
         words = Rhymecrime::Store.find_all_related_computed(lemma_key, include_rhymeless, common_only)
         debug "Finding words related to #{word} (store[cache], lemma=#{lemma_key})... #{words.length}\n"
         return @related_word_cache[key] = words
@@ -356,7 +359,7 @@ class RelatedWords
       # has_related? to distinguish "row exists but filtered to empty"
       # (legit "no related words" answer) from "row never built for this cue"
       # (fall through).
-      if Rhymecrime::Store.available? && Rhymecrime::Store.has_related?(lemma_key)
+      if !related_bypass_store? && Rhymecrime::Store.available? && Rhymecrime::Store.has_related?(lemma_key)
         tuples = Rhymecrime::Store.find_all_related_computed_with_scores(lemma_key, include_rhymeless, common_only)
         debug "Finding words related to #{word} (store[cache], lemma=#{lemma_key})... #{tuples.length}\n"
         @related_word_cache[key] = tuples

@@ -51,6 +51,7 @@ require_relative "build_utils"
 require_relative "constants"
 require_relative "phonology"
 require_relative "initialism_pronunciation"
+require_relative "../morphology/lexical" # acronym_shape_wordfreq_only?, wn_has_entry?
 
 # Keep in lock-step with bin/train-rarity-classifier. The JSON records its own
 # feature-name list so mismatches are detected at load.
@@ -523,24 +524,43 @@ def classifier_set_freq!(entry, new_freq:, verdict:, reason:)
   end
 end
 
-# Distinct pronunciation rows for a headword (BuildEntry#prons or legacy [1]).
-def pronunciation_row_count_for_rarity(entry)
-  prons = entry.is_a?(BuildEntry) ? entry.prons : entry[1]
-  return 0 unless prons.is_a?(Array)
-  prons.size
+# WordNet surface attestation from the frequency pipeline (preferred) or a live
+# lemma probe. Used so 2–4 letter all-alpha surfaces like *fish* stay governed by
+# WN while *abc* / *cnn* (no lemma on the lowercase surface) still clamp as initialisms.
+def wordnet_surface_attested_for_initialism_gate?(word, entry)
+  if entry.is_a?(BuildEntry) && entry.freq_computation
+    return entry.freq_computation.wn_in
+  end
+
+  wn_has_entry?(word)
 end
 
-# Dotted / hyphen-letter surfaces (see initialism_shaped_headword?) or a
-# single pronunciation row that letter-spells the headword (uss -> Y UW EH S EH S).
-# Multiple pronunciation rows skip the clamp (homographs like us).
+# Surfaces we clamp to :rare in rarity_rescore_and_dump! (after the classifier,
+# unless curated/rarity.csv already fixed the word — overrides short-circuit
+# earlier and never reach this predicate).
+#
+# 1. Orthographic initialisms: dotted (u.s.) or hyphen single-letter chains (b-j).
+# 2. Letter-spelled ARPAbet for the headword (ip, noaa, fbi) on one or more rows,
+#    as long as we do not still have a mixed letter + ordinary reading (homograph
+#    guard: *us* with AH S vs Y UW EH S). After dict-build drops bogus CMU alts,
+#    most acronym headwords are a single letter-reading row and qualify here.
+# 3. Two- to four-letter all-alpha surfaces with no WordNet lemma on the surface
+#    (abc, cnn) — catches SUBTLEX-only rows with no CMU pronunciation so (2) never
+#    runs. Real short lexemes (*cat*, *fish*) have wn_in from compute_frequency.
 def headword_initialism_for_rarity_clamp?(word, entry)
-  return false if pronunciation_row_count_for_rarity(entry) > 1
   return true if initialism_shaped_headword?(word)
 
   prons = entry.is_a?(BuildEntry) ? entry.prons : entry[1]
-  return false unless prons.is_a?(Array) && !prons.empty?
+  if prons.is_a?(Array) && !prons.empty?
+    spelled = prons.map { |p| pronunciation_spells_out_headword_letters?(word, p) }
+    if spelled.any?(true)
+      return false if prons.size > 1 && spelled.any?(false)
 
-  pronunciation_spells_out_headword_letters?(word, prons.first)
+      return true
+    end
+  end
+
+  acronym_shape_wordfreq_only?(word) && !wordnet_surface_attested_for_initialism_gate?(word, entry)
 end
 
 def rarity_rescore_and_dump!(hash, **ctx_kwargs)

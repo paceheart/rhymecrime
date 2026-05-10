@@ -1,0 +1,163 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+#
+# Triage CMUdict pronunciations using heuristics aligned with common
+# authoritative_pronunciations.txt fixes (see prior discussion: duplicate
+# alternates, CMU vs Kaikki rime mismatch, truncated high-Zipf entries,
+# single-token CMU vs Kaikki substitutions).
+#
+# Usage:
+#   bin/audit-cmudict-suspects                    # all detectors (loads Kaikki + wordfreq)
+#   bin/audit-cmudict-suspects --only dupes     # fast: no Wiktionary
+#   bin/audit-cmudict-suspects --only stress,subst
+#   bin/audit-cmudict-suspects --limit 30         # cap rows per section
+#   bin/audit-cmudict-suspects --include-authoritative   # do not skip curated overrides
+#   bin/audit-cmudict-suspects --fail-if-any      # exit 1 if any hit (optional CI)
+#
+# Inputs: corpora/cmudict/cmudict-0.7c.txt, corpora/wiktionary/*.jsonl.gz,
+#         generated/wordfreq.tsv (from bin/build or equivalent).
+#
+# Exit 0 by default (reporting tool). Use --fail-if-any for a hard gate.
+
+$LOAD_PATH.unshift File.expand_path("../lib", __dir__)
+
+require "set"
+require "rhymecrime/build/constants"
+require "rhymecrime/build/cmudict_suspect_detectors"
+require "rhymecrime/build/phonology"
+require "rhymecrime/build/wiktionary"
+require "rhymecrime/io_utils"
+
+CMU_PATH = CMUDICT_FILENAME
+
+opts = {
+  only: nil, # nil = all, or Set of "dupes", "stress", "trunc", "subst"
+  limit: nil,
+  include_authoritative: false,
+  fail_if_any: false,
+}
+
+ARGV.each_with_index do |arg, i|
+  case arg
+  when "-h", "--help"
+    puts File.read(__FILE__).lines.grep(/^# /).join
+    exit 0
+  when "--only"
+    opts[:only] = Set.new(ARGV[i + 1].to_s.split(",").map(&:strip).reject(&:empty?))
+  when "--limit"
+    opts[:limit] = ARGV[i + 1]&.to_i
+  when "--include-authoritative"
+    opts[:include_authoritative] = true
+  when "--fail-if-any"
+    opts[:fail_if_any] = true
+  end
+end
+
+unless File.exist?(CMU_PATH)
+  abort "missing #{CMU_PATH}"
+end
+
+skip = Set.new
+unless opts[:include_authoritative]
+  skip.merge(authoritative_pronunciation_words)
+end
+
+lim = opts[:limit]
+want = opts[:only]
+
+def cap_rows(rows, lim)
+  return rows if lim.nil? || lim <= 0
+
+  rows.first(lim)
+end
+
+total_hits = 0
+
+run_dupes = want.nil? || want.include?("dupes")
+run_stress = want.nil? || want.include?("stress")
+run_trunc = want.nil? || want.include?("trunc")
+run_subst = want.nil? || want.include?("subst")
+
+if run_dupes
+  d = CmudictSuspectDetectors.duplicate_alternate_prons(CMU_PATH)
+  d.reject! { |h| skip.include?(h[:base]) } unless opts[:include_authoritative]
+  puts "=== duplicate identical CMU variants (idea 3) — #{d.size} ==="
+  cap_rows(d, lim).each do |h|
+    puts "  #{h[:base].upcase}  x#{h[:occurrences]}  alts=#{h[:alts].inspect}  #{h[:pron_string]}"
+  end
+  puts "  (showing #{[lim, d.size].min} of #{d.size})" if lim && d.size > lim
+  total_hits += d.size
+  puts
+end
+
+kaikki = nil
+wordfreq = {}
+if File.exist?(WORDFREQ_FILENAME)
+  IoUtils.foreach(WORDFREQ_FILENAME, encoding: "UTF-8", hint: "audit-cmudict-suspects zipf") do |line|
+    w, z = line.chomp.split("\t")
+    wordfreq[w] = z.to_f if w && z
+  end
+else
+  warn "Warning: #{WORDFREQ_FILENAME} missing — Zipf filters treat every word as 0 (run bin/build or generate wordfreq.tsv)."
+end
+
+if run_stress || run_subst
+  unless File.exist?(WIKTIONARY_DATA_PATH)
+    abort "Kaikki extract missing at #{WIKTIONARY_DATA_PATH} (run bin/setup-corpora). Use --only dupes,trunc to skip."
+  end
+  original_stdout = $stdout
+  $stdout = File.open(File::NULL, "w")
+  begin
+    kaikki, = load_wiktionary
+  ensure
+    $stdout.close
+    $stdout = original_stdout
+  end
+end
+
+if run_stress
+  s = CmudictSuspectDetectors.stress_disagreement_with_kaikki(
+    CMU_PATH, kaikki, wordfreq, skip_bases: skip
+  )
+  puts "=== CMU vs Kaikki rime mismatch (idea 2) — #{s.size} ==="
+  cap_rows(s, lim).each do |h|
+    puts "  #{h[:base]} zipf=%.2f" % [h[:zipf]]
+    puts "    rime CMU:    #{h[:cmu_rime]}"
+    puts "    rime Kaikki: #{h[:kaikki_rime]}"
+    puts "    flat CMU:    #{h[:cmu]}"
+    puts "    flat Kaikki: #{h[:kaikki]}"
+  end
+  puts "  (showing #{[lim, s.size].min} of #{s.size})" if lim && s.size > lim
+  total_hits += s.size
+  puts
+end
+
+if run_trunc
+  t = CmudictSuspectDetectors.truncated_or_under_specified_prons(CMU_PATH, wordfreq)
+  t.reject! { |h| skip.include?(h[:base]) } unless opts[:include_authoritative]
+  puts "=== high-Zipf + few ARPAbet vowels vs spelling (idea 4) — #{t.size} ==="
+  cap_rows(t, lim).each do |h|
+    puts "  #{h[:base]} zipf=%.2f orth_v=#{h[:orthographic_vowels]} arpa_v=#{h[:arpa_vowel_phones]} phones=#{h[:non_dot_phones]}  #{h[:cmu]}"
+  end
+  puts "  (showing #{[lim, t.size].min} of #{t.size})" if lim && t.size > lim
+  total_hits += t.size
+  puts
+end
+
+if run_subst
+  u = CmudictSuspectDetectors.single_phone_substitution_vs_kaikki(
+    CMU_PATH, kaikki, wordfreq, skip_bases: skip
+  )
+  puts "=== CMU vs Kaikki single phone substitution (idea 5) — #{u.size} ==="
+  cap_rows(u, lim).each do |h|
+    puts "  #{h[:base]} zipf=%.2f" % [h[:zipf]]
+    puts "    CMU:    #{h[:cmu]}"
+    puts "    Kaikki: #{h[:kaikki]}"
+  end
+  puts "  (showing #{[lim, u.size].min} of #{u.size})" if lim && u.size > lim
+  total_hits += u.size
+  puts
+end
+
+puts "total rows (all sections): #{total_hits}"
+exit 1 if opts[:fail_if_any] && total_hits.positive?

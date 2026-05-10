@@ -18,6 +18,7 @@ ai,common_ish,initialisms
 aol,rare,initialisms
 al,rare,initialisms
 api,rare_ish,initialisms
+abc,rare,initialisms
 atm,rare_ish,initialisms
 ba,rare,initialisms
 bbc,rare,initialisms
@@ -756,6 +757,7 @@ boo-boo,rare_ish,hyphenated words / with existing final words
 aye-aye,rare,hyphenated words / with existing final words
 ha-ha,rare,hyphenated words / with existing final words
 so-so,common,hyphenated words / with existing final words
+nt-a-car,rare,hyphenated words / spurious fragment of rent-a-car (CMU-style surface)
 bad-ass,forbidden,hyphenated words / with existing final words
 checkup,common,hyphenated words / with existing final words
 check-up,forbidden,hyphenated words / with existing final words
@@ -1808,6 +1810,7 @@ rin,forbidden_ish,-in'
 rin',forbidden,-in'
 hearing,common,-in'
 hearin,forbidden_ish,-in'
+ears,common,Zipf undercount; set_related music prereq ears/spheres
 earring,common,-in'
 earrin,forbidden,-in'
 earrin',forbidden,-in'
@@ -1931,6 +1934,7 @@ brushedder,forbidden,don't overgenerate inflected forms
 brusheddest,forbidden,don't overgenerate inflected forms
 bruter,forbidden,don't overgenerate inflected forms
 brutest,forbidden,don't overgenerate inflected forms
+buggery,common_ish,set_related anchor with thuggery (tuple scan is common_only)
 buggeder,forbidden,don't overgenerate inflected forms
 buggedest,forbidden,don't overgenerate inflected forms
 buggedder,forbidden,don't overgenerate inflected forms
@@ -4080,5 +4084,5 @@ blackguard,common,prereq for pirate -> blackguard / swaggered
 trow,rare,archaic
 ufo,common,it's an initialism but it's cool so I'll allow it
 samurais,rare,the correct plural is samurai
-ip,rare,
-noaa,rare,
+ip,rare,initialisms
+fu,rare,initialisms

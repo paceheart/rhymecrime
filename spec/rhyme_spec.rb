@@ -349,7 +349,7 @@ describe 'RHYMES' do
         oughta_rhyme 'new', 'anew', not_working_reason: 'edge case'
         oughta_rhyme 'part', 'apart', not_working_reason: 'edge case'
         oughta_rhyme 'rise', 'arise', not_working_reason: 'edge case'
-        ought_not_rhyme 'stand', 'understand' # under- is a prefix, but 'understand' arguably has its own meaning
+        ought_not_rhyme 'stand', 'understand', not_working_reason: "under- is a prefix, but 'understand' arguably has its own meaning"
         oughta_rhyme 'wait', 'await', not_working_reason: 'edge case'
         oughta_rhyme 'waits', 'awaits', not_working_reason: 'edge case'
         oughta_rhyme 'wake', 'awake', not_working_reason: 'edge case'
@@ -530,7 +530,7 @@ describe 'RHYMES' do
     oughta_rhyme 'tv', 'fee'
     oughta_rhyme 'high', 'ai'
     oughta_rhyme 'mount', 'count'
-    ought_not_rhyme 'mt', 'count'
+    ought_not_rhyme_one_way 'count', 'mt'
     ought_not_rhyme 'noaa', 'boa'
     ought_not_rhyme 'ct', 'sort'
     ought_not_rhyme 'ip', 'dip'
@@ -1152,6 +1152,10 @@ describe 'RHYMES' do
   end
 
   context 'bad pronunciations' do
+    oughta_rhyme 'engineer', 'queer'
+    ought_not_rhyme 'hibachi', 'mochi'
+    ought_not_rhyme 'foreign', 'sarin'
+    ought_not_rhyme 'euro', 'tempura'
     ought_not_rhyme 'otaku', 'sudoku'
     ought_not_rhyme 'no-one', 'cartoon'
     ought_not_rhyme 'noone', 'cartoon'

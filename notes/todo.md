@@ -70,3 +70,5 @@ try asking some LLMs for 100 or 1000 words related to 'pirate'. try various prom
 try RoBERTa
 
 make a test that ensures everything in awesome.csv works
+
+rap -> disapprovin' / groovin' / reprovin', why not the -ing versions?

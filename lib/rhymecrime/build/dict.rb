@@ -45,6 +45,7 @@ require_relative "morph_rules"
 require_relative "rime"
 require_relative "frequency"
 require_relative "corpus_variants"
+require_relative "initialism_pronunciation"
 
 $inflection_base_words = {}
 
@@ -885,6 +886,7 @@ def rebuild_rhymecrime_dictionaries()
   append_r_to_orthographic_r_pronunciations!(pronunciation_map, label: "pronunciation_map")
   insert_r_before_final_d_for_red_pronunciations!(pronunciation_map, label: "pronunciation_map")
   insert_r_before_final_sibilant_for_s_pronunciations!(pronunciation_map, label: "pronunciation_map")
+  drop_mixed_initialism_nonletter_pronunciations!(pronunciation_map, authoritative_words: authoritative_pronunciation_words)
   rime_dict = build_rime_dict(pronunciation_map)
   word_dict = build_word_dict(pronunciation_map, rime_dict, subtlex_hash, subtlex_total_hash, wordfreq_hash, wiktionary_words, pos_map, forms_map, kaikki_verb_morph, pronunciation_map_seed_headwords, kaikki_capitalized_only, kaikki_variant_map, varcon_variant_map)
   prune_obsolete_alt_of_only_headwords!(word_dict, rime_dict, kaikki_obsolete_alt_of_only)

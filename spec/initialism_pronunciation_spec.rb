@@ -1,5 +1,7 @@
 # encoding: utf-8
 
+require "set"
+
 require_relative "../lib/rhymecrime/build/initialism_pronunciation"
 require_relative "../lib/rhymecrime/pronunciation"
 
@@ -46,5 +48,32 @@ RSpec.describe "pronunciation_spells_out_headword_letters?" do
              "us",
              Pronunciation.new(%w[Y UW1 EH1 S]),
            )).to eq(true)
+  end
+end
+
+RSpec.describe "drop_mixed_initialism_nonletter_pronunciations!" do
+  it "keeps only letter-spelled rows when CMU also lists a word-like alt" do
+    letter = Pronunciation.new(%w[AY2 . P IY2])
+    word_like = Pronunciation.new(%w[IH1 P])
+    m = { "ip" => [letter, word_like] }
+    drop_mixed_initialism_nonletter_pronunciations!(m, authoritative_words: Set.new)
+    expect(m["ip"].size).to eq(1)
+    expect(m["ip"].first.rime).to eq(letter.rime)
+  end
+
+  it "does not strip two-letter blocklist homographs" do
+    y_us = Pronunciation.new(%w[Y UW1 EH1 S])
+    ah_s = Pronunciation.new(%w[AH1 S])
+    m = { "us" => [y_us, ah_s] }
+    drop_mixed_initialism_nonletter_pronunciations!(m, authoritative_words: Set.new)
+    expect(m["us"].size).to eq(2)
+  end
+
+  it "skips headwords listed as authoritative" do
+    letter = Pronunciation.new(%w[AY2 . P IY2])
+    word_like = Pronunciation.new(%w[IH1 P])
+    m = { "ip" => [letter, word_like] }
+    drop_mixed_initialism_nonletter_pronunciations!(m, authoritative_words: Set.new(["ip"]))
+    expect(m["ip"].size).to eq(2)
   end
 end

@@ -359,6 +359,10 @@ describe "RARITY" do
     oughta_be_common 'upswings' # explicit common override in rarity.csv
   end
 
+  context "-in'" do
+    oughta_be_forbidden "stin'"
+  end
+
   # Wiktionary also pluralizes abstract -ness nominalizations
   # (abruptnesses, stiffnesses, goodnesses) — paradigm-table noise that
   # English never produces. wiktionary_overgenerated_abstract_nesses_plural?

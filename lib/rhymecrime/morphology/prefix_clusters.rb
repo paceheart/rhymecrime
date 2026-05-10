@@ -23,6 +23,8 @@ COMMON_PREFIXES = [
   'along',   # alongside
   'alpha',   # alphanumeric.
   'an',
+  'ant',     # antarctic/arctic (Greek ἀνταρκτικός 'opposite the Bear'); not antacid/acid
+             # (that peel is etymologically bogus but harmless — different rimes).
   'ante',
   'anti',
   'arch',
@@ -125,6 +127,7 @@ COMMON_PREFIXES = [
   'non',
   'north',
   'off',
+  'on',      # onstage/stage (curated prefix.csv); productive locative/prefix use of on-.
   'omni',
   'out',
   'over',
@@ -185,6 +188,7 @@ COMMON_PREFIXES = [
   'trans',
   'tri',
   'typo',    # combining form (typographical).
+  'ultra',   # Latin combining form (ultrasonic/sonic, ultraviolet/violet).
   'un',
   'under',
   'uni',

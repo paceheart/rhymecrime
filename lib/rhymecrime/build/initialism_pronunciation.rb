@@ -6,6 +6,8 @@
 # clamp alongside orthographic dotted forms (see initialism_shaped_headword? in
 # phonology.rb).
 
+require "set"
+
 require_relative "../phoneme"
 require_relative "../pronunciation"
 
@@ -76,4 +78,49 @@ def pronunciation_spells_out_headword_letters?(word, pron)
   return false if bare.empty?
 
   spelling_matches_bare_phones?(letters, bare, 0, 0)
+end
+
+# Two-letter function words that can carry both a letter-by-letter reading and an ordinary
+# pronunciation under the same spelling (e.g. *us*). Never drop the non-letter row for
+# these — we only strip CMU's bogus "word" alts for clear initialisms (ip, mt, …).
+TWO_LETTER_MIXED_INITIALISM_STRIP_BLOCKLIST = %w[
+  us we he me my it is in on at as an am or of be do go no so up if
+].to_set.freeze
+
+# Dict-build: CMU often lists a letter-spelled row alongside a word-like alternate for the
+# same lowercase headword (NOAA+N OW AH, IP+IH P). Drop the non-letter rows so runtime
+# rhyme/rime indexing never treats the token as an ordinary word. See rhyme_spec initialisms.
+#
+# Skips headwords in authoritative_pronunciations.txt (curator-owned multi-pron) and
+# two-letter blocklist words (homograph guard).
+def drop_mixed_initialism_nonletter_pronunciations!(pronunciation_map, authoritative_words: Set.new)
+  auth = authoritative_words.to_set
+
+  dropped_prons = 0
+  touched_headwords = 0
+
+  pronunciation_map.each do |word, prons|
+    next if prons.nil? || prons.size < 2
+    next if auth.include?(word)
+    next if word.length == 2 && TWO_LETTER_MIXED_INITIALISM_STRIP_BLOCKLIST.include?(word)
+
+    spelled = prons.map { |p| pronunciation_spells_out_headword_letters?(word, p) }
+    n_spelled = spelled.count(true)
+    next if n_spelled < 1 || n_spelled == spelled.size
+
+    kept = prons.each_with_index.select { |_, i| spelled[i] }.map(&:first)
+    next if kept.empty?
+
+    n_drop = prons.size - kept.size
+    next if n_drop <= 0
+
+    dropped_prons += n_drop
+    touched_headwords += 1
+    pronunciation_map[word] = kept
+  end
+
+  if dropped_prons > 0
+    puts "Dropped #{dropped_prons} word-like alternate pronunciations for #{touched_headwords} initialism headwords (letter-reading kept)"
+  end
+  dropped_prons
 end

@@ -585,7 +585,9 @@ end
 # vs scribe, subtract vs tract). Productive sub- derivations
 # (subset, submenu, subgroup) cite their base in the gloss and still
 # collapse correctly.
-GLOSS_GATED_PREFIXES = Set["sub"].freeze
+# ex- needs gloss citation like sub-: naive peels catch expressive speech ("music
+# expressed") as ex + pressed → pressed, collapsing expressed out of EH_S_T tuples.
+GLOSS_GATED_PREFIXES = Set["sub", "ex"].freeze
 
 def condense_tuple_derived_forms(tup, focal_word = nil)
   return tup if tup.size < 2
@@ -934,6 +936,41 @@ EPENTHETIC_CE_TAILS = ["nce", "nse", "mse"].freeze
 # just bakes in the same epenthetic stop for both spellings.
 EPENTHETIC_TS_TAILS = ["nts", "mps"].freeze
 
+# Orthographic edit distance for homophone-cluster decisions only (short headwords).
+def orthographic_edit_distance(a, b)
+  m = a.length
+  n = b.length
+  return n if m.zero?
+  return m if n.zero?
+  prev = (0..n).to_a
+  cur = Array.new(n + 1, 0)
+  (1..m).each do |i|
+    cur[0] = i
+    ai = a.getbyte(i - 1)
+    (1..n).each do |j|
+      cost = ai == b.getbyte(j - 1) ? 0 : 1
+      cur[j] = [
+        cur[j - 1] + 1,
+        prev[j] + 1,
+        prev[j - 1] + cost
+      ].min
+    end
+    prev, cur = cur, prev
+  end
+  prev[n]
+end
+
+# Only collapse CMU homophones into one tuple member when they are "same word"
+# orthographically (spelling-variant row) or near-twins (coral/choral, flour/flower).
+# Same-pron distant spellings (crews/cruise, title/tidal) stay distinct — they are
+# different lemmas with independent thematic hooks for cues like pirate / music.
+def homophone_tuple_merge_candidates?(a, b)
+  return false if a == b
+  va = variants[a]
+  return true if va && va.include?(b)
+  orthographic_edit_distance(a.downcase, b.downcase) <= 2
+end
+
 # True when a and b share a CMUdict pron only because the dictionary
 # inserts an epenthetic /T/ (after /N/ before /S/) or /P/ (after /M/ before
 # /S/), and the two surfaces' orthographies disagree about whether that
@@ -966,7 +1003,8 @@ def condense_tuple_homophones(tup, focal_word)
     seed_prons = pronunciations(seed)
     mates = ungrouped.select do |other|
       next false if epenthetic_t_pseudo_homophone?(seed, other)
-      seed_prons.any? { |sp| homophone_rhyme?(other, sp) }
+      next false unless seed_prons.any? { |sp| homophone_rhyme?(other, sp) }
+      homophone_tuple_merge_candidates?(seed, other)
     end
     next if mates.empty?
     ungrouped -= mates
@@ -1383,15 +1421,10 @@ def find_rhyming_tuples(input_rel1, common_only = false)
   return really_find_rhyming_tuples(input_rel1, common_only) if $disable_cross_tuple_redundancy_pruning
 
   # Computed-store path: bin/compute-set-related stashes the fully
-  # post-pruned tuple list for every cue lemma in the cueniverse. The Lambda
-  # runtime (DataSource.dynamodb? → store_authoritative?) treats a missing
-  # row as "this cue isn't in our common-word set" and returns nil here so
-  # the goal-dispatch branch in rhymecrime can render the friendly
-  # bad_input message ("I don't like that word." for forbid_list cues, "Oops,
-  # I don't know what words are related to <cue>..." otherwise). Local-dev
-  # (LocalStore, non-authoritative) falls through to the live-compute path
-  # so spec runs and pre-compute checkouts still produce results.
-  if Rhymecrime::Store.available?
+  # post-pruned tuple list for every cue lemma in the cueniverse. Skip when
+  # RELATED_BYPASS_STORE=1 so eval matches live tuple assembly (same rationale
+  # as RelatedWords.find_all_thematically_related_words).
+  if !related_bypass_store? && Rhymecrime::Store.available?
     cached = Rhymecrime::Store.fetch_set_related_tuples(lemma(input_rel1))
     return cached if cached
     return nil if store_authoritative?

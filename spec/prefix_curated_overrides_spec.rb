@@ -19,26 +19,26 @@ RSpec.describe "prefix_curated_overrides" do
   end
 
   def write_csv(body)
-    File.write(@csv, "prefix,base,verdict,source,note\n#{body}")
+    File.write(@csv, "prefix,base,verdict,note\n#{body}")
     reset_prefix_curated_overrides!
   end
 
   it "adds allow pairs to the gate" do
-    write_csv("re,mind,allow,spec,test override\n")
+    write_csv("re,mind,allow,test override\n")
     gate = {}
     prefix_curated_overrides_apply!(gate)
     expect(gate["remind"]).to eq(%w[mind])
   end
 
   it "removes filter pairs from the gate" do
-    write_csv("un,able,filter,spec,test override\n")
+    write_csv("un,able,filter,test override\n")
     gate = { "unable" => %w[able] }
     prefix_curated_overrides_apply!(gate)
     expect(gate).not_to have_key("unable")
   end
 
   it "drops contradictory rows for the same prefix,base" do
-    write_csv("re,mind,allow,spec,a\nre,mind,filter,spec,b\n")
+    write_csv("re,mind,allow,a\nre,mind,filter,b\n")
     gate = {}
     prefix_curated_overrides_apply!(gate)
     expect(gate).not_to have_key("remind")
@@ -46,7 +46,7 @@ RSpec.describe "prefix_curated_overrides" do
   end
 
   it "skips whatever verdict" do
-    write_csv("re,mind,whatever,spec,x\n")
+    write_csv("re,mind,whatever,x\n")
     gate = {}
     prefix_curated_overrides_apply!(gate)
     expect(gate).to eq({})
@@ -54,7 +54,7 @@ RSpec.describe "prefix_curated_overrides" do
   end
 
   it "honors RHYMECRIME_PREFIX_CSV_OVERRIDE=0" do
-    write_csv("re,mind,allow,spec,x\n")
+    write_csv("re,mind,allow,x\n")
     gate = {}
     old = ENV["RHYMECRIME_PREFIX_CSV_OVERRIDE"]
     ENV["RHYMECRIME_PREFIX_CSV_OVERRIDE"] = "0"

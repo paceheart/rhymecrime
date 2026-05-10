@@ -175,7 +175,9 @@ def conflate_imperfect_rhyme_phoneme_tokens(tokens)
 end
 
 # Flat ARPAbet pronunciation (no syllable dots): same pipeline as CMU phoneme tail after the headword.
-def normalize_flat_arphabet_pronunciation(pron)
+# When +apply_flap+ is false, skips with_flapped_t — used by CMU vs Kaikki audit detectors so an
+# underlying T vs D disagreement is not collapsed before single-token diff (e.g. satyr).
+def normalize_flat_arphabet_pronunciation(pron, apply_flap: true)
   return pron if pron.nil? || pron.empty?
   flat = pron.phonemes.reject { |p| p == "." }
   return pron if flat.empty?
@@ -183,7 +185,8 @@ def normalize_flat_arphabet_pronunciation(pron)
   s = apply_shared_arphabet_phoneme_string_normalizations(flat.join(" "))
   p = Pronunciation.new(s.split).with_dwimmed_schwas
   tok = conflate_imperfect_rhyme_phoneme_tokens(p.phonemes)
-  Pronunciation.new(tok).with_flapped_t
+  out = Pronunciation.new(tok)
+  apply_flap ? out.with_flapped_t : out
 end
 
 # Flat phoneme lists for stem (each stored pronunciation, dots stripped).

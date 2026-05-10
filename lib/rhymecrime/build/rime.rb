@@ -285,6 +285,17 @@ def non_rich_rime_pair_exists_for_rime?(a, b, rime, word_dict)
   pr_b = eb[1]
   return false if pr_a.nil? || pr_b.nil?
 
+  # Same rime key with different syllable counts is usually a prefix extension
+  # (agonize/antagonize), not "every common–common link is rich-rhyme-only".
+  # Counting that as non-rich keeps educational cohorts when INCLUDE_RICH_RHYMES is off.
+  pr_a.each do |pa|
+    next unless pa.rime == rime
+    pr_b.each do |pb|
+      next unless pb.rime == rime
+      return true if pa.syllables.length != pb.syllables.length
+    end
+  end
+
   pr_a.each do |pa|
     next unless pa.rime == rime
     return true unless headword_rich_rhyme?(b, pa.rich_rime_array, rime, word_dict)

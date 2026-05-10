@@ -38,6 +38,7 @@ describe 'SET_RELATED' do
     set_related_oughta_contain 'pirate', 'crude', 'pursued', not_working_reason: "predictor now relates pirate/crude and pirate/pursued (related_spec prereqs pass), but set_related doesn't surface this tuple"
     set_related_oughta_contain 'pirate', 'buggery', 'thuggery'
     set_related_oughta_contain 'pirate', 'crews', 'tattoos'
+    set_related_oughta_contain_semantic_base 'pirate', 'crew', 'tattoo'
     set_related_oughta_contain 'pirate', 'commandeering', 'profiteering'
     set_related_oughta_contain 'pirate', 'deck', 'wreck'
     set_related_oughta_contain 'pirate', 'dagger', 'swagger'

@@ -297,6 +297,15 @@ if [ "$DICT_ONLY" -eq 1 ]; then
   echo "==> Dictionary compile (--dict-only; RHYMECRIME_BUILD_MODE=$RHYMECRIME_BUILD_MODE)"
   run_dict_inner
 
+  # Match full bin/build stage 5: compile-only writes [freq, prons, lemma] rows;
+  # without this step the optional prefix-allow column is absent and
+  # filter_out_prefix_words suppresses curated pairs like agonize/antagonize.
+  if [ "$RHYMECRIME_BUILD_MODE" = "final" ]; then
+    echo "==> Precompute prefix allow-list (-> word_dict column; dict-only)"
+    RHYMECRIME_BUILD_DIR="$BUILD_DIR" \
+      ./bin/precompute-prefix-gate
+  fi
+
   RUNTIME="$BUILD_DIR/runtime"
   CURRENT_LINK="$REPO/generated/current"
 

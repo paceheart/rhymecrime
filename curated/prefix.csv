@@ -1,344 +1,351 @@
-prefix,base,verdict,source,note
-a,tonal,filter,spec,privative: a+tonal
-a,flame,filter,spec,locative: a+flame
-a,round,filter,spec,locative: a+round
-a,ground,filter,spec,locative: a+ground
-a,sexual,filter,spec,privative: a+sexual
-a,shore,filter,spec,locative: a+shore
-a,social,filter,spec,privative: a+social
-a,thermic,filter,spec,privative: a+thermic
-a,biotic,filter,spec,privative: a+biotic
-a,caudal,filter,spec,privative: a+caudal
-a,causal,filter,spec,privative: a+causal
-a,buzz,filter,spec,locative: a+buzz (in a buzz)
-a,chromatic,filter,spec,privative: a+chromatic
-a,foot,filter,new,locative: on foot
-a,float,filter,new,locative: in a floating state
-a,blaze,filter,new,locative: on fire
-a,drift,filter,new,locative: drifting
-a,moral,filter,new,privative: without morals
-a,symmetric,filter,new,privative: lacking symmetry
-a,typical,filter,new,privative: not typical
-a,loft,filter,new,locative: on high (Old English on lyft)
-a,basement,allow,spec,Old French abaissier - basement is unrelated
-a,bashed,allow,spec,Old French embaissier - bash is unrelated
-a,but,allow,spec,Old French abouter - but is unrelated
-a,do,allow,spec,from Old Norse at do - fixed phrase
-a,go,allow,spec,Old English agan - opaque to modern ear
-a,head,allow,spec,frozen locative - speakers parse as opaque
-a,pathetic,allow,spec,Greek apathētikos borrowed whole
-a,spire,allow,spec,Latin aspirare - spire (tower) is unrelated
-a,void,allow,spec,Old French esvuidier - void is unrelated
-a,based,allow,spec,Old French abaisser - based is unrelated
-a,bode,allow,spec,Old English abad - bode is unrelated
-a,bodes,allow,spec,plural of abode - bodes is unrelated
-a,butter,allow,spec,legal term from abuttor - butter is unrelated
-a,jar,allow,spec,etymology uncertain - jar is unrelated
-a,cross,allow,new,Old Norse á kross - not parsed as a+cross today
-a,gain,allow,new,Old English ongean - gain is unrelated
-a,ware,allow,new,Old English gewær - ware (pottery) is unrelated
-a,board,allow,new,locative but fully fixed nautical phrase
-a,bridge,allow,new,Latin abbreviare - bridge is unrelated
-a,bide,whatever,spec,arguable: Old English abidan - may feel transparent
-a,new,whatever,spec,arguable: a+new - still compositional to many speakers
-a,part,whatever,spec,arguable: a+part - still transparent
-a,rise,whatever,spec,arguable: Old English arisan - still transparent
-a,wait,whatever,spec,arguable: a+wait - still transparent
-a,wake,whatever,spec,arguable: Old English awæcnan - still transparent
-a,woken,whatever,spec,arguable: past participle of awake
-be,side,filter,spec,be+side = at the side of
-be,low,filter,new,be+low - locative
-be,come,filter,new,be+come - still compositional
-be,witch,filter,new,be+witch - denominative verb
-be,head,filter,new,be+head - privative action
-be,fall,filter,new,be+fall - verbal prefix
-be,friend,filter,new,be+friend - denominative verb
-be,loved,filter,new,be+loved - adjectival form
-be,ware,filter,new,Old English bewarian (be+wary/ware)
-be,fore,filter,new,be+fore - transparent locative (at the fore of time)
-be,tween,allow,spec,Old English betweonum - tween (demographic) is unrelated
-be,half,allow,new,Old English behealf - half and behalf are unrelated today
-be,cause,allow,new,from Old English bi causé - now an opaque connective
-dis,able,filter,spec,dis+able
-dis,member,filter,spec,dis+member
-dis,honesty,filter,spec,dis+honesty
-dis,enchanted,filter,spec,dis+enchanted
-dis,enchant,filter,spec,dis+enchant
-dis,orient,filter,spec,dis+orient
-dis,orienting,filter,spec,dis+orienting
-dis,agree,filter,new,dis+agree
-dis,order,filter,new,dis+order
-dis,trust,filter,new,dis+trust
-dis,qualify,filter,new,dis+qualify
-dis,connect,filter,new,dis+connect
-dis,please,filter,new,dis+please
-dis,comfort,filter,new,dis+comfort
-dis,parity,allow,spec,Latin disparitas borrowed whole - parity is separate Latin paritas
-dis,guise,allow,new,Old French desguiser - guise is semantically disconnected
-dis,cover,allow,new,Old French descouvrir - arguable; discover ≠ un-cover semantically
-dis,cuss,allow,new,Latin discutere - cuss is unrelated
-dis,play,allow,new,Old French despleier - play is unrelated
-dis,miss,allow,new,Latin dimittere - miss is unrelated
-dis,arm,whatever,new,
-dis,assemble,filter,new,
-im,pure,filter,spec,im+pure
-im,print,whatever,spec,im+print
-im,prison,filter,spec,im+prison
-im,balance,filter,new,im+balance
-im,mature,filter,new,im+mature
-im,mortal,filter,new,im+mortal
-im,perfect,filter,new,im+perfect
-im,polite,filter,new,im+polite
-im,possible,filter,new,im+possible
-im,partial,filter,new,im+partial
-im,proper,filter,new,im+proper (not proper)
-im,mobile,filter,new,im+mobile
-im,moral,filter,new,im+moral
-im,patient,filter,new,im+patient
-im,pact,allow,spec,Latin impactus - pact is unrelated
-im,peach,allow,spec,Old French empeechier - peach (fruit) is unrelated
-im,plied,allow,spec,implied = imply+ed - not im+plied
-im,port,allow,spec,Latin importare - arguable; port (harbour) is unrelated etymologically
-im,pound,allow,spec,enclosure sense opaque vs pound weight — rhyme ok (see rhyme_spec)
-im,prove,allow,spec,Old French emprover - prove is unrelated
-im,pose,allow,new,Latin imponere - pose is unrelated
-im,pulse,allow,new,Latin impulsus - pulse is unrelated
-im,ply,allow,new,Latin implicare - ply is unrelated
-inter,mixed,filter,spec,inter+mixed
-inter,operate,filter,spec,inter+operate
-inter,national,filter,spec,inter+national
-inter,change,filter,new,inter+change
-inter,face,filter,new,inter+face (meeting surface)
-inter,lock,filter,new,inter+lock
-inter,play,filter,new,inter+play
-inter,link,filter,new,inter+link
-inter,weave,filter,new,inter+weave
-inter,act,filter,new,inter+act (between agents)
-inter,sect,allow,spec,cross != cult
-inter,view,allow,new,French entrevue - interview ≠ inter+view derivationally
-inter,course,allow,new,Latin intercursus - opaque in modern English
-inter,bred,filter,new,
-inter,breed,filter,new,
-in,tern,allow,new,Latin internus - tern (seabird) is unrelated
-re,orient,filter,spec,re+orient
-re,orienting,filter,spec,re+orienting
-re,organize,filter,spec,re+organize
-re,organizing,filter,spec,re+organizing
-re,open,filter,spec,re+open
-re,distribution,filter,spec,re+distribution
-re,loading,filter,spec,re+loading
-re,fitted,filter,spec,re+fitted
-re,join,filter,spec,re+join
-re,cycle,allow,these feel distinct,
-re,cycling,allow,these feel distinct,
-re,train,filter,spec,re+train
-re,derive,filter,spec,re+derive
-re,distribute,filter,spec,re+distribute
-re,write,filter,new,re+write
-re,build,filter,new,re+build
-re,load,filter,new,re+load
-re,use,filter,new,re+use
-re,form,allow,new,also means social improvement
-re,place,allow,new,replace ≠ put-back-in-place etymologically but feels productive
-re,dress,allow,spec,Old French redrecier - dress is unrelated
-re,percussion,allow,spec,Latin repercussio borrowed whole
-re,lied,allow,spec,relied = rely+ed - not re+lied (misparse)
-re,quest,allow,spec,Latin requestam - quest (adventure) is unrelated
-re,turn,allow,spec,Old French retorner - different sense of turn
-re,member,allow,spec,Old French remembrer - member (limb) is unrelated
-re,mind,allow,spec,re+mind not the historical derivation
-re,cord,allow,spec,Latin recordari - cord (rope) is unrelated
-re,corded,allow,spec,Latin recordari - corded is unrelated
-re,sent,allow,new,Old French resentir - resent ≠ re+sent (past of send)
-re,veal,allow,new,Old French reveler - veal (meat) is unrelated
-re,broadcast,filter,new,
-re,tract,allow,new,pull back != screed
-re,tractor,allow,new,backpuller != farm vehicle
-re,construct,filter,new,
-re,construction,filter,new,
-re,constructions,filter,new,
-sub,urban,filter,spec,sub+urban
-sub,human,filter,spec,sub+human
-sub,ordinate,filter,spec,sub+ordinate productive morphology
-sub,standard,filter,new,sub+standard
-sub,zero,filter,new,sub+zero
-sub,optimal,filter,new,sub+optimal
-sub,species,filter,new,sub+species
-sub,group,filter,new,sub+group
-sub,type,filter,new,sub+type
-sub,plot,filter,new,sub+plot
-sub,marine,allow,spec,Latin submarinus borrowed whole - marine is unrelated productively
-sub,machine,filter,new,
-sub,tract,allow,spec,Latin subtrahere - tract (area of land) is unrelated
-sub,lime,allow,spec,Latin sublimis - lime (citrus/mineral) is unrelated
-sub,due,allow,spec,Old French soduire - due is unrelated
-sub,scribe,allow,spec,Latin subscribere - scribe (writer) sense differs
-sub,merge,allow,spec,Latin submergere - merge is semantically adjacent but borrowed whole
-un,able,filter,spec,
-un,healthy,filter,spec,
-un,safe,filter,spec,
-un,kind,filter,spec,
-un,load,filter,spec,
-un,loading,filter,spec,
-un,promising,filter,spec,
-un,mixed,filter,spec,
-un,deserved,filter,spec,
-un,opened,filter,spec,
-un,sexing,filter,spec,
-un,easy,allow,new,uneasy has a meaning distinct from non-easy
-un,fair,filter,new,
-un,likely,filter,new,
-un,willing,filter,new,
-un,skilled,filter,new,
-anti,social,filter,spec,
-anti,war,filter,spec,
-anti,biotic,filter,new,
-anti,trust,filter,new,
-bi,racial,filter,spec,
-bi,sect,allow,new,slice != cult
-co,operate,allow,spec,cooperate has a meaning that's not just operate-together
-contra,indicated,filter,spec,
-de,activate,filter,spec,
-de,activating,filter,spec,
-de,compose,allow,spec,you can't get 'rot' from de+compose
-de,composition,allow,spec,you can't get 'rot' from de+composition
-de,emphasize,filter,spec,
-de,code,filter,new,
-de,frost,filter,new,
-en,closed,filter,spec,
-en,close,filter,spec,
-en,act,filter,spec,
-en,join,filter,spec,
-en,chant,allow,spec,
-en,chanted,allow,spec,
-ex,urb,filter,spec,
-extra,ordinary,whatever,spec,
-homo,sexual,filter,spec,
-homo,erotic,filter,spec,
-hyper,active,filter,spec,
-hyper,space,filter,spec,
-il,legal,filter,spec,
-il,legitimate,filter,spec,
-in,subordinate,filter,spec,
-mis,applied,filter,spec,
-mis,appropriate,filter,spec,
-mis,construe,filter,new,
-mis,take,allow,new,mistake is more than the sum of its parts
-mis,guided,filter,new,
-multi,national,filter,new,
-multi,task,filter,new,
-multi,tool,filter,new,
-multi,meter,whatever,new,
-non,combatant,filter,new,
-non,verbal,filter,spec,
-non,entity,filter,spec,
-off,loading,filter,spec,
-out,live,filter,spec,
-out,run,filter,new,
-over,lay,filter,spec,
-over,load,filter,new,
-post,game,filter,spec,
-post,war,filter,new,
-pre,game,filter,spec,
-pre,recorded,filter,spec,
-pre,school,filter,new,
-super,human,filter,spec,
-super,natural,whatever,new,
-trans,atlantic,filter,spec,
-trans,pacific,filter,spec,
-under,stand,whatever,spec,edge case
-under,lay,filter,spec,
-under,lie,filter,spec,
-under,lying,allow,spec,lying also means deceiving
-under,mine,allow,new,undermine doesn't mean under a mine
-under,sea,filter,new,
-up,wind,filter,spec,
-down,wind,filter,spec,
-be,labor,filter,new,be+labor — to discuss at length
-be,rate,allow,new,the common meaning of rate is unrelated to berate
-be,smirch,filter,new,be+smirch — to soil
-be,stow,whatever,new,be+stow — to stow away/give
-be,foul,filter,new,be+foul — to make foul
-be,gin,allow,new,Old English beginnan — gin (spirit) is unrelated
-be,long,allow,new,Old English gelang — long (adjective) is unrelated
-dis,respect,filter,new,dis+respect — transparent
-dis,array,filter,new,dis+array — transparent
-dis,believe,filter,new,dis+believe — transparent
-dis,courage,filter,new,dis+courage — transparent
-dis,till,allow,new,Latin distillare — till (cultivate) unrelated
-dis,patch,allow,new,Middle French despeechier — patch (mend) unrelated
-im,modest,filter,new,im+modest — transparent
-im,movable,filter,new,im+movable — transparent
-im,plausible,filter,new,im+plausible — transparent
-im,personal,filter,new,im+personal — transparent
-en,large,filter,new,en+large — transparent
-en,able,filter,new,en+able — transparent
-en,force,filter,new,en+force — transparent
-en,danger,filter,new,en+danger — transparent
-en,tire,allow,new,Old French entier (from Latin integer) — tire (wheel) unrelated
-be,little,filter,new,be+little — to make someone seem small; transparent
-be,hold,whatever,new,be+hold — to hold in view; observe
-be,fit,whatever,new,be+fit — to be appropriate for; transparent
-be,hind,whatever,new,hind (female deer / rear-limb adj) unrelated to spatial behind
-be,lief,whatever,new,lief (archaic: willingly) is opaque to modern speakers
-be,grudge,filter,new,
-be,dazzle,filter,new,
-dis,honor,filter,new,dis+honor — transparent negation
-dis,content,filter,new,dis+content — transparent negation
-dis,grace,filter,new,dis+grace — loss of grace; transparent
-dis,card,filter,new,dis+card — card-game term: to remove a card from hand
-dis,cord,allow,new,Latin discordia (hearts apart); cord (rope) is unrelated
-dis,solve,allow,new,dissolve in water vs solve a puzzle — semantically diverged
-dis,course,allow,new,Latin discursus; course and discourse are semantically distinct
-en,rich,filter,new,en+rich — to make rich; transparent
-en,list,whatever,new,en+list — to put on the list; transparent
-en,sure,whatever,new,en+sure — to make sure; transparent
-im,press,allow,new,it's rare to earn someone's favor by pushing them
-im,plant,filter,new,to install has nothing to do with flora
-im,pair,allow,new,Old French empeirer (to make worse); pair (two items) is unrelated
-a,maze,allow,new,Old English amasian; maze (labyrinth) is not compositionally a+maze
-de,value,filter,new,de+value — to reduce value; transparent
-be,calm,filter,new,
-be,clouded,filter,new,
-be,forehand,filter,this is before+hand not be+forehand,
-be,get,whatever,new,
-be,gotten,allow,new,it means more than be+gotten
-be,set,whatever,new,
-be,fell,filter,new,
-be,fuddle,filter,new,
-be,grimed,filter,new,
-be,guile,filter,new,
-be,moan,filter,new,
-be,numbed,filter,new,
-be,whiskered,filter,new,
-be,wail,whatever,new,bewail is rare enough that I don't care
-be,deck,whatever,new,be+deck — to adorn; transparent
-be,stride,filter,new,be+stride — to stride across; transparent
-be,dim,filter,new,be+dim — to make dim; transparent
-be,spatter,filter,new,be+spatter — to spatter over; transparent
-be,smear,filter,new,be+smear — to smear over; transparent
-be,devil,filter,new,be+devil — to torment; devil used as a verb
-be,token,filter,new,be+token — to signify; transparent
-be,speak,filter,new,be+speak — to indicate or order in advance; transparent
-be,night,filter,new,be+night — to overtake with darkness (benight); transparent
-be,lie,allow,new,belie means to contradict/misrepresent — unrelated to lie
-be,have,allow,new,behave means to conduct oneself — not literally be+have
-be,neath,whatever,new,neath is archaic and rare so I don't care about this example
-be,tray,allow,new,betray from Old French; tray and betray are unrelated
-be,queath,allow,new,queath is archaic; bequeath is opaque
-be,seech,allow,new,seech is not a modern word; beseech is fully opaque
-be,muse,allow,new,bemuse now means to confuse — semantic drift from muse
-be,leaguer,allow,new,leaguer (besieging camp) is archaic; beleaguer is opaque
-be,troth,whatever,new,troth (pledge) is archaic; betroth is opaque to modern speakers
-be,reave,whatever,new,reave (to plunder) is archaic; bereave is opaque
-micro,electronic,filter,new,
-micro,electronics,filter,new,
-micro,processor,filter,new,
-ultra,sonic,filter,new,
-ultra,violet,filter,new,
-macro,economics,filter,new,
-ex,tract,allow,take out != screed
-ex,tractors,allow,ones who take out != farm vehicles
-non,human,filter,new,
-re,play,filter,new,
-re,played,filter,new,
+prefix,base,verdict,note
+a,tonal,filter,privative: a+tonal
+a,flame,filter,locative: a+flame
+a,round,filter,locative: a+round
+a,ground,filter,locative: a+ground
+a,sexual,filter,privative: a+sexual
+a,shore,filter,locative: a+shore
+a,social,filter,privative: a+social
+a,thermic,filter,privative: a+thermic
+a,biotic,filter,privative: a+biotic
+a,caudal,filter,privative: a+caudal
+a,causal,filter,privative: a+causal
+a,buzz,filter,locative: a+buzz (in a buzz)
+a,chromatic,filter,privative: a+chromatic
+a,foot,filter,locative: on foot
+a,float,filter,locative: in a floating state
+a,blaze,filter,locative: on fire
+a,drift,filter,locative: drifting
+a,moral,filter,privative: without morals
+a,symmetric,filter,privative: lacking symmetry
+a,typical,filter,privative: not typical
+a,loft,filter,locative: on high (Old English on lyft)
+a,basement,allow,Old French abaissier - basement is unrelated
+a,bashed,allow,Old French embaissier - bash is unrelated
+a,but,allow,Old French abouter - but is unrelated
+a,do,allow,from Old Norse at do - fixed phrase
+a,go,allow,Old English agan - opaque to modern ear
+a,head,allow,frozen locative - speakers parse as opaque
+a,pathetic,allow,Greek apathētikos borrowed whole
+a,spire,allow,Latin aspirare - spire (tower) is unrelated
+a,void,allow,Old French esvuidier - void is unrelated
+a,based,allow,Old French abaisser - based is unrelated
+a,bode,allow,Old English abad - bode is unrelated
+a,bodes,allow,plural of abode - bodes is unrelated
+a,butter,allow,legal term from abuttor - butter is unrelated
+a,jar,allow,etymology uncertain - jar is unrelated
+a,cross,allow,Old Norse á kross - not parsed as a+cross today
+a,gain,allow,Old English ongean - gain is unrelated
+a,ware,allow,Old English gewær - ware (pottery) is unrelated
+a,board,allow,locative but fully fixed nautical phrase
+a,bridge,allow,Latin abbreviare - bridge is unrelated
+a,bide,whatever,arguable: Old English abidan - may feel transparent
+a,new,whatever,arguable: a+new - still compositional to many speakers
+a,part,whatever,arguable: a+part - still transparent
+a,rise,whatever,arguable: Old English arisan - still transparent
+a,wait,whatever,arguable: a+wait - still transparent
+a,wake,whatever,arguable: Old English awæcnan - still transparent
+a,woken,whatever,arguable: past participle of awake
+be,side,filter,be+side = at the side of
+be,low,filter,be+low - locative
+be,come,filter,be+come - still compositional
+be,witch,filter,be+witch - denominative verb
+be,head,filter,be+head - privative action
+be,fall,filter,be+fall - verbal prefix
+be,friend,filter,be+friend - denominative verb
+be,loved,filter,be+loved - adjectival form
+be,ware,filter,Old English bewarian (be+wary/ware)
+be,fore,filter,be+fore - transparent locative (at the fore of time)
+be,tween,allow,Old English betweonum - tween (demographic) is unrelated
+be,half,allow,Old English behealf - half and behalf are unrelated today
+be,cause,allow,from Old English bi causé - now an opaque connective
+dis,able,filter,dis+able
+dis,member,filter,dis+member
+dis,honesty,filter,dis+honesty
+dis,enchanted,filter,dis+enchanted
+dis,enchant,filter,dis+enchant
+dis,orient,filter,dis+orient
+dis,orienting,filter,dis+orienting
+dis,agree,filter,dis+agree
+dis,order,filter,dis+order
+dis,trust,filter,dis+trust
+dis,qualify,filter,dis+qualify
+dis,connect,filter,dis+connect
+dis,please,filter,dis+please
+dis,comfort,filter,dis+comfort
+dis,parity,allow,Latin disparitas borrowed whole - parity is separate Latin paritas
+dis,guise,allow,Old French desguiser - guise is semantically disconnected
+dis,cover,allow,Old French descouvrir - arguable; discover ≠ un-cover semantically
+dis,cuss,allow,Latin discutere - cuss is unrelated
+dis,play,allow,Old French despleier - play is unrelated
+dis,miss,allow,Latin dimittere - miss is unrelated
+dis,arm,whatever,
+dis,assemble,filter,
+im,pure,filter,im+pure
+im,print,whatever,im+print
+im,prison,filter,im+prison
+im,balance,filter,im+balance
+im,mature,filter,im+mature
+im,mortal,filter,im+mortal
+im,perfect,filter,im+perfect
+im,polite,filter,im+polite
+im,possible,filter,im+possible
+im,partial,filter,im+partial
+im,proper,filter,im+proper (not proper)
+im,mobile,filter,im+mobile
+im,moral,filter,im+moral
+im,patient,filter,im+patient
+im,pact,allow,Latin impactus - pact is unrelated
+im,peach,allow,Old French empeechier - peach (fruit) is unrelated
+im,plied,allow,implied = imply+ed - not im+plied
+im,port,allow,Latin importare - arguable; port (harbour) is unrelated etymologically
+im,pound,allow,enclosure sense opaque vs pound weight — rhyme ok (see rhyme_spec)
+im,prove,allow,Old French emprover - prove is unrelated
+im,pose,allow,Latin imponere - pose is unrelated
+im,pulse,allow,Latin impulsus - pulse is unrelated
+im,ply,allow,Latin implicare - ply is unrelated
+inter,mixed,filter,inter+mixed
+inter,operate,filter,inter+operate
+inter,national,filter,inter+national
+inter,change,filter,inter+change
+inter,face,filter,inter+face (meeting surface)
+inter,lock,filter,inter+lock
+inter,play,filter,inter+play
+inter,link,filter,inter+link
+inter,weave,filter,inter+weave
+inter,act,filter,inter+act (between agents)
+inter,sect,allow,cross != cult
+inter,view,allow,French entrevue - interview ≠ inter+view derivationally
+inter,course,allow,Latin intercursus - opaque in modern English
+inter,bred,filter,
+inter,breed,filter,
+in,tern,allow,Latin internus - tern (seabird) is unrelated
+re,orient,filter,re+orient
+re,orienting,filter,re+orienting
+re,organize,filter,re+organize
+re,organizing,filter,re+organizing
+re,open,filter,re+open
+re,distribution,filter,re+distribution
+re,loading,filter,re+loading
+re,fitted,filter,re+fitted
+re,join,filter,re+join
+re,cycle,allow,
+re,cycling,allow,
+re,train,filter,re+train
+re,derive,filter,re+derive
+re,distribute,filter,re+distribute
+re,write,filter,re+write
+re,build,filter,re+build
+re,load,filter,re+load
+re,use,filter,re+use
+re,form,allow,also means social improvement
+re,place,allow,replace ≠ put-back-in-place etymologically but feels productive
+re,dress,allow,Old French redrecier - dress is unrelated
+re,percussion,allow,Latin repercussio borrowed whole
+re,lied,allow,relied = rely+ed - not re+lied (misparse)
+re,quest,allow,Latin requestam - quest (adventure) is unrelated
+re,turn,allow,Old French retorner - different sense of turn
+re,member,allow,Old French remembrer - member (limb) is unrelated
+re,mind,allow,re+mind not the historical derivation
+re,cord,allow,Latin recordari - cord (rope) is unrelated
+re,corded,allow,Latin recordari - corded is unrelated
+re,sent,allow,Old French resentir - resent ≠ re+sent (past of send)
+re,veal,allow,Old French reveler - veal (meat) is unrelated
+re,broadcast,filter,
+re,tract,allow,pull back != screed
+re,tractor,allow,backpuller != farm vehicle
+re,construct,filter,
+re,construction,filter,
+re,constructions,filter,
+sub,urban,filter,sub+urban
+sub,human,filter,sub+human
+sub,ordinate,filter,sub+ordinate productive morphology
+sub,standard,filter,sub+standard
+sub,zero,filter,sub+zero
+sub,optimal,filter,sub+optimal
+sub,species,filter,sub+species
+sub,group,filter,sub+group
+sub,type,filter,sub+type
+sub,plot,filter,sub+plot
+sub,marine,allow,Latin submarinus borrowed whole - marine is unrelated productively
+sub,machine,filter,
+sub,tract,allow,Latin subtrahere - tract (area of land) is unrelated
+sub,lime,allow,Latin sublimis - lime (citrus/mineral) is unrelated
+sub,due,allow,Old French soduire - due is unrelated
+sub,scribe,allow,Latin subscribere - scribe (writer) sense differs
+sub,merge,allow,Latin submergere - merge is semantically adjacent but borrowed whole
+un,able,filter,
+un,healthy,filter,
+un,safe,filter,
+un,kind,filter,
+un,load,filter,
+un,loading,filter,
+un,promising,filter,
+un,mixed,filter,
+un,deserved,filter,
+un,opened,filter,
+un,sexing,filter,
+un,easy,allow,uneasy has a meaning distinct from non-easy
+un,fair,filter,
+un,likely,filter,
+un,willing,filter,
+un,skilled,filter,
+anti,social,filter,
+anti,war,filter,
+anti,biotic,filter,
+anti,trust,filter,
+bi,racial,filter,
+bi,sect,allow,slice != cult
+co,operate,allow,cooperate has a meaning that's not just operate-together
+contra,indicated,filter,
+de,activate,filter,
+de,activating,filter,
+de,compose,allow,you can't get 'rot' from de+compose
+de,composition,allow,you can't get 'rot' from de+composition
+de,emphasize,filter,
+de,code,filter,
+de,frost,filter,
+en,closed,filter,
+en,close,filter,
+en,act,filter,
+en,join,filter,
+en,chant,allow,
+en,chanted,allow,
+ex,urb,filter,
+extra,ordinary,whatever,
+homo,sexual,filter,
+homo,erotic,filter,
+hyper,active,filter,
+hyper,space,filter,
+il,legal,filter,
+il,legitimate,filter,
+in,subordinate,filter,
+mis,applied,filter,
+mis,appropriate,filter,
+mis,construe,filter,
+mis,take,allow,mistake is more than the sum of its parts
+mis,guided,filter,
+multi,national,filter,
+multi,task,filter,
+multi,tool,filter,
+multi,meter,whatever,
+non,combatant,filter,
+non,verbal,filter,
+non,entity,filter,
+off,loading,filter,
+out,live,filter,
+out,run,filter,
+over,lay,filter,
+over,load,filter,
+post,game,filter,
+post,war,filter,
+pre,game,filter,
+pre,record,filter,
+pre,recorded,filter,
+pre,school,filter,
+super,human,filter,
+super,natural,whatever,
+trans,atlantic,filter,
+trans,pacific,filter,
+under,stand,whatever,edge case
+under,lay,filter,
+under,lie,filter,
+under,lying,allow,lying also means deceiving
+under,mine,allow,undermine doesn't mean under a mine
+under,sea,filter,
+up,wind,filter,
+down,wind,filter,
+be,labor,filter,be+labor — to discuss at length
+be,rate,allow,the common meaning of rate is unrelated to berate
+be,smirch,filter,be+smirch — to soil
+be,stow,whatever,be+stow — to stow away/give
+be,foul,filter,be+foul — to make foul
+be,gin,allow,Old English beginnan — gin (spirit) is unrelated
+be,long,allow,Old English gelang — long (adjective) is unrelated
+dis,respect,filter,dis+respect — transparent
+dis,array,filter,dis+array — transparent
+dis,believe,filter,dis+believe — transparent
+dis,courage,filter,dis+courage — transparent
+dis,till,allow,Latin distillare — till (cultivate) unrelated
+dis,patch,allow,Middle French despeechier — patch (mend) unrelated
+im,modest,filter,im+modest — transparent
+im,movable,filter,im+movable — transparent
+im,plausible,filter,im+plausible — transparent
+im,personal,filter,im+personal — transparent
+en,large,filter,en+large — transparent
+en,able,filter,en+able — transparent
+en,force,filter,en+force — transparent
+en,danger,filter,en+danger — transparent
+en,tire,allow,Old French entier (from Latin integer) — tire (wheel) unrelated
+be,little,filter,be+little — to make someone seem small; transparent
+be,hold,whatever,be+hold — to hold in view; observe
+be,fit,whatever,be+fit — to be appropriate for; transparent
+be,hind,whatever,hind (female deer / rear-limb adj) unrelated to spatial behind
+be,lief,whatever,lief (archaic: willingly) is opaque to modern speakers
+be,grudge,filter,
+be,dazzle,filter,
+dis,honor,filter,dis+honor — transparent negation
+dis,content,filter,dis+content — transparent negation
+dis,grace,filter,dis+grace — loss of grace; transparent
+dis,card,filter,dis+card — card-game term: to remove a card from hand
+dis,cord,allow,Latin discordia (hearts apart); cord (rope) is unrelated
+dis,solve,allow,dissolve in water vs solve a puzzle — semantically diverged
+dis,course,allow,Latin discursus; course and discourse are semantically distinct
+en,rich,filter,en+rich — to make rich; transparent
+en,list,whatever,en+list — to put on the list; transparent
+en,sure,whatever,en+sure — to make sure; transparent
+im,press,allow,it's rare to earn someone's favor by pushing them
+im,plant,filter,to install has nothing to do with flora
+im,pair,allow,Old French empeirer (to make worse); pair (two items) is unrelated
+a,maze,allow,Old English amasian; maze (labyrinth) is not compositionally a+maze
+de,value,filter,de+value — to reduce value; transparent
+be,calm,filter,
+be,clouded,filter,
+be,forehand,filter,
+be,get,whatever,
+be,gotten,allow,it means more than be+gotten
+be,set,whatever,
+be,fell,filter,
+be,fuddle,filter,
+be,grimed,filter,
+be,guile,filter,
+be,moan,filter,
+be,numbed,filter,
+be,whiskered,filter,
+be,wail,whatever,bewail is rare enough that I don't care
+be,deck,whatever,be+deck — to adorn; transparent
+be,stride,filter,be+stride — to stride across; transparent
+be,dim,filter,be+dim — to make dim; transparent
+be,spatter,filter,be+spatter — to spatter over; transparent
+be,smear,filter,be+smear — to smear over; transparent
+be,devil,filter,be+devil — to torment; devil used as a verb
+be,token,filter,be+token — to signify; transparent
+be,speak,filter,be+speak — to indicate or order in advance; transparent
+be,night,filter,be+night — to overtake with darkness (benight); transparent
+be,lie,allow,belie means to contradict/misrepresent — unrelated to lie
+be,have,allow,behave means to conduct oneself — not literally be+have
+be,neath,whatever,neath is archaic and rare so I don't care about this example
+be,tray,allow,betray from Old French; tray and betray are unrelated
+be,queath,allow,queath is archaic; bequeath is opaque
+be,seech,allow,seech is not a modern word; beseech is fully opaque
+be,muse,allow,bemuse now means to confuse — semantic drift from muse
+be,leaguer,allow,leaguer (besieging camp) is archaic; beleaguer is opaque
+be,troth,whatever,troth (pledge) is archaic; betroth is opaque to modern speakers
+be,reave,whatever,reave (to plunder) is archaic; bereave is opaque
+micro,electronic,filter,
+micro,electronics,filter,
+micro,processor,filter,
+ultra,sonic,filter,
+ultra,violet,filter,
+macro,economics,filter,
+ex,tract,allow,
+ex,tractors,allow,
+non,human,filter,
+re,play,filter,
+re,played,filter,
+re,sound,allow,
+ant,agonize,allow,feel pain and inflict pain feel different even though they're technically not
+ant,arctic,filter,
+off,stage,filter,
+on,stage,filter,
+con,verse,allow,
