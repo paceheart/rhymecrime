@@ -369,3 +369,5 @@ un,earned,filter,
 under,powered,filter,
 re,sell,filter,
 mis,management,filter,
+ex,press,allow,demonstrate != push
+ex,pressed,allow,demonstrated != pushed
