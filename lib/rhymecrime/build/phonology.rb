@@ -300,6 +300,29 @@ def drop_abbreviation_expansion_alternates!(cmudict_flat_prons)
   dropped
 end
 
+# True when the headword surface looks like an orthographic initialism / letter
+# built-in: period-separated single letters (CMU-style u.s., p.m.) or a hyphen
+# chain where every segment is exactly one letter (b-j). Not intended to catch
+# compact letter acronyms without dots (fbi) — those stay on classifier + CSV.
+#
+# Used by rarity_rescore_and_dump! (with pronunciation-based detection in
+# initialism_pronunciation.rb) to clamp such entries to :rare unless the
+# headword carries multiple pronunciation rows (then the clamp is skipped).
+# For a spelling shared by an ordinary word and an initialism (e.g. us vs
+# U.S.), authoritative_pronunciations.txt should list **only** the
+# non-initialism reading(s); the letter-reading is usually a different surface
+# in CMU (u.s) or left uncaptured on the ambiguous spelling.
+def initialism_shaped_headword?(word)
+  w = word.to_s
+  return false if w.empty?
+  return true if w.match?(/\A(?:[a-z]\.)+[a-z]\.?\z/)
+  if w.include?("-")
+    parts = w.split("-", -1)
+    return true if parts.size >= 2 && parts.all? { |p| p.match?(/\A[a-z]\z/) }
+  end
+  false
+end
+
 AUTHORITATIVE_PRONUNCIATIONS_PATH = File.join(CURATED_DIR, "authoritative_pronunciations.txt")
 
 # Hand-curated pronunciation overrides. Loaded before CMUdict (and merged ahead

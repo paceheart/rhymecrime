@@ -315,6 +315,25 @@ describe "RARITY" do
     oughta_be_forbidden 'non-plussed'
   end
 
+  context 'initialisms' do
+    oughta_be_forbidden 'uss' # rare would be fine too
+    oughta_be_rare 'cia'
+    oughta_be_rare 'fbi'
+    oughta_be_rare 'abc'
+    oughta_be_rare 'atm'
+    oughta_be_rare 'cnn'
+    oughta_be_rare 'gps'
+    oughta_be_forbidden 'b-j'
+    oughta_be_rare 'jfk'
+    oughta_be_rare 'un'
+    oughta_be_rare 'phd'
+  end
+
+  context 'acronyms' do
+    oughta_be_common 'scuba'
+    oughta_be_common 'laser'
+  end
+
   # This is to verify that the classifier isn't training on the labels
   context 'words that do not appear in rarity.csv' do
     oughta_be_common 'elongated'

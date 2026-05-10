@@ -5155,7 +5155,7 @@ asahan,2,
 asahara,2,AE0 . S AH0 . HH AE1 . R AH0
 asahi,2,AH0 . S AA1 . HH IY0
 asamera,2,AE2 . S AH0 . M EH1 . R AH0
-asap,10,EY1 . EH1 . S EY1 . P IY1
+asap,2,EY1 . EH1 . S EY1 . P IY1
 asarco,2,AH0 . S AA1 R . K OW0
 asaro,2,AA0 . S AA1 . R OW0
 asat,2,
@@ -6360,7 +6360,7 @@ ba'ath,2,B AA1 TH
 ba'athism,2,B AA1 . TH AH0 . Z AH0 M
 ba'athist,2,B AA1 . TH AH0 S T
 ba'athists,2,B AA1 . TH AH0 S T S,ba'athist
-baa,10,B IY2 . EY2 . EY1
+baa,2,B IY2 . EY2 . EY1
 baab,2,B AA1 B
 baack,2,B AA1 K
 baade,2,B AA1 D
@@ -24860,7 +24860,7 @@ dazzled,10,D AE1 . Z AH0 L D,dazzle
 dazzling,10,D AE1 . Z AH0 . L IY0 NG,dazzle
 dazzo,2,D AE1 . Z OW0
 dbase,2,
-dc,10,D IY2 . S IY1
+dc,2,D IY2 . S IY1
 ddt,2,D IY2 . D IY2 . T IY1
 de,2,D IY1|D EY1|D AH0
 dea,2,D IY1
@@ -35407,7 +35407,7 @@ fazenbaker,2,
 fazio,2,F EY1 . Z IY0 . OW0|F AA1 . Z IY0 . OW0
 fazzino,2,F AA0 T . S IY1 . N OW0
 fazzio,2,F AE1 . Z IY0 . OW0
-fbi,10,EH1 F . B IY1 . AY1
+fbi,2,EH1 F . B IY1 . AY1
 fbi's,2,EH1 F . B IY1 . AY1 Z
 feagan,2,F EY1 . G AH0 N
 feagans,2,F IY1 . G AH0 N Z
@@ -101531,7 +101531,7 @@ sutured,10,,suture
 sutures,10,S UW1 . CH AH0 R Z,suture
 suturing,10,,suture
 suu,2,EH1 S . Y UW1 . Y UW1|S UW1
-suv,98,EH2 S . Y UW2 . V IY1
+suv,2,EH2 S . Y UW2 . V IY1
 suva,2,S UW1 . V AH0
 suvs,98,EH2 S . Y UW2 . V IY1 Z,suv
 suydam,2,S AY1 . D AH0 M

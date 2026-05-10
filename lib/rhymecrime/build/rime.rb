@@ -4,6 +4,7 @@
 require_relative "build_utils"
 require_relative "../pronunciation.rb"
 require_relative "constants"
+require_relative "phonology" # authoritative_pronunciation_words for inherit guard
 
 def build_rime_dict(pronunciation_map)
   # RimeDict subclasses Hash and adds a per-instance pruning-active flag
@@ -115,8 +116,14 @@ end
 # pairs are visible to preferred_form_in_build_lexicon, and before
 # strip_dispreferred_headwords_from_rime_dict! so the rime-bucket stripper sees
 # the preferred form populated.
+#
+# Skips the copy when +pref+ is listed in curated/authoritative_pronunciations.txt
+# (+authoritative_pronunciation_words+): curator intent for the preferred spelling
+# must not be replaced by phones from a dispreferred sibling (e.g. marveled must
+# not inherit marvelled's CMU reading after a singleton-rime filter emptied the row).
 def inherit_prons_from_dispreferred_to_preferred!(word_dict, log: true)
   inherited = 0
+  authoritative = authoritative_pronunciation_words
   word_dict.each do |word, entry|
     next if entry.nil?
     next if word_dict_entry_tombstoned?(entry)
@@ -127,6 +134,7 @@ def inherit_prons_from_dispreferred_to_preferred!(word_dict, log: true)
     pref_entry = word_dict[pref]
     next unless pref_entry
     next if word_dict_entry_tombstoned?(pref_entry)
+    next if authoritative.include?(pref)
     pref_prons = pref_entry[1]
     next unless pref_prons.is_a?(Array) && pref_prons.empty?
     pref_entry[1] = prons.dup

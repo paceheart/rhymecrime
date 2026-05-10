@@ -49,6 +49,8 @@ require_relative "rarity_signals"
 require_relative "rarity_curated_overrides"
 require_relative "build_utils"
 require_relative "constants"
+require_relative "phonology"
+require_relative "initialism_pronunciation"
 
 # Keep in lock-step with bin/train-rarity-classifier. The JSON records its own
 # feature-name list so mismatches are detected at load.
@@ -521,6 +523,26 @@ def classifier_set_freq!(entry, new_freq:, verdict:, reason:)
   end
 end
 
+# Distinct pronunciation rows for a headword (BuildEntry#prons or legacy [1]).
+def pronunciation_row_count_for_rarity(entry)
+  prons = entry.is_a?(BuildEntry) ? entry.prons : entry[1]
+  return 0 unless prons.is_a?(Array)
+  prons.size
+end
+
+# Dotted / hyphen-letter surfaces (see initialism_shaped_headword?) or a
+# single pronunciation row that letter-spells the headword (uss -> Y UW EH S EH S).
+# Multiple pronunciation rows skip the clamp (homographs like us).
+def headword_initialism_for_rarity_clamp?(word, entry)
+  return false if pronunciation_row_count_for_rarity(entry) > 1
+  return true if initialism_shaped_headword?(word)
+
+  prons = entry.is_a?(BuildEntry) ? entry.prons : entry[1]
+  return false unless prons.is_a?(Array) && !prons.empty?
+
+  pronunciation_spells_out_headword_letters?(word, prons.first)
+end
+
 def rarity_rescore_and_dump!(hash, **ctx_kwargs)
   dump_path = ENV["RHYMECRIME_RARITY_DUMP_SIGNALS"]
   dump_enabled = !dump_path.nil? && !dump_path.empty?
@@ -551,6 +573,7 @@ def rarity_rescore_and_dump!(hash, **ctx_kwargs)
   rescored = 0
   deleted = 0
   skipped_sentinel = 0
+  initialism_sentinel_clamped = 0
   override_applied = 0
   override_rescored = 0
   override_deleted = 0
@@ -699,6 +722,19 @@ def rarity_rescore_and_dump!(hash, **ctx_kwargs)
         new_freq = CURATED_RARITY_OVERRIDE_FREQ[:rare]
       end
 
+      # Initialism surfaces (dotted u.s., hyphen b-j) or letter-name ARPAbet
+      # (uss, fbi). Clamp to :rare when there is only one pronunciation row;
+      # multiple rows skip the clamp. For us vs U.S., keep only the ordinary
+      # pron in authoritative_pronunciations.txt; the letter reading is usually
+      # a separate headword (u.s) or a second CMU row on us.
+      if new_cat != :forbidden && headword_initialism_for_rarity_clamp?(word, entry)
+        if new_cat != :rare || new_freq != CURATED_RARITY_OVERRIDE_FREQ[:rare]
+          dict_trace_puts(word, "rarity_classifier_rescore: initialism -> :rare (was cat=#{new_cat})") if dict_trace_word?(word)
+        end
+        new_cat = :rare
+        new_freq = CURATED_RARITY_OVERRIDE_FREQ[:rare]
+      end
+
       if new_cat == :forbidden
         dict_trace_puts(word, "rarity_classifier_rescore: DELETE (classified :forbidden, was freq=#{entry[0]})") if dict_trace_word?(word)
         classifier_mark_or_delete!(hash, word, entry, phase: :classifier, reason: :forbidden_verdict, detail: { was_freq: entry[0], classifier_score: new_freq })
@@ -709,6 +745,24 @@ def rarity_rescore_and_dump!(hash, **ctx_kwargs)
         rescored += 1
       else
         dict_trace_puts(word, "rarity_classifier_rescore: kept freq=#{entry[0]} (cat=#{new_cat})") if dict_trace_word?(word)
+      end
+    end
+
+    # Headwords skipped above (freq > RARITY_CLASSIFIER_RESCORE_MAX_FREQ) never
+    # reached the classifier; still clamp initialism surfaces (orthographic or
+    # letter-name pronunciation) so curated sentinel floors cannot leave them common.
+    if clf
+      hash.each_key do |word|
+        entry = hash[word]
+        next unless entry
+        next if entry.is_a?(BuildEntry) && entry.tombstoned?
+        next if overrides[word]
+        next unless headword_initialism_for_rarity_clamp?(word, entry)
+        cur = entry.is_a?(BuildEntry) ? entry.derived_freq : entry[0].to_i
+        next if cur <= RARE_FREQ_MAX
+        dict_trace_puts(word, "rarity_classifier_rescore: initialism clamp after sentinel skip #{cur} -> #{CURATED_RARITY_OVERRIDE_FREQ[:rare]}") if dict_trace_word?(word)
+        classifier_set_freq!(entry, new_freq: CURATED_RARITY_OVERRIDE_FREQ[:rare], verdict: :rare, reason: :initialism_rarity_clamp_sentinel)
+        initialism_sentinel_clamped += 1
       end
     end
 
@@ -742,6 +796,9 @@ def rarity_rescore_and_dump!(hash, **ctx_kwargs)
 
   if clf
     puts "rarity classifier: rescored #{rescored} entries, deleted #{deleted} forbidden entries, skipped #{skipped_sentinel} sentinel-freq entries"
+    if initialism_sentinel_clamped > 0
+      puts "rarity classifier: initialism headwords clamped to rare after sentinel skip: #{initialism_sentinel_clamped}"
+    end
     if override_applied > 0
       puts "rarity classifier: of those, #{override_applied} came from curated/rarity.csv overrides (#{override_rescored} rescored, #{override_deleted} deleted)"
     end

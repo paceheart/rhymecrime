@@ -525,6 +525,11 @@ describe 'RHYMES' do
     oughta_rhyme 'nato', 'tomato'
     oughta_rhyme 'tv', 'fee'
     oughta_rhyme 'high', 'ai'
+    oughta_rhyme 'mount', 'count'
+    ought_not_rhyme 'mt', 'count'
+    ought_not_rhyme 'noaa', 'boa'
+    ought_not_rhyme 'ct', 'sort'
+    ought_not_rhyme 'ip', 'dip'
   end
 
   context 'schwas' do
