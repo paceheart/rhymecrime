@@ -138,6 +138,8 @@ describe 'RHYMES' do
   end
   
   context "you can't just add a prefix and call it a rhyme" do
+    ought_not_rhyme 'activate', 'deactivate'
+    ought_not_rhyme 'activating', 'deactivating'
     ought_not_rhyme 'sea', 'undersea'
     ought_not_rhyme 'arctic', 'antarctic'
     ought_not_rhyme 'appropriate', 'misappropriate'
@@ -304,6 +306,8 @@ describe 'RHYMES' do
     ought_not_rhyme 'entity', 'nonentity'
     ought_not_rhyme 'entity', 'non-entity'
     context "unless they're not derivationally related" do
+      oughta_rhyme 'tract', 'retract'
+      oughta_rhyme 'tractor', 'retractor'
       oughta_rhyme 'parity', 'disparity'
       oughta_rhyme 'dress', 'redress'
       oughta_rhyme 'percussion', 'repercussion'
@@ -1148,6 +1152,12 @@ describe 'RHYMES' do
   end
 
   context 'bad pronunciations' do
+    ought_not_rhyme 'otaku', 'sudoku'
+    ought_not_rhyme 'no-one', 'cartoon'
+    ought_not_rhyme 'noone', 'cartoon'
+    ought_not_rhyme 'cameras', 'samurais'
+    oughta_rhyme 'ratchet', 'hatchet'
+    ought_not_rhyme 'ratchet', 'but'
     ought_not_rhyme 'marveled', 'held'
     ought_not_rhyme 'lances', 'nancies'
     ought_not_rhyme 'us', 'yes'

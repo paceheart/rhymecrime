@@ -441,10 +441,16 @@ def compute_lemma_map(word_dict)
       # archaic/dialectal inflections (crew→crow, feed→fee) that mislead the common-sense lemma.
       kaikki_base = $inflection_base_words[word]
       if kaikki_base && kaikki_base != word && word_dict.key?(kaikki_base)
-        if !wn_has_entry?(word) || wn_accept_inflection_lemma_pair?(word, kaikki_base)
-          chosen = canonicalize_lemma_target(kaikki_base, word_dict)
-          lemma_map[word] = chosen if chosen != word
-          next
+        # Kaikki sometimes lists a compound headword as the base of a homographic regular
+        # inflection (e.g. *builds* plural of *build* linked to *pro-build*). Do not attach a
+        # solid surface to a hyphenated lemma — fall through to Source B so WordNet/Inflect
+        # can pick the matching orthography (see spec/hyphenated_lemma_hyphenation_spec.rb).
+        unless kaikki_base.include?("-") && !word.include?("-")
+          if !wn_has_entry?(word) || wn_accept_inflection_lemma_pair?(word, kaikki_base)
+            chosen = canonicalize_lemma_target(kaikki_base, word_dict)
+            lemma_map[word] = chosen if chosen != word
+            next
+          end
         end
       end
 

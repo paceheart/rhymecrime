@@ -307,16 +307,18 @@ describe "RARITY" do
     oughta_be_forbidden '🧢'
   end
 
-  # ensure that a common hyphenated word is deemed common
   context 'hyphens' do
     oughta_be_common 'so-so'
     oughta_be_forbidden 'soso'
     oughta_be_common 'nonplussed'
     oughta_be_forbidden 'non-plussed'
+    oughta_be_rare 'state-of-the-art'
+    oughta_be_forbidden 'stateoftheart'
+    ought_not_be_common 'nt-a-car'
   end
 
   context 'initialisms' do
-    oughta_be_forbidden 'uss' # rare would be fine too
+    ought_not_be_common 'uss'
     oughta_be_rare 'cia'
     oughta_be_rare 'fbi'
     oughta_be_rare 'abc'

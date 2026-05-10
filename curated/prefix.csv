@@ -79,6 +79,8 @@ dis,cover,allow,new,Old French descouvrir - arguable; discover ≠ un-cover sema
 dis,cuss,allow,new,Latin discutere - cuss is unrelated
 dis,play,allow,new,Old French despleier - play is unrelated
 dis,miss,allow,new,Latin dimittere - miss is unrelated
+dis,arm,whatever,new,
+dis,assemble,filter,new,
 im,pure,filter,spec,im+pure
 im,print,whatever,spec,im+print
 im,prison,filter,spec,im+prison
@@ -150,6 +152,11 @@ re,corded,allow,spec,Latin recordari - corded is unrelated
 re,sent,allow,new,Old French resentir - resent ≠ re+sent (past of send)
 re,veal,allow,new,Old French reveler - veal (meat) is unrelated
 re,broadcast,filter,new,
+re,tract,allow,new,pull back != screed
+re,tractor,allow,new,backpuller != farm vehicle
+re,construct,filter,new,
+re,construction,filter,new,
+re,constructions,filter,new,
 sub,urban,filter,spec,sub+urban
 sub,human,filter,spec,sub+human
 sub,ordinate,filter,spec,sub+ordinate productive morphology
@@ -161,6 +168,7 @@ sub,group,filter,new,sub+group
 sub,type,filter,new,sub+type
 sub,plot,filter,new,sub+plot
 sub,marine,allow,spec,Latin submarinus borrowed whole - marine is unrelated productively
+sub,machine,filter,new,
 sub,tract,allow,spec,Latin subtrahere - tract (area of land) is unrelated
 sub,lime,allow,spec,Latin sublimis - lime (citrus/mineral) is unrelated
 sub,due,allow,spec,Old French soduire - due is unrelated
@@ -181,6 +189,7 @@ un,easy,allow,new,uneasy has a meaning distinct from non-easy
 un,fair,filter,new,
 un,likely,filter,new,
 un,willing,filter,new,
+un,skilled,filter,new,
 anti,social,filter,spec,
 anti,war,filter,spec,
 anti,biotic,filter,new,
@@ -189,6 +198,8 @@ bi,racial,filter,spec,
 bi,sect,allow,new,slice != cult
 co,operate,allow,spec,cooperate has a meaning that's not just operate-together
 contra,indicated,filter,spec,
+de,activate,filter,spec,
+de,activating,filter,spec,
 de,compose,allow,spec,you can't get 'rot' from de+compose
 de,composition,allow,spec,you can't get 'rot' from de+composition
 de,emphasize,filter,spec,
@@ -230,6 +241,7 @@ post,game,filter,spec,
 post,war,filter,new,
 pre,game,filter,spec,
 pre,recorded,filter,spec,
+pre,school,filter,new,
 super,human,filter,spec,
 super,natural,whatever,new,
 trans,atlantic,filter,spec,
@@ -319,3 +331,14 @@ be,muse,allow,new,bemuse now means to confuse — semantic drift from muse
 be,leaguer,allow,new,leaguer (besieging camp) is archaic; beleaguer is opaque
 be,troth,whatever,new,troth (pledge) is archaic; betroth is opaque to modern speakers
 be,reave,whatever,new,reave (to plunder) is archaic; bereave is opaque
+micro,electronic,filter,new,
+micro,electronics,filter,new,
+micro,processor,filter,new,
+ultra,sonic,filter,new,
+ultra,violet,filter,new,
+macro,economics,filter,new,
+ex,tract,allow,take out != screed
+ex,tractors,allow,ones who take out != farm vehicles
+non,human,filter,new,
+re,play,filter,new,
+re,played,filter,new,

@@ -17,13 +17,6 @@ maybe NLTK wup_similarity or https://stackoverflow.com/questions/14148986/how-do
 * reduce dumb outputs
 ** fix close / enclose, bass / base by pushing down only_preferred to find_rhyming_words so it can have access to the pronunciation
 ** filter out spelling variants from rime dict, e.g. UW_S_EH_F  yousef youssef yusef. But how to know whether it's a spelling variant or a homonym?
-** hyphens
-*** standardize "i r a" vs. "ira" and "san-jose" oughta be "san_jose" but "so-so" oughta stay "so-so"
-
-* urlencode word links
-* test input phrases
-
-## user requests
 
 * show rich rhymes in "for the brazen" instead of eliminating them entirely
 
@@ -65,8 +58,6 @@ do something about ever / however / howsoever / whatever / whatsoever / whenever
 make it actually follow up on the "I'll make a note" notes
 
 in single column, add a "jump to"
-
-get rid of initialisms
 
 try retraining relatedness with whatever mapped to related_ish, or related_ish_ish
 try retraining relatedness with 5 classes: related, related_ish, whatever, unrelated_ish, unrelated
