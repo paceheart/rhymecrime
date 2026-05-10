@@ -65,9 +65,19 @@ require "sqlite3"
 require_relative "_aws_preflight"
 require_relative "../lib/rhymecrime/store/data_source"
 require_relative "../lib/rhymecrime/build/build_utils"
+require_relative "../lib/rhymecrime/dev/local_store"
 
 skip_related = false
-related_path = generated_dict_path(LOCAL_STORE_FILENAME)
+# Resolve via LocalStore so this script reads from the same path
+# bin/compute-relatedness / bin/compute-set-related write to. The local SQLite
+# store lives at generated/rhymecrime_local.sqlite3 (the generated/ root) — it
+# is *not* a runtime lexicon artifact and so does not live under
+# generated/current/, which is the symlink to <stamp>/runtime/ that only holds
+# dict-build outputs (word_dict.msgpack, rime_dict.msgpack, classifier links, …).
+# Using generated_dict_path here would resolve to generated/current/rhymecrime_local.sqlite3
+# and the upload would always abort with "Missing …" even when the store was
+# present at its canonical location.
+related_path = Rhymecrime::LocalStore.database_path
 cues_filter = nil
 
 # Snapshot before parse! mutates ARGV so the AWS_PROFILE abort below can
