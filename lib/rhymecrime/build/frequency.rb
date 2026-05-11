@@ -1950,6 +1950,52 @@ def add_frequency_info(pronunciation_map, subtlex_hash, subtlex_total_hash, word
   end
   puts "#{stopword_inflection_scrub} paradigm-noise inflections of curated stop words removed after frequency phases" if stopword_inflection_scrub > 0
 
+  # Wiktionary/Kaikki sometimes ships direct pronunciations for theoretical
+  # verbal inflections of noun-only lemmas (kimono -> kimonoed). They enter as
+  # pronunciation_map_seed rows with freq=0, then the rarity classifier can
+  # rescue them to :rare before the disconnect filter sees them. Apply the same
+  # verb-form gate used by morph inheritance/expansion before classifier rescore.
+  blocked_verb_inflection_scrub = 0
+  hash.keys.each do |word|
+    next if common_words.include?(word)
+    next if rare_words.include?(word)
+    next if wn_has_entry?(word)
+    next if (wordfreq_hash[word] || 0).to_f >= WORDFREQ_RARE_ZIPF
+    next if (subtlex_hash[word] || 0).to_i > 0
+    next if neol_words.include?(word)
+
+    zipf_inf = (wordfreq_hash[word] || 0).to_f
+    candidate_bases = []
+    kaikki_base = $inflection_base_words[word]
+    candidate_bases << kaikki_base if kaikki_base && kaikki_base != word
+    Inflect.each_candidate_base_for_inflected(word) { |base| candidate_bases << base }
+    candidate_bases.uniq!
+    candidate_bases.select! do |base|
+      next false if base.nil? || base == word
+      next false unless hash.key?(base)
+      %i[ed ing].include?(Inflect.send(:match_suffix_kind, base, word))
+    end
+    next if candidate_bases.empty?
+    next if candidate_bases.any? do |base|
+      morph_base_allows_verb_forms?(base, word, pos_map, forms_map, zipf_inf, wordfreq_hash, kaikki_verb_morph: kaikki_verb_morph)
+    end
+
+    base = candidate_bases.first
+    suffix_kind = Inflect.send(:match_suffix_kind, base, word)
+
+    entry = hash[word]
+    next unless entry
+    next if entry.is_a?(BuildEntry) && entry.tombstoned?
+    dict_trace_puts(word, "blocked_verb_inflection_scrub: DELETE (base=#{base}, suffix=#{suffix_kind}, no surface corpus/WordNet attestation)") if dict_trace_word?(word)
+    entry.mark_tombstoned!(
+      phase: :blocked_verb_inflection_scrub,
+      reason: :paradigm_noise_blocked_verb_inflection,
+      detail: { base: base, suffix_kind: suffix_kind, zipf: zipf_inf },
+    )
+    blocked_verb_inflection_scrub += 1
+  end
+  puts "#{blocked_verb_inflection_scrub} blocked Kaikki -ed/-ing verb-form surfaces removed before rarity rescore" if blocked_verb_inflection_scrub > 0
+
   hyp_edge = delete_headwords_with_edge_hyphen!(hash)
   puts "#{hyp_edge} headwords with a leading or trailing '-' removed after frequency phases" if hyp_edge > 0
 

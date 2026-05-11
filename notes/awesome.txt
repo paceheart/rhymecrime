@@ -1,0 +1,130 @@
+Looking at awesome.csv, the related-rhyme pipeline guts (lib/rhymecrime/tuples.rb), and the contrast against the live set_related#rap output for the same cues, I think there are five patterns that turn a generic set‑related tuple into one of these. They split cleanly into "phonological" features and "semantic" features, and most of them are computable from data the build already has on disk.
+
+What every awesome row has in common
+1. Long, lexical rimes (not productive suffixes)
+Going through the prons in generated/current/word_dict.txt and stripping to the rime per the rules in the README's Building the Rhyming Dictionary:
+
+row	rime	phonemes	syllables
+transgender / apostate / prostate
+AA S T EY T
+5
+2
+transgender / complexion / correction / introspection / resurrection
+EH K SH AH N
+5
+2
+transgender / dichotomy / sodomy
+AA D AH M IY
+5
+3
+transgender / estranged / rearranged
+EY N JH D
+4
+1
+transgender / makeup / shakeup
+EY K AH P
+4
+2
+transgender / sitz / tits
+IH T S
+3
+1
+fire / bituminous / luminous
+UW M AH N AH S
+6
+3
+pirate / anchored / tankard
+AE NG K AH R D
+6
+2
+pirate / buggery / skulduggery / thuggery
+AH G AH R IY
+5
+3
+pirate / crypto / tiptoe
+IH P T OW
+4
+2
+pirate / handsome / ransom
+AE N S AH M
+5
+2
+pirate / marauder / otter / rotter / water
+AA D AH R
+4
+2
+sex / breast / caressed / undressed
+EH S T
+3
+1
+japan / feudal / noodle
+UW D AH L
+4
+2
+otaku / hobby / snobby / wasabi
+AA B IY
+3
+2
+rap / chillaxin' / jackson / waxin'
+AE K S AH N
+5
+2
+money / chargin' / margin
+AA R JH AH N
+5
+2
+anime / judo / pluto
+UW D OW
+3
+2
+Average rime length is 4.4 phonemes / 2 syllables. The vast majority of set_related#rap tuples are short single‑syllable rimes (["bling","ding","king","ring","sing"...], ["clip","dip","drip"…]) or are dominated by one productive suffix (["acclamation","accusation","allegation"…] is 39 words long, all ‑EY SH AH N). Almost no awesome entry uses a productive English suffix as its rime. The lone exception — complexion / correction / introspection / resurrection — is on ‑EH K SH AH N, but the stems (complex, correct, introspect, resurrect) are wildly different concepts. That's the cleverness premium that lets it in.
+
+2. Onset‑only variation — minimal pairs and Spoonerisms
+In a lot of these rows the entire word after the onset is identical:
+
+handsome / ransom differ in HH/R only.
+otter / rotter / water / marauder all share AA D AH R; only the onset/prefix changes.
+sitz / tits is a literal Spoonerism (S/T swap).
+hobby / snobby / wasabi share AA B IY and just collect different left edges.
+anchored / tankard: Ø/T onset, body identical.
+crypto / tiptoe: KR/T onset, body identical.
+Concretely: max(len(rime) / len(pron)) across the tuple's members is ≥ 0.7 for most awesome rows. That ratio is the best one‑number summary I can find of "feels like the same word minus a consonant." Compare with a generic 39‑word ‑ation tuple, where any member's ratio is ~0.3.
+
+3. Tuple cardinality
+8 of 18 awesome rows have ≥3 words, and three have ≥4. The set‑related output for rap has hundreds of tuples but only ~10% are ≥3 once you discount the productive‑suffix monsters. Multi-word tuples are intrinsically rarer, especially once you require everything to be related to the same cue, so they earn extra credit.
+
+4. Words live in a frequency sweet spot
+Pull frequencies from word_dict.txt: every awesome member is at freq=10 (the curated common floor) except sitz and tits at freq=2 (the rare floor — those would normally be filtered into "for the desperate"). None are 999999 (function words / superhighfreq); none are below 2. The picks are vivid mid‑frequency vocabulary: tankard, marauder, rotter, skulduggery, wasabi, apostate, bituminous. Specific enough to feel chosen, common enough to land.
+
+5. The members are tight to the cue but far from each other
+This is the one that the existing classifiers aren't capturing. In each row, all members score very high on thematically_related?(cue, w) — but they scatter on different axes of the cue's semantic field:
+
+pirate / anchored / tankard — sailing tackle + drinking. Two pirate tropes, not synonyms.
+pirate / marauder / otter / rotter / water — pirate role + ocean creature + Britishism for scoundrel + the literal sea. Four facets, one rime.
+transgender / apostate / prostate — heresy/identity‑rejection + body part. Metaphorical + literal.
+transgender / makeup / shakeup — surface change + upheaval. Cosmetic + existential.
+anime / judo / pluto — Japanese martial art + cartoon dog (or astronomical exile, take your pick). Both sit inside "stuff anime references," far from each other.
+Pure cosine‑in‑Numberbatch similarity flattens this — judo and pluto aren't close in any embedding I know of. The thing that makes the row work is that both are well‑connected to anime while being far apart from each other.
+
+Distinguishing diamonds from rough automatically
+awesome.csv is currently consumed only by spec/awesome_spec.rb (a "must‑surface" gate) and listed once in notes/todo.md. It isn't yet a training signal anywhere. There's existing precedent for training a CSV‑driven classifier on top of curated labels — spec/related_spec.rb + bin/train-relatedness-classifier against curated/related.csv, and spec/rarity_spec.rb + bin/train-rarity-classifier against curated/rarity.csv. A tuple‑level classifier with awesome.csv as positives and "every other tuple in set_related#…" as negatives is the natural next step. Per‑tuple features I'd ship:
+
+rime_phoneme_count — length of the shared rime (= length of the rime_dict key for the tuple).
+rime_syllable_count — count of vowel phones in the rime.
+max_post_onset_share — max_i len(rime) / len(pron(w_i)). The "spoonerism density" feature; a single number that captures whether at least one member is essentially "the rime + a consonant."
+onset_diversity — distinct onset clusters across members. otter/rotter/water/marauder = 4 distinct onsets vs confess/profess/regress (mostly fricative + e + s + s) where onsets are similar.
+cohort_size — total number of words in this rime in rime_dict. Productive suffixes have huge cohorts; lexical rimes have small ones. ‑EY SH AH N ≈ 500+, ‑AE N S AH M ≈ tens. Lower cohort → better diamond candidate.
+cohort_density_under_cue — what fraction of the rime cohort scores thematically_related?(cue, _) == related. High density means "this rime naturally leans toward this cue," which is the structural reason pirate / buggery / skulduggery / thuggery is so satisfying — that whole rime cohort is piratical.
+tuple_cardinality — k.
+min_relatedness_to_cue, avg_relatedness_to_cue — scored via the existing relatedness classifier. Worst‑member score is the one that usually sinks rough tuples.
+avg_pairwise_semantic_distance_among_members — Numberbatch cosine, averaged over (i, j) pairs. Counterintuitively, you want this to be not tiny — high distance between members + high relatedness to cue = the "different‑facets‑of‑the‑cue" signature.
+pos_diversity, lemma_diversity — distinct POS / lemma stems across members. Penalizes morphological‑variant tuples that already largely get pruned by rhyming_tuple_redundant_with? in lib/rhymecrime/tuples.rb, but catches cases where they still leak through.
+mean_log_frequency, min_log_frequency — both want to be in the mid‑band; freq=10 floors and freq=2 rarities are both fine but 999999 function‑word presence kills a tuple.
+rime_is_productive_suffix — boolean, true if the rime equals a known suffix rime (‑EY SH AH N, ‑IH T IY, ‑ER, ‑IH NG, ‑D, ‑Z, etc.). One EY SH AH N exception (the complexion/correction/introspection/resurrection row) suggests this should be a soft penalty, not a hard filter.
+Two cheap wins you can ship today, before training anything:
+
+Filter or down‑rank any tuple whose rime equals a top‑20 productive English suffix in rime_dict. That single rule cuts ~70% of the bulk in set_related#rap and leaves the lexical rimes — almost all the diamonds — sitting on top.
+Sort the remainder by max_post_onset_share then tuple_cardinality. Those two together capture the Spoonerism bias and the "more is better" bias that explain 16/18 of awesome.csv.
+There's also a labeling consequence worth noting. The actual generated set_related#rap tuple at ["chillaxin'","jackson","klaxon","waxin'"] is a superset of the chillaxin' / jackson / waxin' row in awesome.csv — klaxon is in the cohort but didn't make the diamond. So the diamond judgement is really about which subset of a tuple feels like a coherent cluster. That's a strictly harder task than tuple‑level binary scoring, but the features above still apply: klaxon doesn't carry a rap connotation the way the ‑in' colloquials and jackson do, so its relatedness_to_cue would be lower than its tuplemates'. So a per-member "would I include this in the diamond?" classifier — features (1)-(8) plus per-member relatedness — should let you go from "tuples ≥ awesome subset" to "exactly the awesome subset."
+
+If you want, I can sketch bin/train-tuple-classifier mirroring bin/train-relatedness-classifier, with awesome.csv as positives and a sampled cross‑section of set_related#… rows as negatives, plus the feature extractors above as a new module under lib/rhymecrime/relatedness/.

@@ -12594,6 +12594,7 @@ transgender,date,related,feedback: 1 up / 0 down
 transgender,dyke,related,feedback: 1 up / 0 down
 transgender,endocrinologist,related,feedback: 1 up / 0 down
 transgender,entity,unrelated,feedback: 0 up / 1 down
+transgender,estranged,related,awesome.csv: transgender/estranged+rearranged
 transgender,estrangements,related,feedback: 1 up / 0 down
 transgender,facial,related,feedback: 1 up / 0 down
 transgender,geek,related,feedback: 1 up / 0 down
@@ -12608,6 +12609,7 @@ transgender,queen,related,feedback: 1 up / 0 down
 transgender,queers,related,feedback: 1 up / 0 down
 transgender,realign,related,feedback: 1 up / 0 down
 transgender,realignment,related,feedback: 1 up / 0 down
+transgender,rearranged,related,awesome.csv: transgender/estranged+rearranged
 transgender,rearrangements,related,feedback: 1 up / 0 down
 transgender,recallin',unrelated,feedback: 0 up / 1 down
 transgender,redefined,related,feedback: 1 up / 0 down

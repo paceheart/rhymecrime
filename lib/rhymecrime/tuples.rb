@@ -1054,6 +1054,81 @@ def prune_trivial_rhyming_pairs(pairs)
   end
 end
 
+# Ordered-pair version of rhyming_tuple_redundant_with?. Pair-related output
+# has slot semantics (left word is related to cue 1, right word to cue 2), so
+# we only use the slot-aligned same-length checks from the set_related pruner.
+# The unordered lemma-subset and richer/smaller tuple branches are for sorted
+# same-cue tuples and can erase good cross-cue pairs.
+def rhyming_pair_redundant_with?(ear, pair)
+  return false unless ear.size == 2 && pair.size == 2
+  return true if rhyming_tuple_suffix_redundant_with?(ear, pair)
+  kinds = rhyming_tuples_share_hidden_base(ear, pair)
+  return true if kinds && rhyming_tuple_kind_preferred?(kinds[0], kinds[1])
+  return true if rhyming_tuples_share_letter_stem_via_derivational_suffix?(ear, pair)
+
+  false
+end
+
+# Pair-mode cross-tuple pruning. Mirrors the final redundancy sweep from
+# prune_suffix_redundant_rhyming_tuples, but deliberately skips the
+# within-tuple condensation passes: a two-word pair should be kept or dropped
+# as a unit, not shortened to a singleton.
+def prune_redundant_rhyming_pairs(pairs)
+  pairs = prune_trivial_rhyming_pairs(pairs)
+  return pairs.sort if $disable_cross_tuple_redundancy_pruning
+
+  verbose_prunes = $debug_mode || debug_pruning?
+  base_index = Hash.new { |h, k| h[k] = Set.new }
+  kept = {}
+  kept_bases = {}
+  next_idx = 0
+
+  bases_for_pair = lambda do |pair|
+    set = Set.new
+    pair.each { |w| set.merge(tuple_redundancy_keys_for_word(w)) }
+    set
+  end
+
+  pairs.sort.each do |pair|
+    bases = bases_for_pair.call(pair)
+    candidate_idx = Set.new
+    bases.each { |b| candidate_idx.merge(base_index[b]) }
+
+    keeper_idx = candidate_idx.find { |ki| rhyming_pair_redundant_with?(kept[ki], pair) }
+    if keeper_idx
+      if verbose_prunes
+        puts "pruned rhyming pair (suffix-redundant): #{pair.join(' / ')}  [kept: #{kept[keeper_idx].join(' / ')}]"
+      end
+      next
+    end
+
+    to_remove = []
+    candidate_idx.each do |ki|
+      ear = kept[ki]
+      next unless ear
+      next unless rhyming_pair_redundant_with?(pair, ear)
+
+      if verbose_prunes
+        puts "pruned rhyming pair (suffix-redundant): #{ear.join(' / ')}  [kept: #{pair.join(' / ')}]"
+      end
+      to_remove << ki
+    end
+
+    to_remove.each do |ki|
+      kept_bases[ki].each { |b| base_index[b].delete(ki) }
+      kept.delete(ki)
+      kept_bases.delete(ki)
+    end
+
+    kept[next_idx] = pair
+    kept_bases[next_idx] = bases
+    bases.each { |b| base_index[b] << next_idx }
+    next_idx += 1
+  end
+
+  kept.values
+end
+
 # When $disable_cross_tuple_redundancy_pruning is true, the cross-tuple
 # rhyming_tuple_redundant_with? pass below is skipped: distinct rhyme-bucket
 # tuples that differ only by parallel Inflect suffixes ([deck, wreck] vs
@@ -1494,6 +1569,9 @@ def really_find_rhyming_tuples(input_rel1, common_only = false)
 end
 
 $rhyming_pair_cache = {}
+PAIR_RELATED_MAX_PAIRS = 1000
+PAIR_RELATED_PRUNE_SEARCH_RAW_FACTOR = 2
+
 def find_rhyming_pairs(input_rel1, input_rel2, common_only = false)
   # Mirrors find_rhyming_tuples's caching policy: bypass the cache whenever
   # $debug_pruning is true so pruning side-effects still populate.
@@ -1502,6 +1580,52 @@ def find_rhyming_pairs(input_rel1, input_rel2, common_only = false)
 
   lru_cache_fetch($rhyming_pair_cache, [input_rel1, input_rel2, common_only], RHYMING_LRU_CACHE_SIZE) do
     really_find_rhyming_pairs(input_rel1, input_rel2, common_only)
+  end
+end
+
+def scored_related_words_for_pair_related(input_rel, common_only)
+  by_word = {}
+  RelatedWords.find_all_thematically_related_words_with_scores(input_rel, false, common_only).each do |word, score|
+    pref = preferred_form(word)
+    next if pref.nil? || pref.empty?
+
+    score = score.to_i
+    by_word[pref] = [by_word[pref] || 0, score].max
+  end
+
+  words = by_word.keys.sort
+  words -= all_forms(input_rel)
+  words = filter_out_prefix_words(words, input_rel)
+  words = filter_related_words_to_common_preferred(words)
+  words.reject! { |w| semantically_promiscuous?(w) }
+  words.map { |w| [w, by_word.fetch(w, RELATEDNESS_SCORE_THRESHOLD)] }
+end
+
+def pair_related_thresholds(pair_scores)
+  thresholds = [RELATEDNESS_SCORE_THRESHOLD]
+  thresholds.concat(pair_scores.uniq.select { |score| score > RELATEDNESS_SCORE_THRESHOLD }.sort)
+  thresholds << 101
+  thresholds.uniq
+end
+
+def pair_related_threshold_for_pair_limit(pairs_with_scores)
+  pair_scores = pairs_with_scores.map { |(_pair, score)| score.to_i }
+  return RELATEDNESS_SCORE_THRESHOLD if pairs_with_scores.length <= PAIR_RELATED_MAX_PAIRS
+
+  max_raw_to_prune = PAIR_RELATED_MAX_PAIRS * PAIR_RELATED_PRUNE_SEARCH_RAW_FACTOR
+  pair_related_thresholds(pair_scores).find do |min_score|
+    pairs_with_scores.count { |(_pair, score)| score.to_i >= min_score } <= max_raw_to_prune
+  end || 101
+end
+
+def prune_pair_related_pairs_to_limit(pairs_with_scores)
+  return [] if pairs_with_scores.empty?
+
+  min_score = pair_related_threshold_for_pair_limit(pairs_with_scores)
+  pair_related_thresholds(pairs_with_scores.map { |(_pair, score)| score.to_i }).select { |threshold| threshold >= min_score }.each do |threshold|
+    pairs = pairs_with_scores.select { |(_pair, score)| score.to_i >= threshold }.map(&:first)
+    pruned = prune_redundant_rhyming_pairs(pairs)
+    return pruned if pruned.length < PAIR_RELATED_MAX_PAIRS || threshold > 100
   end
 end
 
@@ -1526,16 +1650,16 @@ def really_find_rhyming_pairs(input_rel1, input_rel2, common_only = false)
   # [perhaps, duh] / [could, then]. A 2-element pair has no room for a
   # go-word anchor when either side is promiscuous, so we drop those before
   # the rhyme cross.
-  relateds1 = Rhymecrime::Timing.measure("#{timing_base} find+filter related[1]") do
-    filter_related_words_to_common_preferred(
-      find_related_words(input_rel1, true, false, nil, common_only: true)
-    ).reject { |w| semantically_promiscuous?(w) }
+  relateds1_with_scores = Rhymecrime::Timing.measure("#{timing_base} find+filter related[1]") do
+    scored_related_words_for_pair_related(input_rel1, true)
   end
-  relateds2 = Rhymecrime::Timing.measure("#{timing_base} find+filter related[2]") do
-    filter_related_words_to_common_preferred(
-      find_related_words(input_rel2, true, false, nil, common_only: true)
-    ).reject { |w| semantically_promiscuous?(w) }
+  relateds2_with_scores = Rhymecrime::Timing.measure("#{timing_base} find+filter related[2]") do
+    scored_related_words_for_pair_related(input_rel2, true)
   end
+  related_score1 = relateds1_with_scores.to_h
+  related_score2 = relateds2_with_scores.to_h
+  relateds1 = related_score1.keys
+  relateds2 = related_score2.keys
   relateds2_set = relateds2.to_set
   relateds1_set = relateds1.to_set
 
@@ -1592,12 +1716,17 @@ def really_find_rhyming_pairs(input_rel1, input_rel2, common_only = false)
     end
   end
 
-  pairs = []
+  pairs_by_words = {}
   related_rhymes.each do |relrhyme1, relrhyme2_list|
-    relrhyme2_list.uniq.each { |relrhyme2| pairs.push([relrhyme1, relrhyme2]) }
+    relrhyme2_list.uniq.each do |relrhyme2|
+      pair = [relrhyme1, relrhyme2]
+      score = [related_score1.fetch(relrhyme1, RELATEDNESS_SCORE_THRESHOLD), related_score2.fetch(relrhyme2, RELATEDNESS_SCORE_THRESHOLD)].min
+      pairs_by_words[pair] = [pairs_by_words[pair] || 0, score].max
+    end
   end
+  pairs_with_scores = pairs_by_words.map { |pair, score| [pair, score] }
 
-  Rhymecrime::Timing.measure("#{timing_base} prune pairs=#{pairs.size}") do
-    prune_trivial_rhyming_pairs(pairs)
+  Rhymecrime::Timing.measure("#{timing_base} prune pairs=#{pairs_with_scores.size}") do
+    prune_pair_related_pairs_to_limit(pairs_with_scores)
   end
 end

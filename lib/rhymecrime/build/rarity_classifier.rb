@@ -544,22 +544,22 @@ end
 #    as long as we do not still have a mixed letter + ordinary reading (homograph
 #    guard: *us* with AH S vs Y UW EH S). After dict-build drops bogus CMU alts,
 #    most acronym headwords are a single letter-reading row and qualify here.
-# 3. Two- to four-letter all-alpha surfaces with no WordNet lemma on the surface
-#    (abc, cnn) — catches SUBTLEX-only rows with no CMU pronunciation so (2) never
-#    runs. Real short lexemes (*cat*, *fish*) have wn_in from compute_frequency.
+# 3. Two- to four-letter all-alpha surfaces with no pronunciation entry and no
+#    WordNet lemma (abc, cnn) — catches SUBTLEX/wordfreq-only rows where (2)
+#    never runs. Words that have any pronunciation are fully handled by (2): if
+#    none of their prons spells out letters they are real lexemes, not initialisms.
 def headword_initialism_for_rarity_clamp?(word, entry)
   return true if initialism_shaped_headword?(word)
 
   prons = entry.is_a?(BuildEntry) ? entry.prons : entry[1]
   if prons.is_a?(Array) && !prons.empty?
     spelled = prons.map { |p| pronunciation_spells_out_headword_letters?(word, p) }
-    if spelled.any?(true)
-      return false if prons.size > 1 && spelled.any?(false)
+    return true if spelled.any?(true) && !(prons.size > 1 && spelled.any?(false))
 
-      return true
-    end
+    return false  # has pronunciations but none are letter-readings → real lexeme
   end
 
+  # No pronunciation entry: clamp short all-alpha tokens with no WordNet lemma.
   acronym_shape_wordfreq_only?(word) && !wordnet_surface_attested_for_initialism_gate?(word, entry)
 end
 

@@ -65,6 +65,12 @@ RSpec.describe "deployed stack" do
       response = http_get("https://www.#{HOST}#{Rhymecrime::HttpPaths::HEALTH}")
       expect(response.code).to eq("200"), "expected 200, got #{response.code} (body: #{response.body.inspect})"
     end
+
+    it "GET https://<apex>/about.html returns 200 (about page)" do
+      response = http_get("https://#{HOST}/about.html")
+      expect(response.code).to eq("200"), "expected 200, got #{response.code} (body: #{response.body.inspect})"
+      expect(response.body).to include("<title>About RhymeCrime</title>")
+    end
   end
 
   describe "HTTP -> HTTPS redirect (the new behavior)" do
@@ -97,6 +103,13 @@ RSpec.describe "deployed stack" do
     it "GET https://<apex>/crime returns 200 (main lookup page)" do
       response = http_get("https://#{HOST}/crime")
       expect(response.code).to eq("200")
+      # Sanity: it's the rhymecrime page, not some interstitial.
+      expect(response.body).to include("rhymecrime")
+    end
+
+    it "GET https://<apex>/food/dark returns 200 (two-word lookup page)" do
+      response = http_get("https://#{HOST}/food/dark")
+      expect(response.code).to eq("200"), "expected 200, got #{response.code} (body: #{response.body.inspect})"
       # Sanity: it's the rhymecrime page, not some interstitial.
       expect(response.body).to include("rhymecrime")
     end

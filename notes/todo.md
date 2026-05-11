@@ -69,8 +69,8 @@ cheese -> cassavas / guavas, why not cassava / guava?
 try asking some LLMs for 100 or 1000 words related to 'pirate'. try various prompts.
 try RoBERTa
 
-make a test that ensures everything in awesome.csv works
-
 rap -> disapprovin' / groovin' / reprovin', why not the -ing versions?
 
 try clamping the number of related words for various cues and see if that yields tighter set_relateds
+
+add filters for syllable count and POS

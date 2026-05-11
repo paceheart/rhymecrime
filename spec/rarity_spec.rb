@@ -299,6 +299,7 @@ describe "RARITY" do
     oughta_be_common 'enby'
     oughta_be_common 'enbies'
     oughta_be_common 'polycule'
+    oughta_be_common 'swam'
   end
 
   context 'unicode' do
@@ -329,6 +330,7 @@ describe "RARITY" do
     oughta_be_rare 'jfk'
     oughta_be_rare 'un'
     oughta_be_rare 'phd'
+    oughta_be_rare 'dhs'
   end
 
   context 'acronyms' do

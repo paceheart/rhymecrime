@@ -1152,6 +1152,8 @@ describe 'RHYMES' do
   end
 
   context 'bad pronunciations' do
+    oughta_rhyme 'liqueur', 'poor'
+    ought_not_rhyme 'liqueur', 'are'
     ought_not_rhyme 'dante', 'dilettante'
     ought_not_rhyme 'kimono', 'persona'
     ought_not_rhyme 'scythe', 'myth'

@@ -197,6 +197,7 @@ describe 'prune_suffix_redundant_rhyming_tuples' do
     prune_entire_rhyming_tuple 'disorienting / orienting / reorienting'
     prune_entire_rhyming_tuple 'disorients / orients / reorients'
     prune_rhyming_tuple 'extract / react', 'extracted / reacted'
+    prune_rhyming_tuple 'accommodation / carnation', 'accommodations / carnations'
   end
 
   context 'stop words' do
@@ -215,5 +216,25 @@ describe 'prune_suffix_redundant_rhyming_tuples' do
     prune_entire_rhyming_tuple 'billionaire / millionaire / multimillionaire / trillionaire', not_working_reason: "TODO"
     prune_entire_rhyming_tuple 'nanometer / micrometer / millimeter / centimeter / decimeter / meter / kilometer / megameter / gigameter', not_working_reason: "TODO"
     condense_rhyming_tuple 'neater / nanometer / micrometer / millimeter / centimeter / decimeter / meter / kilometer / megameter / gigameter', 'neater / meter', not_working_reason: "TODO"
+  end
+end
+
+describe 'prune_redundant_rhyming_pairs' do
+  it 'drops pair-level suffix shadows without condensing pairs' do
+    keep = parse_tuple_literal('cat / bat')
+    prune_me = parse_tuple_literal('cats / bats')
+
+    result = prune_redundant_rhyming_pairs([keep, prune_me])
+
+    expect(result).to(
+      contain_exactly(keep),
+      "expected pair pruning to keep #{keep.inspect} and drop #{prune_me.inspect}, got #{result.inspect}"
+    )
+  end
+
+  it 'never emits a singleton when a pair is internally trivial' do
+    pair = parse_tuple_literal('legal / illegal')
+
+    expect(prune_redundant_rhyming_pairs([pair])).to eq([])
   end
 end

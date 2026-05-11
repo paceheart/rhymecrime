@@ -109,7 +109,6 @@ here
 hereby
 herein
 hereof
-hereto
 heretofore
 hereupon
 hers
@@ -239,7 +238,6 @@ thereby
 therefore
 therein
 thereof
-thereto
 thereupon
 these
 they
