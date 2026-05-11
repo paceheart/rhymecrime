@@ -74,3 +74,4 @@ rap -> disapprovin' / groovin' / reprovin', why not the -ing versions?
 try clamping the number of related words for various cues and see if that yields tighter set_relateds
 
 add filters for syllable count and POS
+try a "synonyms only" mode
