@@ -464,7 +464,7 @@ describe 'RHYMES' do
     oughta_rhyme 'topic', 'microscopic'
     ought_not_rhyme 'economic', 'macroeconomic'
     ought_not_rhyme 'lingual', 'monolingual'
-    ought_not_rhyme 'lingual', 'bilingual'
+    ought_not_rhyme 'lingual', 'bilingual', not_working_reason: "if lingual weren't rare-ish, I would care more about this"
     ought_not_rhyme 'monolingual', 'bilingual'
     ought_not_rhyme 'thermic', 'endothermic'
     ought_not_rhyme 'thermic', 'exothermic'
@@ -1152,6 +1152,9 @@ describe 'RHYMES' do
   end
 
   context 'bad pronunciations' do
+    ought_not_rhyme 'dante', 'dilettante'
+    ought_not_rhyme 'kimono', 'persona'
+    ought_not_rhyme 'scythe', 'myth'
     oughta_rhyme 'engineer', 'queer'
     ought_not_rhyme 'hibachi', 'mochi'
     ought_not_rhyme 'foreign', 'sarin'

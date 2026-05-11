@@ -371,3 +371,21 @@ re,sell,filter,
 mis,management,filter,
 ex,press,allow,demonstrate != push
 ex,pressed,allow,demonstrated != pushed
+en,liven,filter,
+re,draw,filter
+re,drawn,filter
+over,draw,allow,spend more money than you have != make too much art
+over,drawn,allow,spend more money than you have != make too much art
+un,real,filter
+un,realistic,filter
+pre,adolescent,filter
+re,finance,filter
+un,explored,filter
+mis,allocation,filter
+mis,communication,filter
+dis,place,whatever,probably ought to filter but I found it a useful reminder that the word displace exists
+un,occupied,filter
+arch,enemy,filter
+arch,villain,filter
+arch,nemesis,filter
+arch,on,allow,

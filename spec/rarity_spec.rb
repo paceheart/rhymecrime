@@ -386,6 +386,7 @@ describe "RARITY" do
 
   context '-ed overgeneration' do
     oughta_be_forbidden 'aied'
+    oughta_be_forbidden 'kimonoed'
   end
 
   # Wiktionary/Kaikki paradigm-table also overgenerates -s rows for
