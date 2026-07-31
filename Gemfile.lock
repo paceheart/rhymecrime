@@ -25,7 +25,7 @@ GEM
     diff-lcs (1.6.2)
     jmespath (1.6.2)
     logger (1.7.0)
-    msgpack (1.8.0)
+    msgpack (1.8.2)
     mustermann (3.1.0)
     nio4r (2.7.5)
     numo-narray (0.9.2.1)
